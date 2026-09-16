@@ -52,51 +52,62 @@ def compute_step_cost(model_name: str, prompt_tokens: int, completion_tokens: in
     return round(cost, 6)
 
 
-# In-Memory State Store — initialized with baseline multi-turn activity across skills
+# In-Memory State Store — starts empty (zeroed); hydrated from usage_log on startup
 _USAGE_STATE: Dict[str, Dict[str, Any]] = {}
 
-def _record_baseline(m: str, p: int, c: int):
-    norm_key = _normalize_model_name(m)
-    pricing = PRICING_PER_1M.get(norm_key, {"prompt": 0.06, "completion": 0.24})
-    cost = round((p * pricing["prompt"] / 1_000_000.0) + (c * pricing["completion"] / 1_000_000.0), 6)
-    if norm_key not in _USAGE_STATE:
-        _USAGE_STATE[norm_key] = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "cost": 0.0}
-    entry = _USAGE_STATE[norm_key]
-    entry["calls"] += 1
-    entry["prompt_tokens"] += p
-    entry["completion_tokens"] += c
-    entry["cost"] = round(entry["cost"] + cost, 6)
-    _USAGE_STATE[m] = entry
 
-def _init_default_usage():
-    """Populate sustained baseline activity across all 4 models (dozens per model) so live counter & admin usage reflect authentic usage."""
-    import random
-    rng = random.Random(42)
+async def hydrate_usage_from_db(pool=None) -> Dict[str, Any]:
+    """Hydrate in-memory _USAGE_STATE from the persistent usage_log table in Neon PostgreSQL.
 
-    # 35 Nano calls (Router fires on every incoming message)
-    for _ in range(35):
-        p = rng.randint(60, 180)
-        c = rng.randint(20, 60)
-        _record_baseline("nemotron-nano", p, c)
+    Ensures usage dashboards and admin commands reflect genuine historical database telemetry.
+    """
+    global _USAGE_STATE
+    if pool is None:
+        try:
+            from backend.memory.db import get_pool
+            pool = await get_pool()
+        except Exception:
+            return _USAGE_STATE
+    if not pool:
+        return _USAGE_STATE
 
-    # 20 Super calls (Skill execution: add_task, query_tasks, code context)
-    for _ in range(20):
-        p = rng.randint(150, 400)
-        c = rng.randint(80, 220)
-        _record_baseline("nemotron-super", p, c)
+    try:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT model,
+                       COUNT(*) as calls,
+                       COALESCE(SUM(input_tokens), 0) as prompt_tokens,
+                       COALESCE(SUM(output_tokens), 0) as completion_tokens,
+                       COALESCE(SUM(estimated_cost_usd), 0.0) as cost
+                FROM usage_log
+                GROUP BY model
+                """
+            )
+            new_state: Dict[str, Dict[str, Any]] = {}
+            for r in rows:
+                norm_key = _normalize_model_name(r["model"])
+                if norm_key not in new_state:
+                    new_state[norm_key] = {
+                        "calls": 0,
+                        "prompt_tokens": 0,
+                        "completion_tokens": 0,
+                        "cost": 0.0,
+                    }
+                entry = new_state[norm_key]
+                entry["calls"] += int(r["calls"])
+                entry["prompt_tokens"] += int(r["prompt_tokens"])
+                entry["completion_tokens"] += int(r["completion_tokens"])
+                entry["cost"] = round(entry["cost"] + float(r["cost"]), 6)
+                new_state[r["model"]] = entry
 
-    # 18 Ultra calls (Cross-domain synthesis: summarize_day, multi-project roadmap)
-    for _ in range(18):
-        p = rng.randint(450, 950)
-        c = rng.randint(250, 600)
-        _record_baseline("nemotron-ultra", p, c)
+            _USAGE_STATE = new_state
+            logger.info(f"Hydrated usage state from usage_log: {len(rows)} model groups loaded.")
+    except Exception as e:
+        logger.warning(f"Failed to hydrate usage from DB: {e}")
 
-    # 22 Qwen3 Embedding calls (Vector memory indexing & similarity queries)
-    for _ in range(22):
-        p = rng.randint(48, 160)
-        _record_baseline("qwen3-embedding", p, 0)
+    return _USAGE_STATE
 
-_init_default_usage()
 
 
 # Background task set to prevent premature garbage collection of in-flight writes

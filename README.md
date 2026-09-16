@@ -3,7 +3,7 @@
 
 ## What It Does
 
-Compass is a productivity copilot and personal AI assistant engineered for intense dual-track academic and competitive engineering workloads (specifically VIT dual-degree coursework and hackathons). It maintains persistent, long-term memory across three partitioned domains: hackathon deadlines, repository code context, and academic coursework. Accessible via both a real-time web dashboard and a terminal CLI, Compass accurately tracks deliverables, recalls technical architecture decisions via dense vector search, and synthesizes unified schedules across domains.
+Compass is a productivity copilot and autonomous agent engineered for intense dual-track academic and competitive engineering workloads (specifically VIT dual-degree coursework and hackathons). It maintains persistent, long-term memory across three partitioned domains: hackathon deadlines, repository code context, and academic coursework. Accessible via both a real-time web dashboard and a terminal CLI, Compass accurately tracks deliverables, recalls technical architecture decisions via dense vector search, and synthesizes unified schedules across domains.
 
 ---
 
@@ -184,7 +184,7 @@ compass admin usage
 ### 6. Running the Test Suite
 ```powershell
 python -m pytest tests -v
-# 44 passed, 0 skipped, 0 failed in ~60s (Python 3.12+)
+# 72 passed, 0 skipped, 0 failed (Python 3.12+)
 ```
 
 ---
@@ -243,20 +243,20 @@ Compass provides 8 core memory skills, a conversational fallback, and a cross-do
 
 ## Testing
 
-Compass includes an automated regression test suite (**52 tests**, 100% passing, 0 skipped) covering all critical application surfaces, run under Python 3.12.4 against a live Postgres instance:
+Compass includes an automated regression test suite (**72 tests**, 100% passing, 0 skipped) covering all critical application surfaces, run against a live Postgres instance:
 
 ```text
-======================== 52 passed in 100% =========================
+======================= 72 passed in 100% =======================
 ```
 
-- **Autonomous Agent Engine (`tests/test_agent.py`)**: 15 tests validating the ReAct loop, SSE event stream protocol, step production (`think`, `tool_call`, `observe`, `critic`, `synthesize`), safe state-mutation gating (`add_task`, `edit_task`, `delete_task`, `update_task_status`), reject path re-planning, confirmation timeouts, self-critique pass capping (2 rounds), reconnect persistence in `agent_runs`, audit logging in `agent_audit_log`, undo endpoint (`POST /api/agent/undo`), and Tavily gating.
-- **API & Authentication (`tests/test_api_endpoints.py`)**: Tests Bearer token authentication, invalid credentials rejection, and CORS headers.
-- **Structured Memory (`tests/test_structured_memory.py`)**: Validates database schema migrations, project creation, task lifecycle (add/edit/query/complete/delete), and task isolation across domains — runs against a live Postgres instance.
-- **Multi-Turn Context (`tests/test_multi_turn.py`)**: End-to-end verification that conversational context persists across turns.
-- **SSE Streaming (`tests/test_streaming.py`)**: Verifies `text/event-stream` headers, `X-Accel-Buffering: no`, and incremental token delivery.
-- **CLI Operations (`tests/test_cli.py`)**: Validates terminal commands, argument parsing, output formatting, and CLI SSE streaming.
-- **End-to-End Demo Flow (`tests/test_demo_flow.py`)**: Validates the full flow across memory ingestion, tool calls, and roadmap generation.
-- **Gap Closure Verification (`tests/test_gap_closures.py`)**: Server-side task domain filtering, the public `/api/usage/summary` endpoint, per-IP rate limiting, the gated `search_web` skill, CLI streaming fallback, and usage-summary cost deltas across turns.
+- **Autonomous Agent Engine (`tests/test_agent.py`)**: 26 tests validating the ReAct loop, SSE event stream protocol, step production (`think`, `tool_call`, `observe`, `critic`, `synthesize`), safe state-mutation gating (`add_task`, `edit_task`, `delete_task`, `update_task_status`), reject path re-planning, confirmation timeouts, self-critique pass capping (2 rounds), reconnect persistence in `agent_runs`, audit logging in `agent_audit_log`, undo endpoint (`POST /api/agent/undo`), live per-step costs, model tier attribution, deadline conflict detection, and report card generation.
+- **Gap Closure & Subsystem Hardening (`tests/test_gap_closures.py`)**: 15 tests verifying server-side task domain filtering, public `/api/usage/summary` endpoint, per-IP sliding window rate limiting, gated `search_web` skill, CLI streaming fallback, usage-summary cost deltas, Bearer auth enforcement on confirm/undo/nightly endpoints, deadline conflict scanning, agent run list/conversation_id filtering, and CLI agent commands.
+- **API & Authentication (`tests/test_api_endpoints.py`)**: 14 tests verifying root redirect, health checks, Bearer token authentication enforcement on protected routes, valid credentials handling, and CORS headers.
+- **CLI Operations (`tests/test_cli.py`)**: 8 tests validating terminal commands, argument parsing, config viewing/updating, status tables, project grouping, domain filtering, memory logging, and interactive REPL chat.
+- **End-to-End Demo Flow (`tests/test_demo_flow.py`)**: 4 tests validating the full multi-domain workflow across memory ingestion, tool calls, and roadmap generation.
+- **Structured Memory (`tests/test_structured_memory.py`)**: 3 tests validating database schema migrations, project creation with fuzzy matching, task lifecycle (add/edit/query/complete/delete), and task isolation across domains against live Postgres.
+- **Multi-Turn Context (`tests/test_multi_turn.py`)**: 1 test validating multi-turn conversational context persistence across turns.
+- **SSE Streaming (`tests/test_streaming.py`)**: 1 test verifying `text/event-stream` headers, `X-Accel-Buffering: no`, and incremental token delivery.
 
 ---
 

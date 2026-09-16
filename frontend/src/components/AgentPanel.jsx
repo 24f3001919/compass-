@@ -605,6 +605,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': 'Bearer dev-token',
         },
         body: JSON.stringify({ run_id: currentRunId }),
       })
@@ -634,6 +635,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': 'Bearer dev-token',
         },
         body: JSON.stringify({ audit_log_id: auditLogId }),
       })
@@ -1101,10 +1103,10 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
         {/* Cost Efficiency Comparison Card */}
         {steps.some(s => s.type === 'done') && (
           <div style={{
-            margin: '14px 0',
-            padding: '12px 16px',
-            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(14, 165, 233, 0.1))',
-            border: '1px solid rgba(52, 211, 153, 0.3)',
+            marginTop: '12px',
+            padding: '10px 14px',
+            background: 'rgba(16, 185, 129, 0.08)',
+            border: '1px solid rgba(16, 185, 129, 0.25)',
             borderRadius: '8px',
             display: 'flex',
             alignItems: 'center',
@@ -1116,21 +1118,24 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                 <span>⚡</span> Nebius Token Factory Cost Efficiency
               </div>
               <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
-                This {steps.length}-step run cost <strong style={{ color: '#e2e8f0' }}>${(steps.reduce((sum, s) => sum + (s.step_cost_usd || 0), 0)).toFixed(5)}</strong> on Nebius · Equivalent on GPT-4o: <strong style={{ color: '#f87171' }}>~${((steps.reduce((sum, s) => sum + (s.step_cost_usd || 0), 0)) * 36).toFixed(4)}</strong> (~36x cost reduction)
+                This {steps.length}-step run cost <strong style={{ color: '#e2e8f0' }}>${(steps.reduce((sum, s) => sum + (s.step_cost_usd || 0), 0)).toFixed(5)} USD</strong> on Nebius Token Factory · Equivalent on OpenAI GPT-4o: <strong style={{ color: '#f87171' }}>~${((steps.reduce((sum, s) => sum + (s.step_cost_usd || 0), 0)) * 9.4).toFixed(4)} USD</strong> (~9.4x reduction)
               </div>
             </div>
-            <span style={{
-              padding: '4px 8px',
-              background: 'rgba(16, 185, 129, 0.2)',
-              borderRadius: '6px',
-              border: '1px solid #10b98155',
-              color: '#4ade80',
-              fontSize: '11px',
-              fontWeight: '700',
-              fontFamily: 'monospace',
-              whiteSpace: 'nowrap',
-            }}>
-              97.2% SAVINGS
+            <span
+              title="Based on published OpenAI GPT-4o pricing ($2.50/1M prompt, $10.00/1M completion from openai.com/api/pricing) vs Nebius Nemotron-3 Super ($0.30/1M prompt, $0.90/1M completion)."
+              style={{
+                padding: '4px 8px',
+                background: 'rgba(16, 185, 129, 0.2)',
+                borderRadius: '6px',
+                border: '1px solid #10b98155',
+                color: '#4ade80',
+                fontSize: '11px',
+                fontWeight: '700',
+                fontFamily: 'monospace',
+                whiteSpace: 'nowrap',
+                cursor: 'help',
+              }}>
+              ~89.4% SAVINGS
             </span>
           </div>
         )}

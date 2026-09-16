@@ -199,22 +199,42 @@ async def test_summarize_across_domains_aggregates_multidomain_data():
 
 
 @pytest.mark.asyncio
-async def test_agent_confirm_and_undo_public_access(client: AsyncClient):
-    """Gap 5 & 7 Fix: Verify /api/agent/confirm and /api/agent/undo can be accessed without auth headers."""
-    # Confirm endpoint without token should not return 401 Unauthorized
-    resp_confirm = await client.post(
+async def test_agent_confirm_and_undo_auth_enforcement(client: AsyncClient, auth_headers: dict):
+    """Verify /api/agent/confirm, /api/agent/undo, and /api/agent/trigger-nightly require Bearer auth."""
+    # 1. Unauthenticated requests must return 401 Unauthorized
+    resp_confirm_unauth = await client.post(
         "/api/agent/confirm",
         json={"actions": [], "run_id": "test_public_confirm"},
     )
-    assert resp_confirm.status_code == 200
+    assert resp_confirm_unauth.status_code == 401
 
-    # Undo endpoint without token should not return 401 Unauthorized
-    resp_undo = await client.post(
+    resp_undo_unauth = await client.post(
         "/api/agent/undo",
         json={"run_id": "nonexistent_run_id"},
     )
-    assert resp_undo.status_code == 200
-    assert resp_undo.json().get("status") in ("ok", "noop", "error")
+    assert resp_undo_unauth.status_code == 401
+
+    resp_nightly_unauth = await client.post(
+        "/api/agent/trigger-nightly",
+    )
+    assert resp_nightly_unauth.status_code == 401
+
+    # 2. Authenticated requests must succeed (200 OK)
+    resp_confirm_auth = await client.post(
+        "/api/agent/confirm",
+        headers=auth_headers,
+        json={"actions": [], "run_id": "test_auth_confirm"},
+    )
+    assert resp_confirm_auth.status_code == 200
+
+    resp_undo_auth = await client.post(
+        "/api/agent/undo",
+        headers=auth_headers,
+        json={"run_id": "nonexistent_run_id"},
+    )
+    assert resp_undo_auth.status_code == 200
+    assert resp_undo_auth.json().get("status") in ("ok", "noop", "error")
+
 
 
 def test_config_pricing_matches_usage_pricing():

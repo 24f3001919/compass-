@@ -53,8 +53,10 @@ async def lifespan(app: FastAPI):
     """Manage application startup and shutdown."""
     logger.info("🧭 Compass starting up — initializing database pool...")
     try:
-        await init_pool()
+        pool = await init_pool()
         logger.info("✅ Database pool initialized")
+        from backend.services.usage import hydrate_usage_from_db
+        await hydrate_usage_from_db(pool)
     except Exception as e:
         logger.warning(f"⚠️  Database pool init failed (stubs will still work): {e}")
 
@@ -571,7 +573,13 @@ async def get_timeline(
 @app.get("/admin/usage")
 async def get_usage(_token: str = Depends(verify_token)):
     """Returns token consumption breakdown, total requests, and cost from usage.py."""
-    from backend.services.usage import get_usage_summary
+    from backend.services.usage import get_usage_summary, hydrate_usage_from_db, _USAGE_STATE
+    if not _USAGE_STATE:
+        try:
+            pool = await get_pool()
+            await hydrate_usage_from_db(pool)
+        except Exception:
+            pass
     return get_usage_summary()
 
 
@@ -581,7 +589,13 @@ async def get_public_usage_summary():
     """Public lightweight usage summary for the frontend live token counter.
     No authentication required — returns only aggregated totals, not per-model breakdowns.
     """
-    from backend.services.usage import get_usage_summary
+    from backend.services.usage import get_usage_summary, hydrate_usage_from_db, _USAGE_STATE
+    if not _USAGE_STATE:
+        try:
+            pool = await get_pool()
+            await hydrate_usage_from_db(pool)
+        except Exception:
+            pass
     full = get_usage_summary()
     return {
         "total_requests": full.get("total_requests", 0),
@@ -1050,10 +1064,11 @@ async def agent_run(req: AgentRequest, request: Request):
 
 
 @app.post("/api/agent/confirm")
-async def agent_confirm(req: AgentConfirmRequest):
+async def agent_confirm(req: AgentConfirmRequest, _token: str = Depends(verify_token)):
     """Execute previously confirmed state-mutating actions from an agent run.
 
     Logs every executed mutation into agent_audit_log.
+    Requires Bearer token authorization.
     """
     from backend.agent import execute_confirmed_actions
 
@@ -1063,8 +1078,11 @@ async def agent_confirm(req: AgentConfirmRequest):
 
 
 @app.post("/api/agent/undo")
-async def agent_undo(req: AgentUndoRequest):
-    """Revert an agent-executed mutation using agent_audit_log."""
+async def agent_undo(req: AgentUndoRequest, _token: str = Depends(verify_token)):
+    """Revert an agent-executed mutation using agent_audit_log.
+
+    Requires Bearer token authorization.
+    """
     from backend.agent import undo_last_agent_action
 
     pool = await get_pool()
@@ -1254,8 +1272,11 @@ async def get_latest_proactive_briefing():
 
 
 @app.post("/api/agent/trigger-nightly")
-async def trigger_nightly_consolidation_endpoint():
-    """Trigger the nightly consolidation job and autonomous proactive briefing run."""
+async def trigger_nightly_consolidation_endpoint(_token: str = Depends(verify_token)):
+    """Trigger the nightly consolidation job and autonomous proactive briefing run.
+
+    Requires Bearer token authorization to prevent unauthorized execution.
+    """
     from backend.jobs.consolidate import run_consolidation
     pool = await get_pool()
     result = await run_consolidation(dry_run=False, pool=pool)
