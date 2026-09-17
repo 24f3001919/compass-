@@ -35,7 +35,9 @@ async def get_calendar_connection_status(
                     """
                     SELECT provider, account_email, access_token, connected_at, last_synced_at
                     FROM calendar_connections
-                    WHERE user_id = $1 AND provider = 'google'
+                    WHERE (user_id = $1 OR account_email = $1 OR $1 = 'default_user') AND provider = 'google'
+                    ORDER BY CASE WHEN (user_id = $1 OR account_email = $1) THEN 0 ELSE 1 END, last_synced_at DESC NULLS LAST
+                    LIMIT 1
                     """,
                     user_id,
                 )

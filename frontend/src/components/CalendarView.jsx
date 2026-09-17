@@ -71,6 +71,14 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated }) {
         type: 'success',
         text: `✅ Google Calendar successfully connected via OAuth (${email || 'Live'})! Scheduled tasks will synchronize directly.`
       })
+      if (email) {
+        setCalendarStatus({
+          connected: true,
+          mode: 'live',
+          account_email: email,
+          label: `Google Calendar: ${email} (Live OAuth Connected)`,
+        })
+      }
       window.history.replaceState({}, document.title, window.location.pathname)
     }
 

@@ -1339,11 +1339,12 @@ async def agent_feasibility(req: FeasibilityRequest,
 # ---------------------------------------------------------------------------
 
 @app.get("/api/calendar/status")
-async def get_calendar_status_endpoint():
+async def get_calendar_status_endpoint(request: Request, user_id: Optional[str] = Query(None)):
     """Check connection status for Google Calendar integration."""
     from backend.services.calendar import get_calendar_connection_status
+    uid = user_id or _get_current_user_id(request)
     pool = await get_pool()
-    status = await get_calendar_connection_status(pool=pool)
+    status = await get_calendar_connection_status(pool=pool, user_id=uid)
     return {"status": "ok", "calendar": status}
 
 
