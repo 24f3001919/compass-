@@ -36,8 +36,8 @@ logger = logging.getLogger("compass.agent")
 # ---------------------------------------------------------------------------
 # Tools that mutate state require human confirmation before execution
 # ---------------------------------------------------------------------------
-MUTATING_TOOLS = frozenset({"add_task", "edit_task", "update_task_status", "delete_task", "log_code_snippet", "log_code_context", "ingest_url", "apply_triage_plan"})
-READ_ONLY_TOOLS = frozenset({"query_tasks", "query_code_context", "query_coursework_tasks", "get_hackathon_deadlines", "summarize_day", "search_web", "list_projects", "query_coursework_notes", "chat", "summarize_across_domains", "verify_deadline", "assess_feasibility"})
+MUTATING_TOOLS = frozenset({"add_task", "edit_task", "update_task_status", "delete_task", "log_code_snippet", "log_code_context", "ingest_url", "apply_triage_plan", "commit_schedule"})
+READ_ONLY_TOOLS = frozenset({"query_tasks", "query_code_context", "query_coursework_tasks", "get_hackathon_deadlines", "summarize_day", "search_web", "list_projects", "query_coursework_notes", "chat", "summarize_across_domains", "verify_deadline", "assess_feasibility", "detect_deadline_conflicts", "get_calendar_availability", "propose_schedule", "detect_schedule_conflicts"})
 
 # In-memory registry for live SSE confirmation events: run_id -> (asyncio.Event, outcome_dict)
 _PENDING_CONFIRMATION_EVENTS: Dict[str, Tuple[asyncio.Event, Dict[str, Any]]] = {}
@@ -1289,6 +1289,23 @@ async def execute_confirmed_actions(
                                 if hasattr(v, "isoformat"):
                                     previous_state[k] = v.isoformat()
                             affected_id = int(task_id)
+            elif pool and tool_name == "commit_schedule":
+                assignments = tool_args.get("assignments") or []
+                affected_ids = [a.get("task_id") for a in assignments if a.get("task_id")]
+                if affected_ids:
+                    async with pool.acquire() as conn:
+                        rows = await conn.fetch("SELECT id, scheduled_start, scheduled_end FROM tasks WHERE id = ANY($1::int[])", affected_ids)
+                        previous_state = {
+                            "tasks": [
+                                {
+                                    "task_id": r["id"],
+                                    "scheduled_start": r["scheduled_start"].isoformat() if r["scheduled_start"] else None,
+                                    "scheduled_end": r["scheduled_end"].isoformat() if r["scheduled_end"] else None,
+                                }
+                                for r in rows
+                            ]
+                        }
+                    affected_id = affected_ids[0] if affected_ids else None
         except Exception as e:
             logger.warning(f"Failed to capture pre-mutation state: {e}")
 
