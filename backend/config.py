@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     TAVILY_MAX_RESULTS: int = 5
     TAVILY_TIMEOUT_S: float = 12.0
 
+    # --- Google Calendar OAuth ---
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/calendar/callback"
+    TOKEN_ENCRYPTION_KEY: str = "compass_secure_local_dev_token_encryption_key_32bytes!"
+
     # --- App ---
     LOG_LEVEL: str = "INFO"
     PORT: int = 8000
