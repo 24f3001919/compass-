@@ -487,6 +487,7 @@ async def run_agent(
     total_run_cost_usd: float = 0.0
     is_abstained: bool = False
     web_escalation_used: bool = False
+    forced_tool_choice: Optional[Any] = None
     active_replan_diff: Optional[Dict[str, Any]] = None
 
     # Check for existing run state in database
@@ -686,12 +687,15 @@ async def run_agent(
                 c_tok = 100
                 record_usage(settings.SKILL_MODEL, 200, 100)
             else:
+                current_tool_choice = forced_tool_choice if forced_tool_choice is not None else "auto"
+                forced_tool_choice = None
+
                 completions: Any = client.chat.completions
                 response = await completions.create(
                     model=str(settings.SKILL_MODEL),
                     messages=cast(Any, messages),
                     tools=cast(Any, agent_tools),
-                    tool_choice="auto",
+                    tool_choice=current_tool_choice,
                     max_tokens=512,
                     temperature=0.4,
                 )
@@ -924,6 +928,7 @@ async def run_agent(
 
                 # Emit OBSERVE step
                 step_num += 1
+                obs_tier = "Tavily Web Intelligence" if func_name in ("search_web", "ingest_url", "verify_deadline") else "Neon Postgres Engine"
                 obs_step = AgentStep(
                     type="observe",
                     content=tool_result,
@@ -931,7 +936,7 @@ async def run_agent(
                     step_number=step_num,
                     elapsed_ms=int((time.perf_counter() - step_start) * 1000),
                     run_id=run_id,
-                    model_tier="Neon Postgres Engine",
+                    model_tier=obs_tier,
                     step_cost_usd=0.0,
                 )
                 yield obs_step
@@ -988,6 +993,7 @@ async def run_agent(
                         tavily_ok = False
                     if tavily_ok and not web_escalation_used:
                         web_escalation_used = True
+                        forced_tool_choice = {"type": "function", "function": {"name": "search_web"}}
                         step_num += 1
                         escalate_step = AgentStep(
                             type="escalate",

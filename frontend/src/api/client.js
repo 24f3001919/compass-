@@ -271,8 +271,39 @@ export async function fetchCalendarStatus() {
   }
 }
 
-export function getGoogleOAuthConnectUrl() {
-  return `${API_BASE}/api/calendar/connect`
+export async function fetchCurrentUser() {
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/me`)
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+export async function quickConnectUser(email) {
+  const res = await fetch(`${API_BASE}/api/auth/quick-connect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return await res.json()
+}
+
+export async function syncCalendarNow() {
+  const res = await fetch(`${API_BASE}/api/calendar/sync-now`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return await res.json()
+}
+
+export function getGoogleOAuthConnectUrl(loginHint = null) {
+  let url = `${API_BASE}/api/calendar/connect?redirect=true`
+  if (loginHint) url += `&login_hint=${encodeURIComponent(loginHint)}`
+  return url
 }
 
 export async function disconnectCalendar() {

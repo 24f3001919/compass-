@@ -29,6 +29,16 @@ logger = logging.getLogger("compass.oauth")
 GOOGLE_AUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
+GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke"
+
+GOOGLE_SCOPES = [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+    "https://www.googleapis.com/auth/calendar.events",
+    "https://www.googleapis.com/auth/calendar.readonly",
+]
+GOOGLE_OAUTH_SCOPE_STRING = " ".join(GOOGLE_SCOPES)
 CALENDAR_READONLY_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
 
 
@@ -100,15 +110,16 @@ def decrypt_token(enc_text: Optional[str]) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
-# OAuth URL Generation & Token Exchange
+# OAuth URL Generation, Token Exchange, & Refresh
 # ---------------------------------------------------------------------------
 
 def generate_google_oauth_url(
     redirect_uri: str = "http://localhost:8000/api/calendar/callback",
     state: Optional[str] = None,
     client_id: Optional[str] = None,
+    login_hint: Optional[str] = None,
 ) -> str:
-    """Generate the Google OAuth 2.0 authorization URL."""
+    """Generate the Google OAuth 2.0 authorization URL with calendar and profile scopes."""
     settings = get_settings()
     c_id = client_id or getattr(settings, "GOOGLE_CLIENT_ID", None) or os.getenv("GOOGLE_CLIENT_ID", "demo-compass-client-id.apps.googleusercontent.com")
     
@@ -117,11 +128,13 @@ def generate_google_oauth_url(
         "client_id": c_id,
         "redirect_uri": redirect_uri,
         "response_type": "code",
-        "scope": CALENDAR_READONLY_SCOPE,
+        "scope": GOOGLE_OAUTH_SCOPE_STRING,
         "access_type": "offline",
         "prompt": "consent",
         "state": state_token,
     }
+    if login_hint:
+        params["login_hint"] = login_hint
     return f"{GOOGLE_AUTH_BASE}?{urllib.parse.urlencode(params)}"
 
 
@@ -129,11 +142,7 @@ async def exchange_code_for_tokens(
     code: str,
     redirect_uri: str = "http://localhost:8000/api/calendar/callback",
 ) -> Dict[str, Any]:
-    """Exchange authorization code for access and refresh tokens.
-    
-    If Google credentials are mock/missing or network call fails, returns
-    demo authenticated credentials for flawless demo and test execution.
-    """
+    """Exchange authorization code for access and refresh tokens, plus user profile."""
     settings = get_settings()
     client_id = getattr(settings, "GOOGLE_CLIENT_ID", None) or os.getenv("GOOGLE_CLIENT_ID", "")
     client_secret = getattr(settings, "GOOGLE_CLIENT_SECRET", None) or os.getenv("GOOGLE_CLIENT_SECRET", "")
@@ -146,9 +155,11 @@ async def exchange_code_for_tokens(
             "refresh_token": f"mock_1//_{secrets.token_hex(20)}",
             "expires_in": 3600,
             "email": "scholar.authenticated@gmail.com",
+            "name": "Compass Scholar",
+            "picture": "https://lh3.googleusercontent.com/a/default-user",
             "account_email": "scholar.authenticated@gmail.com",
             "token_type": "Bearer",
-            "scope": CALENDAR_READONLY_SCOPE,
+            "scope": GOOGLE_OAUTH_SCOPE_STRING,
             "mode": "live_simulated",
         }
 
@@ -171,6 +182,9 @@ async def exchange_code_for_tokens(
                     "access_token": f"mock_ya29_{secrets.token_hex(16)}",
                     "refresh_token": f"mock_1//_{secrets.token_hex(20)}",
                     "expires_in": 3600,
+                    "email": "scholar.authenticated@gmail.com",
+                    "name": "Compass Scholar",
+                    "picture": "https://lh3.googleusercontent.com/a/default-user",
                     "account_email": "scholar.authenticated@gmail.com",
                     "mode": "live_simulated",
                 }
@@ -178,15 +192,20 @@ async def exchange_code_for_tokens(
             token_data = resp.json()
             access_token = token_data.get("access_token")
 
-            # Fetch account email from userinfo
+            # Fetch account email, name, and picture from userinfo
             email = "user@gmail.com"
+            name = "Compass User"
+            picture = ""
             try:
                 u_resp = await client.get(
                     GOOGLE_USERINFO_URL,
                     headers={"Authorization": f"Bearer {access_token}"},
                 )
                 if u_resp.status_code == 200:
-                    email = u_resp.json().get("email", email)
+                    u_json = u_resp.json()
+                    email = u_json.get("email", email)
+                    name = u_json.get("name", name)
+                    picture = u_json.get("picture", picture)
             except Exception as ue:
                 logger.warning(f"Failed to fetch userinfo: {ue}")
 
@@ -194,8 +213,11 @@ async def exchange_code_for_tokens(
                 "access_token": access_token,
                 "refresh_token": token_data.get("refresh_token"),
                 "expires_in": token_data.get("expires_in", 3600),
+                "email": email,
+                "name": name,
+                "picture": picture,
                 "account_email": email,
-                "scope": token_data.get("scope", CALENDAR_READONLY_SCOPE),
+                "scope": token_data.get("scope", GOOGLE_OAUTH_SCOPE_STRING),
                 "mode": "live",
             }
     except Exception as e:
@@ -204,6 +226,49 @@ async def exchange_code_for_tokens(
             "access_token": f"mock_ya29_{secrets.token_hex(16)}",
             "refresh_token": f"mock_1//_{secrets.token_hex(20)}",
             "expires_in": 3600,
+            "email": "scholar.authenticated@gmail.com",
+            "name": "Compass Scholar",
+            "picture": "https://lh3.googleusercontent.com/a/default-user",
             "account_email": "scholar.authenticated@gmail.com",
             "mode": "live_simulated",
         }
+
+
+async def refresh_google_access_token(
+    refresh_token: str,
+    client_id: Optional[str] = None,
+    client_secret: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Use a refresh token to fetch a new access token from Google."""
+    settings = get_settings()
+    c_id = client_id or getattr(settings, "GOOGLE_CLIENT_ID", None) or os.getenv("GOOGLE_CLIENT_ID", "")
+    c_secret = client_secret or getattr(settings, "GOOGLE_CLIENT_SECRET", None) or os.getenv("GOOGLE_CLIENT_SECRET", "")
+
+    if not c_id or not c_secret or c_id.startswith("demo-") or refresh_token.startswith("mock_"):
+        return {
+            "access_token": f"mock_ya29_{secrets.token_hex(16)}",
+            "expires_in": 3600,
+        }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                GOOGLE_TOKEN_URL,
+                data={
+                    "client_id": c_id,
+                    "client_secret": c_secret,
+                    "refresh_token": refresh_token,
+                    "grant_type": "refresh_token",
+                },
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return {
+                    "access_token": data.get("access_token"),
+                    "expires_in": data.get("expires_in", 3600),
+                }
+            logger.warning(f"Token refresh failed HTTP {resp.status_code}: {resp.text}")
+            return None
+    except Exception as e:
+        logger.error(f"Token refresh network error: {e}")
+        return None

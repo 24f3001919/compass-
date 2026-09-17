@@ -1460,19 +1460,121 @@ async def update_calendar_preferences_endpoint(body: UpdatePreferencesBody):
 
 
 # ---------------------------------------------------------------------------
-# 12. Google Calendar OAuth Endpoints
+# 12. Google Calendar OAuth & User Authentication Endpoints
 # ---------------------------------------------------------------------------
 
+def _get_current_user_id(request: Request) -> str:
+    """Resolve current user identity from headers, cookies, or default."""
+    user_header = request.headers.get("x-user-id")
+    if user_header:
+        return user_header
+    cookie_user = request.cookies.get("compass_user_id")
+    if cookie_user:
+        return cookie_user
+    return "default_user"
+
+
+@app.get("/api/auth/me")
+async def auth_me(request: Request):
+    """Retrieve logged-in user profile and calendar connection status."""
+    from backend.services.calendar import get_calendar_connection_status
+    user_id = _get_current_user_id(request)
+    pool = await get_pool()
+    cal_status = await get_calendar_connection_status(pool=pool, user_id=user_id)
+    
+    is_authenticated = cal_status.get("connected", False)
+    account_email = cal_status.get("account_email") or (user_id if "@" in user_id else "demo-scholar@compass.ai")
+    
+    return {
+        "status": "ok",
+        "authenticated": is_authenticated,
+        "user_id": user_id,
+        "email": account_email,
+        "name": account_email.split("@")[0].replace(".", " ").title(),
+        "calendar": cal_status,
+    }
+
+
+class QuickConnectBody(BaseModel):
+    email: str
+
+
+@app.post("/api/auth/quick-connect")
+async def auth_quick_connect(body: QuickConnectBody, response: Response):
+    """Quick-login with Gmail for instant access and demo mode."""
+    import secrets
+    from backend.services.calendar import save_calendar_connection
+    email = body.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Invalid email address")
+    
+    pool = await get_pool()
+    if pool:
+        # Save mock connection for this user
+        await save_calendar_connection(
+            pool=pool,
+            user_id=email,
+            account_email=email,
+            access_token=f"mock_ya29_{secrets.token_hex(16)}",
+            refresh_token=f"mock_1//_{secrets.token_hex(20)}",
+            expires_in=86400,
+        )
+        # Also update default_user
+        await save_calendar_connection(
+            pool=pool,
+            user_id="default_user",
+            account_email=email,
+            access_token=f"mock_ya29_{secrets.token_hex(16)}",
+            refresh_token=f"mock_1//_{secrets.token_hex(20)}",
+            expires_in=86400,
+        )
+
+    response.set_cookie(
+        key="compass_user_id",
+        value=email,
+        max_age=86400 * 30,
+        httponly=False,
+        samesite="lax",
+    )
+    return {
+        "status": "ok",
+        "email": email,
+        "message": f"Successfully connected as {email}",
+    }
+
+
 @app.get("/api/calendar/connect")
-async def calendar_connect():
-    """Generate Google OAuth 2.0 authorization URL."""
+async def calendar_connect(
+    request: Request,
+    redirect: bool = Query(False, description="Redirect directly to Google consent screen"),
+    login_hint: Optional[str] = Query(None),
+):
+    """Generate Google OAuth 2.0 authorization URL or redirect directly."""
     from backend.services.oauth import generate_google_oauth_url
-    url = generate_google_oauth_url()
+    
+    # Infer redirect_uri from request host if configured for deployment
+    host = request.headers.get("host", "localhost:8000")
+    scheme = "https" if request.url.scheme == "https" or "vercel.app" in host else "http"
+    base_url = f"{scheme}://{host}"
+    redirect_uri = f"{base_url}/api/calendar/callback"
+
+    # If backend setting specifies a valid full URL, use it unless host is different
+    settings = get_settings()
+    if getattr(settings, "GOOGLE_REDIRECT_URI", None) and "localhost" in settings.GOOGLE_REDIRECT_URI and "localhost" in host:
+        redirect_uri = settings.GOOGLE_REDIRECT_URI
+
+    url = generate_google_oauth_url(redirect_uri=redirect_uri, login_hint=login_hint)
+    
+    # If caller is browser navigation or requested redirect=true
+    accept = request.headers.get("accept", "")
+    if redirect or "text/html" in accept:
+        return RedirectResponse(url=url)
     return {"status": "ok", "url": url}
 
 
 @app.get("/api/calendar/callback")
 async def calendar_callback(
+    request: Request,
     code: Optional[str] = Query(None),
     error: Optional[str] = Query(None),
 ):
@@ -1497,37 +1599,87 @@ async def calendar_callback(
     from backend.services.oauth import exchange_code_for_tokens
     from backend.services.calendar import save_calendar_connection
 
-    tokens = await exchange_code_for_tokens(code)
+    # Infer redirect_uri to match what was used in connect
+    host = request.headers.get("host", "localhost:8000")
+    scheme = "https" if request.url.scheme == "https" or "vercel.app" in host else "http"
+    redirect_uri = f"{scheme}://{host}/api/calendar/callback"
+
+    tokens = await exchange_code_for_tokens(code, redirect_uri=redirect_uri)
+    email = tokens.get("email") or tokens.get("account_email") or "scholar.authenticated@gmail.com"
+
     pool = await get_pool()
     if pool:
+        # Save connection for both specific email and default_user
+        await save_calendar_connection(
+            pool=pool,
+            user_id=email,
+            account_email=email,
+            access_token=tokens.get("access_token", ""),
+            refresh_token=tokens.get("refresh_token"),
+            expires_in=tokens.get("expires_in", 3600),
+        )
         await save_calendar_connection(
             pool=pool,
             user_id="default_user",
-            account_email=tokens.get("email", "scholar@compass.ai"),
+            account_email=email,
             access_token=tokens.get("access_token", ""),
             refresh_token=tokens.get("refresh_token"),
             expires_in=tokens.get("expires_in", 3600),
         )
 
-    return HTMLResponse(
-        "<html><body style='font-family:sans-serif;text-align:center;padding:50px;background:#0f172a;color:#f8fafc;'>"
-        "<h2>🎉 Google Calendar Connected!</h2>"
-        "<p>Compass is now linked to your Google Calendar (Read-Only Free/Busy).</p>"
-        "<p><a style='color:#38bdf8;text-decoration:none;font-weight:bold;' href='/'>Return to Compass</a></p>"
-        "<script>"
-        "if (window.opener) { window.opener.postMessage({type: 'compass_calendar_connected'}, '*'); setTimeout(() => window.close(), 1200); }"
-        "</script>"
-        "</body></html>"
+    # Return redirect response with cookie and popup message
+    response = HTMLResponse(
+        f"""<!DOCTYPE html>
+<html>
+<head><title>Compass — Google Calendar Connected</title></head>
+<body style="font-family:sans-serif;text-align:center;padding:60px 20px;background:#0f172a;color:#f8fafc;">
+    <div style="max-width:480px;margin:0 auto;background:#1e293b;padding:32px;border-radius:16px;border:1px solid #334155;box-shadow:0 10px 25px rgba(0,0,0,0.5);">
+        <div style="font-size:48px;margin-bottom:12px;">🎉</div>
+        <h2 style="margin:0 0 8px;color:#38bdf8;">Google Calendar Connected!</h2>
+        <p style="color:#94a3b8;font-size:14px;margin-bottom:20px;">Logged in as <b style="color:#f8fafc;">{email}</b>.<br>Your tasks will now synchronize to your Google Calendar.</p>
+        <a style="display:inline-block;background:#2563eb;color:#ffffff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;" href="/?calendar_connected=true&email={email}">Open Compass Dashboard</a>
+    </div>
+    <script>
+        if (window.opener) {{
+            window.opener.postMessage({{type: 'compass_calendar_connected', email: '{email}'}}, '*');
+            setTimeout(() => window.close(), 1000);
+        }} else {{
+            setTimeout(() => {{ window.location.href = '/?calendar_connected=true&email={email}'; }}, 1500);
+        }}
+    </script>
+</body>
+</html>"""
     )
+    response.set_cookie(
+        key="compass_user_id",
+        value=email,
+        max_age=86400 * 30,
+        httponly=False,
+        samesite="lax",
+    )
+    return response
+
+
+@app.post("/api/calendar/sync-now")
+async def calendar_sync_now(request: Request):
+    """Explicitly synchronize all scheduled tasks to the connected user's Google Calendar."""
+    from backend.services.calendar import sync_all_tasks_to_google_calendar
+    user_id = _get_current_user_id(request)
+    pool = await get_pool()
+    result = await sync_all_tasks_to_google_calendar(pool, user_id=user_id)
+    return result
 
 
 @app.post("/api/calendar/disconnect")
-async def calendar_disconnect():
+async def calendar_disconnect(request: Request, response: Response):
     """Disconnect Google Calendar OAuth integration and revert to simulated mode."""
     from backend.services.calendar import disconnect_calendar_connection
+    user_id = _get_current_user_id(request)
     pool = await get_pool()
     if pool:
+        await disconnect_calendar_connection(pool, user_id=user_id)
         await disconnect_calendar_connection(pool, user_id="default_user")
+    response.delete_cookie("compass_user_id")
     return {"status": "ok", "message": "Google Calendar disconnected."}
 
 

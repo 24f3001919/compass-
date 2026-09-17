@@ -53,6 +53,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
         "http://localhost:80",
         "http://localhost",
+        "https://compass-kappa-nine.vercel.app",
         "https://compass-farmlytics.vercel.app",
         "https://compass-frontend.vercel.app",
         "https://compass.nebius.app",

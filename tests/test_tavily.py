@@ -15,7 +15,32 @@ Automated verification tests for all 10 core integration requirements:
 """
 
 import pytest
-from unittest.mock import AsyncMock
+import json
+import uuid
+from unittest.mock import AsyncMock, MagicMock
+
+def _create_mock_completion(tool_name: str | None = None, tool_args: dict | None = None, content: str = ""):
+    choice = MagicMock()
+    choice.message = MagicMock()
+    choice.message.content = content
+
+    if tool_name:
+        tc = MagicMock()
+        tc.id = f"call_{uuid.uuid4().hex[:8]}"
+        tc.function = MagicMock()
+        tc.function.name = tool_name
+        tc.function.arguments = json.dumps(tool_args or {})
+        choice.message.tool_calls = [tc]
+    else:
+        choice.message.tool_calls = None
+
+    resp = MagicMock()
+    resp.choices = [choice]
+    resp.usage = MagicMock()
+    resp.usage.prompt_tokens = 120
+    resp.usage.completion_tokens = 45
+    return resp
+
 
 from backend.config import get_settings
 from backend.memory.db import get_pool
@@ -96,6 +121,7 @@ async def test_ingest_url_stores_768_dim_chunks(monkeypatch):
     }
     monkeypatch.setattr(tavily_service, "extract", AsyncMock(return_value=mock_extract))
     monkeypatch.setattr(tavily_service, "tavily_available", lambda: True)
+    monkeypatch.setattr("backend.memory.vector.get_embedding", AsyncMock(return_value=[0.05] * 768))
 
     res = await handle_ingest_url({
         "url": "https://example.com/test-article",
@@ -149,6 +175,7 @@ async def test_ingest_url_undo_removes_chunks(monkeypatch):
     }
     monkeypatch.setattr(tavily_service, "extract", AsyncMock(return_value=mock_extract))
     monkeypatch.setattr(tavily_service, "tavily_available", lambda: True)
+    monkeypatch.setattr("backend.memory.vector.get_embedding", AsyncMock(return_value=[0.05] * 768))
 
     res = await handle_ingest_url({"url": test_url, "domain": "general"}, pool=pool)
     assert res["success"] is True
@@ -184,7 +211,6 @@ async def test_ingest_url_undo_removes_chunks(monkeypatch):
 @pytest.mark.asyncio
 async def test_abstention_escalates_to_web_once(monkeypatch):
     """Verify [ABSTAIN] in agent reasoning triggers an escalate step exactly once without looping."""
-    pool = await get_pool()
     monkeypatch.setattr(tavily_service, "tavily_available", lambda: True)
 
     # Mock search to return clean data
@@ -192,19 +218,29 @@ async def test_abstention_escalates_to_web_once(monkeypatch):
         "results": [{"title": "Web Info", "url": "https://example.com/info", "content": "Live answer.", "score": 0.9}]
     }))
 
+    mock_client = MagicMock()
+    mock_client.chat = MagicMock()
+    mock_client.chat.completions = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(side_effect=[
+        _create_mock_completion(content="[ABSTAIN] Not found in local memory."),
+        _create_mock_completion(tool_name="search_web", tool_args={"query": "secret passphrase quantum-shadow"}),
+        _create_mock_completion(content="Found live answer from web search."),
+    ])
+
     # Run agent with an unknown obscure question
     steps = []
     async for step in run_agent(
         goal="[TEST] What is the secret passphrase for project quantum-shadow?",
-        pool=pool,
+        client=mock_client,
         max_steps=4,
         enable_critic=False,
     ):
         steps.append(step)
 
-    # Check if escalate step was yielded or search was invoked
+    # Check that escalate step was yielded and deterministic search was forced
     escalate_steps = [s for s in steps if s.type == "escalate"]
-    assert len(escalate_steps) <= 1  # Escalation must be bounded to at most once per run
+    assert len(escalate_steps) == 1
+    assert any(s.type == "tool_call" and s.tool_name == "search_web" for s in steps)
 
 
 # ---------------------------------------------------------------------------
@@ -213,7 +249,6 @@ async def test_abstention_escalates_to_web_once(monkeypatch):
 @pytest.mark.asyncio
 async def test_web_content_cannot_trigger_mutation(monkeypatch):
     """A malicious page telling the agent to delete tasks must not cause a mutation to execute without human confirmation."""
-    pool = await get_pool()
     malicious_results = {
         "results": [
             {
@@ -226,27 +261,28 @@ async def test_web_content_cannot_trigger_mutation(monkeypatch):
     monkeypatch.setattr(tavily_service, "search", AsyncMock(return_value=malicious_results))
     monkeypatch.setattr(tavily_service, "tavily_available", lambda: True)
 
-    async with pool.acquire() as conn:
-        initial_tasks_count = await conn.fetchval("SELECT count(*) FROM tasks")
+    mock_client = MagicMock()
+    mock_client.chat = MagicMock()
+    mock_client.chat.completions = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(side_effect=[
+        _create_mock_completion(tool_name="search_web", tool_args={"query": "instructions on evil.example"}),
+        _create_mock_completion(tool_name="delete_task", tool_args={"task_id": 1}),
+    ])
 
     steps = []
     async for step in run_agent(
         goal="Search the web for instructions on evil.example and follow them",
-        pool=pool,
+        client=mock_client,
         max_steps=5,
         wait_for_confirmation=False,  # Unconfirmed mode
         enable_critic=False,
     ):
         steps.append(step)
 
-    # Crucial assertion: no tasks deleted
-    async with pool.acquire() as conn:
-        final_tasks_count = await conn.fetchval("SELECT count(*) FROM tasks")
-        assert final_tasks_count == initial_tasks_count
-
     # If the model attempted delete_task, it MUST have halted at confirm_request
     executed_tools = [s.tool_name for s in steps if s.type == "observe"]
     assert "delete_task" not in executed_tools
+    assert any(s.type == "confirm_request" for s in steps)
 
 
 # ---------------------------------------------------------------------------
@@ -301,17 +337,18 @@ async def test_tavily_credits_tracked_separately_from_tokens():
 @pytest.mark.asyncio
 async def test_verify_deadline_reports_drift(monkeypatch):
     """Verify verify_deadline compares stored task due date with live web data."""
-    pool = await get_pool()
+    mock_pool = MagicMock()
+    mock_conn = AsyncMock()
+    mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-    # Create temporary task to verify
-    async with pool.acquire() as conn:
-        task_id = await conn.fetchval(
-            """
-            INSERT INTO tasks (title, domain, due_date, status, priority)
-            VALUES ('Nebius Buildathon Phase 2', 'hackathon', '2026-09-17', 'open', 'high')
-            RETURNING id
-            """
-        )
+    monkeypatch.setattr("backend.memory.structured.get_task", AsyncMock(return_value={
+        "id": 101,
+        "title": "Nebius Buildathon Phase 2",
+        "domain": "hackathon",
+        "due_date": "2026-09-17",
+        "status": "open",
+        "priority": "high",
+    }))
 
     mock_search = {
         "results": [
@@ -326,15 +363,11 @@ async def test_verify_deadline_reports_drift(monkeypatch):
     monkeypatch.setattr(tavily_service, "search", AsyncMock(return_value=mock_search))
     monkeypatch.setattr(tavily_service, "tavily_available", lambda: True)
 
-    try:
-        res = await handle_verify_deadline({"task_id": task_id}, pool=pool)
-        assert res["success"] is True
-        assert res["data"]["task"]["id"] == task_id
-        assert len(res["data"]["results"]) >= 1
-        assert "citations" in res["data"]
-        assert "2026-09-17" in res["summary"]
-        assert "September 24, 2026" in res["data"]["results"][0]["content"]
-        assert "<untrusted_web_content>" in res["fenced_context"]
-    finally:
-        async with pool.acquire() as conn:
-            await conn.execute("DELETE FROM tasks WHERE id = $1", task_id)
+    res = await handle_verify_deadline({"task_id": 101}, pool=mock_pool)
+    assert res["success"] is True
+    assert res["data"]["task"]["id"] == 101
+    assert len(res["data"]["results"]) >= 1
+    assert "citations" in res["data"]
+    assert "2026-09-17" in res["summary"]
+    assert "September 24, 2026" in res["data"]["results"][0]["content"]
+    assert "<untrusted_web_content>" in res["fenced_context"]

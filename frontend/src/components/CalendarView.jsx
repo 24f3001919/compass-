@@ -8,6 +8,8 @@ import {
   getGoogleOAuthConnectUrl,
   disconnectCalendar,
   checkReactiveSchedule,
+  syncCalendarNow,
+  quickConnectUser,
 } from '../api/client'
 
 const DOMAIN_STYLES = {
@@ -56,14 +58,18 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated }) {
   const [proposedPlan, setProposedPlan] = useState(null)
   const [bannerMessage, setBannerMessage] = useState(null)
   const [checkingReactive, setCheckingReactive] = useState(false)
+  const [syncingCalendar, setSyncingCalendar] = useState(false)
+  const [quickEmailInput, setQuickEmailInput] = useState('')
+  const [showQuickModal, setShowQuickModal] = useState(false)
 
   // Sync calendar connection status & check URL callback
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
     if (urlParams.get('calendar_connected') === 'true') {
+      const email = urlParams.get('email') || ''
       setBannerMessage({
         type: 'success',
-        text: '✅ Google Calendar successfully connected via OAuth! Live availability enabled.'
+        text: `✅ Google Calendar successfully connected via OAuth (${email || 'Live'})! Scheduled tasks will synchronize directly.`
       })
       window.history.replaceState({}, document.title, window.location.pathname)
     }
@@ -268,50 +274,124 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated }) {
         </div>
 
         {/* Action Controls */}
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
           {calendarStatus.connected && calendarStatus.mode === 'live' ? (
-            <button
-              id="btn-disconnect-google"
-              onClick={async () => {
-                await disconnectCalendar()
-                setCalendarStatus({ connected: false, mode: 'demo', account_email: 'demo-scholar@compass.ai' })
-                loadAvailability(selectedDate)
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '7px 12px',
-                borderRadius: '8px',
-                background: '#1e293b',
-                border: '1px solid #334155',
-                color: '#94a3b8',
-                fontSize: '12px',
-                cursor: 'pointer'
-              }}>
-              Disconnect
-            </button>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button
+                id="btn-sync-gcal"
+                onClick={async () => {
+                  setSyncingCalendar(true)
+                  setBannerMessage(null)
+                  try {
+                    const res = await syncCalendarNow()
+                    setBannerMessage({
+                      type: 'success',
+                      text: `✅ Synced ${res.count || 0} scheduled tasks to your Google Calendar (${calendarStatus.account_email})!`
+                    })
+                    loadAvailability(selectedDate)
+                  } catch (err) {
+                    setBannerMessage({
+                      type: 'error',
+                      text: `Failed to sync to Google Calendar: ${err.message}`
+                    })
+                  } finally {
+                    setSyncingCalendar(false)
+                  }
+                }}
+                disabled={syncingCalendar}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '7px 12px',
+                  borderRadius: '8px',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                  color: '#34d399',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  cursor: syncingCalendar ? 'wait' : 'pointer',
+                  transition: 'all 0.15s ease'
+                }}>
+                {syncingCalendar ? '🔄 Syncing...' : '📅 Sync to Google Calendar'}
+              </button>
+              <a
+                href="https://calendar.google.com"
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '7px 10px',
+                  borderRadius: '8px',
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#94a3b8',
+                  fontSize: '12px',
+                  textDecoration: 'none'
+                }}>
+                Open Calendar ↗
+              </a>
+              <button
+                id="btn-disconnect-google"
+                onClick={async () => {
+                  await disconnectCalendar()
+                  setCalendarStatus({ connected: false, mode: 'demo', account_email: 'demo-scholar@compass.ai' })
+                  loadAvailability(selectedDate)
+                }}
+                style={{
+                  padding: '7px 10px',
+                  borderRadius: '8px',
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#ef4444',
+                  fontSize: '12px',
+                  cursor: 'pointer'
+                }}>
+                Disconnect
+              </button>
+            </div>
           ) : (
-            <a
-              id="btn-connect-google"
-              href={getGoogleOAuthConnectUrl()}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '7px 12px',
-                borderRadius: '8px',
-                background: 'rgba(59, 130, 246, 0.12)',
-                border: '1px solid rgba(59, 130, 246, 0.35)',
-                color: '#60a5fa',
-                fontSize: '12px',
-                fontWeight: '500',
-                textDecoration: 'none',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease'
-              }}>
-              🔗 Connect Google Account
-            </a>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <a
+                id="btn-connect-google"
+                href={getGoogleOAuthConnectUrl()}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '7px 12px',
+                  borderRadius: '8px',
+                  background: 'rgba(59, 130, 246, 0.15)',
+                  border: '1px solid rgba(59, 130, 246, 0.4)',
+                  color: '#60a5fa',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}>
+                🔗 Sign in with Google
+              </a>
+              <button
+                id="btn-quick-login"
+                onClick={() => setShowQuickModal(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '7px 10px',
+                  borderRadius: '8px',
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#cbd5e1',
+                  fontSize: '12px',
+                  cursor: 'pointer'
+                }}>
+                ⚡ Quick Gmail Login
+              </button>
+            </div>
           )}
 
           <a
@@ -786,6 +866,114 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated }) {
                   boxShadow: '0 0 12px rgba(16, 185, 129, 0.4)'
                 }}>
                 {committing ? 'Committing...' : '✅ Approve & Commit to Google Calendar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Gmail Login Modal */}
+      {showQuickModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.75)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{
+            background: '#131c2e',
+            border: '1px solid #334155',
+            borderRadius: '16px',
+            padding: '28px',
+            width: '100%',
+            maxWidth: '420px',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.6)'
+          }}>
+            <h3 style={{ margin: '0 0 8px', color: '#f8fafc', fontSize: '18px' }}>⚡ Connect Your Gmail</h3>
+            <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 20px', lineHeight: '1.5' }}>
+              Enter your Google / Gmail address to activate your calendar profile. Scheduled tasks will be synchronized to your calendar.
+            </p>
+            <input
+              id="input-quick-email"
+              type="email"
+              placeholder="e.g. yourname@gmail.com"
+              value={quickEmailInput}
+              onChange={(e) => setQuickEmailInput(e.target.value)}
+              onKeyDown={async (e) => {
+                if (e.key === 'Enter' && quickEmailInput.includes('@')) {
+                  await quickConnectUser(quickEmailInput)
+                  setShowQuickModal(false)
+                  fetchCalendarStatus().then(status => {
+                    if (status) setCalendarStatus(status)
+                  })
+                  setBannerMessage({
+                    type: 'success',
+                    text: `✅ Connected as ${quickEmailInput}! Tasks will sync to your Google Calendar.`
+                  })
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                background: '#0f172a',
+                border: '1px solid #334155',
+                color: '#f8fafc',
+                fontSize: '14px',
+                marginBottom: '18px',
+                boxSizing: 'border-box'
+              }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                onClick={() => setShowQuickModal(false)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#94a3b8',
+                  fontSize: '13px',
+                  cursor: 'pointer'
+                }}>
+                Cancel
+              </button>
+              <button
+                id="btn-submit-quick-connect"
+                disabled={!quickEmailInput.includes('@')}
+                onClick={async () => {
+                  try {
+                    await quickConnectUser(quickEmailInput)
+                    setShowQuickModal(false)
+                    fetchCalendarStatus().then(status => {
+                      if (status) setCalendarStatus(status)
+                    })
+                    setBannerMessage({
+                      type: 'success',
+                      text: `✅ Connected as ${quickEmailInput}! Tasks will sync to your Google Calendar.`
+                    })
+                  } catch (err) {
+                    alert(`Could not connect: ${err.message}`)
+                  }
+                }}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: '8px',
+                  background: quickEmailInput.includes('@') ? 'linear-gradient(135deg, #2563eb, #3b82f6)' : '#334155',
+                  border: 'none',
+                  color: '#ffffff',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: quickEmailInput.includes('@') ? 'pointer' : 'not-allowed'
+                }}>
+                Connect Account
               </button>
             </div>
           </div>
