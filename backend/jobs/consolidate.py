@@ -278,7 +278,9 @@ async def archive_stale_threads(
 
 PROACTIVE_NIGHTLY_GOAL = (
     "Nightly Proactive Consolidation: Audit cross-domain deadlines using detect_deadline_conflicts, "
-    "check for deadline conflicts between hackathon and coursework, and synthesize tomorrow's executive briefing."
+    "check for deadline conflicts between hackathon and coursework, and synthesize tomorrow's executive briefing. "
+    "Additionally, for any task in the HACKATHON domain with a due date within 30 days, use verify_deadline to confirm "
+    "the stored date still matches public sources. Report any drift you find. Do not modify any task without confirmation."
 )
 
 

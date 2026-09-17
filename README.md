@@ -70,6 +70,11 @@ flowchart TD
     Ultra -->|Synthesized Roadmap| FastAPI
 ```
 
+### Public vs. Protected Endpoint Design Decision
+The four interactive endpoints (`/api/chat`, `/api/chat/stream`, `/api/agent/run`, and `/api/log`) are intentionally **public by design** (protected by per-IP sliding-window rate limiters: 30 req/min on chat/stream/log, 10 req/min on agent runs) rather than requiring authentication. This is an explicit, documented architectural decision: hackathon evaluators and judges can test the live interactive UI and autonomous agent flows without needing pre-configured credentials or bearer tokens. Conversely, mutation execution and approval endpoints (`/api/agent/confirm`, `/api/agent/undo`, and `/api/agent/trigger-nightly`) strictly require the Bearer token (`AUTH_TOKEN`) specifically because they execute or reverse persistent state changes in the database.
+
+Crucially, there is an important architectural distinction between **mutation-adjacent drivers** and **mutation execution**: `/api/chat` and `/api/agent/run` are both public. In `/api/chat`, a user message like `"add a task: Prepare slides"` directly drives task creation unauthenticated via the Nemotron router and orchestrator (`add_task`), meaning actual task insertion into PostgreSQL happens unauthenticated for seamless demo evaluation. In `/api/agent/run`, the autonomous agent loop can reason, plan, and propose changes without authentication; however, when the agent attempts a state-mutating tool (`add_task`, `delete_task`, `edit_task`, `apply_triage_plan`), it halts at a confirm gate (`confirm_request`), and only the *agent confirm-gate approval* (`POST /api/agent/confirm`) requires Bearer token authentication. Direct chat task creation is unauthenticated for evaluation, whereas autonomous multi-step agent approvals are strictly protected.
+
 ---
 
 ## How Nebius & NVIDIA Power Compass

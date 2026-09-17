@@ -30,8 +30,11 @@ class Settings(BaseSettings):
     AUTH_TOKEN: str = ""  # Required — set in .env
 
     # --- Tavily Search API ---
-    TAVILY_ENABLED: bool = False  # Feature flag: disabled by default pending team sign-off
-    TAVILY_API_KEY: str = ""  # Optional — enables search_web skill when TAVILY_ENABLED is True
+    TAVILY_API_KEY: str = ""
+    TAVILY_ENABLED: bool = True  # MUST be True in the submitted build
+    TAVILY_SEARCH_DEPTH: str = "basic"  # ultra-fast | fast | basic | advanced
+    TAVILY_MAX_RESULTS: int = 5
+    TAVILY_TIMEOUT_S: float = 12.0
 
     # --- App ---
     LOG_LEVEL: str = "INFO"

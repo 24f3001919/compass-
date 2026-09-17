@@ -187,21 +187,66 @@ SEARCH_WEB_TOOL: Dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "search_web",
-        "description": "Search the web for current information, news, documentation, or any query requiring up-to-date external data using Tavily Search.",
+        "description": (
+            "Search the live web for current information that is NOT in Compass's "
+            "stored memory. Use only after checking memory first. Good for: current "
+            "deadlines, library/API changes since a note was written, facts that "
+            "post-date stored context."
+        ),
         "parameters": {
             "type": "object",
             "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query or question to look up on the web",
-                },
-                "search_depth": {
+                "query": {"type": "string", "description": "Search query, under 390 chars"},
+                "depth": {
                     "type": "string",
                     "enum": ["basic", "advanced"],
-                    "description": "Search depth: 'basic' for quick results, 'advanced' for comprehensive research",
+                    "description": "Use 'advanced' (2 credits) only when basic is insufficient",
                 },
             },
             "required": ["query"],
+        },
+    },
+}
+
+INGEST_URL_TOOL: Dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "ingest_url",
+        "description": (
+            "Permanently add the contents of a web page to Compass's long-term "
+            "memory so it becomes semantically searchable later. Use when the user "
+            "says to remember, save, or read a link."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "The URL to extract and ingest"},
+                "domain": {
+                    "type": "string",
+                    "enum": ["hackathon", "coursework", "code", "general"],
+                    "description": "Domain to store memory under",
+                },
+                "project": {"type": "string", "description": "Optional project name to associate with"},
+            },
+            "required": ["url", "domain"],
+        },
+    },
+}
+
+VERIFY_DEADLINE_TOOL: Dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "verify_deadline",
+        "description": (
+            "Compare a stored task's due_date against what the live web currently says. "
+            "Searches for deadline announcements or updates and flags drift."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "integer", "description": "The ID of the task to verify"},
+            },
+            "required": ["task_id"],
         },
     },
 }
@@ -395,12 +440,12 @@ BASE_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
 
 def get_tool_definitions() -> List[Dict[str, Any]]:
     """Return active tool definitions for the Nemotron router.
-    search_web is feature-flagged behind TAVILY_ENABLED (default: False).
+    search_web, ingest_url, and verify_deadline are available when Tavily is enabled.
     """
     try:
-        from backend.config import get_settings
-        if getattr(get_settings(), "TAVILY_ENABLED", False):
-            return BASE_TOOL_DEFINITIONS + [SEARCH_WEB_TOOL]
+        from backend.services.tavily import tavily_available
+        if tavily_available():
+            return BASE_TOOL_DEFINITIONS + [SEARCH_WEB_TOOL, INGEST_URL_TOOL, VERIFY_DEADLINE_TOOL]
     except Exception:
         pass
     return list(BASE_TOOL_DEFINITIONS)
@@ -988,7 +1033,7 @@ async def handle_detect_deadline_conflicts(args: Dict[str, Any], pool: Any) -> D
             except Exception:
                 pass
 
-    conflicts = []
+    conflicts: List[Dict[str, Any]] = []
     for d_str, day_tasks in sorted(by_date.items()):
         domains = {t.get("domain", "general") for t in day_tasks}
         priorities = {t.get("priority", "medium") for t in day_tasks}
@@ -1011,9 +1056,10 @@ async def handle_detect_deadline_conflicts(args: Dict[str, Any], pool: Any) -> D
             })
 
     if conflicts:
+        top_domains = [str(d) for d in (conflicts[0].get("domains") or [])]
         summary = (
             f"⚠️ Detected {len(conflicts)} deadline conflict cluster(s) within the next {days} days. "
-            f"Most critical: {conflicts[0]['date']} with {conflicts[0]['task_count']} tasks across {', '.join(conflicts[0]['domains'])}."
+            f"Most critical: {conflicts[0]['date']} with {conflicts[0]['task_count']} tasks across {', '.join(top_domains)}."
         )
     else:
         summary = f"✅ No critical deadline conflicts detected across domains in the next {days} days."
@@ -1038,79 +1084,363 @@ async def dispatch_skill(skill_name: str, args: Dict[str, Any], pool: Any) -> Di
 
 @register_skill("search_web")
 async def handle_search_web(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
-    """Search the web using Tavily Search API and return a formatted summary of results.
-    
-    Makes a genuine HTTP call to https://api.tavily.com/search with the user's query.
-    Requires TAVILY_API_KEY to be set in the environment.
-    Falls back gracefully if the key is missing.
+    """Search the live web using the centralized Tavily service.
+
+    Returns citations, fenced context, and human-readable summary.
     """
-    import httpx
-    from backend.config import get_settings
+    from backend.services import tavily as tavily_service
 
-    settings = get_settings()
-    query = args.get("query", "").strip()
-    search_depth = args.get("search_depth", "basic")
-
+    query = (args.get("query") or "").strip()
     if not query:
-        return {"response": "Please provide a search query.", "data": {}}
-
-    if not getattr(settings, "TAVILY_ENABLED", False):
         return {
-            "response": "Web search is currently disabled (TAVILY_ENABLED=False).",
-            "data": {"query": query, "error": "TAVILY_ENABLED is False"},
+            "success": False,
+            "data": {},
+            "summary": "Query cannot be empty",
+            "response": "Please provide a search query.",
+            "error": "Query cannot be empty",
         }
 
-    if not settings.TAVILY_API_KEY:
+    if not tavily_service.tavily_available():
         return {
-            "response": f"Web search is not configured (TAVILY_API_KEY missing). To enable it, add your Tavily API key to the .env file.",
-            "data": {"query": query, "error": "TAVILY_API_KEY not set"},
+            "success": False,
+            "data": {},
+            "summary": "Web search is not configured on this instance",
+            "response": "Web search is currently disabled or missing an API key.",
+            "error": "Web search is not configured on this instance",
+        }
+
+    depth = args.get("depth") or args.get("search_depth") or "basic"
+    try:
+        resp = await tavily_service.search(query, search_depth=depth)
+    except Exception as e:
+        logger.warning(f"Tavily search failed: {e}")
+        return {
+            "success": False,
+            "data": {},
+            "summary": f"Web search failed: {e}",
+            "response": f"Web search failed: {e}",
+            "error": f"Web search failed: {e}",
+        }
+
+    results = resp.get("results", [])
+    citations = [
+        {"title": r.get("title"), "url": r.get("url"), "score": r.get("score")}
+        for r in results
+    ]
+    fenced = tavily_service.fence_web_content(results)
+    top_url = citations[0]["url"] if citations else "none"
+    summary = f"Found {len(results)} web result(s) for '{query}'. Top source: {top_url}"
+
+    # Build markdown response for chat interface
+    parts = [f"**Web Search Results for:** *{query}*"]
+    for r in results[:3]:
+        parts.append(f"• [{r.get('title', 'Untitled')}]({r.get('url', '')})\n  {r.get('content', '')[:180].strip()}...")
+    formatted_response = "\n".join(parts) if results else summary
+
+    return {
+        "success": True,
+        "data": {"results": results, "citations": citations, "source": "web"},
+        "fenced_context": fenced,
+        "summary": summary,
+        "response": formatted_response,
+        "error": None,
+    }
+
+
+@register_skill("ingest_url")
+async def handle_ingest_url(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
+    """Extract and ingest a web page's contents into Compass long-term memory.
+
+    Chunked, embedded via Qwen3 768-dim, and stored into memory_chunks table.
+    Mutating action — must be confirm-gated by the agent loop.
+    """
+    from backend.services import tavily as tavily_service
+    from backend.memory import vector, structured
+
+    VALID_DOMAINS = {"hackathon", "coursework", "code", "general"}
+    url = (args.get("url") or "").strip()
+    domain = (args.get("domain") or "general").lower()
+
+    if domain not in VALID_DOMAINS:
+        return {
+            "success": False,
+            "data": {},
+            "summary": f"Invalid domain '{domain}'. Must be one of: {', '.join(sorted(VALID_DOMAINS))}",
+            "response": f"Invalid domain '{domain}'.",
+            "error": f"Invalid domain '{domain}'",
+        }
+
+    if not url.startswith(("http://", "https://")):
+        return {
+            "success": False,
+            "data": {},
+            "summary": "URL must start with http:// or https://",
+            "response": "URL must start with http:// or https://",
+            "error": "URL must start with http:// or https://",
+        }
+
+    if not tavily_service.tavily_available():
+        return {
+            "success": False,
+            "data": {},
+            "summary": "Tavily service is not available on this instance",
+            "response": "Tavily service is not configured.",
+            "error": "Tavily service is not available",
         }
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                "https://api.tavily.com/search",
-                json={
-                    "api_key": settings.TAVILY_API_KEY,
-                    "query": query,
-                    "search_depth": search_depth,
-                    "max_results": 3,
-                    "include_answer": True,
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
-
-        results = data.get("results", [])
-        answer = data.get("answer", "")
-
-        # Format a concise, readable response
-        parts = []
-        if answer:
-            parts.append(f"**Quick Answer:** {answer}")
-        if results:
-            parts.append("\n**Top Results:**")
-            for r in results[:3]:
-                title = r.get("title", "Untitled")
-                url = r.get("url", "")
-                snippet = r.get("content", "")[:200].strip()
-                parts.append(f"• [{title}]({url})\n  {snippet}")
-
-        summary = "\n".join(parts) if parts else f"No results found for: {query}"
-        return {
-            "response": summary,
-            "data": {"query": query, "results": results, "answer": answer},
-        }
-    except httpx.HTTPStatusError as e:
-        logger.error(f"Tavily API HTTP error: {e.response.status_code} — {e.response.text}")
-        return {
-            "response": f"Web search failed (HTTP {e.response.status_code}). Please try again.",
-            "data": {"query": query, "error": str(e)},
-        }
+        resp = await tavily_service.extract([url], extract_depth="advanced")
     except Exception as e:
-        logger.error(f"Tavily search_web error: {e}")
+        logger.error(f"Tavily extract failed for {url}: {e}")
         return {
-            "response": f"Web search encountered an error: {e}",
-            "data": {"query": query, "error": str(e)},
+            "success": False,
+            "data": {},
+            "summary": f"Extraction failed: {e}",
+            "response": f"Extraction failed: {e}",
+            "error": f"Extraction failed: {e}",
         }
 
+    ok = resp.get("results", [])
+    if not ok:
+        failed = resp.get("failed_results", [])
+        return {
+            "success": False,
+            "data": {"failed": failed},
+            "summary": f"Could not extract content from {url}",
+            "response": f"Could not extract content from {url}",
+            "error": f"Could not extract content from {url}",
+        }
+
+    raw = ok[0].get("raw_content") or ok[0].get("content") or ""
+    flagged = tavily_service.scan_for_injection(raw)
+
+    # Chunk text (~1200 chars with 200 char overlap, max 12 chunks)
+    chunks = [raw[i : i + 1200] for i in range(0, len(raw), 1000)][:12]
+    stored = 0
+
+    async with pool.acquire() as conn:
+        project_id = None
+        if args.get("project"):
+            proj = await structured.get_or_create_project(conn, args["project"], domain)
+            project_id = proj["id"]
+
+        tags = ["web", "tavily-extract"]
+        if flagged:
+            tags.append("injection-flagged")
+
+        for ch in chunks:
+            if not ch.strip():
+                continue
+            await vector.store_chunk(
+                conn,
+                domain=domain,
+                content=ch,
+                project_id=project_id,
+                source=url,
+                tags=tags,
+            )
+            stored += 1
+
+    injection_note = " ⚠️ Page contained instruction-like text; stored as data only." if flagged else ""
+    summary = f"Ingested {url} into {domain.upper()} memory as {stored} searchable chunk(s).{injection_note}"
+
+    return {
+        "success": True,
+        "data": {
+            "url": url,
+            "chunks_stored": stored,
+            "domain": domain,
+            "injection_flagged": bool(flagged),
+        },
+        "summary": summary,
+        "response": summary,
+        "error": None,
+    }
+
+
+@register_skill("verify_deadline")
+async def handle_verify_deadline(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
+    """Compare a stored task's due date against live web sources to detect drift."""
+    from backend.services import tavily as tavily_service
+    from backend.memory import structured
+
+    task_id = args.get("task_id")
+    if not task_id:
+        return {
+            "success": False,
+            "data": {},
+            "summary": "task_id is required",
+            "response": "task_id is required",
+            "error": "task_id is required",
+        }
+
+    async with pool.acquire() as conn:
+        task = await structured.get_task(conn, int(task_id))
+    if not task:
+        return {
+            "success": False,
+            "data": {},
+            "summary": f"No task with id {task_id}",
+            "response": f"No task with id {task_id}",
+            "error": f"No task with id {task_id}",
+        }
+
+    task_title = task.get("title", "")
+    stored_due = str(task.get("due_date") or "none")
+
+    if not tavily_service.tavily_available():
+        return {
+            "success": False,
+            "data": {"task": dict(task)},
+            "summary": "Web search is not configured to verify deadline",
+            "response": "Web search is not configured.",
+            "error": "Web search is not configured",
+        }
+
+    query = f"{task_title} deadline submission date"
+    try:
+        resp = await tavily_service.search(query, search_depth="basic")
+    except Exception as e:
+        return {
+            "success": False,
+            "data": {"task": dict(task)},
+            "summary": f"Web search failed during verification: {e}",
+            "response": f"Web search failed during verification: {e}",
+            "error": str(e),
+        }
+
+    results = resp.get("results", [])
+    fenced = tavily_service.fence_web_content(results)
+    summary = f"Checked '{task_title}' (stored due: {stored_due}) against {len(results)} live source(s)."
+
+    return {
+        "success": True,
+        "data": {
+            "task": dict(task),
+            "results": results,
+            "citations": [r.get("url") for r in results if r.get("url")],
+            "source": "web",
+        },
+        "fenced_context": fenced,
+        "summary": summary,
+        "response": summary,
+        "error": None,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Feasibility & Realist Tool Definitions and Handlers
+# ---------------------------------------------------------------------------
+
+ASSESS_FEASIBILITY_TOOL: Dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "assess_feasibility",
+        "description": (
+            "Determine whether the user's open workload is actually achievable in the "
+            "time they have, and produce a keep/defer/drop triage plan. Use when the "
+            "user asks what to prioritise, what to drop, whether they can finish in "
+            "time, or says they feel overloaded."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "days": {"type": "integer", "description": "Days available, default 5"},
+                "hours_per_day": {"type": "number", "description": "Focused hours per day, default 4"},
+                "domain": {
+                    "type": "string",
+                    "enum": ["hackathon", "coursework", "code", "general"],
+                    "description": "Optional: restrict to one domain",
+                },
+            },
+            "required": [],
+        },
+    },
+}
+
+
+APPLY_TRIAGE_PLAN_TOOL: Dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "apply_triage_plan",
+        "description": "Apply a feasibility triage plan: mark dropped tasks done and keep deferred tasks open. MUTATING — requires user confirmation.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "defer_ids": {"type": "array", "items": {"type": "integer"}, "description": "Task IDs to defer (set status=open)"},
+                "drop_ids": {"type": "array", "items": {"type": "integer"}, "description": "Task IDs to drop (set status=done)"},
+            },
+            "required": [],
+        },
+    },
+}
+
+
+@register_skill("assess_feasibility")
+async def handle_assess_feasibility(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
+    from backend.agents.feasibility import assess_feasibility, DEFAULT_HOURS_PER_DAY
+    try:
+        days = int(args.get("days") or 5)
+        hours = float(args.get("hours_per_day") or DEFAULT_HOURS_PER_DAY)
+    except (TypeError, ValueError):
+        days, hours = 5, DEFAULT_HOURS_PER_DAY
+    days = min(max(days, 1), 90)
+    hours = min(max(hours, 0.5), 16.0)
+
+    domain = args.get("domain")
+    if domain not in ("hackathon", "coursework", "code", "general"):
+        domain = None
+
+    try:
+        plan = await assess_feasibility(pool, days=days, hours_per_day=hours, domain=domain)
+    except Exception as e:
+        logger.error("Feasibility review failed: %s", e, exc_info=True)
+        return {"success": False, "data": {}, "summary": "",
+                "error": "Could not complete the feasibility review."}
+
+    v = plan.verdict
+    return {
+        "success": True,
+        "data": {
+            "triage_plan": plan.model_dump(),
+            "artifact_markdown": plan.as_markdown(),
+            "rounds_used": plan.rounds_used,
+            "degraded": plan.degraded,
+        },
+        "summary": (
+            f"{v.verdict}: {v.demand_hours}h of work against {v.capacity_hours}h "
+            f"available ({v.utilisation_pct}% utilisation). "
+            f"Keeping {len(plan.keep)}, deferring {len(plan.defer)}, "
+            f"dropping {len(plan.drop)}. {plan.narrative}"
+        ),
+        "error": None,
+    }
+
+
+@register_skill("apply_triage_plan")
+async def handle_apply_triage_plan(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
+    """Set deferred tasks to 'open' with pushed dates and drop others.
+    MUTATING — must be confirm-gated."""
+    from backend.memory import structured
+    defer_ids = [int(i) for i in (args.get("defer_ids") or [])]
+    drop_ids = [int(i) for i in (args.get("drop_ids") or [])]
+    changed = []
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            for tid in drop_ids:
+                await structured.update_task_status(conn, tid, "done")
+                changed.append({"id": tid, "action": "dropped"})
+            for tid in defer_ids:
+                await structured.update_task_status(conn, tid, "open")
+                changed.append({"id": tid, "action": "deferred"})
+    return {
+        "success": True,
+        "data": {"changed": changed},
+        "summary": f"Applied triage: {len(drop_ids)} dropped, {len(defer_ids)} deferred.",
+        "error": None,
+    }
+
+
+BASE_TOOL_DEFINITIONS.append(ASSESS_FEASIBILITY_TOOL)
+BASE_TOOL_DEFINITIONS.append(APPLY_TRIAGE_PLAN_TOOL)
+TOOL_DEFINITIONS = get_tool_definitions()

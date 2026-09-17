@@ -55,6 +55,14 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
         ALTER TABLE agent_audit_log ADD COLUMN IF NOT EXISTS is_reverted BOOLEAN NOT NULL DEFAULT FALSE;
         CREATE INDEX IF NOT EXISTS idx_agent_audit_log_run_id     ON agent_audit_log(run_id);
         CREATE INDEX IF NOT EXISTS idx_agent_audit_log_created_at ON agent_audit_log(created_at);
+
+        CREATE TABLE IF NOT EXISTS tavily_usage_log (
+            id         SERIAL       PRIMARY KEY,
+            operation  TEXT         NOT NULL,
+            credits    INTEGER      NOT NULL DEFAULT 1,
+            created_at TIMESTAMPTZ  NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_tavily_usage_created_at ON tavily_usage_log(created_at);
         """)
 
 

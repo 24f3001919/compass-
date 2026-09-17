@@ -11,6 +11,7 @@ Run with:
     uvicorn backend.main:app --reload --port 8000
 """
 
+import os
 import json
 import logging
 import uuid
@@ -20,8 +21,8 @@ from contextlib import asynccontextmanager
 from datetime import datetime, date, timezone
 from typing import Optional, Any, cast
 try:
-    from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam
-except ImportError:
+    from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam  # type: ignore[import-untyped,import-not-found]
+except (ImportError, ModuleNotFoundError):
     ChatCompletionMessageParam = Any  # type: ignore[misc,assignment]
     ChatCompletionToolParam = Any  # type: ignore[misc,assignment]
 
@@ -281,6 +282,7 @@ class HealthResponse(BaseModel):
     version: str = "0.1.0"
     database: str
     db_connected: bool = False
+    commit: str = "unknown"
 
 
 # ---------------------------------------------------------------------------
@@ -619,11 +621,15 @@ async def health_check():
     except Exception:
         pass
 
+    raw_commit = os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "unknown"
+    commit_sha = raw_commit[:7] if len(raw_commit) >= 7 and raw_commit != "unknown" else raw_commit
+
     return HealthResponse(
         status="ok",
         version="0.1.0",
         database=db_status,
         db_connected=(db_status == "connected"),
+        commit=commit_sha,
     )
 
 
@@ -779,7 +785,7 @@ class LogMemoryRequest(BaseModel):
 
 
 @app.post("/api/log")
-async def log_memory_entry(req: LogMemoryRequest):
+async def log_memory_entry(req: LogMemoryRequest, _rl: None = Depends(rate_limit)):
     """Accepts { content, domain, project, tags }, generates 768-dim embedding via Nebius Token Factory,
     inserts into Neon, increments embedding tokens in usage.py, and returns { status: 'logged', id }."""
     from backend.services.embeddings import get_embedding
@@ -1281,4 +1287,34 @@ async def trigger_nightly_consolidation_endpoint(_token: str = Depends(verify_to
     pool = await get_pool()
     result = await run_consolidation(dry_run=False, pool=pool)
     return {"status": "ok", "consolidation": result}
+
+
+class FeasibilityRequest(BaseModel):
+    days: int = 5
+    hours_per_day: float = 4.0
+    domain: Optional[str] = None
+
+
+@app.post("/api/agent/feasibility")
+async def agent_feasibility(req: FeasibilityRequest,
+                            _token: str = Depends(verify_token)):
+    from backend.agents.feasibility import run_feasibility_review
+    pool = await get_pool()
+
+    async def event_generator():
+        try:
+            async for ev in run_feasibility_review(
+                pool, days=req.days, hours_per_day=req.hours_per_day,
+                domain=req.domain,
+            ):
+                yield f"data: {json.dumps(ev)}\n\n"
+        except Exception as e:
+            logger.error("Feasibility stream failed: %s", e, exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 

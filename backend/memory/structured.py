@@ -256,6 +256,11 @@ async def update_task(
     return await get_task(conn, task_id)
 
 
+async def update_task_status(conn: DbConn, task_id: int, status: str) -> Optional[dict]:
+    """Convenience helper to update task status."""
+    return await update_task(conn, task_id, status=status)
+
+
 async def delete_task(conn: DbConn, task_id: int) -> bool:
     """Delete a task by ID."""
     result = await conn.execute("DELETE FROM tasks WHERE id = $1", task_id)
