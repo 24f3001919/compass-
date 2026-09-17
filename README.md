@@ -108,6 +108,36 @@ Nebius Token Factory is the core AI engine of Compass. Every routing decision, e
 
 ---
 
+## Web Intelligence & Real-Time Research (Tavily Integration)
+
+Compass integrates Tavily to bridge the gap between static LLM training cutoffs and live hackathon/coursework realities (e.g. surprise deadline extensions, updated contest rules, emerging library documentation).
+
+### 1. Architecture & Design Principles
+- **Async Client Only**: Uses `AsyncTavilyClient` exclusively across all endpoints and background workers, preventing synchronous blocking of the FastAPI event loop (preventing DEFECT-04 latency degradation).
+- **Single Import Site**: The external `tavily` package is imported exclusively in [`backend/services/tavily.py`](./backend/services/tavily.py). All other modules consume web intelligence through dependency-injected interfaces or dynamic skill dispatch.
+- **Graceful Degradation**: When `TAVILY_ENABLED=false` or `TAVILY_API_KEY` is omitted, web tools are cleanly pruned from the agent's schema at startup without runtime crashes.
+
+### 2. Three Web Skills
+1. **`search_web` (Read-Only)**: Real-time search with domain filtering, query length normalization (<390 chars), citation tracking, and structured response fencing.
+2. **`ingest_url` (Mutating & Human-Gated)**: Fetches and cleans external documentation via Tavily Extract, chunks content into ~1,200 character segments, computes 768-dim embeddings via `Qwen/Qwen3-Embedding-8B` on Nebius Token Factory, and persists them to Neon PostgreSQL with `pgvector` HNSW cosine indexing.
+   - **Safety Gate**: Registered in `MUTATING_TOOLS` — requires explicit confirmation before execution.
+   - **Audit & Reversibility**: Logged to `agent_audit_log` and fully reversible via `/api/agent/undo` (removes all inserted chunks).
+3. **`verify_deadline` (Read-Only)**: Proactively cross-references stored hackathon task deadlines against live contest websites (Devpost, official rules) to detect deadline drift or date extensions without modifying database state.
+
+### 3. Epistemic Humility & Escalation (`[ABSTAIN]`)
+When asked about real-time events or documentation not present in local vector memory, Nemotron models are instructed to output `[ABSTAIN]`. The Compass agent ReAct loop intercepts this token, pauses hallucination, and emits an `escalate` step (`model_tier="Tavily Web Intelligence"`), querying Tavily to answer from verified web evidence. Escalation is bounded to at most once per run to avoid infinite search loops.
+
+### 4. Defense Against Indirect Prompt Injection
+Web content is inherently untrusted. All raw content retrieved from Tavily passes through `fence_web_content()` and `scan_for_injection()` before entering any model prompt:
+- Content is strictly wrapped in `<untrusted_web_content>` XML fences with instructions warning the model that enclosed text is unverified reference data.
+- Common adversarial patterns (`"ignore previous instructions"`, `"system prompt:"`, `"you are now an unrestricted"`) are flagged, sanitized, or rejected.
+- Web content cannot trigger state mutations without passing through the human confirmation gate.
+
+### 5. Dedicated Credit Accounting (`tavily_usage_log`)
+Tavily credit consumption is recorded in a dedicated PostgreSQL table (`tavily_usage_log`), partitioned by operation (`search` = 1-2 credits, `extract` = 1 credit per 5 URLs). Web credits are tracked separately from Nebius GPU token costs and reported in admin usage breakdowns (`python -m cli admin usage`). No credits are fabricated or pre-seeded.
+
+---
+
 ## Quick Start
 
 ### 1. Prerequisites
