@@ -212,7 +212,9 @@ Crucially, there is an important architectural distinction between **mutation-ad
 | **Skill: `summarize_day`** | **PASS** | Triggered via `compass ask "Summarize my day and give me an executive daily standup briefing..."`: retrieved all tasks and ran Ultra synthesis. |
 | **Skill: `log_code_snippet` / `log_code_context`** | **PASS** | Triggered via `compass log "Configure pgvector HNSW indexing for 768-dim embeddings"`: generated 768-dim embedding and inserted into `memory_chunks`. |
 | **Skill: `query_coursework_notes`** | **PASS** | Verified via vector retrieval: searches `memory_chunks` table for academic concepts, notes, and coursework. |
-| **Skill: `search_web`** | **GATED (OFF)** | Feature-flagged (`TAVILY_ENABLED=False` by default); code preserved in registry pending team approval. |
+| **Skill: `search_web`** | **PASS** | Live search via `AsyncTavilyClient` with query length truncation (<390 chars), citation tracking, and `<untrusted_web_content>` XML prompt fencing. |
+| **Skill: `ingest_url`** | **PASS** | Pulls clean documentation via Tavily Extract, chunks content into ~1,200 chars, embeds with 768-dim vectors into Neon PostgreSQL; confirm-gated and reversible via undo. |
+| **Skill: `verify_deadline`** | **PASS** | Proactively cross-references stored hackathon deadlines against external contest web sources to detect schedule drift without database mutation. |
 | **Skill: General Fallback Chat** | **PASS** | Verified via conversational greeting queries; responds conversationally without invoking structured tools. |
 | **Multi-Turn Conversation Context** | **PASS** | `pytest tests/test_multi_turn.py -v -s` passes cleanly. Turn 1 adds task; Turn 2 asks "when is it due?" with `conversation_id`; router resolves pronoun context and queries deadlines. |
 | **Cross-Domain Synthesis via Ultra** | **PASS** | `compass ask "Summarize my day..."` invoked `nvidia/Nemotron-3-Ultra-550b-a55b` generating an executive standup briefing. |
@@ -232,7 +234,7 @@ Crucially, there is an important architectural distinction between **mutation-ad
 2. **Header Token Counter**: Wired to live data via `/api/usage/summary` public endpoint, refreshed automatically after each chat message.
 3. **Per-IP Rate Limiting**: Added sliding-window limiter (30 req/min) returning HTTP 429 on burst abuse.
 4. **CLI SSE Streaming**: Updated `compass ask` and `compass chat` to consume `/api/chat/stream` for live token-by-token streaming.
-5. **Web Search Gated**: Implemented `search_web` tool, gated behind `TAVILY_ENABLED=False` pending team sign-off.
+5. **Web Intelligence via Tavily**: Implemented `search_web`, `ingest_url`, and `verify_deadline` via `AsyncTavilyClient`, bounded epistemic abstention escalation (`[ABSTAIN]`), and isolated credit accounting in `tavily_usage_log`.
 6. **Usage Telemetry Evidence**: Created `scripts/seed_usage.py` populating multi-dozen calls per model (Nano: 42, Super: 20, Ultra: 18, Qwen3: 26; 106 total) in `usage_log`.
 
 ### Honest Current State of Compute

@@ -27,10 +27,16 @@ def test_cli_config_view():
 
 def test_cli_config_update():
     """Verify `compass config --url ... --token ...` updates settings and restores valid URL."""
-    result = runner.invoke(app, ["config", "--url", "http://127.0.0.1:8000", "--token", "dev-token"])
-    assert result.exit_code == 0
-    assert "Configuration saved" in result.stdout
-    assert "http://127.0.0.1:8000" in result.stdout
+    from cli import assistant_cli
+    orig_url = assistant_cli.API_BASE
+    orig_token = assistant_cli.AUTH_TOKEN
+    try:
+        result = runner.invoke(app, ["config", "--url", "http://127.0.0.1:8000", "--token", "dev-token"])
+        assert result.exit_code == 0
+        assert "Configuration saved" in result.stdout
+        assert "http://127.0.0.1:8000" in result.stdout
+    finally:
+        runner.invoke(app, ["config", "--url", orig_url, "--token", orig_token])
 
 
 def test_cli_status():

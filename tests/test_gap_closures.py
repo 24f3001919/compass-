@@ -408,10 +408,39 @@ async def test_agent_runs_conversation_id_filtering(client: AsyncClient):
             await conn.execute("DELETE FROM agent_runs WHERE id = $1", test_run_id)
 
 
-def test_cli_agent_runs_and_briefing_commands():
+def test_cli_agent_runs_and_briefing_commands(monkeypatch):
     """Verify CLI commands `agent-runs` and `agent-briefing` execute cleanly."""
     from typer.testing import CliRunner
     from cli.assistant_cli import app
+    from unittest.mock import MagicMock
+    import httpx
+
+    def mock_get(url, *args, **kwargs):
+        resp = MagicMock()
+        resp.raise_for_status = MagicMock()
+        if "runs" in url:
+            resp.json.return_value = {
+                "runs": [
+                    {
+                        "id": "run_test12345678",
+                        "goal": "Test goal for CLI history display",
+                        "status": "completed",
+                        "steps_count": 3,
+                        "created_at": "2026-09-17T12:00:00",
+                        "conversation_id": "conv_123",
+                    }
+                ]
+            }
+        else:
+            resp.json.return_value = {
+                "run_id": "run_briefing123",
+                "briefing": "Morning executive briefing summary.",
+                "steps_count": 2,
+                "created_at": "2026-09-17T08:00:00",
+            }
+        return resp
+
+    monkeypatch.setattr(httpx, "get", mock_get)
 
     runner = CliRunner()
 
