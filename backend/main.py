@@ -28,7 +28,7 @@ except (ImportError, ModuleNotFoundError):
 
 from fastapi import FastAPI, Depends, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse, Response, HTMLResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
@@ -685,6 +685,12 @@ class FrontendTaskOut(BaseModel):
     tags: list[str] = []
     vector_dim: int = 768
     timestamp: str = "Recently"
+    priority: str = "medium"
+    status: str = "open"
+    duration_minutes: int = 60
+    scheduled_start: Optional[str] = None
+    scheduled_end: Optional[str] = None
+    is_fixed: bool = False
 
 
 def _format_countdown(due_date: Optional[date]) -> str:
@@ -728,6 +734,9 @@ async def get_frontend_tasks(domain: Optional[str] = Query(None)):
                 if t.get("priority") == "urgent":
                     tags.append("urgent")
 
+                s_start = t.get("scheduled_start")
+                s_end = t.get("scheduled_end")
+
                 result.append(
                     FrontendTaskOut(
                         id=str(t["id"]),
@@ -738,6 +747,12 @@ async def get_frontend_tasks(domain: Optional[str] = Query(None)):
                         tags=tags,
                         vector_dim=768,
                         timestamp=ts_str,
+                        priority=t.get("priority", "medium"),
+                        status=t.get("status", "open"),
+                        duration_minutes=int(t.get("duration_minutes") or 60),
+                        scheduled_start=s_start.isoformat() if hasattr(s_start, "isoformat") else (str(s_start) if s_start else None),
+                        scheduled_end=s_end.isoformat() if hasattr(s_end, "isoformat") else (str(s_end) if s_end else None),
+                        is_fixed=bool(t.get("is_fixed", False)),
                     )
                 )
             return result
@@ -1317,4 +1332,370 @@ async def agent_feasibility(req: FeasibilityRequest,
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ---------------------------------------------------------------------------
+# 11. Dynamic Scheduling & Google Calendar Integration Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/calendar/status")
+async def get_calendar_status_endpoint():
+    """Check connection status for Google Calendar integration."""
+    from backend.services.calendar import get_calendar_connection_status
+    pool = await get_pool()
+    status = await get_calendar_connection_status(pool=pool)
+    return {"status": "ok", "calendar": status}
+
+
+@app.get("/api/calendar/availability")
+async def get_calendar_availability_endpoint(
+    start_date: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
+):
+    """Retrieve busy blocks and available working windows."""
+    from backend.skills import SKILL_REGISTRY
+    pool = await get_pool()
+    handler = SKILL_REGISTRY.get("get_calendar_availability")
+    if not handler:
+        raise HTTPException(status_code=500, detail="Availability skill not registered")
+    result = await handler({"start_date": start_date, "end_date": end_date}, pool)
+    return result
+
+
+class ProposeScheduleBody(BaseModel):
+    target_date: Optional[str] = None
+    domain: Optional[str] = None
+    task_ids: Optional[list[int]] = None
+
+
+@app.post("/api/schedule/propose")
+async def propose_schedule_endpoint(body: ProposeScheduleBody):
+    """Generate deterministic schedule proposal for tasks."""
+    from backend.skills import SKILL_REGISTRY
+    pool = await get_pool()
+    handler = SKILL_REGISTRY.get("propose_schedule")
+    if not handler:
+        raise HTTPException(status_code=500, detail="Schedule proposer skill not registered")
+    result = await handler(body.model_dump(), pool)
+    return result
+
+
+class CommitScheduleBody(BaseModel):
+    assignments: list[dict[str, Any]]
+    rationale: Optional[str] = "Committed via Compass Schedule View"
+
+
+@app.post("/api/schedule/commit")
+async def commit_schedule_endpoint(body: CommitScheduleBody):
+    """Commit approved time slots to tasks and calendar."""
+    from backend.skills import SKILL_REGISTRY
+    pool = await get_pool()
+    handler = SKILL_REGISTRY.get("commit_schedule")
+    if not handler:
+        raise HTTPException(status_code=500, detail="Schedule commit skill not registered")
+    result = await handler(body.model_dump(), pool)
+    return result
+
+
+@app.get("/api/calendar/export.ics")
+async def export_calendar_ics_endpoint(domain: Optional[str] = Query(None)):
+    """Export standard RFC 5545 iCalendar feed for calendar apps."""
+    from backend.services.calendar import generate_ics_feed
+    pool = await get_pool()
+    tasks: list[dict[str, Any]] = []
+    if pool is not None:
+        async with pool.acquire() as conn:
+            tasks = await structured.list_tasks(conn, domain=domain, scheduled_only=True)
+            # If no tasks explicitly slotted yet, pull all open tasks and generate demo schedule
+            if not tasks:
+                tasks = await structured.list_tasks(conn, domain=domain)
+
+    ics_content = generate_ics_feed(tasks, calendar_name="Compass Tasks")
+    return Response(
+        content=ics_content,
+        media_type="text/calendar",
+        headers={
+            "Content-Disposition": "attachment; filename=compass_schedule.ics",
+            "Cache-Control": "no-cache",
+        },
+    )
+
+
+@app.get("/api/calendar/preferences")
+async def get_calendar_preferences_endpoint():
+    """Retrieve working hours, days, and buffer preferences."""
+    pool = await get_pool()
+    if not pool:
+        return {
+            "user_id": "default_user",
+            "work_start_time": "09:00:00",
+            "work_end_time": "18:00:00",
+            "work_days": [1, 2, 3, 4, 5],
+            "buffer_minutes": 15,
+            "preferred_focus": "morning",
+        }
+    async with pool.acquire() as conn:
+        prefs = await structured.get_scheduling_preferences(conn)
+        return prefs
+
+
+class UpdatePreferencesBody(BaseModel):
+    work_start_time: Optional[str] = None
+    work_end_time: Optional[str] = None
+    work_days: Optional[list[int]] = None
+    buffer_minutes: Optional[int] = None
+    preferred_focus: Optional[str] = None
+
+
+@app.put("/api/calendar/preferences")
+async def update_calendar_preferences_endpoint(body: UpdatePreferencesBody):
+    """Update working hours, days, and buffer preferences."""
+    pool = await get_pool()
+    if not pool:
+        return {"status": "error", "message": "Database not available"}
+    async with pool.acquire() as conn:
+        updates = {k: v for k, v in body.model_dump().items() if v is not None}
+        prefs = await structured.update_scheduling_preferences(conn, **updates)
+        return {"status": "ok", "preferences": prefs}
+
+
+# ---------------------------------------------------------------------------
+# 12. Google Calendar OAuth Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/calendar/connect")
+async def calendar_connect():
+    """Generate Google OAuth 2.0 authorization URL."""
+    from backend.services.oauth import generate_google_oauth_url
+    url = generate_google_oauth_url()
+    return {"status": "ok", "url": url}
+
+
+@app.get("/api/calendar/callback")
+async def calendar_callback(
+    code: Optional[str] = Query(None),
+    error: Optional[str] = Query(None),
+):
+    """Handle OAuth redirect: exchange authorization code for tokens and save connection."""
+    if error:
+        return HTMLResponse(
+            f"<html><body style='font-family:sans-serif;padding:40px;background:#0f172a;color:#f87171;'>"
+            f"<h3>Google Calendar Authorization Error: {error}</h3>"
+            f"<p><a style='color:#38bdf8;' href='/'>Return to Compass</a></p>"
+            f"</body></html>",
+            status_code=400,
+        )
+    if not code:
+        return HTMLResponse(
+            "<html><body style='font-family:sans-serif;padding:40px;background:#0f172a;color:#f87171;'>"
+            "<h3>Missing OAuth authorization code</h3>"
+            "<p><a style='color:#38bdf8;' href='/'>Return to Compass</a></p>"
+            "</body></html>",
+            status_code=400,
+        )
+
+    from backend.services.oauth import exchange_code_for_tokens
+    from backend.services.calendar import save_calendar_connection
+
+    tokens = await exchange_code_for_tokens(code)
+    pool = await get_pool()
+    if pool:
+        await save_calendar_connection(
+            pool=pool,
+            user_id="default_user",
+            account_email=tokens.get("email", "scholar@compass.ai"),
+            access_token=tokens.get("access_token", ""),
+            refresh_token=tokens.get("refresh_token"),
+            expires_in=tokens.get("expires_in", 3600),
+        )
+
+    return HTMLResponse(
+        "<html><body style='font-family:sans-serif;text-align:center;padding:50px;background:#0f172a;color:#f8fafc;'>"
+        "<h2>🎉 Google Calendar Connected!</h2>"
+        "<p>Compass is now linked to your Google Calendar (Read-Only Free/Busy).</p>"
+        "<p><a style='color:#38bdf8;text-decoration:none;font-weight:bold;' href='/'>Return to Compass</a></p>"
+        "<script>"
+        "if (window.opener) { window.opener.postMessage({type: 'compass_calendar_connected'}, '*'); setTimeout(() => window.close(), 1200); }"
+        "</script>"
+        "</body></html>"
+    )
+
+
+@app.post("/api/calendar/disconnect")
+async def calendar_disconnect():
+    """Disconnect Google Calendar OAuth integration and revert to simulated mode."""
+    from backend.services.calendar import disconnect_calendar_connection
+    pool = await get_pool()
+    if pool:
+        await disconnect_calendar_connection(pool, user_id="default_user")
+    return {"status": "ok", "message": "Google Calendar disconnected."}
+
+
+# ---------------------------------------------------------------------------
+# 13. Task Dependency Graph Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/tasks/{task_id}/dependencies")
+async def get_task_dependencies_endpoint(task_id: int):
+    """Retrieve prerequisite dependencies for a task."""
+    pool = await get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        return await structured.get_task_dependencies(conn, task_id)
+
+
+class AddDependencyBody(BaseModel):
+    depends_on_task_id: int
+
+
+@app.post("/api/tasks/{task_id}/dependencies")
+async def add_task_dependency_endpoint(task_id: int, body: AddDependencyBody):
+    """Add a prerequisite dependency: task_id depends on body.depends_on_task_id."""
+    pool = await get_pool()
+    if not pool:
+        raise HTTPException(status_code=500, detail="Database unavailable")
+    async with pool.acquire() as conn:
+        try:
+            dep = await structured.add_task_dependency(conn, task_id, body.depends_on_task_id)
+            return {"status": "ok", "dependency": dep}
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.delete("/api/tasks/{task_id}/dependencies/{depends_on_task_id}")
+async def remove_task_dependency_endpoint(task_id: int, depends_on_task_id: int):
+    """Remove a dependency edge."""
+    pool = await get_pool()
+    if not pool:
+        raise HTTPException(status_code=500, detail="Database unavailable")
+    async with pool.acquire() as conn:
+        deleted = await structured.remove_task_dependency(conn, task_id, depends_on_task_id)
+        return {"status": "ok", "deleted": deleted}
+
+
+# ---------------------------------------------------------------------------
+# 14. Reactive Dynamic Scheduling Check & Conflict Detection
+# ---------------------------------------------------------------------------
+
+class ReactiveCheckBody(BaseModel):
+    current_time: Optional[str] = None
+
+
+@app.post("/api/schedule/reactive-check")
+async def reactive_schedule_check_endpoint(body: Optional[ReactiveCheckBody] = None):
+    """Detect uncompleted tasks that passed their scheduled end time and compute reactive re-plan.
+
+    If slipped tasks exist, computes updated slot allocations for the slipped task and its
+    downstream dependents, and stages a pending confirmation in agent_runs table so the
+    user can review and approve/reject via the existing human gate.
+    """
+    from dataclasses import asdict
+    from datetime import datetime, timezone, timedelta
+    from backend.services.scheduler import find_slipped_tasks, replan_slipped_tasks, get_available_windows
+    from backend.services.calendar import get_calendar_freebusy
+    from backend.agent import AgentStep, save_agent_run
+
+    pool = await get_pool()
+    if not pool:
+        raise HTTPException(status_code=500, detail="Database unavailable")
+
+    now = datetime.fromisoformat(body.current_time.replace("Z", "+00:00")) if (body and body.current_time) else datetime.now(timezone.utc)
+
+    async with pool.acquire() as conn:
+        all_tasks = await structured.list_tasks(conn)
+        dep_map = await structured.get_all_dependencies_map(conn)
+        prefs = await structured.get_scheduling_preferences(conn)
+
+    slipped = find_slipped_tasks(all_tasks, current_time=now)
+    if not slipped:
+        return {
+            "status": "ok",
+            "slipped_count": 0,
+            "message": "No slipped tasks detected. Schedule is currently on track.",
+            "slipped_tasks": [],
+            "replan": None,
+        }
+
+    busy = await get_calendar_freebusy(now, now + timedelta(days=7), pool=pool)
+    windows = get_available_windows(
+        busy,
+        now,
+        now + timedelta(days=7),
+        work_start_time=prefs.get("work_start_time", "09:00:00"),
+        work_end_time=prefs.get("work_end_time", "18:00:00"),
+        work_days=prefs.get("work_days", [1, 2, 3, 4, 5]),
+        buffer_minutes=prefs.get("buffer_minutes", 15),
+    )
+
+    replan = replan_slipped_tasks(
+        slipped_tasks=slipped,
+        all_tasks=all_tasks,
+        dependencies=dep_map,
+        available_windows=windows,
+        buffer_minutes=prefs.get("buffer_minutes", 15),
+    )
+
+    # If there are rescheduled slots, create an agent run staged for user confirmation
+    run_id = f"reactive_replan_{int(now.timestamp())}"
+    if replan["rescheduled"]:
+        rationale = f"Reactive re-schedule: {len(slipped)} task(s) slipped past scheduled end ({replan['slipped_task_ids']}). Replanned {len(replan['rescheduled'])} affected tasks."
+        pending_action = {
+            "tool": "commit_schedule",
+            "args": {
+                "assignments": replan["rescheduled"],
+                "rationale": rationale,
+            },
+        }
+        step_think = AgentStep(
+            type="think",
+            content=f"Detected slipped uncompleted task(s): {', '.join(str(s.get('title', 'Task')) for s in slipped)}. Calculating cascading dependencies and replanning into available slots.",
+            step_number=1,
+            run_id=run_id,
+        )
+        step_confirm = AgentStep(
+            type="confirm_request",
+            content=rationale,
+            tool_name="commit_schedule",
+            tool_args=pending_action["args"],
+            step_number=2,
+            run_id=run_id,
+        )
+
+        try:
+            await save_agent_run(
+                pool=pool,
+                run_id=run_id,
+                goal=f"Reactive Re-Plan: Slipped Tasks {replan['slipped_task_ids']}",
+                status="pending_confirmation",
+                accumulated_steps=[step_think, step_confirm],
+                messages=[{"role": "assistant", "content": rationale}],
+                pending_actions=[pending_action],
+            )
+        except Exception as e:
+            logger.warning(f"Could not persist reactive agent run: {e}")
+
+    return {
+        "status": "reactive_replan_staged" if replan["rescheduled"] else "slipped_detected_no_slots",
+        "run_id": run_id if replan["rescheduled"] else None,
+        "slipped_count": len(slipped),
+        "slipped_tasks": slipped,
+        "replan": replan,
+    }
+
+
+@app.get("/api/schedule/conflicts")
+async def get_schedule_conflicts_endpoint(
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+):
+    """Check for schedule overlaps, dependency timing violations, and slipped deadlines."""
+    from backend.skills import SKILL_REGISTRY
+    pool = await get_pool()
+    handler = SKILL_REGISTRY.get("detect_schedule_conflicts")
+    if not handler:
+        raise HTTPException(status_code=500, detail="Conflict detection skill not registered")
+    result = await handler({"start_date": start_date, "end_date": end_date}, pool)
+    return result
+
 
