@@ -790,7 +790,7 @@ async def create_frontend_task(req: CreateTaskRequest):
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid due_date format (expected YYYY-MM-DD)")
 
-    dom_clean = str(req.domain or "general").lower().strip()
+    dom_clean = (req.domain or "general").lower().strip()
     if dom_clean not in structured.VALID_DOMAINS:
         dom_clean = "general"
 
@@ -815,7 +815,7 @@ async def create_frontend_task(req: CreateTaskRequest):
             task_id = task_row["id"]
             if req.duration_minutes:
                 try:
-                    await structured.update_task(conn, task_id, duration_minutes=int(req.duration_minutes))
+                    await structured.update_task(conn, task_id, duration_minutes=req.duration_minutes)
                 except Exception as ex:
                     logger.debug(f"Could not update duration_minutes: {ex}")
 
@@ -864,7 +864,7 @@ async def create_frontend_task(req: CreateTaskRequest):
                 timestamp=ts_str,
                 priority=task_row.get("priority", "medium"),
                 status=task_row.get("status", "open"),
-                duration_minutes=int(req.duration_minutes or 60),
+                duration_minutes=req.duration_minutes or 60,
                 scheduled_start=None,
                 scheduled_end=None,
                 is_fixed=False,
@@ -886,7 +886,7 @@ async def create_frontend_task(req: CreateTaskRequest):
             timestamp="Just now",
             priority=req.priority,
             status="open",
-            duration_minutes=int(req.duration_minutes or 60),
+            duration_minutes=req.duration_minutes or 60,
             description=req.notes,
         )
 
@@ -1147,7 +1147,8 @@ async def stream_chat(req: StreamChatRequest, _rl: None = Depends(rate_limit)):
     Non-tool-call messages are streamed; tool-call responses (e.g. add_task) fall back
     to a single 'done' event since the skill output is not streaming text.
     """
-    from openai import AsyncOpenAI
+    from openai import AsyncOpenAI, AsyncStream
+    from openai.types.chat import ChatCompletionChunk
     from backend.config import get_settings as _gs
     from backend.router import TOOLS
     from backend.services.usage import record_usage
@@ -1184,14 +1185,17 @@ async def stream_chat(req: StreamChatRequest, _rl: None = Depends(rate_limit)):
             ]
             tools: list[ChatCompletionToolParam] = cast(list[ChatCompletionToolParam], TOOLS)
 
-            stream = await client.chat.completions.create(
-                model=_settings.ROUTER_MODEL,
-                messages=messages,
-                tools=tools,
-                tool_choice="auto",
-                max_tokens=512,
-                temperature=0.7,
-                stream=True,
+            stream = cast(
+                AsyncStream[ChatCompletionChunk],
+                await client.chat.completions.create(
+                    model=_settings.ROUTER_MODEL,
+                    messages=messages,
+                    tools=tools,
+                    tool_choice="auto",
+                    max_tokens=512,
+                    temperature=0.7,
+                    stream=True,
+                ),
             )
 
             full_text = ""
