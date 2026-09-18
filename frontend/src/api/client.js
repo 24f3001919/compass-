@@ -400,3 +400,33 @@ export async function fetchScheduleConflicts() {
   return await res.json()
 }
 
+/**
+ * Create a task or deadline directly without relying on AI chat.
+ */
+export async function createTask(taskData) {
+  const res = await fetch(`${API_BASE}/api/tasks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(taskData)
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Failed to create task (HTTP ${res.status})`)
+  }
+  return await res.json()
+}
+
+/**
+ * Delete a task or deadline directly by ID without relying on AI chat.
+ */
+export async function deleteTask(taskId) {
+  const res = await fetch(`${API_BASE}/api/tasks/${taskId}`, {
+    method: 'DELETE'
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Failed to delete task (HTTP ${res.status})`)
+  }
+  return await res.json()
+}
+

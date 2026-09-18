@@ -691,6 +691,7 @@ class FrontendTaskOut(BaseModel):
     scheduled_start: Optional[str] = None
     scheduled_end: Optional[str] = None
     is_fixed: bool = False
+    description: Optional[str] = None
 
 
 def _format_countdown(due_date: Optional[date]) -> str:
@@ -753,12 +754,176 @@ async def get_frontend_tasks(domain: Optional[str] = Query(None)):
                         scheduled_start=s_start.isoformat() if hasattr(s_start, "isoformat") else (str(s_start) if s_start else None),
                         scheduled_end=s_end.isoformat() if hasattr(s_end, "isoformat") else (str(s_end) if s_end else None),
                         is_fixed=bool(t.get("is_fixed", False)),
+                        description=t.get("notes") or t.get("description"),
                     )
                 )
             return result
     except Exception as e:
         logger.warning(f"Error fetching frontend tasks from DB: {e}")
         return []
+
+
+class CreateTaskRequest(BaseModel):
+    title: str
+    domain: str = "general"
+    due_date: Optional[str] = None
+    project: Optional[str] = "General"
+    priority: str = "medium"
+    notes: Optional[str] = None
+    duration_minutes: Optional[int] = 60
+
+
+@app.post("/api/tasks", response_model=FrontendTaskOut)
+@app.post("/tasks", response_model=FrontendTaskOut)
+async def create_frontend_task(req: CreateTaskRequest):
+    """Direct user endpoint to create a task or deadline without relying on AI chat."""
+    title = req.title.strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Task title is required")
+
+    parsed_date = None
+    if req.due_date:
+        try:
+            parsed_date = date.fromisoformat(req.due_date.strip())
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid due_date format (expected YYYY-MM-DD)")
+
+    dom_clean = str(req.domain or "general").lower().strip()
+    if dom_clean not in structured.VALID_DOMAINS:
+        dom_clean = "general"
+
+    proj_name = req.project.strip() if req.project else "General"
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            project_id = None
+            if proj_name and proj_name != "General":
+                proj = await structured.get_or_create_project(conn, name=proj_name, domain=dom_clean)
+                project_id = proj.get("id")
+
+            task_row = await structured.create_task(
+                conn,
+                domain=dom_clean,
+                title=title,
+                project_id=project_id,
+                due_date=parsed_date,
+                priority=req.priority,
+                notes=req.notes,
+            )
+            task_id = task_row["id"]
+            if req.duration_minutes:
+                try:
+                    await structured.update_task(conn, task_id, duration_minutes=int(req.duration_minutes))
+                except Exception as ex:
+                    logger.debug(f"Could not update duration_minutes: {ex}")
+
+            try:
+                from backend.services.embeddings import get_embedding
+                emb_text = f"Task [{dom_clean}]: {title}"
+                if proj_name and proj_name != "General":
+                    emb_text += f" (Project: {proj_name})"
+                if req.notes:
+                    emb_text += f" - {req.notes}"
+                embedding = await get_embedding(emb_text)
+                tags_list = [dom_clean]
+                if proj_name and proj_name != "General":
+                    tags_list.append(proj_name.lower().replace(" ", "-"))
+                if req.priority == "urgent":
+                    tags_list.append("urgent")
+                await conn.execute(
+                    """
+                    INSERT INTO memory_chunks (domain, project_id, content, embedding, source, tags)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    """,
+                    dom_clean, project_id, emb_text, embedding, "direct_task_creation", tags_list
+                )
+            except Exception as e:
+                logger.warning(f"Could not index memory chunk for new task: {e}")
+
+            due_d = task_row.get("due_date")
+            countdown_str = _format_countdown(due_d)
+            created_at = task_row.get("created_at") or datetime.now()
+            ts_str = created_at.strftime("%b %d, %H:%M") if isinstance(created_at, (datetime, date)) else "Just now"
+
+            tags = [dom_clean]
+            if proj_name and proj_name != "General":
+                tags.append(proj_name.lower().replace(" ", "-"))
+            if req.priority == "urgent":
+                tags.append("urgent")
+
+            return FrontendTaskOut(
+                id=str(task_id),
+                title=task_row["title"],
+                domain=task_row["domain"],
+                project=proj_name,
+                countdown=countdown_str,
+                tags=tags,
+                vector_dim=768,
+                timestamp=ts_str,
+                priority=task_row.get("priority", "medium"),
+                status=task_row.get("status", "open"),
+                duration_minutes=int(req.duration_minutes or 60),
+                scheduled_start=None,
+                scheduled_end=None,
+                is_fixed=False,
+                description=req.notes,
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"DB unavailable for task creation, falling back to mock: {e}")
+        import uuid
+        return FrontendTaskOut(
+            id=f"demo-{uuid.uuid4().hex[:8]}",
+            title=title,
+            domain=dom_clean,
+            project=proj_name,
+            countdown=_format_countdown(parsed_date),
+            tags=[dom_clean],
+            vector_dim=768,
+            timestamp="Just now",
+            priority=req.priority,
+            status="open",
+            duration_minutes=int(req.duration_minutes or 60),
+            description=req.notes,
+        )
+
+
+@app.delete("/api/tasks/{task_id}")
+@app.delete("/tasks/{task_id}")
+async def delete_frontend_task(task_id: str):
+    """Direct user endpoint to delete a task or deadline without relying on AI chat."""
+    try:
+        numeric_id = int(task_id)
+    except ValueError:
+        return {"status": "ok", "deleted": True, "task_id": task_id}
+
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            existing = await structured.get_task(conn, numeric_id)
+            if not existing:
+                raise HTTPException(status_code=404, detail="Task not found")
+
+            # Remove task dependencies if any exist
+            try:
+                await conn.execute(
+                    "DELETE FROM task_dependencies WHERE task_id = $1 OR depends_on_task_id = $1",
+                    numeric_id
+                )
+            except Exception as e:
+                logger.warning(f"Could not delete task dependencies for task {numeric_id}: {e}")
+
+            deleted = await structured.delete_task(conn, numeric_id)
+            if not deleted:
+                raise HTTPException(status_code=500, detail="Failed to delete task")
+
+            return {"status": "ok", "deleted": True, "task_id": str(numeric_id)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"DB unavailable for task deletion, treating as mock: {e}")
+        return {"status": "ok", "deleted": True, "task_id": task_id}
 
 
 class PublicChatRequest(BaseModel):
