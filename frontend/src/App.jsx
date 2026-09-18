@@ -298,6 +298,10 @@ export default function App() {
             tasks={tasks}
             activeDomain={selectedDomain}
             onSelectDomain={setSelectedDomain}
+            onTasksUpdated={() => {
+              loadTasks(selectedDomain)
+              refreshUsage()
+            }}
           />
         ) : activeTab === 'calendar' ? (
           <CalendarView

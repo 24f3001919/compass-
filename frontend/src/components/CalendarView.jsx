@@ -10,6 +10,7 @@ import {
   checkReactiveSchedule,
   syncCalendarNow,
   quickConnectUser,
+  deleteTask,
 } from '../api/client'
 
 const DOMAIN_STYLES = {
@@ -713,9 +714,42 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated }) {
                     <span style={{ fontSize: '12.5px', color: '#f1f5f9', fontWeight: '500' }}>
                       {task.title}
                     </span>
-                    <span className={style.badgeClass} style={{ padding: '1px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: '700' }}>
-                      {task.domain}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span className={style.badgeClass} style={{ padding: '1px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: '700' }}>
+                        {task.domain}
+                      </span>
+                      <button
+                        title="Delete task/deadline"
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          if (window.confirm(`Delete "${task.title}"?`)) {
+                            try {
+                              await deleteTask(task.id)
+                              if (onTasksUpdated) onTasksUpdated()
+                            } catch (err) {
+                              alert(`Failed to delete: ${err.message}`)
+                            }
+                          }
+                        }}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#64748b',
+                          cursor: 'pointer',
+                          padding: '2px 4px',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'color 0.15s ease'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
+                        onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
                     <span style={{ fontSize: '11px', color: '#64748b' }}>
