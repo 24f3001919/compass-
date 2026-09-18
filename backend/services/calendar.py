@@ -374,7 +374,7 @@ async def create_google_calendar_event(
             return {
                 "id": f"gcal_fallback_{uuid.uuid4().hex[:10]}",
                 "status": "confirmed",
-                "htmlLink": f"https://calendar.google.com/calendar",
+                "htmlLink": "https://calendar.google.com/calendar",
                 "mode": "fallback",
             }
     except Exception as e:
@@ -382,7 +382,7 @@ async def create_google_calendar_event(
         return {
             "id": f"gcal_fallback_{uuid.uuid4().hex[:10]}",
             "status": "confirmed",
-            "htmlLink": f"https://calendar.google.com/calendar",
+            "htmlLink": "https://calendar.google.com/calendar",
             "mode": "fallback",
         }
 

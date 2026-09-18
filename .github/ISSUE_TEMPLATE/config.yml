@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Compass Documentation
+    url: https://github.com/Ratnesh-101/compass#readme
+    about: Read the official documentation and setup guides.
