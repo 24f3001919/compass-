@@ -308,13 +308,11 @@ async def root():
 
 # ---- 1. POST /chat -------------------------------------------------------
 @app.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest, req_raw: Request, _token: str = Depends(verify_token)):
+async def chat(request: ChatRequest, _token: str = Depends(verify_token)):
     """Main conversational endpoint — wired to Nemotron router and orchestrator."""
-    user_id = _get_current_user_id(req_raw)
     result = await handle_message(
         conversation_id=request.conversation_id,
         message=request.message,
-        user_id=user_id,
     )
     return ChatResponse(**result)
 
@@ -694,6 +692,7 @@ class FrontendTaskOut(BaseModel):
     scheduled_end: Optional[str] = None
     is_fixed: bool = False
     description: Optional[str] = None
+    due_date: Optional[str] = None  # ISO date string (YYYY-MM-DD), for edit pre-fill
 
 
 def _format_countdown(due_date: Optional[date]) -> str:
@@ -758,6 +757,7 @@ async def get_frontend_tasks(request: Request, domain: Optional[str] = Query(Non
                         scheduled_end=s_end.isoformat() if hasattr(s_end, "isoformat") else (str(s_end) if s_end else None),
                         is_fixed=bool(t.get("is_fixed", False)),
                         description=t.get("notes") or t.get("description"),
+                        due_date=due_d.isoformat() if hasattr(due_d, "isoformat") else (str(due_d) if due_d else None),
                     )
                 )
             return result
@@ -894,6 +894,110 @@ async def create_frontend_task(request: Request, req: CreateTaskRequest):
         )
 
 
+class UpdateTaskRequest(BaseModel):
+    title: Optional[str] = None
+    domain: Optional[str] = None
+    project: Optional[str] = None
+    due_date: Optional[str] = None
+    priority: Optional[str] = None
+    status: Optional[str] = None
+    notes: Optional[str] = None
+    duration_minutes: Optional[int] = None
+
+
+@app.patch("/api/tasks/{task_id}", response_model=FrontendTaskOut)
+@app.put("/api/tasks/{task_id}", response_model=FrontendTaskOut)
+async def update_frontend_task(task_id: str, req: UpdateTaskRequest, request: Request):
+    """Direct user endpoint to edit any field of a task/deadline without relying on AI chat."""
+    try:
+        numeric_id = int(task_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid task ID")
+
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            existing = await structured.get_task(conn, numeric_id)
+            if not existing:
+                raise HTTPException(status_code=404, detail="Task not found")
+
+            # Build update kwargs — only include provided fields
+            update_kwargs: dict = {}
+
+            if req.title is not None:
+                update_kwargs["title"] = req.title.strip()
+            if req.domain is not None:
+                update_kwargs["domain"] = req.domain.lower().strip()
+            if req.priority is not None:
+                update_kwargs["priority"] = req.priority
+            if req.status is not None:
+                update_kwargs["status"] = req.status
+            if req.notes is not None:
+                update_kwargs["notes"] = req.notes.strip() or None
+            if req.duration_minutes is not None:
+                update_kwargs["duration_minutes"] = req.duration_minutes
+
+            # Handle due_date string → date conversion
+            if req.due_date is not None:
+                if req.due_date == "" or req.due_date.lower() == "null":
+                    update_kwargs["due_date"] = None
+                else:
+                    try:
+                        from datetime import date as _date
+                        update_kwargs["due_date"] = _date.fromisoformat(req.due_date)
+                    except ValueError:
+                        raise HTTPException(status_code=400, detail=f"Invalid due_date format: {req.due_date}")
+
+            # Handle project rename: resolve or create project
+            if req.project is not None:
+                proj_name = req.project.strip() or "General"
+                dom_for_proj = update_kwargs.get("domain") or existing.get("domain", "general")
+                proj_row = await structured.get_or_create_project(conn, proj_name, dom_for_proj)
+                update_kwargs["project_id"] = proj_row.get("id")
+
+            updated = await structured.update_task(conn, numeric_id, **update_kwargs)
+            if not updated:
+                raise HTTPException(status_code=500, detail="Failed to update task")
+
+            # Reformat into FrontendTaskOut
+            proj_data = updated.get("project") or {}
+            proj_name_out = proj_data.get("name", "General") if proj_data else "General"
+            due_d = updated.get("due_date")
+            countdown_str = _format_countdown(due_d)
+            created_at = updated.get("created_at")
+            if isinstance(created_at, (datetime, date)):
+                ts_str = created_at.strftime("%b %d, %H:%M")
+            else:
+                ts_str = "Recently"
+
+            tags = [updated.get("domain", "task")]
+            if proj_name_out and proj_name_out != "General":
+                tags.append(proj_name_out.lower().replace(" ", "-"))
+            if updated.get("priority") == "urgent":
+                tags.append("urgent")
+
+            return FrontendTaskOut(
+                id=str(updated["id"]),
+                title=updated["title"],
+                domain=updated.get("domain", "general"),
+                project=proj_name_out,
+                countdown=countdown_str,
+                tags=tags,
+                vector_dim=768,
+                timestamp=ts_str,
+                priority=updated.get("priority", "medium"),
+                status=updated.get("status", "open"),
+                duration_minutes=int(updated.get("duration_minutes") or 60),
+                description=updated.get("notes") or updated.get("description"),
+                due_date=due_d.isoformat() if hasattr(due_d, "isoformat") else (str(due_d) if due_d else None),
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"DB unavailable for task update: {e}")
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+
 @app.delete("/api/tasks/{task_id}")
 @app.delete("/tasks/{task_id}")
 async def delete_frontend_task(task_id: str):
@@ -945,13 +1049,12 @@ class PublicChatResponse(BaseModel):
 
 
 @app.post("/api/chat", response_model=PublicChatResponse)
-async def public_chat(req: PublicChatRequest, request: Request, _rl: None = Depends(rate_limit)):
+async def public_chat(req: PublicChatRequest, _rl: None = Depends(rate_limit)):
     """Executes orchestrator.handle_message(), records usage, and returns response and latency."""
     from backend.orchestrator import handle_message
 
-    user_id = _get_current_user_id(request)
     msg = req.message.strip()
-    result = await handle_message(conversation_id=req.conversation_id, message=msg, user_id=user_id)
+    result = await handle_message(conversation_id=req.conversation_id, message=msg)
 
     return PublicChatResponse(
         response=result.get("response", ""),
@@ -971,7 +1074,7 @@ class LogMemoryRequest(BaseModel):
 
 
 @app.post("/api/log")
-async def log_memory_entry(req: LogMemoryRequest, request: Request, _rl: None = Depends(rate_limit)):
+async def log_memory_entry(req: LogMemoryRequest, _rl: None = Depends(rate_limit)):
     """Accepts { content, domain, project, tags }, generates 768-dim embedding via Nebius Token Factory,
     inserts into Neon, increments embedding tokens in usage.py, and returns { status: 'logged', id }."""
     from backend.services.embeddings import get_embedding
@@ -981,8 +1084,6 @@ async def log_memory_entry(req: LogMemoryRequest, request: Request, _rl: None = 
     text = (req.content or req.summary or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="Missing memory content or summary")
-
-    user_id = _get_current_user_id(request)
 
     # Normalize tags into list[str]
     tags_list: list[str] = []
@@ -1010,11 +1111,11 @@ async def log_memory_entry(req: LogMemoryRequest, request: Request, _rl: None = 
 
             row = await conn.fetchrow(
                 """
-                INSERT INTO memory_chunks (domain, project_id, content, embedding, source, tags, user_id)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-                RETURNING id, domain, project_id, content, source, tags, user_id, created_at
+                INSERT INTO memory_chunks (domain, project_id, content, embedding, source, tags)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING id, domain, project_id, content, source, tags, created_at
                 """,
-                req.domain, project_id, text, embedding, "api_log", tags_list, user_id
+                req.domain, project_id, text, embedding, "api_log", tags_list
             )
             if row:
                 chunk_id = str(row["id"])
@@ -1038,7 +1139,7 @@ class StreamChatRequest(BaseModel):
 
 
 @app.post("/api/chat/stream")
-async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depends(rate_limit)):
+async def stream_chat(req: StreamChatRequest, _rl: None = Depends(rate_limit)):
     """Real Server-Sent Events endpoint.
 
     Streams Nebius token-by-token output using stream=True on the OpenAI-compatible
@@ -1056,7 +1157,6 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
     from backend.orchestrator import handle_message
 
     _settings = _gs()
-    user_id = _get_current_user_id(request)
 
     async def event_generator():
         conv_id = req.conversation_id or str(uuid.uuid4())
@@ -1064,7 +1164,7 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
 
         # If no Nebius key, fall back to non-streaming orchestrator
         if not _settings.NEBIUS_API_KEY:
-            result = await handle_message(conversation_id=req.conversation_id, message=message, user_id=user_id)
+            result = await handle_message(conversation_id=req.conversation_id, message=message)
             response_text = result.get("response", "")
             prompt_est = max(len(message.split()) * 3, 30)
             completion_est = max(len(response_text.split()), 15)
@@ -1116,7 +1216,7 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
 
             if tool_call_detected:
                 # Tool call detected — fall back to full orchestrator for structured handling
-                result = await handle_message(conversation_id=req.conversation_id, message=message, user_id=user_id)
+                result = await handle_message(conversation_id=req.conversation_id, message=message)
                 response_text = result.get("response", "")
                 prompt_est = max(len(message.split()) * 3, 30)
                 completion_est = max(len(response_text.split()), 15)
@@ -1136,7 +1236,7 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
         except Exception as e:
             logger.warning(f"SSE stream error ({e}); falling back to non-streaming orchestrator")
             try:
-                result = await handle_message(conversation_id=req.conversation_id, message=message, user_id=user_id)
+                result = await handle_message(conversation_id=req.conversation_id, message=message)
                 response_text = result.get("response", "")
                 prompt_est = max(len(message.split()) * 3, 30)
                 completion_est = max(len(response_text.split()), 15)
