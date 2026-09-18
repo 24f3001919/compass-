@@ -113,13 +113,25 @@ def decrypt_token(enc_text: Optional[str]) -> Optional[str]:
 # OAuth URL Generation, Token Exchange, & Refresh
 # ---------------------------------------------------------------------------
 
+def is_google_oauth_configured() -> bool:
+    """Return True if real Google OAuth client credentials are configured in environment or settings."""
+    settings = get_settings()
+    c_id = getattr(settings, "GOOGLE_CLIENT_ID", None) or os.getenv("GOOGLE_CLIENT_ID", "")
+    secret = getattr(settings, "GOOGLE_CLIENT_SECRET", None) or os.getenv("GOOGLE_CLIENT_SECRET", "")
+    return bool(c_id and secret and not str(c_id).startswith("demo-"))
+
+
 def generate_google_oauth_url(
     redirect_uri: str = "http://localhost:8000/api/calendar/callback",
     state: Optional[str] = None,
     client_id: Optional[str] = None,
     login_hint: Optional[str] = None,
 ) -> str:
-    """Generate the Google OAuth 2.0 authorization URL with calendar and profile scopes."""
+    """Generate the Google OAuth 2.0 authorization URL with calendar and profile scopes.
+    
+    Always includes prompt='select_account consent' so Google will present the account
+    selection screen rather than silently logging into an existing browser session.
+    """
     settings = get_settings()
     c_id = client_id or getattr(settings, "GOOGLE_CLIENT_ID", None) or os.getenv("GOOGLE_CLIENT_ID", "demo-compass-client-id.apps.googleusercontent.com")
     
@@ -130,7 +142,7 @@ def generate_google_oauth_url(
         "response_type": "code",
         "scope": GOOGLE_OAUTH_SCOPE_STRING,
         "access_type": "offline",
-        "prompt": "consent",
+        "prompt": "select_account consent",
         "state": state_token,
     }
     if login_hint:

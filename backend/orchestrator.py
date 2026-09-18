@@ -43,6 +43,7 @@ def _parse_iso_date(val: Optional[str]) -> Optional[date]:
 async def handle_message(
     conversation_id: Optional[str],
     message: str,
+    user_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Process an incoming user message through router and skill handlers."""
     start_time = time.perf_counter()
@@ -65,6 +66,8 @@ async def handle_message(
 
     # 1. Route via Nemotron-3 Nano
     skill_name, args, text_reply = await route_message(message, history=history if history else None)
+    if user_id and isinstance(args, dict):
+        args["user_id"] = user_id
 
     # 2. Skill Execution: add_task
     if skill_name == "add_task" and args:
@@ -105,6 +108,7 @@ async def handle_message(
                     status=status,
                     priority=priority,
                     notes=notes,
+                    user_id=user_id,
                 )
         except Exception as e:
             logger.error(f"add_task failed — database unavailable: {e}", exc_info=True)

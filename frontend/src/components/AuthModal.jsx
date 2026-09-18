@@ -1,0 +1,489 @@
+import React, { useState } from 'react'
+import {
+  selectAccount,
+  logoutUser,
+  getGoogleOAuthConnectUrl,
+  disconnectCalendar,
+  syncCalendarNow,
+  getCalendarExportUrl,
+} from '../api/client'
+
+export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged }) {
+  const [emailInput, setEmailInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [successMsg, setSuccessMsg] = useState(null)
+  const [copiedIcs, setCopiedIcs] = useState(false)
+
+  if (!isOpen) return null
+
+  const handleSwitchAccount = async (targetEmail) => {
+    const clean = targetEmail.trim().toLowerCase()
+    if (!clean || !clean.includes('@')) {
+      setError('Please enter a valid email address.')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    setSuccessMsg(null)
+    try {
+      await selectAccount(clean)
+      setSuccessMsg(`Switched to account: ${clean}`)
+      if (onUserChanged) onUserChanged(clean)
+      setTimeout(() => {
+        onClose()
+      }, 700)
+    } catch (err) {
+      setError(err.message || 'Failed to switch account')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      await logoutUser()
+      if (currentUser?.authenticated) {
+        await disconnectCalendar()
+      }
+      if (onUserChanged) onUserChanged(null)
+      onClose()
+    } catch (err) {
+      setError(err.message || 'Failed to sign out')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCopyIcs = () => {
+    const url = getCalendarExportUrl()
+    const fullUrl = url.startsWith('http') ? url : `${window.location.origin}${url}`
+    navigator.clipboard.writeText(fullUrl)
+    setCopiedIcs(true)
+    setTimeout(() => setCopiedIcs(false), 2500)
+  }
+
+  const activeEmail = currentUser?.authenticated ? currentUser.email : null
+  const isCalendarLinked = currentUser?.calendar?.connected || false
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(2, 6, 15, 0.78)',
+        backdropFilter: 'blur(4px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1100,
+        padding: '20px'
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: '#0d131f',
+          borderRadius: '16px',
+          border: '1px solid #1e293b',
+          width: '100%',
+          maxWidth: '560px',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+          padding: '26px',
+          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7)',
+          color: '#f8fafc'
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '24px' }}>👤</span>
+            <div>
+              <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: '#f8fafc' }}>
+                Account & Google Calendar
+              </h3>
+              <p style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 0' }}>
+                Select your account and manage individual memory isolation
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: '#1e293b',
+              border: '1px solid #334155',
+              color: '#94a3b8',
+              width: '28px',
+              height: '28px',
+              borderRadius: '7px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Status Banners */}
+        {error && (
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.12)',
+            border: '1px solid rgba(239, 68, 68, 0.35)',
+            color: '#fca5a5',
+            padding: '10px 14px',
+            borderRadius: '8px',
+            fontSize: '13px',
+            marginBottom: '16px'
+          }}>
+            ⚠️ {error}
+          </div>
+        )}
+        {successMsg && (
+          <div style={{
+            background: 'rgba(16, 185, 129, 0.12)',
+            border: '1px solid rgba(16, 185, 129, 0.35)',
+            color: '#6ee7b7',
+            padding: '10px 14px',
+            borderRadius: '8px',
+            fontSize: '13px',
+            marginBottom: '16px'
+          }}>
+            ✓ {successMsg}
+          </div>
+        )}
+
+        {/* Current Session Overview */}
+        <div style={{
+          background: '#131c2e',
+          border: '1px solid #1e293b',
+          borderRadius: '12px',
+          padding: '16px',
+          marginBottom: '20px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', fontWeight: '700' }}>
+                Active Account
+              </div>
+              <div style={{ fontSize: '15px', fontWeight: '700', color: activeEmail ? '#38bdf8' : '#94a3b8', marginTop: '2px' }}>
+                {activeEmail || 'Guest Mode (No active account)'}
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                background: activeEmail ? '#10b981' : '#64748b',
+                boxShadow: activeEmail ? '0 0 8px #10b981' : 'none'
+              }} />
+              <span style={{ fontSize: '12px', color: activeEmail ? '#10b981' : '#64748b', fontWeight: '600' }}>
+                {activeEmail ? 'Isolated Memory Active' : 'Unauthenticated'}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ marginTop: '10px', fontSize: '12px', color: '#94a3b8', lineHeight: '1.5' }}>
+            🔒 <strong>Per-Account Privacy:</strong> Deadlines, tasks, and assistant memory chunks belong strictly to your active account. Switching accounts automatically isolates all workspace state.
+          </div>
+        </div>
+
+        {/* Account Selection */}
+        <div style={{ marginBottom: '24px' }}>
+          <h4 style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#cbd5e1', fontWeight: '700', marginBottom: '12px' }}>
+            1. Select Login Account
+          </h4>
+
+          {/* Quick Picker for kumarinandan911@gmail.com */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+            <button
+              onClick={() => handleSwitchAccount('kumarinandan911@gmail.com')}
+              disabled={loading}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                border: activeEmail === 'kumarinandan911@gmail.com' ? '1.5px solid #3b82f6' : '1px solid #1e293b',
+                background: activeEmail === 'kumarinandan911@gmail.com' ? 'rgba(59, 130, 246, 0.15)' : '#111827',
+                color: '#f8fafc',
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '16px' }}>⭐</span>
+                <div>
+                  <div style={{ fontSize: '13.5px', fontWeight: '600', color: '#f8fafc' }}>
+                    kumarinandan911@gmail.com
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#64748b' }}>
+                    Primary User Account (Isolated Workspace)
+                  </div>
+                </div>
+              </div>
+              {activeEmail === 'kumarinandan911@gmail.com' ? (
+                <span style={{ fontSize: '11.5px', color: '#38bdf8', fontWeight: '700' }}>✓ Active</span>
+              ) : (
+                <span style={{ fontSize: '12px', color: '#60a5fa', fontWeight: '600' }}>Switch →</span>
+              )}
+            </button>
+          </div>
+
+          {/* Custom Email Input */}
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input
+              type="email"
+              placeholder="Or enter another email (e.g. user@gmail.com)"
+              value={emailInput}
+              onChange={e => setEmailInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  if (emailInput.trim()) handleSwitchAccount(emailInput)
+                }
+              }}
+              style={{
+                flex: 1,
+                padding: '9px 12px',
+                borderRadius: '8px',
+                border: '1px solid #334155',
+                background: '#111827',
+                color: '#f8fafc',
+                fontSize: '13px',
+                outline: 'none'
+              }}
+            />
+            <button
+              onClick={() => handleSwitchAccount(emailInput)}
+              disabled={loading || !emailInput.trim()}
+              style={{
+                padding: '9px 16px',
+                borderRadius: '8px',
+                border: 'none',
+                background: '#2563eb',
+                color: '#fff',
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: loading || !emailInput.trim() ? 'not-allowed' : 'pointer',
+                opacity: loading || !emailInput.trim() ? 0.6 : 1
+              }}
+            >
+              Switch
+            </button>
+          </div>
+        </div>
+
+        {/* Google Calendar Section */}
+        <div style={{
+          borderTop: '1px solid #1e293b',
+          paddingTop: '20px',
+          marginBottom: '20px'
+        }}>
+          <h4 style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#cbd5e1', fontWeight: '700', marginBottom: '12px' }}>
+            2. Google Calendar Linking
+          </h4>
+
+          {isCalendarLinked ? (
+            <div style={{
+              background: 'rgba(16, 185, 129, 0.1)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              borderRadius: '10px',
+              padding: '14px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '10px'
+            }}>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: '#34d399' }}>
+                  ✓ Google Calendar Live Sync Connected
+                </div>
+                <div style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '2px' }}>
+                  Account: {currentUser?.calendar?.account_email || activeEmail}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={async () => {
+                    setLoading(true)
+                    try {
+                      await syncCalendarNow()
+                      setSuccessMsg('Synchronized scheduled tasks with Google Calendar!')
+                    } catch (e) {
+                      setError(e.message)
+                    } finally {
+                      setLoading(false)
+                    }
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #334155',
+                    background: '#1e293b',
+                    color: '#f8fafc',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ⚡ Sync Now
+                </button>
+                <button
+                  onClick={async () => {
+                    await disconnectCalendar()
+                    if (onUserChanged) onUserChanged(activeEmail)
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    color: '#f87171',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Disconnect
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* Method A: Google OAuth Connect */}
+              <div style={{
+                background: '#111827',
+                border: '1px solid #1e293b',
+                borderRadius: '10px',
+                padding: '14px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: '700', color: '#f8fafc' }}>
+                      Option A: Connect with Google OAuth
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px', lineHeight: '1.4' }}>
+                      Presents Google's "Choose an Account" screen (with <code>prompt=select_account</code>) so you choose exactly which account to link.
+                    </div>
+                  </div>
+                  <a
+                    href={getGoogleOAuthConnectUrl(activeEmail)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 14px',
+                      borderRadius: '8px',
+                      background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                      color: '#ffffff',
+                      fontSize: '12.5px',
+                      fontWeight: '600',
+                      textDecoration: 'none',
+                      flexShrink: 0
+                    }}
+                  >
+                    Connect Google →
+                  </a>
+                </div>
+                <div style={{ marginTop: '10px', fontSize: '11px', color: '#64748b' }}>
+                  ℹ️ Note: If your Google Cloud project is in development, configure <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> in your <code>.env</code> file.
+                </div>
+              </div>
+
+              {/* Method B: Instant 1-Click iCal URL Subscription */}
+              <div style={{
+                background: '#111827',
+                border: '1px solid #1e293b',
+                borderRadius: '10px',
+                padding: '14px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: '700', color: '#f8fafc' }}>
+                      Option B: Instant 1-Click Google Calendar Subscription (RFC 5545)
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px', lineHeight: '1.4' }}>
+                      Zero OAuth setup required! In Google Calendar (shown in your screenshot), click <strong>Other calendars '+' → 'From URL'</strong> and paste this link:
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleCopyIcs}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: '8px',
+                      border: '1px solid #334155',
+                      background: copiedIcs ? 'rgba(16, 185, 129, 0.2)' : '#1e293b',
+                      color: copiedIcs ? '#34d399' : '#f8fafc',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      flexShrink: 0
+                    }}
+                  >
+                    {copiedIcs ? '✓ Link Copied!' : '📋 Copy Calendar URL'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer Actions */}
+        <div style={{
+          borderTop: '1px solid #1e293b',
+          paddingTop: '16px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          {activeEmail ? (
+            <button
+              onClick={handleLogout}
+              disabled={loading}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '8px',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                background: 'rgba(239, 68, 68, 0.1)',
+                color: '#f87171',
+                fontSize: '12.5px',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+            >
+              Sign Out of {activeEmail}
+            </button>
+          ) : <div />}
+
+          <button
+            onClick={onClose}
+            style={{
+              padding: '8px 18px',
+              borderRadius: '8px',
+              border: '1px solid #334155',
+              background: '#1e293b',
+              color: '#cbd5e1',
+              fontSize: '12.5px',
+              fontWeight: '500',
+              cursor: 'pointer'
+            }}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

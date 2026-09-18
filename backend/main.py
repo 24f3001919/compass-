@@ -308,11 +308,13 @@ async def root():
 
 # ---- 1. POST /chat -------------------------------------------------------
 @app.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest, _token: str = Depends(verify_token)):
+async def chat(request: ChatRequest, req_raw: Request, _token: str = Depends(verify_token)):
     """Main conversational endpoint — wired to Nemotron router and orchestrator."""
+    user_id = _get_current_user_id(req_raw)
     result = await handle_message(
         conversation_id=request.conversation_id,
         message=request.message,
+        user_id=user_id,
     )
     return ChatResponse(**result)
 
@@ -711,12 +713,13 @@ def _format_countdown(due_date: Optional[date]) -> str:
 
 
 @app.get("/api/tasks", response_model=list[FrontendTaskOut])
-async def get_frontend_tasks(domain: Optional[str] = Query(None)):
-    """Public frontend endpoint matching frontend/src/api/client.js format."""
+async def get_frontend_tasks(request: Request, domain: Optional[str] = Query(None)):
+    """Public frontend endpoint matching frontend/src/api/client.js format with per-account isolation."""
     try:
+        user_id = _get_current_user_id(request)
         pool = await get_pool()
         async with pool.acquire() as conn:
-            raw_tasks = await structured.list_tasks(conn, domain=domain)
+            raw_tasks = await structured.list_tasks(conn, domain=domain, user_id=user_id)
             result = []
             for t in raw_tasks:
                 proj_name = t.get("project", {}).get("name", "General") if t.get("project") else "General"
@@ -775,8 +778,8 @@ class CreateTaskRequest(BaseModel):
 
 @app.post("/api/tasks", response_model=FrontendTaskOut)
 @app.post("/tasks", response_model=FrontendTaskOut)
-async def create_frontend_task(req: CreateTaskRequest):
-    """Direct user endpoint to create a task or deadline without relying on AI chat."""
+async def create_frontend_task(request: Request, req: CreateTaskRequest):
+    """Direct user endpoint to create a task or deadline with per-account isolation."""
     title = req.title.strip()
     if not title:
         raise HTTPException(status_code=400, detail="Task title is required")
@@ -793,6 +796,7 @@ async def create_frontend_task(req: CreateTaskRequest):
         dom_clean = "general"
 
     proj_name = req.project.strip() if req.project else "General"
+    user_id = _get_current_user_id(request)
     try:
         pool = await get_pool()
         async with pool.acquire() as conn:
@@ -809,6 +813,7 @@ async def create_frontend_task(req: CreateTaskRequest):
                 due_date=parsed_date,
                 priority=req.priority,
                 notes=req.notes,
+                user_id=user_id,
             )
             task_id = task_row["id"]
             if req.duration_minutes:
@@ -832,10 +837,10 @@ async def create_frontend_task(req: CreateTaskRequest):
                     tags_list.append("urgent")
                 await conn.execute(
                     """
-                    INSERT INTO memory_chunks (domain, project_id, content, embedding, source, tags)
-                    VALUES ($1, $2, $3, $4, $5, $6)
+                    INSERT INTO memory_chunks (domain, project_id, content, embedding, source, tags, user_id)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
                     """,
-                    dom_clean, project_id, emb_text, embedding, "direct_task_creation", tags_list
+                    dom_clean, project_id, emb_text, embedding, "direct_task_creation", tags_list, user_id
                 )
             except Exception as e:
                 logger.warning(f"Could not index memory chunk for new task: {e}")
@@ -940,12 +945,13 @@ class PublicChatResponse(BaseModel):
 
 
 @app.post("/api/chat", response_model=PublicChatResponse)
-async def public_chat(req: PublicChatRequest, _rl: None = Depends(rate_limit)):
+async def public_chat(req: PublicChatRequest, request: Request, _rl: None = Depends(rate_limit)):
     """Executes orchestrator.handle_message(), records usage, and returns response and latency."""
     from backend.orchestrator import handle_message
 
+    user_id = _get_current_user_id(request)
     msg = req.message.strip()
-    result = await handle_message(conversation_id=req.conversation_id, message=msg)
+    result = await handle_message(conversation_id=req.conversation_id, message=msg, user_id=user_id)
 
     return PublicChatResponse(
         response=result.get("response", ""),
@@ -965,7 +971,7 @@ class LogMemoryRequest(BaseModel):
 
 
 @app.post("/api/log")
-async def log_memory_entry(req: LogMemoryRequest, _rl: None = Depends(rate_limit)):
+async def log_memory_entry(req: LogMemoryRequest, request: Request, _rl: None = Depends(rate_limit)):
     """Accepts { content, domain, project, tags }, generates 768-dim embedding via Nebius Token Factory,
     inserts into Neon, increments embedding tokens in usage.py, and returns { status: 'logged', id }."""
     from backend.services.embeddings import get_embedding
@@ -975,6 +981,8 @@ async def log_memory_entry(req: LogMemoryRequest, _rl: None = Depends(rate_limit
     text = (req.content or req.summary or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="Missing memory content or summary")
+
+    user_id = _get_current_user_id(request)
 
     # Normalize tags into list[str]
     tags_list: list[str] = []
@@ -1002,11 +1010,11 @@ async def log_memory_entry(req: LogMemoryRequest, _rl: None = Depends(rate_limit
 
             row = await conn.fetchrow(
                 """
-                INSERT INTO memory_chunks (domain, project_id, content, embedding, source, tags)
-                VALUES ($1, $2, $3, $4, $5, $6)
-                RETURNING id, domain, project_id, content, source, tags, created_at
+                INSERT INTO memory_chunks (domain, project_id, content, embedding, source, tags, user_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING id, domain, project_id, content, source, tags, user_id, created_at
                 """,
-                req.domain, project_id, text, embedding, "api_log", tags_list
+                req.domain, project_id, text, embedding, "api_log", tags_list, user_id
             )
             if row:
                 chunk_id = str(row["id"])
@@ -1030,7 +1038,7 @@ class StreamChatRequest(BaseModel):
 
 
 @app.post("/api/chat/stream")
-async def stream_chat(req: StreamChatRequest, _rl: None = Depends(rate_limit)):
+async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depends(rate_limit)):
     """Real Server-Sent Events endpoint.
 
     Streams Nebius token-by-token output using stream=True on the OpenAI-compatible
@@ -1048,6 +1056,7 @@ async def stream_chat(req: StreamChatRequest, _rl: None = Depends(rate_limit)):
     from backend.orchestrator import handle_message
 
     _settings = _gs()
+    user_id = _get_current_user_id(request)
 
     async def event_generator():
         conv_id = req.conversation_id or str(uuid.uuid4())
@@ -1055,7 +1064,7 @@ async def stream_chat(req: StreamChatRequest, _rl: None = Depends(rate_limit)):
 
         # If no Nebius key, fall back to non-streaming orchestrator
         if not _settings.NEBIUS_API_KEY:
-            result = await handle_message(conversation_id=req.conversation_id, message=message)
+            result = await handle_message(conversation_id=req.conversation_id, message=message, user_id=user_id)
             response_text = result.get("response", "")
             prompt_est = max(len(message.split()) * 3, 30)
             completion_est = max(len(response_text.split()), 15)
@@ -1107,7 +1116,7 @@ async def stream_chat(req: StreamChatRequest, _rl: None = Depends(rate_limit)):
 
             if tool_call_detected:
                 # Tool call detected — fall back to full orchestrator for structured handling
-                result = await handle_message(conversation_id=req.conversation_id, message=message)
+                result = await handle_message(conversation_id=req.conversation_id, message=message, user_id=user_id)
                 response_text = result.get("response", "")
                 prompt_est = max(len(message.split()) * 3, 30)
                 completion_est = max(len(response_text.split()), 15)
@@ -1127,7 +1136,7 @@ async def stream_chat(req: StreamChatRequest, _rl: None = Depends(rate_limit)):
         except Exception as e:
             logger.warning(f"SSE stream error ({e}); falling back to non-streaming orchestrator")
             try:
-                result = await handle_message(conversation_id=req.conversation_id, message=message)
+                result = await handle_message(conversation_id=req.conversation_id, message=message, user_id=user_id)
                 response_text = result.get("response", "")
                 prompt_est = max(len(message.split()) * 3, 30)
                 completion_est = max(len(response_text.split()), 15)
@@ -1629,15 +1638,15 @@ async def update_calendar_preferences_endpoint(body: UpdatePreferencesBody):
 # 12. Google Calendar OAuth & User Authentication Endpoints
 # ---------------------------------------------------------------------------
 
-def _get_current_user_id(request: Request) -> str:
-    """Resolve current user identity from headers, cookies, or default."""
+def _get_current_user_id(request: Request) -> Optional[str]:
+    """Resolve current user identity strictly from headers or cookies."""
     user_header = request.headers.get("x-user-id")
-    if user_header:
-        return user_header
+    if user_header and user_header.strip():
+        return user_header.strip().lower()
     cookie_user = request.cookies.get("compass_user_id")
-    if cookie_user:
-        return cookie_user
-    return "default_user"
+    if cookie_user and cookie_user.strip():
+        return cookie_user.strip().lower()
+    return None
 
 
 @app.get("/api/auth/me")
@@ -1645,20 +1654,63 @@ async def auth_me(request: Request):
     """Retrieve logged-in user profile and calendar connection status."""
     from backend.services.calendar import get_calendar_connection_status
     user_id = _get_current_user_id(request)
+    
+    if not user_id:
+        return {
+            "status": "ok",
+            "authenticated": False,
+            "user_id": None,
+            "email": None,
+            "name": "Guest",
+            "calendar": {"connected": False, "mode": "none", "account_email": None},
+        }
+
     pool = await get_pool()
     cal_status = await get_calendar_connection_status(pool=pool, user_id=user_id)
-    
-    is_authenticated = cal_status.get("connected", False)
-    account_email = cal_status.get("account_email") or (user_id if "@" in user_id else "demo-scholar@compass.ai")
+    is_authenticated = bool(cal_status.get("connected", False))
     
     return {
         "status": "ok",
-        "authenticated": is_authenticated,
+        "authenticated": True,
         "user_id": user_id,
-        "email": account_email,
-        "name": account_email.split("@")[0].replace(".", " ").title(),
+        "email": user_id,
+        "name": user_id.split("@")[0].replace(".", " ").title(),
         "calendar": cal_status,
     }
+
+
+class SelectAccountBody(BaseModel):
+    email: str
+
+
+@app.post("/api/auth/select-account")
+async def auth_select_account(body: SelectAccountBody, response: Response):
+    """Select or switch active user account for memory and calendar isolation."""
+    email = body.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="A valid email address is required")
+
+    response.set_cookie(
+        key="compass_user_id",
+        value=email,
+        max_age=86400 * 30,
+        httponly=False,
+        samesite="lax",
+    )
+    return {
+        "status": "ok",
+        "user_id": email,
+        "email": email,
+        "name": email.split("@")[0].replace(".", " ").title(),
+        "message": f"Switched account to {email}",
+    }
+
+
+@app.post("/api/auth/logout")
+async def auth_logout(response: Response):
+    """Log out of current account and clear session cookies."""
+    response.delete_cookie("compass_user_id")
+    return {"status": "ok", "message": "Logged out successfully"}
 
 
 class QuickConnectBody(BaseModel):
@@ -1667,7 +1719,7 @@ class QuickConnectBody(BaseModel):
 
 @app.post("/api/auth/quick-connect")
 async def auth_quick_connect(body: QuickConnectBody, response: Response):
-    """Quick-login with Gmail for instant access and demo mode."""
+    """Quick-login with user account for instant access and testing."""
     import secrets
     from backend.services.calendar import save_calendar_connection
     email = body.email.strip().lower()
@@ -1676,19 +1728,9 @@ async def auth_quick_connect(body: QuickConnectBody, response: Response):
     
     pool = await get_pool()
     if pool:
-        # Save mock connection for this user
         await save_calendar_connection(
             pool=pool,
             user_id=email,
-            account_email=email,
-            access_token=f"mock_ya29_{secrets.token_hex(16)}",
-            refresh_token=f"mock_1//_{secrets.token_hex(20)}",
-            expires_in=86400,
-        )
-        # Also update default_user
-        await save_calendar_connection(
-            pool=pool,
-            user_id="default_user",
             account_email=email,
             access_token=f"mock_ya29_{secrets.token_hex(16)}",
             refresh_token=f"mock_1//_{secrets.token_hex(20)}",
@@ -1716,26 +1758,36 @@ async def calendar_connect(
     login_hint: Optional[str] = Query(None),
 ):
     """Generate Google OAuth 2.0 authorization URL or redirect directly."""
-    from backend.services.oauth import generate_google_oauth_url
+    from backend.services.oauth import generate_google_oauth_url, is_google_oauth_configured
     
-    # Infer redirect_uri from request host if configured for deployment
+    configured = is_google_oauth_configured()
+    if not configured:
+        # Avoid redirecting to Google's broken 401 invalid_client error page
+        if redirect:
+            return RedirectResponse(url="/?oauth_error=not_configured")
+        return {
+            "status": "not_configured",
+            "configured": False,
+            "message": "Google OAuth credentials are not set in .env. Use Account Switcher or configure GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.",
+        }
+
     host = request.headers.get("host", "localhost:8000")
     scheme = "https" if request.url.scheme == "https" or "vercel.app" in host else "http"
     base_url = f"{scheme}://{host}"
     redirect_uri = f"{base_url}/api/calendar/callback"
 
-    # If backend setting specifies a valid full URL, use it unless host is different
     settings = get_settings()
     if getattr(settings, "GOOGLE_REDIRECT_URI", None) and "localhost" in settings.GOOGLE_REDIRECT_URI and "localhost" in host:
         redirect_uri = settings.GOOGLE_REDIRECT_URI
 
-    url = generate_google_oauth_url(redirect_uri=redirect_uri, login_hint=login_hint)
+    current_user = _get_current_user_id(request)
+    effective_hint = login_hint or (current_user if current_user and "@" in current_user else None)
+    url = generate_google_oauth_url(redirect_uri=redirect_uri, login_hint=effective_hint)
     
-    # If caller is browser navigation or requested redirect=true
     accept = request.headers.get("accept", "")
     if redirect or "text/html" in accept:
         return RedirectResponse(url=url)
-    return {"status": "ok", "url": url}
+    return {"status": "ok", "configured": True, "url": url}
 
 
 @app.get("/api/calendar/callback")
@@ -1765,7 +1817,6 @@ async def calendar_callback(
     from backend.services.oauth import exchange_code_for_tokens
     from backend.services.calendar import save_calendar_connection
 
-    # Infer redirect_uri to match what was used in connect
     host = request.headers.get("host", "localhost:8000")
     scheme = "https" if request.url.scheme == "https" or "vercel.app" in host else "http"
     redirect_uri = f"{scheme}://{host}/api/calendar/callback"
@@ -1775,7 +1826,7 @@ async def calendar_callback(
 
     pool = await get_pool()
     if pool:
-        # Save connection for both specific email and default_user
+        # Save connection strictly for this specific authenticated user
         await save_calendar_connection(
             pool=pool,
             user_id=email,
@@ -1784,16 +1835,7 @@ async def calendar_callback(
             refresh_token=tokens.get("refresh_token"),
             expires_in=tokens.get("expires_in", 3600),
         )
-        await save_calendar_connection(
-            pool=pool,
-            user_id="default_user",
-            account_email=email,
-            access_token=tokens.get("access_token", ""),
-            refresh_token=tokens.get("refresh_token"),
-            expires_in=tokens.get("expires_in", 3600),
-        )
 
-    # Return redirect response with cookie and popup message
     response = HTMLResponse(
         f"""<!DOCTYPE html>
 <html>
@@ -1831,6 +1873,8 @@ async def calendar_sync_now(request: Request):
     """Explicitly synchronize all scheduled tasks to the connected user's Google Calendar."""
     from backend.services.calendar import sync_all_tasks_to_google_calendar
     user_id = _get_current_user_id(request)
+    if not user_id:
+        return {"status": "error", "message": "Sign in to sync tasks with Google Calendar"}
     pool = await get_pool()
     result = await sync_all_tasks_to_google_calendar(pool, user_id=user_id)
     return result
@@ -1838,13 +1882,12 @@ async def calendar_sync_now(request: Request):
 
 @app.post("/api/calendar/disconnect")
 async def calendar_disconnect(request: Request, response: Response):
-    """Disconnect Google Calendar OAuth integration and revert to simulated mode."""
+    """Disconnect Google Calendar OAuth integration and clear session."""
     from backend.services.calendar import disconnect_calendar_connection
     user_id = _get_current_user_id(request)
     pool = await get_pool()
-    if pool:
+    if pool and user_id:
         await disconnect_calendar_connection(pool, user_id=user_id)
-        await disconnect_calendar_connection(pool, user_id="default_user")
     response.delete_cookie("compass_user_id")
     return {"status": "ok", "message": "Google Calendar disconnected."}
 
