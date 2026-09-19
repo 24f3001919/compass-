@@ -62,6 +62,7 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated }) {
   const [syncingCalendar, setSyncingCalendar] = useState(false)
   const [quickEmailInput, setQuickEmailInput] = useState('')
   const [showQuickModal, setShowQuickModal] = useState(false)
+  const [showIcsModal, setShowIcsModal] = useState(false)
 
   // Sync calendar connection status & check URL callback
   useEffect(() => {
@@ -284,46 +285,55 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated }) {
 
         {/* Action Controls */}
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-          {calendarStatus.connected && calendarStatus.mode === 'live' ? (
+          <button
+            id="btn-sync-gcal"
+            onClick={async () => {
+              setSyncingCalendar(true)
+              setBannerMessage(null)
+              try {
+                const res = await syncCalendarNow()
+                if (res.is_live) {
+                  setBannerMessage({
+                    type: 'success',
+                    text: `✅ Synced ${res.live_count || res.count || 0} scheduled tasks directly to your Google Calendar (${calendarStatus.account_email})!`
+                  })
+                } else {
+                  setBannerMessage({
+                    type: 'info',
+                    text: `ℹ️ ${res.message || `Slotted ${res.count || 0} tasks in Compass.`}`
+                  })
+                  setShowIcsModal(true)
+                }
+                loadAvailability(selectedDate)
+              } catch (err) {
+                setBannerMessage({
+                  type: 'error',
+                  text: `Failed to sync: ${err.message}`
+                })
+              } finally {
+                setSyncingCalendar(false)
+              }
+            }}
+            disabled={syncingCalendar}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 12px',
+              borderRadius: '8px',
+              background: calendarStatus.connected && calendarStatus.mode === 'live' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+              border: calendarStatus.connected && calendarStatus.mode === 'live' ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(59, 130, 246, 0.4)',
+              color: calendarStatus.connected && calendarStatus.mode === 'live' ? '#34d399' : '#60a5fa',
+              fontSize: '12px',
+              fontWeight: '500',
+              cursor: syncingCalendar ? 'wait' : 'pointer',
+              transition: 'all 0.15s ease'
+            }}>
+            {syncingCalendar ? '🔄 Syncing...' : (calendarStatus.connected && calendarStatus.mode === 'live' ? '📅 Sync to Google Calendar' : '📅 Slot / Sync Tasks')}
+          </button>
+
+          {calendarStatus.connected ? (
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <button
-                id="btn-sync-gcal"
-                onClick={async () => {
-                  setSyncingCalendar(true)
-                  setBannerMessage(null)
-                  try {
-                    const res = await syncCalendarNow()
-                    setBannerMessage({
-                      type: 'success',
-                      text: `✅ Synced ${res.count || 0} scheduled tasks to your Google Calendar (${calendarStatus.account_email})!`
-                    })
-                    loadAvailability(selectedDate)
-                  } catch (err) {
-                    setBannerMessage({
-                      type: 'error',
-                      text: `Failed to sync to Google Calendar: ${err.message}`
-                    })
-                  } finally {
-                    setSyncingCalendar(false)
-                  }
-                }}
-                disabled={syncingCalendar}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '7px 12px',
-                  borderRadius: '8px',
-                  background: 'rgba(16, 185, 129, 0.15)',
-                  border: '1px solid rgba(16, 185, 129, 0.4)',
-                  color: '#34d399',
-                  fontSize: '12px',
-                  fontWeight: '500',
-                  cursor: syncingCalendar ? 'wait' : 'pointer',
-                  transition: 'all 0.15s ease'
-                }}>
-                {syncingCalendar ? '🔄 Syncing...' : '📅 Sync to Google Calendar'}
-              </button>
               <a
                 href="https://calendar.google.com"
                 target="_blank"
@@ -342,6 +352,28 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated }) {
                 }}>
                 Open Calendar ↗
               </a>
+              {calendarStatus.mode !== 'live' && (
+                <a
+                  id="btn-connect-google"
+                  href={getGoogleOAuthConnectUrl()}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '7px 12px',
+                    borderRadius: '8px',
+                    background: 'rgba(59, 130, 246, 0.15)',
+                    border: '1px solid rgba(59, 130, 246, 0.4)',
+                    color: '#60a5fa',
+                    fontSize: '12px',
+                    fontWeight: '500',
+                    textDecoration: 'none',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}>
+                  🔗 Sign in with Google
+                </a>
+              )}
               <button
                 id="btn-disconnect-google"
                 onClick={async () => {
@@ -403,27 +435,44 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated }) {
             </div>
           )}
 
-          <a
-            id="btn-export-ics"
-            href={getCalendarExportUrl(activeDomain)}
-            download="compass_schedule.ics"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '7px 12px',
-              borderRadius: '8px',
-              background: '#1e293b',
-              border: '1px solid #334155',
-              color: '#cbd5e1',
-              fontSize: '12px',
-              fontWeight: '500',
-              textDecoration: 'none',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease'
-            }}>
-            📥 Export .ics Feed
-          </a>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <a
+              id="btn-export-ics"
+              href={getCalendarExportUrl(activeDomain)}
+              download="compass_schedule.ics"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '7px 12px',
+                borderRadius: '8px',
+                background: '#1e293b',
+                border: '1px solid #334155',
+                color: '#cbd5e1',
+                fontSize: '12px',
+                fontWeight: '500',
+                textDecoration: 'none',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}>
+              📥 Export .ics Feed
+            </a>
+            <button
+              onClick={() => setShowIcsModal(true)}
+              title="How to import into Google Calendar"
+              style={{
+                background: '#1e293b',
+                border: '1px solid #334155',
+                color: '#38bdf8',
+                borderRadius: '8px',
+                padding: '7px 10px',
+                fontSize: '12px',
+                cursor: 'pointer',
+                fontWeight: '600'
+              }}>
+              Sync Guide
+            </button>
+          </div>
 
           <button
             id="btn-check-slipped"
@@ -634,13 +683,13 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated }) {
                     </div>
                     <span style={{
                       fontSize: '11px',
-                      color: '#10b981',
+                      color: calendarStatus.connected && calendarStatus.mode === 'live' ? '#10b981' : '#38bdf8',
                       fontWeight: '600',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '4px'
                     }}>
-                      ✓ Synced
+                      {calendarStatus.connected && calendarStatus.mode === 'live' ? '✓ Synced' : '⏱ Slotted'}
                     </span>
                   </div>
 
@@ -940,7 +989,7 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated }) {
           }}>
             <h3 style={{ margin: '0 0 8px', color: '#f8fafc', fontSize: '18px' }}>⚡ Connect Your Gmail</h3>
             <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 20px', lineHeight: '1.5' }}>
-              Enter your Google / Gmail address to activate your calendar profile. Scheduled tasks will be synchronized to your calendar.
+              Enter your Gmail address to activate your schedule profile. Tasks will be slotted deterministically and can be imported or subscribed directly in Google Calendar.
             </p>
             <input
               id="input-quick-email"
@@ -957,7 +1006,7 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated }) {
                   })
                   setBannerMessage({
                     type: 'success',
-                    text: `✅ Connected as ${quickEmailInput}! Tasks will sync to your Google Calendar.`
+                    text: `✅ Connected as ${quickEmailInput}! Schedule slotted.`
                   })
                 }
               }}
@@ -999,7 +1048,7 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated }) {
                     })
                     setBannerMessage({
                       type: 'success',
-                      text: `✅ Connected as ${quickEmailInput}! Tasks will sync to your Google Calendar.`
+                      text: `✅ Connected as ${quickEmailInput}! Schedule slotted.`
                     })
                   } catch (err) {
                     alert(`Could not connect: ${err.message}`)
@@ -1016,6 +1065,155 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated }) {
                   cursor: quickEmailInput.includes('@') ? 'pointer' : 'not-allowed'
                 }}>
                 Connect Account
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Google Calendar Sync & .ics Import Guide Modal */}
+      {showIcsModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.75)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{
+            background: '#131c2e',
+            border: '1px solid #334155',
+            borderRadius: '16px',
+            padding: '28px',
+            width: '100%',
+            maxWidth: '520px',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.6)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                🗓️ Sync Tasks to Google Calendar
+              </h3>
+              <button
+                onClick={() => setShowIcsModal(false)}
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '18px', cursor: 'pointer' }}>
+                ✕
+              </button>
+            </div>
+
+            <p style={{ color: '#94a3b8', fontSize: '13px', lineHeight: '1.5', margin: '0 0 16px' }}>
+              Because direct Google Calendar API write requires registered Google Cloud OAuth credentials, you can sync all your scheduled tasks into your Google Calendar right now in 2 easy steps:
+            </p>
+
+            <div style={{ background: '#0b0f17', border: '1px solid #1e293b', borderRadius: '10px', padding: '14px', marginBottom: '16px' }}>
+              <h4 style={{ margin: '0 0 8px', color: '#38bdf8', fontSize: '13px', fontWeight: '600' }}>
+                Option 1: Instant 1-Click File Import (Recommended)
+              </h4>
+              <ol style={{ margin: '0 0 10px', paddingLeft: '18px', color: '#cbd5e1', fontSize: '12.5px', lineHeight: '1.6' }}>
+                <li>
+                  Click below to download the <code style={{ color: '#38bdf8' }}>compass_schedule.ics</code> file:
+                  <div style={{ marginTop: '6px', marginBottom: '6px' }}>
+                    <a
+                      href={getCalendarExportUrl(activeDomain)}
+                      download="compass_schedule.ics"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 12px',
+                        background: '#2563eb',
+                        borderRadius: '6px',
+                        color: '#ffffff',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        textDecoration: 'none'
+                      }}>
+                      📥 Download compass_schedule.ics
+                    </a>
+                  </div>
+                </li>
+                <li>In Google Calendar, look at the left sidebar under <b>Other calendars</b> and click <b>+</b>.</li>
+                <li>Click <b>Import</b>, select the downloaded file, and click <b>Import</b>.</li>
+                <li>All 16 tasks immediately appear in your Google Calendar!</li>
+              </ol>
+
+              <div style={{ borderTop: '1px solid #1e293b', paddingTop: '10px', marginTop: '10px' }}>
+                <h4 style={{ margin: '0 0 8px', color: '#34d399', fontSize: '13px', fontWeight: '600' }}>
+                  Option 2: Live Auto-Sync via Calendar Subscription URL
+                </h4>
+                <p style={{ color: '#94a3b8', fontSize: '12px', margin: '0 0 8px' }}>
+                  In Google Calendar &gt; <b>Other calendars (+)</b> &gt; <b>From URL</b>, paste this feed URL:
+                </p>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input
+                    readOnly
+                    value={`${window.location.origin}/api/calendar/export.ics`}
+                    style={{
+                      flex: 1,
+                      padding: '6px 10px',
+                      borderRadius: '6px',
+                      background: '#131c2e',
+                      border: '1px solid #334155',
+                      color: '#94a3b8',
+                      fontSize: '11.5px',
+                      fontFamily: 'JetBrains Mono, monospace'
+                    }}
+                  />
+                  <button
+                    onClick={(e) => {
+                      navigator.clipboard.writeText(`${window.location.origin}/api/calendar/export.ics`)
+                      e.target.innerText = 'Copied! ✓'
+                      setTimeout(() => { e.target.innerText = 'Copy' }, 2000)
+                    }}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      background: '#334155',
+                      border: 'none',
+                      color: '#f8fafc',
+                      fontSize: '12px',
+                      cursor: 'pointer'
+                    }}>
+                    Copy
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <a
+                href="https://calendar.google.com"
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#f8fafc',
+                  fontSize: '13px',
+                  textDecoration: 'none'
+                }}>
+                Open Google Calendar ↗
+              </a>
+              <button
+                onClick={() => setShowIcsModal(false)}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: '8px',
+                  background: '#2563eb',
+                  border: 'none',
+                  color: '#ffffff',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}>
+                Done
               </button>
             </div>
           </div>

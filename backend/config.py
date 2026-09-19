@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     # --- Google Calendar OAuth ---
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
-    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/calendar/callback"
+    GOOGLE_REDIRECT_URI: str = "https://compass-farmlytics.vercel.app/api/calendar/callback"
     TOKEN_ENCRYPTION_KEY: str = "compass_secure_local_dev_token_encryption_key_32bytes!"
 
     # --- App ---
