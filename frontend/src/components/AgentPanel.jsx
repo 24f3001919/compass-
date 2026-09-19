@@ -12,79 +12,131 @@ const STEP_STYLES = {
     bg: 'rgba(30, 58, 95, 0.35)',
     border: '#2563eb',
     icon: '🧠',
-    label: 'THINKING',
+    label: 'Thinking',
     labelColor: '#60a5fa',
   },
   tool_call: {
     bg: 'rgba(74, 55, 40, 0.35)',
     border: '#d97706',
-    icon: '🔧',
-    label: 'TOOL CALL',
+    icon: '🔍',
+    label: 'Checking your data',
     labelColor: '#fbbf24',
   },
   observe: {
     bg: 'rgba(26, 58, 42, 0.35)',
     border: '#16a34a',
-    icon: '👁️',
-    label: 'RESULT',
+    icon: '📄',
+    label: 'Found',
     labelColor: '#4ade80',
   },
   confirm_request: {
     bg: 'rgba(95, 30, 30, 0.35)',
     border: '#ef4444',
     icon: '⚠️',
-    label: 'CONFIRMATION REQUIRED',
+    label: 'Needs your approval',
     labelColor: '#f87171',
   },
   critic: {
     bg: 'rgba(58, 42, 74, 0.35)',
     border: '#9333ea',
-    icon: '⚖️',
-    label: 'SELF-CRITIQUE',
+    icon: '✔️',
+    label: 'Quality check',
     labelColor: '#c084fc',
   },
   synthesize: {
     bg: 'linear-gradient(135deg, rgba(30, 58, 95, 0.25), rgba(58, 42, 74, 0.25))',
     border: '#8b5cf6',
     icon: '✨',
-    label: 'SYNTHESIS',
+    label: 'Summary',
     labelColor: '#a78bfa',
   },
   error: {
     bg: 'rgba(95, 30, 30, 0.35)',
     border: '#ef4444',
     icon: '❌',
-    label: 'ERROR',
+    label: 'Something went wrong',
     labelColor: '#f87171',
   },
   done: {
     bg: 'rgba(26, 58, 42, 0.2)',
     border: '#16a34a',
     icon: '✅',
-    label: 'COMPLETE',
+    label: 'Done',
     labelColor: '#4ade80',
   },
   propose: {
     bg: 'rgba(6, 78, 59, 0.3)',
     border: '#06b6d4',
     icon: '📋',
-    label: 'PLANNER PROPOSAL',
+    label: 'Proposed plan',
     labelColor: '#22d3ee',
   },
   verdict: {
     bg: 'rgba(95, 30, 30, 0.4)',
     border: '#ef4444',
     icon: '⚖️',
-    label: 'REALIST VERDICT',
+    label: 'Feasibility check',
     labelColor: '#f87171',
   },
   replan: {
     bg: 'rgba(74, 55, 40, 0.4)',
     border: '#f59e0b',
     icon: '🔄',
-    label: 'PLANNER RE-PLAN',
+    label: 'Replanning',
     labelColor: '#fbbf24',
   },
+}
+
+// Maps internal tool names to friendly human-readable descriptions
+function friendlyTool(toolName) {
+  const map = {
+    query_tasks: 'Looking up your tasks',
+    add_task: 'Adding a new task',
+    edit_task: 'Updating a task',
+    delete_task: 'Removing a task',
+    update_task_status: 'Changing task status',
+    ingest_url: 'Reading a web page',
+    ingest_text: 'Reading content',
+    memory_search: 'Searching your memory',
+    summarize_day: 'Summarizing your day',
+    query_calendar: 'Checking your calendar',
+    schedule_event: 'Scheduling an event',
+    query_code_context: 'Reading your code notes',
+    query_coursework_notes: 'Reading your coursework notes',
+    apply_triage_plan: 'Applying triage decisions',
+    get_projects: 'Looking up your projects',
+    search_web: 'Searching the web',
+    web_search: 'Searching the web',
+  }
+  if (!toolName) return ''
+  return map[toolName] || toolName.replace(/_/g, ' ')
+}
+
+// Maps internal table names to friendly descriptions
+function friendlyTable(table) {
+  const map = {
+    tasks: 'Task',
+    memory_chunks: 'Memory entry',
+    projects: 'Project',
+    calendar_events: 'Calendar event',
+    agent_audit_log: 'Action log',
+  }
+  return map[table] || table
+}
+
+// Maps internal tool action names to past-tense human descriptions
+function friendlyAction(tool) {
+  const map = {
+    add_task: 'Added a task',
+    edit_task: 'Updated a task',
+    delete_task: 'Deleted a task',
+    update_task_status: 'Changed task status',
+    ingest_url: 'Saved web page to memory',
+    ingest_text: 'Saved note to memory',
+    apply_triage_plan: 'Applied triage plan',
+    schedule_event: 'Scheduled an event',
+  }
+  return map[tool] || (tool || '').replace(/_/g, ' ')
 }
 
 const SUGGESTED_GOALS = [
@@ -226,85 +278,30 @@ function StepCard({ step, index }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '14px' }}>{style.icon}</span>
         <span style={{
-          fontSize: '10px',
+          fontSize: '11px',
           fontWeight: '700',
-          letterSpacing: '0.05em',
           color: style.labelColor,
-          textTransform: 'uppercase',
-          fontFamily: 'JetBrains Mono, monospace',
         }}>
           {style.label}
         </span>
 
-        {/* Agent Badge (Planner / Realist) */}
-        {(step.metadata?.agent || step.agent) && (
-          <span style={{
-            fontSize: '10px',
-            fontWeight: '700',
-            letterSpacing: '0.05em',
-            color: (step.metadata?.agent || step.agent) === 'planner' ? '#22d3ee' : '#f87171',
-            background: (step.metadata?.agent || step.agent) === 'planner' ? 'rgba(6, 182, 212, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-            border: `1px solid ${(step.metadata?.agent || step.agent) === 'planner' ? '#06b6d4' : '#ef4444'}`,
-            padding: '2px 8px',
-            borderRadius: '10px',
-            textTransform: 'uppercase',
-            fontFamily: 'JetBrains Mono, monospace',
-          }}>
-            {(step.metadata?.agent || step.agent) === 'planner' ? '🧠 PLANNER' : '⚖️ REALIST'}
-          </span>
-        )}
-
-        {/* Model Tier Attribution */}
-        {step.model_tier && (
-          <span style={{
-            fontSize: '10px',
-            color: '#94a3b8',
-            background: 'rgba(30, 41, 59, 0.8)',
-            padding: '2px 8px',
-            borderRadius: '10px',
-            border: '1px solid #334155',
-            fontFamily: 'JetBrains Mono, monospace',
-          }}>
-            {step.model_tier}
-          </span>
-        )}
-
-        {/* Live USD Cost Badge */}
-        {step.step_cost_usd !== undefined && step.step_cost_usd !== null && (
-          <span style={{
-            fontSize: '10px',
-            fontWeight: '600',
-            color: step.step_cost_usd > 0 ? '#34d399' : '#64748b',
-            background: step.step_cost_usd > 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(51, 65, 85, 0.3)',
-            padding: '2px 6px',
-            borderRadius: '10px',
-            border: `1px solid ${step.step_cost_usd > 0 ? '#10b98144' : '#47556933'}`,
-            fontFamily: 'JetBrains Mono, monospace',
-          }}>
-            ${step.step_cost_usd.toFixed(5)}
+        {/* Show friendly tool description instead of raw tool name for tool_call steps */}
+        {step.type === 'tool_call' && step.tool && (
+          <span style={{ fontSize: '11px', color: '#cbd5e1' }}>
+            — {friendlyTool(step.tool)}
           </span>
         )}
 
         <span style={{
           fontSize: '10px',
-          color: '#64748b',
+          color: '#475569',
           marginLeft: 'auto',
-          fontFamily: 'JetBrains Mono, monospace',
         }}>
-          Step {step.step} · {step.elapsed_ms}ms
+          {step.elapsed_ms > 0 ? `${(step.elapsed_ms / 1000).toFixed(1)}s` : ''}
         </span>
       </div>
 
-      {step.tool && (
-        <div style={{
-          fontSize: '12px',
-          color: '#fbbf24',
-          fontFamily: 'JetBrains Mono, monospace',
-          marginBottom: '4px',
-        }}>
-          {step.tool}({step.args ? JSON.stringify(step.args) : ''})
-        </div>
-      )}
+
 
       {/* Realist Arithmetic Box */}
       {step.metadata?.verdict && (
@@ -351,7 +348,7 @@ function StepCard({ step, index }) {
         </div>
       )}
 
-      {/* Epistemic Abstention Warning Card */}
+      {/* Not enough info warning */}
       {isAbstained && (
         <div style={{
           background: 'rgba(245, 158, 11, 0.15)',
@@ -366,7 +363,7 @@ function StepCard({ step, index }) {
           alignItems: 'center',
           gap: '6px',
         }}>
-          🛡️ EPISTEMIC ABSTENTION: Agent identified insufficient context or missing data and gracefully refused to speculate.
+          🤷 Not enough information — the assistant couldn't answer this confidently without guessing.
         </div>
       )}
 
@@ -1156,11 +1153,13 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
         )}
       </div>
 
-      {/* Execution Trace */}
+      {/* Execution Trace — capped height so it never overflows the page */}
       <div style={{
         flex: 1,
         overflowY: 'auto',
+        maxHeight: 'calc(100vh - 220px)',
         padding: '16px 20px',
+        boxSizing: 'border-box',
       }}>
         {/* Run History Flyout Drawer */}
         {showHistory && (
@@ -1248,10 +1247,10 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', fontSize: '11px', color: '#94a3b8' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', color: isRunning ? '#38bdf8' : '#34d399' }}>
                 <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: isRunning ? '#38bdf8' : '#34d399', animation: isRunning ? 'pulse 1s infinite' : 'none' }} />
-                {isRunning ? 'Agent Execution in Progress...' : 'Execution Plan Ready'}
+                {isRunning ? 'Working on it…' : 'Done ✓'}
               </span>
-              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px' }}>
-                Step {steps.length} / 8 · Total: ${(steps.reduce((sum, s) => sum + (s.step_cost_usd || 0), 0)).toFixed(5)} USD
+              <span style={{ fontSize: '11px', color: '#64748b' }}>
+                {steps.length} step{steps.length !== 1 ? 's' : ''} completed
               </span>
             </div>
             <div style={{ width: '100%', height: '4px', background: '#1e293b', borderRadius: '2px', overflow: 'hidden' }}>
@@ -1300,45 +1299,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
           <StepCard key={i} step={step} index={i} />
         ))}
 
-        {/* Cost Efficiency Comparison Card */}
-        {steps.some(s => s.type === 'done') && (
-          <div style={{
-            marginTop: '12px',
-            padding: '10px 14px',
-            background: 'rgba(16, 185, 129, 0.08)',
-            border: '1px solid rgba(16, 185, 129, 0.25)',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-          }}>
-            <div>
-              <div style={{ fontSize: '12px', fontWeight: '700', color: '#34d399', letterSpacing: '0.02em', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span>⚡</span> Nebius Token Factory Cost Efficiency
-              </div>
-              <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
-                This {steps.length}-step run cost <strong style={{ color: '#e2e8f0' }}>${(steps.reduce((sum, s) => sum + (s.step_cost_usd || 0), 0)).toFixed(5)} USD</strong> on Nebius Token Factory · Equivalent on OpenAI GPT-4o: <strong style={{ color: '#f87171' }}>~${((steps.reduce((sum, s) => sum + (s.step_cost_usd || 0), 0)) * 9.4).toFixed(4)} USD</strong> (~9.4x reduction)
-              </div>
-            </div>
-            <span
-              title="Based on published OpenAI GPT-4o pricing ($2.50/1M prompt, $10.00/1M completion from openai.com/api/pricing) vs Nebius Nemotron-3 Super ($0.30/1M prompt, $0.90/1M completion)."
-              style={{
-                padding: '4px 8px',
-                background: 'rgba(16, 185, 129, 0.2)',
-                borderRadius: '6px',
-                border: '1px solid #10b98155',
-                color: '#4ade80',
-                fontSize: '11px',
-                fontWeight: '700',
-                fontFamily: 'monospace',
-                whiteSpace: 'nowrap',
-                cursor: 'help',
-              }}>
-              ~89.4% SAVINGS
-            </span>
-          </div>
-        )}
+
 
         {/* Confirmation gate UI */}
         {pendingActions.length > 0 && !isRunning && (
@@ -1350,22 +1311,25 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
             marginTop: '8px',
           }}>
             <div style={{ fontSize: '14px', fontWeight: '600', color: '#f87171', marginBottom: '8px' }}>
-              ⚠️ {pendingActions.length} action(s) need your approval
+              ⚠️ The assistant wants to make {pendingActions.length} change{pendingActions.length !== 1 ? 's' : ''} — do you approve?
             </div>
             <div style={{ fontSize: '12px', color: '#e2e8f0', marginBottom: '12px' }}>
-              The agent wants to modify your data. Review and approve or reject:
+              These changes will be saved to your data. You can undo them afterwards if needed.
             </div>
             {pendingActions.map((action, i) => (
               <div key={i} style={{
                 background: '#1e293b',
                 borderRadius: '6px',
-                padding: '8px 12px',
+                padding: '10px 14px',
                 marginBottom: '6px',
-                fontFamily: 'JetBrains Mono, monospace',
-                fontSize: '12px',
+                fontSize: '13px',
                 color: '#fbbf24',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
               }}>
-                {action.tool}({JSON.stringify(action.args)})
+                <span>🔄</span>
+                <span>{action.summary || friendlyAction(action.tool)}</span>
               </div>
             ))}
             <div style={{ marginTop: '10px' }}>
@@ -1374,7 +1338,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                 type="text"
                 value={rejectFeedback}
                 onChange={e => setRejectFeedback(e.target.value)}
-                placeholder="Optional feedback for re-planning (e.g., 'don't reschedule this task')..."
+                placeholder="Tell the assistant what to avoid (e.g. 'don't move the exam deadline')..."
                 style={{
                   width: '100%',
                   padding: '8px 12px',
@@ -1427,7 +1391,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
         )}
 
         {/* Global Undo Button when steps or mutations exist */}
-        {steps.some(s => s.type === 'observe' && (s.tool === 'add_task' || s.tool === 'edit_task' || s.tool === 'update_task_status' || s.tool === 'delete_task')) && (
+        {steps.some(s => s.type === 'observe' && (s.tool === 'add_task' || s.tool === 'edit_task' || s.tool === 'update_task_status' || s.tool === 'delete_task' || (s.content && s.content.includes('applied')))) && (
           <div style={{ marginTop: '12px', marginBottom: '8px' }}>
             <button
               id="agent-undo-btn"
@@ -1445,7 +1409,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                 gap: '6px',
               }}
             >
-              ↩️ Undo Last Agent Mutation
+              ↩️ Undo Last Change
             </button>
             {undoStatus && (
               <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: '10px' }}>
@@ -1469,7 +1433,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
           </div>
         )}
 
-        {/* Visible Agent Activity Feed (backed by agent_audit_log with per-item undo) */}
+        {/* Activity Feed */}
         <div id="agent-activity-feed" style={{
           marginTop: '24px',
           borderTop: '1px solid #1e293b',
@@ -1483,26 +1447,12 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{
-                fontSize: '12px',
+                fontSize: '13px',
                 fontWeight: '700',
-                letterSpacing: '0.05em',
-                color: '#94a3b8',
-                textTransform: 'uppercase',
+                color: '#e2e8f0',
               }}>
-                📋 Agent Activity Audit Log ({activityList.length})
+                📋 Recent changes ({activityList.length})
               </span>
-              {critiqueStats && (
-                <span style={{
-                  fontSize: '11px',
-                  color: '#c084fc',
-                  background: 'rgba(147, 51, 234, 0.12)',
-                  padding: '2px 8px',
-                  borderRadius: '10px',
-                  border: '1px solid #9333ea33',
-                }}>
-                  ⚖️ Critique flag rate: {critiqueStats.critique_effectiveness_rate}% ({critiqueStats.critique_issues_flagged}/{critiqueStats.runs_with_critique})
-                </span>
-              )}
             </div>
             <button
               onClick={() => { fetchActivity(); fetchCritiqueStats() }}
@@ -1520,10 +1470,17 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
 
           {activityList.length === 0 ? (
             <div style={{ fontSize: '12px', color: '#64748b', fontStyle: 'italic', padding: '8px 0' }}>
-              No state mutations executed by the agent yet.
+              No changes made by the assistant yet.
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+              maxHeight: '280px',
+              overflowY: 'auto',
+              paddingRight: '2px',
+            }}>
               {activityList.map((item) => (
                 <div
                   key={item.id}
@@ -1532,42 +1489,40 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '8px 12px',
+                    padding: '9px 12px',
                     background: item.is_reverted ? 'rgba(30, 41, 59, 0.2)' : 'rgba(30, 41, 59, 0.5)',
                     border: `1px solid ${item.is_reverted ? '#334155' : '#1e293b'}`,
-                    borderRadius: '6px',
+                    borderRadius: '8px',
                     fontSize: '12px',
+                    opacity: item.is_reverted ? 0.55 : 1,
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{
-                      padding: '2px 6px',
-                      background: '#0f172a',
-                      borderRadius: '4px',
-                      fontSize: '10px',
-                      fontWeight: '700',
-                      color: '#fbbf24',
-                      fontFamily: 'monospace',
-                    }}>
-                      {item.tool}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '14px' }}>
+                      {item.tool === 'add_task' ? '➕' : item.tool === 'delete_task' ? '🗑️' : item.tool?.includes('ingest') ? '📥' : '✏️'}
                     </span>
-                    <span style={{ color: '#e2e8f0' }}>
-                      {item.affected_table} #{item.affected_id}
+                    <span style={{ color: '#e2e8f0', fontWeight: '600', fontSize: '12.5px' }}>
+                      {friendlyAction(item.tool)}
                     </span>
-                    <span style={{ fontSize: '10px', color: '#64748b' }}>
-                      {item.created_at ? item.created_at.slice(11, 19) : ''}
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>
+                      {friendlyTable(item.affected_table)}
                     </span>
-                    <span style={{
-                      fontSize: '9px',
-                      padding: '1px 5px',
-                      borderRadius: '4px',
-                      fontWeight: '700',
-                      background: item.is_reverted ? 'rgba(239, 68, 68, 0.2)' : 'rgba(34, 197, 94, 0.2)',
-                      color: item.is_reverted ? '#f87171' : '#4ade80',
-                      border: `1px solid ${item.is_reverted ? '#ef444444' : '#22c55e44'}`,
-                    }}>
-                      {item.is_reverted ? 'REVERTED' : 'ACTIVE'}
+                    <span style={{ fontSize: '11px', color: '#475569' }}>
+                      {item.created_at ? item.created_at.slice(11, 16) : ''}
                     </span>
+                    {item.is_reverted && (
+                      <span style={{
+                        fontSize: '10px',
+                        padding: '1px 7px',
+                        borderRadius: '10px',
+                        fontWeight: '700',
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        color: '#f87171',
+                        border: '1px solid #ef444430',
+                      }}>
+                        Undone
+                      </span>
+                    )}
                   </div>
 
                   {!item.is_reverted && (
@@ -1575,18 +1530,19 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                       className="agent-revert-btn"
                       onClick={() => revertActivityItem(item.id)}
                       style={{
-                        padding: '3px 8px',
-                        background: '#334155',
-                        border: '1px solid #475569',
-                        borderRadius: '4px',
-                        color: '#f87171',
-                        fontSize: '10px',
+                        padding: '4px 10px',
+                        background: '#1e293b',
+                        border: '1px solid #334155',
+                        borderRadius: '6px',
+                        color: '#94a3b8',
+                        fontSize: '11px',
                         fontWeight: '600',
                         cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0,
                       }}
-                      title={`Revert action #${item.id}`}
                     >
-                      ↩️ Revert
+                      ↩️ Undo
                     </button>
                   )}
                 </div>

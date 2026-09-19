@@ -340,11 +340,16 @@ export async function checkGoogleOAuthStatus() {
     const res = await fetch(`${API_BASE}/api/calendar/connect?redirect=false`, {
       headers: getAuthHeaders(),
     })
-    if (!res.ok) return { configured: false }
+    if (!res.ok) return { configured: false, status: 'error' }
     const data = await res.json()
-    return { configured: Boolean(data.configured), url: data.url }
+    return {
+      configured: Boolean(data.configured),
+      status: data.status || (data.configured ? 'ok' : 'not_configured'),
+      url: data.url,
+      message: data.message,
+    }
   } catch {
-    return { configured: false }
+    return { configured: false, status: 'error' }
   }
 }
 

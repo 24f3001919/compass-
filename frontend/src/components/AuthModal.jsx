@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   selectAccount,
   logoutUser,
@@ -6,6 +6,7 @@ import {
   disconnectCalendar,
   syncCalendarNow,
   getCalendarExportUrl,
+  checkGoogleOAuthStatus,
 } from '../api/client'
 
 export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged }) {
@@ -14,6 +15,14 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
   const [error, setError] = useState(null)
   const [successMsg, setSuccessMsg] = useState(null)
   const [copiedIcs, setCopiedIcs] = useState(false)
+  const [oauthStatus, setOauthStatus] = useState(null) // null = loading, object = result
+
+  // Check OAuth configuration every time the modal opens
+  useEffect(() => {
+    if (!isOpen) return
+    setOauthStatus(null)
+    checkGoogleOAuthStatus().then(setOauthStatus)
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -328,14 +337,9 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                     }
                   }}
                   style={{
-                    padding: '6px 12px',
-                    borderRadius: '6px',
-                    border: '1px solid #334155',
-                    background: '#1e293b',
-                    color: '#f8fafc',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    cursor: 'pointer'
+                    padding: '6px 12px', borderRadius: '6px',
+                    border: '1px solid #334155', background: '#1e293b',
+                    color: '#f8fafc', fontSize: '12px', fontWeight: '600', cursor: 'pointer'
                   }}
                 >
                   ⚡ Sync Now
@@ -346,14 +350,10 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                     if (onUserChanged) onUserChanged(activeEmail)
                   }}
                   style={{
-                    padding: '6px 12px',
-                    borderRadius: '6px',
+                    padding: '6px 12px', borderRadius: '6px',
                     border: '1px solid rgba(239, 68, 68, 0.3)',
                     background: 'rgba(239, 68, 68, 0.1)',
-                    color: '#f87171',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    cursor: 'pointer'
+                    color: '#f87171', fontSize: '12px', fontWeight: '600', cursor: 'pointer'
                   }}
                 >
                   Disconnect
@@ -362,52 +362,120 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {/* Method A: Google OAuth Connect */}
+
+              {/* ── Option A: Google OAuth ──────────────────────────────── */}
               <div style={{
-                background: '#111827',
-                border: '1px solid #1e293b',
-                borderRadius: '10px',
-                padding: '14px'
+                background: '#111827', border: '1px solid #1e293b',
+                borderRadius: '10px', padding: '14px'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
-                  <div>
+                  <div style={{ flex: 1 }}>
                     <div style={{ fontSize: '13px', fontWeight: '700', color: '#f8fafc' }}>
                       Option A: Connect with Google OAuth
                     </div>
                     <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px', lineHeight: '1.4' }}>
-                      Presents Google's "Choose an Account" screen (with <code>prompt=select_account</code>) so you choose exactly which account to link.
+                      Links your Google Calendar for live two-way sync.
                     </div>
                   </div>
-                  <a
-                    href={getGoogleOAuthConnectUrl(activeEmail)}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '8px 14px',
-                      borderRadius: '8px',
-                      background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-                      color: '#ffffff',
-                      fontSize: '12.5px',
-                      fontWeight: '600',
-                      textDecoration: 'none',
-                      flexShrink: 0
-                    }}
-                  >
-                    Connect Google →
-                  </a>
+
+                  {/* Show connect button only when credentials are configured */}
+                  {oauthStatus === null ? (
+                    <div style={{ fontSize: '12px', color: '#64748b', padding: '8px' }}>Checking…</div>
+                  ) : oauthStatus.configured ? (
+                    <a
+                      href={getGoogleOAuthConnectUrl(activeEmail)}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '6px',
+                        padding: '8px 14px', borderRadius: '8px',
+                        background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                        color: '#ffffff', fontSize: '12.5px', fontWeight: '600',
+                        textDecoration: 'none', flexShrink: 0
+                      }}
+                    >
+                      Connect Google →
+                    </a>
+                  ) : (
+                    <span style={{
+                      fontSize: '11px', color: '#f59e0b', fontWeight: '600',
+                      background: 'rgba(245, 158, 11, 0.12)',
+                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                      borderRadius: '6px', padding: '5px 9px', flexShrink: 0
+                    }}>
+                      ⚙️ Setup Required
+                    </span>
+                  )}
                 </div>
-                <div style={{ marginTop: '10px', fontSize: '11px', color: '#64748b' }}>
-                  ℹ️ Note: If your Google Cloud project is in development, configure <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> in your <code>.env</code> file.
-                </div>
+
+                {/* Setup Guide shown when OAuth is not configured */}
+                {oauthStatus && !oauthStatus.configured && (
+                  <div style={{
+                    marginTop: '14px',
+                    background: 'rgba(245, 158, 11, 0.06)',
+                    border: '1px solid rgba(245, 158, 11, 0.2)',
+                    borderRadius: '8px',
+                    padding: '14px'
+                  }}>
+                    <div style={{ fontSize: '12px', fontWeight: '700', color: '#fbbf24', marginBottom: '10px' }}>
+                      📋 One-time Google Cloud setup (5 minutes)
+                    </div>
+                    <ol style={{ fontSize: '11.5px', color: '#94a3b8', lineHeight: '1.8', margin: 0, paddingLeft: '18px' }}>
+                      <li>
+                        Go to{' '}
+                        <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer"
+                          style={{ color: '#38bdf8' }}>
+                          console.cloud.google.com/apis/credentials
+                        </a>
+                      </li>
+                      <li>Click <strong style={{ color: '#e2e8f0' }}>"+ Create Credentials" → "OAuth client ID"</strong></li>
+                      <li>Set Application type: <strong style={{ color: '#e2e8f0' }}>Web application</strong></li>
+                      <li>
+                        Add Authorised redirect URI:{' '}
+                        <code style={{
+                          background: '#1e293b', padding: '1px 5px', borderRadius: '4px',
+                          color: '#a5b4fc', fontSize: '11px'
+                        }}>
+                          http://localhost:8000/api/calendar/callback
+                        </code>
+                      </li>
+                      <li>Copy the <strong style={{ color: '#e2e8f0' }}>Client ID</strong> and <strong style={{ color: '#e2e8f0' }}>Client Secret</strong></li>
+                      <li>
+                        Add to your{' '}
+                        <code style={{
+                          background: '#1e293b', padding: '1px 5px', borderRadius: '4px',
+                          color: '#a5b4fc', fontSize: '11px'
+                        }}>
+                          .env
+                        </code>
+                        {' '}file:
+                        <div style={{
+                          marginTop: '8px',
+                          background: '#0f172a',
+                          border: '1px solid #334155',
+                          borderRadius: '6px',
+                          padding: '10px 12px',
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: '11px',
+                          color: '#7dd3fc',
+                          lineHeight: '1.8',
+                          userSelect: 'all'
+                        }}>
+                          GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com<br />
+                          GOOGLE_CLIENT_SECRET=GOCSPX-your-secret
+                        </div>
+                      </li>
+                      <li>Restart the backend server — then come back and click <strong style={{ color: '#e2e8f0' }}>"Connect Google"</strong></li>
+                    </ol>
+                    <div style={{ marginTop: '10px', fontSize: '11px', color: '#64748b' }}>
+                      💡 Also add your Gmail to <strong>"Test users"</strong> in the OAuth consent screen if your app is in development/testing mode.
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Method B: Instant 1-Click iCal URL Subscription */}
+              {/* ── Option B: iCal Subscription ───────────────────────── */}
               <div style={{
-                background: '#111827',
-                border: '1px solid #1e293b',
-                borderRadius: '10px',
-                padding: '14px'
+                background: '#111827', border: '1px solid #1e293b',
+                borderRadius: '10px', padding: '14px'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
                   <div>
@@ -415,21 +483,18 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                       Option B: Instant 1-Click Google Calendar Subscription (RFC 5545)
                     </div>
                     <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px', lineHeight: '1.4' }}>
-                      Zero OAuth setup required! In Google Calendar (shown in your screenshot), click <strong>Other calendars '+' → 'From URL'</strong> and paste this link:
+                      Zero OAuth setup required! In Google Calendar, click{' '}
+                      <strong style={{ color: '#e2e8f0' }}>Other calendars '+' → 'From URL'</strong> and paste this link:
                     </div>
                   </div>
                   <button
                     onClick={handleCopyIcs}
                     style={{
-                      padding: '8px 14px',
-                      borderRadius: '8px',
+                      padding: '8px 14px', borderRadius: '8px',
                       border: '1px solid #334155',
                       background: copiedIcs ? 'rgba(16, 185, 129, 0.2)' : '#1e293b',
                       color: copiedIcs ? '#34d399' : '#f8fafc',
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      flexShrink: 0
+                      fontSize: '12px', fontWeight: '600', cursor: 'pointer', flexShrink: 0
                     }}
                   >
                     {copiedIcs ? '✓ Link Copied!' : '📋 Copy Calendar URL'}
