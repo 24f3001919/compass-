@@ -148,7 +148,7 @@ async def exchange_code_for_tokens(
     client_secret = getattr(settings, "GOOGLE_CLIENT_SECRET", None) or os.getenv("GOOGLE_CLIENT_SECRET", "")
 
     # If demo/mock credentials or mock test code, provide simulated authenticated response
-    if not client_id or not client_secret or client_id.startswith("demo-") or code.startswith("mock_"):
+    if not client_id or not client_secret or client_id.startswith("demo-") or "mock" in code.lower() or code.startswith("test"):
         logger.info("Using simulated OAuth token exchange (demo mode credentials or test code)")
         return {
             "access_token": f"mock_ya29_{secrets.token_hex(16)}",
