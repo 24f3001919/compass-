@@ -42,6 +42,9 @@ async def get_calendar_connection_status(
                     user_id,
                 )
                 if row and row["access_token"]:
+                    from backend.services.oauth import decrypt_token
+                    decrypted = decrypt_token(row["access_token"])
+                    is_mock = not decrypted or decrypted.startswith("mock_")
                     email = row["account_email"] or "user@gmail.com"
                     return {
                         "connected": True,
@@ -49,10 +52,10 @@ async def get_calendar_connection_status(
                         "account_email": email,
                         "connected_at": row["connected_at"].isoformat() if row["connected_at"] else None,
                         "last_synced_at": row["last_synced_at"].isoformat() if row["last_synced_at"] else None,
-                        "mode": "live",
-                        "is_simulated": False,
-                        "label": f"Google Calendar: {email} (Live OAuth Connected)",
-                        "note": "Live Google Calendar connected via OAuth",
+                        "mode": "live" if not is_mock else "demo",
+                        "is_simulated": is_mock,
+                        "label": f"Google Calendar: {email} (Live OAuth Connected)" if not is_mock else f"Google Calendar: {email} (Quick Demo Mode — Live OAuth not connected)",
+                        "note": "Live Google Calendar connected via OAuth" if not is_mock else "Simulated demo mode via Quick-Connect",
                     }
         except Exception as e:
             logger.warning(f"Could not read calendar_connections: {e}")
@@ -468,6 +471,8 @@ async def sync_all_tasks_to_google_calendar(
         )
 
     synced_events = []
+    live_count = 0
+    simulated_count = 0
     for t in tasks:
         res = await link_calendar_event(
             task_id=t["id"],
@@ -481,6 +486,10 @@ async def sync_all_tasks_to_google_calendar(
             notes=t["notes"] or "",
         )
         synced_events.append(res)
+        if res.get("mode") == "live":
+            live_count += 1
+        else:
+            simulated_count += 1
 
     # Update last_synced_at timestamp on user connection
     try:
@@ -496,9 +505,20 @@ async def sync_all_tasks_to_google_calendar(
     except Exception as e:
         logger.warning(f"Could not update last_synced_at: {e}")
 
+    is_live = live_count > 0
+    msg = (
+        f"Successfully synced {live_count} tasks directly to Google Calendar API."
+        if is_live else
+        f"Slotted {simulated_count} tasks in Compass (Demo Mode). Because live Google OAuth credentials are not connected, use 'Export .ics Feed' to import or subscribe directly in Google Calendar."
+    )
+
     return {
         "success": True,
         "count": len(synced_events),
+        "live_count": live_count,
+        "simulated_count": simulated_count,
+        "is_live": is_live,
+        "message": msg,
         "events": synced_events,
         "user_id": user_id,
     }

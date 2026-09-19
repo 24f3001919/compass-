@@ -1819,6 +1819,23 @@ async def auth_quick_connect(body: QuickConnectBody, response: Response):
     }
 
 
+def _resolve_oauth_redirect_uri(request: Request) -> str:
+    """Consistently resolve OAuth callback URL across local dev and production reverse-proxies."""
+    settings = get_settings()
+    fwd_host = request.headers.get("x-forwarded-host")
+    host = fwd_host or request.headers.get("host", "localhost:8000")
+
+    if "localhost" in host or "127.0.0.1" in host:
+        return "http://localhost:8000/api/calendar/callback"
+
+    if getattr(settings, "GOOGLE_REDIRECT_URI", None) and "localhost" not in settings.GOOGLE_REDIRECT_URI:
+        return settings.GOOGLE_REDIRECT_URI
+
+    fwd_proto = request.headers.get("x-forwarded-proto")
+    scheme = fwd_proto or ("https" if request.url.scheme == "https" or "vercel.app" in host or "onrender.com" in host else "http")
+    return f"{scheme}://{host}/api/calendar/callback"
+
+
 @app.get("/api/calendar/connect")
 async def calendar_connect(
     request: Request,
@@ -1827,18 +1844,7 @@ async def calendar_connect(
 ):
     """Generate Google OAuth 2.0 authorization URL or redirect directly."""
     from backend.services.oauth import generate_google_oauth_url
-    
-    # Infer redirect_uri from request host if configured for deployment
-    host = request.headers.get("host", "localhost:8000")
-    scheme = "https" if request.url.scheme == "https" or "vercel.app" in host else "http"
-    base_url = f"{scheme}://{host}"
-    redirect_uri = f"{base_url}/api/calendar/callback"
-
-    # If backend setting specifies a valid full URL, use it unless host is different
-    settings = get_settings()
-    if getattr(settings, "GOOGLE_REDIRECT_URI", None) and "localhost" in settings.GOOGLE_REDIRECT_URI and "localhost" in host:
-        redirect_uri = settings.GOOGLE_REDIRECT_URI
-
+    redirect_uri = _resolve_oauth_redirect_uri(request)
     url = generate_google_oauth_url(redirect_uri=redirect_uri, login_hint=login_hint)
     
     # If caller is browser navigation or requested redirect=true
@@ -1875,12 +1881,20 @@ async def calendar_callback(
     from backend.services.oauth import exchange_code_for_tokens
     from backend.services.calendar import save_calendar_connection
 
-    # Infer redirect_uri to match what was used in connect
-    host = request.headers.get("host", "localhost:8000")
-    scheme = "https" if request.url.scheme == "https" or "vercel.app" in host else "http"
-    redirect_uri = f"{scheme}://{host}/api/calendar/callback"
-
+    redirect_uri = _resolve_oauth_redirect_uri(request)
     tokens = await exchange_code_for_tokens(code, redirect_uri=redirect_uri)
+
+    if "error" in tokens:
+        return HTMLResponse(
+            f"<html><body style='font-family:sans-serif;padding:40px;background:#0f172a;color:#f87171;'>"
+            f"<h3>Google Calendar Authorization Error</h3>"
+            f"<p style='color:#fca5a5;'>{tokens['error']}</p>"
+            f"<p style='color:#94a3b8;font-size:13px;'>Redirect URI sent to Google: <code style='color:#38bdf8;'>{redirect_uri}</code></p>"
+            f"<p><a style='color:#38bdf8;' href='/'>Return to Compass</a></p>"
+            f"</body></html>",
+            status_code=400,
+        )
+
     email = tokens.get("email") or tokens.get("account_email") or "scholar.authenticated@gmail.com"
 
     pool = await get_pool()
