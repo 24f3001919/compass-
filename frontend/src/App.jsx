@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar'
 import Timeline from './components/Timeline'
 import ChatPanel from './components/ChatPanel'
 import AgentPanel from './components/AgentPanel'
+import CalendarView from './components/CalendarView'
 import { checkBackendHealth, fetchTasks, sendQueryToAssistant, fetchUsageSummary } from './api/client'
 
 export default function App() {
@@ -143,6 +144,19 @@ export default function App() {
             tasks={tasks}
             activeDomain={selectedDomain}
             onSelectDomain={setSelectedDomain}
+            onTasksUpdated={() => {
+              loadTasks(selectedDomain)
+              refreshUsage()
+            }}
+          />
+        ) : activeTab === 'calendar' ? (
+          <CalendarView
+            tasks={tasks}
+            activeDomain={selectedDomain}
+            onTasksUpdated={() => {
+              loadTasks(selectedDomain)
+              refreshUsage()
+            }}
           />
         ) : activeTab === 'agent' ? (
           <AgentPanel
