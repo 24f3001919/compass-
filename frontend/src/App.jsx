@@ -4,6 +4,8 @@ import Timeline from './components/Timeline'
 import ChatPanel from './components/ChatPanel'
 import AgentPanel from './components/AgentPanel'
 import CalendarView from './components/CalendarView'
+import NorthstarPanel from './components/NorthstarPanel'
+import SpecialistPanel from './components/SpecialistPanel'
 import {
   checkBackendHealth,
   fetchTasks,
@@ -16,7 +18,7 @@ import {
 
 export default function App() {
   const [tasks, setTasks] = useState([])
-  const [activeTab, setActiveTab] = useState('timeline')
+  const [activeTab, setActiveTab] = useState('northstar')
   const [selectedDomain, setSelectedDomain] = useState('all')
   const [backendStatus, setBackendStatus] = useState('Connecting...')
   const [conversationId, setConversationId] = useState(null)
@@ -154,6 +156,36 @@ export default function App() {
         <header style={{ height: '60px', borderBottom: '1px solid #1e293b', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', flexShrink: 0 }}>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
+              id="tab-northstar"
+              onClick={() => setActiveTab('northstar')}
+              style={{
+                padding: '7px 14px',
+                borderRadius: '6px',
+                border: 'none',
+                background: activeTab === 'northstar' ? '#1e293b' : 'transparent',
+                color: activeTab === 'northstar' ? '#fff' : '#64748b',
+                cursor: 'pointer',
+                fontWeight: '500',
+                fontSize: '13px'
+              }}>
+              🧭 Northstar AI
+            </button>
+            <button
+              id="tab-specialist"
+              onClick={() => setActiveTab('specialist')}
+              style={{
+                padding: '7px 14px',
+                borderRadius: '6px',
+                border: 'none',
+                background: activeTab === 'specialist' ? '#1e293b' : 'transparent',
+                color: activeTab === 'specialist' ? '#fff' : '#64748b',
+                cursor: 'pointer',
+                fontWeight: '500',
+                fontSize: '13px'
+              }}>
+              🧠 Specialist Team
+            </button>
+            <button
               id="tab-timeline"
               onClick={() => setActiveTab('timeline')}
               style={{
@@ -167,36 +199,6 @@ export default function App() {
                 fontSize: '13px'
               }}>
               📅 Timeline Feed
-            </button>
-            <button
-              id="tab-chat"
-              onClick={() => setActiveTab('chat')}
-              style={{
-                padding: '7px 14px',
-                borderRadius: '6px',
-                border: 'none',
-                background: activeTab === 'chat' ? '#1e293b' : 'transparent',
-                color: activeTab === 'chat' ? '#fff' : '#64748b',
-                cursor: 'pointer',
-                fontWeight: '500',
-                fontSize: '13px'
-              }}>
-              💬 Assistant Chat
-            </button>
-            <button
-              id="tab-agent"
-              onClick={() => setActiveTab('agent')}
-              style={{
-                padding: '7px 14px',
-                borderRadius: '6px',
-                border: 'none',
-                background: activeTab === 'agent' ? '#1e293b' : 'transparent',
-                color: activeTab === 'agent' ? '#fff' : '#64748b',
-                cursor: 'pointer',
-                fontWeight: '500',
-                fontSize: '13px'
-              }}>
-              🧠 Agent Planner
             </button>
             <button
               id="tab-calendar"
@@ -293,7 +295,14 @@ export default function App() {
           </div>
         </header>
 
-        {activeTab === 'timeline' ? (
+        {activeTab === 'specialist' ? (
+          <SpecialistPanel
+            onTaskMutated={() => {
+              loadTasks(selectedDomain)
+              refreshUsage()
+            }}
+          />
+        ) : activeTab === 'timeline' ? (
           <Timeline
             tasks={tasks}
             activeDomain={selectedDomain}
@@ -320,7 +329,7 @@ export default function App() {
             }}
             conversationId={conversationId}
           />
-        ) : (
+        ) : activeTab === 'chat' ? (
           <ChatPanel
             messages={messages}
             setMessages={setMessages}
@@ -329,6 +338,20 @@ export default function App() {
             onSendMessage={handleSendMessage}
             isTyping={isTyping}
             onChatComplete={refreshUsage}
+          />
+        ) : (
+          <NorthstarPanel
+            messages={messages}
+            setMessages={setMessages}
+            conversationId={conversationId}
+            setConversationId={setConversationId}
+            onSendMessage={handleSendMessage}
+            isTyping={isTyping}
+            onChatComplete={refreshUsage}
+            onTaskMutated={() => {
+              loadTasks(selectedDomain)
+              refreshUsage()
+            }}
           />
         )}
       </main>

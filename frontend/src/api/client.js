@@ -436,7 +436,7 @@ export async function deleteTask(taskId) {
 export async function updateTask(taskId, updateData) {
   const res = await fetch(`${API_BASE}/api/tasks/${taskId}`, {
     method: 'PATCH',
-    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updateData),
   })
   if (!res.ok) {
@@ -445,5 +445,26 @@ export async function updateTask(taskId, updateData) {
   }
   return await res.json()
 }
+
+/**
+ * Dispatch a request to the Specialist Multi-Agent System backend.
+ */
+export async function dispatchSpecialist({ capability, user_goal, relevant_context }) {
+  const res = await fetch(`${API_BASE}/api/specialist/dispatch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      capability,
+      user_goal,
+      relevant_context,
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Specialist dispatch failed (HTTP ${res.status})`)
+  }
+  return await res.json()
+}
+
 
 

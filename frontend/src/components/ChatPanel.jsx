@@ -7,6 +7,7 @@ export default function ChatPanel({ messages, setMessages, conversationId, setCo
   const [isStreaming, setIsStreaming] = useState(false)
   const messagesEndRef = useRef(null)
   const streamTimerRef = useRef(null)
+  const isSendingRef = useRef(false)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -65,6 +66,7 @@ export default function ChatPanel({ messages, setMessages, conversationId, setCo
         streamTimerRef.current = null
         setIsStreaming(false)
         setStreamingText('')
+        isSendingRef.current = false
         setMessages(prev => [...prev, { role: 'assistant', text: fullText }])
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
       }
@@ -73,7 +75,9 @@ export default function ChatPanel({ messages, setMessages, conversationId, setCo
 
   const handleSend = async (textToSend) => {
     const text = (textToSend || input).trim()
-    if (!text || isStreaming || isTyping) return
+    if (!text || isStreaming || isTyping || isSendingRef.current) return
+
+    isSendingRef.current = true
     setInput('')
 
     // 1. Add user message to conversation
@@ -94,6 +98,7 @@ export default function ChatPanel({ messages, setMessages, conversationId, setCo
         onComplete: (doneData) => {
           setIsStreaming(false)
           setStreamingText('')
+          isSendingRef.current = false
           if (receivedTokens) {
             setMessages(prev => [...prev, { role: 'assistant', text: receivedTokens }])
           }
@@ -113,7 +118,11 @@ export default function ChatPanel({ messages, setMessages, conversationId, setCo
             const reply = await onSendMessage(text)
             if (reply) {
               streamAssistantResponse(reply)
+            } else {
+              isSendingRef.current = false
             }
+          } else {
+            isSendingRef.current = false
           }
         }
       })
@@ -125,7 +134,11 @@ export default function ChatPanel({ messages, setMessages, conversationId, setCo
         const reply = await onSendMessage(text)
         if (reply) {
           streamAssistantResponse(reply)
+        } else {
+          isSendingRef.current = false
         }
+      } else {
+        isSendingRef.current = false
       }
     }
   }
@@ -136,9 +149,8 @@ export default function ChatPanel({ messages, setMessages, conversationId, setCo
   }
 
   const handleQuickPrompt = () => {
-    if (isStreaming || isTyping) return
+    if (isStreaming || isTyping || isSendingRef.current) return
     const prompt = 'What tasks do I have coming up?'
-    setInput(prompt)
     handleSend(prompt)
   }
 

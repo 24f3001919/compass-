@@ -511,6 +511,29 @@ DETECT_SCHEDULE_CONFLICTS_TOOL: Dict[str, Any] = {
     },
 }
 
+DELEGATE_TO_SPECIALIST_TOOL: Dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "delegate_to_specialist",
+        "description": "Delegate a specialized sub-task to the Specialist Multi-Agent System (coursework analysis, web research & verification, calendar free/busy scheduling, or memory retrieval).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "capability": {
+                    "type": "string",
+                    "enum": ["coursework", "research", "calendar", "memory"],
+                    "description": "Target specialist domain",
+                },
+                "task_description": {
+                    "type": "string",
+                    "description": "Detailed goal or query for the specialist agent",
+                },
+            },
+            "required": ["capability", "task_description"],
+        },
+    },
+}
+
 # Registered tools exposed to the Nemotron router
 BASE_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     ADD_TASK_TOOL,
@@ -533,6 +556,7 @@ BASE_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     PROPOSE_SCHEDULE_TOOL,
     COMMIT_SCHEDULE_TOOL,
     DETECT_SCHEDULE_CONFLICTS_TOOL,
+    DELEGATE_TO_SPECIALIST_TOOL,
 ]
 
 
@@ -1833,6 +1857,27 @@ async def handle_detect_schedule_conflicts(args: Dict[str, Any], pool: Any) -> D
             "scanned_tasks_count": len(tasks),
             "scanned_external_events_count": len(ext_events),
         },
+    }
+
+
+@register_skill("delegate_to_specialist")
+async def handle_delegate_to_specialist(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
+    """Delegate a specialized sub-task to the Specialist Multi-Agent System."""
+    from backend.agents.specialist import run_specialist_task
+
+    capability = args.get("capability") or "memory"
+    task_description = args.get("task_description") or args.get("goal") or "Specialized query"
+
+    specialist_res = await run_specialist_task(
+        capability=capability,
+        user_goal=task_description,
+        pool=pool,
+    )
+
+    summary = specialist_res.get("summary", "")
+    return {
+        "response": summary,
+        "data": specialist_res,
     }
 
 
