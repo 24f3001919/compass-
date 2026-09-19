@@ -49,7 +49,7 @@ export default function Sidebar({
           🧭
         </div>
         <div>
-          <h1 style={{ fontSize: '16px', fontWeight: '800', letterSpacing: '-0.3px', color: 'var(--text-primary)' }}>Compass</h1>
+          <h1 style={{ fontSize: '16px', fontWeight: '800', letterSpacing: '-0.3px', color: 'var(--text-on-dark)' }}>Compass</h1>
           <p style={{ fontSize: '10.5px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: '600' }}>Workspace</p>
         </div>
       </div>
@@ -68,7 +68,7 @@ export default function Sidebar({
           >
             <span className="nav-icon">{item.icon}</span>
             <span>
-              <div style={{ fontSize: '13.5px', fontWeight: '700', color: activeTab === item.key ? 'var(--text-primary)' : 'inherit' }}>
+              <div style={{ fontSize: '13.5px', fontWeight: '700', color: activeTab === item.key ? 'var(--text-on-dark)' : 'inherit' }}>
                 {item.label}
               </div>
               <div style={{ fontSize: '11px', opacity: 0.75 }}>{item.sub}</div>
@@ -110,7 +110,7 @@ export default function Sidebar({
               background: activeDomain === dom.key ? 'var(--bg-sidebar-active)' : 'transparent',
               transition: 'background 0.15s ease'
             }}>
-            <span style={{ fontSize: '13px', color: activeDomain === dom.key ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '13px', color: activeDomain === dom.key ? 'var(--text-on-dark)' : 'var(--text-secondary)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span>{dom.icon}</span> {dom.label}
             </span>
             <span style={{
@@ -143,7 +143,7 @@ export default function Sidebar({
             background: isOnline ? '#34d399' : '#f5a623',
             flexShrink: 0
           }} />
-          <span style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)' }}>
+          <span style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--text-on-dark)' }}>
             {isOnline ? `${totalActive} tasks synced` : 'Reconnecting'}
           </span>
         </div>
