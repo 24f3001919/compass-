@@ -97,16 +97,17 @@ function friendlyTool(toolName) {
     update_task_status: 'Changing task status',
     ingest_url: 'Reading a web page',
     ingest_text: 'Reading content',
-    memory_search: 'Searching your memory',
-    summarize_day: 'Summarizing your day',
+    memory_search: 'Searching your memory and notes',
+    summarize_day: 'Preparing a summary of your day',
     query_calendar: 'Checking your calendar',
     schedule_event: 'Scheduling an event',
     query_code_context: 'Reading your code notes',
     query_coursework_notes: 'Reading your coursework notes',
-    apply_triage_plan: 'Applying triage decisions',
-    get_projects: 'Looking up your projects',
+    apply_triage_plan: 'Adjusting your workload & schedule',
+    get_projects: 'Looking up your active projects',
     search_web: 'Searching the web',
     web_search: 'Searching the web',
+    detect_schedule_conflicts: 'Scanning for schedule conflicts',
   }
   if (!toolName) return ''
   return map[toolName] || toolName.replace(/_/g, ' ')
@@ -116,10 +117,10 @@ function friendlyTool(toolName) {
 function friendlyTable(table) {
   const map = {
     tasks: 'Task',
-    memory_chunks: 'Memory entry',
+    memory_chunks: 'Note',
     projects: 'Project',
-    calendar_events: 'Calendar event',
-    agent_audit_log: 'Action log',
+    calendar_events: 'Event',
+    agent_audit_log: 'Change log',
   }
   return map[table] || table
 }
@@ -131,12 +132,127 @@ function friendlyAction(tool) {
     edit_task: 'Updated a task',
     delete_task: 'Deleted a task',
     update_task_status: 'Changed task status',
-    ingest_url: 'Saved web page to memory',
-    ingest_text: 'Saved note to memory',
-    apply_triage_plan: 'Applied triage plan',
-    schedule_event: 'Scheduled an event',
+    ingest_url: 'Saved web page',
+    ingest_text: 'Saved note',
+    apply_triage_plan: 'Adjusted schedule',
+    schedule_event: 'Scheduled event',
+    commit_schedule: 'Scheduled tasks',
   }
   return map[tool] || (tool || '').replace(/_/g, ' ')
+}
+
+function formatFriendlyTime(dateStr) {
+  if (!dateStr) return ''
+  try {
+    const d = new Date(dateStr)
+    if (isNaN(d.getTime())) return dateStr.slice(11, 16)
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  } catch {
+    return dateStr.slice(11, 16)
+  }
+}
+
+function formatActivityItem(item) {
+  try {
+    const args = typeof item.args === 'string' ? JSON.parse(item.args) : (item.args || {})
+    const newState = typeof item.new_state === 'string' ? JSON.parse(item.new_state) : (item.new_state || {})
+    const prevState = typeof item.previous_state === 'string' ? JSON.parse(item.previous_state) : (item.previous_state || {})
+
+    const title = args.title || newState.title || prevState.title || ''
+
+    if (item.tool === 'add_task') {
+      return title ? `Added task "${title}"` : 'Added a new task'
+    }
+    if (item.tool === 'delete_task') {
+      return title ? `Removed task "${title}"` : 'Removed a task'
+    }
+    if (item.tool === 'edit_task') {
+      return title ? `Updated task "${title}"` : 'Updated a task'
+    }
+    if (item.tool === 'update_task_status') {
+      const status = args.status || newState.status || 'updated'
+      const statusLabel = status === 'done' ? 'completed' : status
+      return title ? `Marked "${title}" as ${statusLabel}` : `Marked task as ${statusLabel}`
+    }
+    if (item.tool === 'ingest_url') {
+      const url = args.url || ''
+      const host = url ? url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] : ''
+      return host ? `Saved link from ${host}` : 'Saved web page'
+    }
+    if (item.tool === 'ingest_text') {
+      return title ? `Saved note: "${title}"` : 'Saved note to memory'
+    }
+    if (item.tool === 'commit_schedule' || item.tool === 'schedule_event') {
+      return title ? `Scheduled "${title}"` : 'Scheduled calendar event'
+    }
+    if (item.tool === 'apply_triage_plan') {
+      return 'Adjusted task plan & schedule'
+    }
+  } catch {
+    // fallback
+  }
+  return friendlyAction(item.tool)
+}
+
+function formatActionDescription(action) {
+  if (!action) return 'Update data'
+  if (action.summary) return action.summary
+  const tool = action.tool
+  const args = action.args || {}
+  if (tool === 'add_task') {
+    return `Add task: "${args.title || 'New Task'}"`
+  }
+  if (tool === 'edit_task') {
+    return `Update task: "${args.title || `Task #${args.task_id || ''}`}"`
+  }
+  if (tool === 'delete_task') {
+    return `Delete task #${args.task_id || ''}`
+  }
+  if (tool === 'update_task_status') {
+    const status = args.status || 'done'
+    return `Mark task #${args.task_id || ''} as ${status === 'done' ? 'completed' : status}`
+  }
+  if (tool === 'schedule_event' || tool === 'commit_schedule') {
+    return `Schedule "${args.title || 'event'}" on calendar`
+  }
+  if (tool === 'apply_triage_plan') {
+    return 'Adjust task plan to balance workload'
+  }
+  return friendlyAction(tool)
+}
+
+function formatStepContent(step) {
+  if (!step.content) return null
+
+  if (step.type === 'done') {
+    return formatDoneSummary(step.content)
+  }
+
+  if (step.type === 'tool_call') {
+    const action = friendlyTool(step.tool)
+    let extra = ''
+    if (step.args) {
+      if (step.args.query) extra = ` for "${step.args.query}"`
+      else if (step.args.status) extra = ` (status: ${step.args.status})`
+      else if (step.args.domain) extra = ` in ${step.args.domain}`
+    }
+    return `Looking up information: ${action.toLowerCase()}${extra}…`
+  }
+
+  if (step.type === 'observe' && typeof step.content === 'string') {
+    const match = step.content.match(/^Found (\d+) task\(s\)(?: with status '([^']+)')?:/i)
+    if (match) {
+      const count = match[1]
+      const status = match[2] ? ` (status: ${match[2]})` : ''
+      return `Found ${count} task${count === '1' ? '' : 's'}${status}. Analyzing your schedule and commitments…`
+    }
+  }
+
+  if (step.type === 'confirm_request') {
+    return 'Please review the requested changes below and let me know if you would like to proceed.'
+  }
+
+  return step.content
 }
 
 const SUGGESTED_GOALS = [
@@ -153,24 +269,22 @@ function ReplanDiffCard({ diff }) {
   return (
     <div style={{
       margin: '10px 0 8px',
-      background: 'rgba(15, 23, 42, 0.75)',
-      border: '1px solid #334155',
-      borderRadius: '6px',
-      padding: '10px 12px',
-      fontSize: '12px',
-      fontFamily: 'JetBrains Mono, monospace',
+      background: 'rgba(245, 158, 11, 0.08)',
+      border: '1px solid rgba(245,158,11,0.3)',
+      borderRadius: '8px',
+      padding: '10px 14px',
+      fontSize: '13px',
     }}>
-      <div style={{ color: '#94a3b8', fontWeight: '700', marginBottom: '6px', fontSize: '11px', letterSpacing: '0.05em' }}>
-        🔄 RE-PLAN DIFF (HUMAN IN THE LOOP)
+      <div style={{ color: '#fbbf24', fontWeight: '700', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        🔄 Change was declined — finding a better approach
       </div>
-      <div style={{ color: '#f87171', textDecoration: 'line-through', marginBottom: '4px' }}>
-        - DECLINED: {diff.declined_action?.tool}({JSON.stringify(diff.declined_action?.args || {})})
-      </div>
-      <div style={{ color: '#fbbf24', marginBottom: '4px' }}>
-        ~ FEEDBACK: "{diff.feedback}"
-      </div>
-      <div style={{ color: '#4ade80' }}>
-        + RE-PLANNING: Finding non-conflicting alternative without state alteration
+      {diff.feedback && (
+        <div style={{ color: '#94a3b8', marginBottom: '4px' }}>
+          Your feedback: <span style={{ color: '#e2e8f0' }}>"{diff.feedback}"</span>
+        </div>
+      )}
+      <div style={{ color: '#4ade80', fontSize: '12px' }}>
+        ✓ Replanning without touching your data
       </div>
     </div>
   )
@@ -178,74 +292,40 @@ function ReplanDiffCard({ diff }) {
 
 function ReportCard({ reportCard }) {
   if (!reportCard) return null
+  const elapsedSec = reportCard.elapsed_ms ? (reportCard.elapsed_ms / 1000).toFixed(1) : null
   return (
     <div id="agent-report-card" style={{
       marginTop: '12px',
-      background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95))',
-      border: '1px solid #3b82f6',
+      background: 'rgba(15, 23, 42, 0.7)',
+      border: '1px solid #1e293b',
       borderRadius: '10px',
-      padding: '14px 16px',
-      boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+      padding: '12px 16px',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '18px' }}>📊</span>
-          <span style={{ fontWeight: '700', fontSize: '13px', color: '#60a5fa', letterSpacing: '0.05em' }}>
-            AGENT RUN REPORT CARD
+          <span style={{ fontSize: '16px' }}>✅</span>
+          <span style={{ fontWeight: '700', fontSize: '13px', color: '#94a3b8' }}>
+            Run summary
           </span>
         </div>
         <span style={{
-          fontSize: '10px',
-          fontWeight: '700',
-          padding: '2px 8px',
+          fontSize: '11px',
+          fontWeight: '600',
+          padding: '2px 10px',
           borderRadius: '12px',
           background: reportCard.abstained ? 'rgba(245, 158, 11, 0.2)' : 'rgba(34, 197, 94, 0.2)',
           color: reportCard.abstained ? '#fbbf24' : '#4ade80',
-          border: `1px solid ${reportCard.abstained ? '#f59e0b44' : '#22c55e44'}`,
         }}>
-          {reportCard.abstained ? 'EPISTEMIC ABSTENTION' : 'COMPLETED'}
+          {reportCard.abstained ? 'Needs more info' : 'Completed'}
         </span>
       </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '12px' }}>
-        <div style={{ background: '#0f172a', padding: '8px 10px', borderRadius: '6px', border: '1px solid #1e293b' }}>
-          <div style={{ fontSize: '10px', color: '#64748b' }}>TOTAL TIME</div>
-          <div style={{ fontSize: '13px', fontWeight: '700', color: '#e2e8f0', fontFamily: 'JetBrains Mono, monospace' }}>
-            {reportCard.elapsed_ms}ms
-          </div>
-        </div>
-        <div style={{ background: '#0f172a', padding: '8px 10px', borderRadius: '6px', border: '1px solid #1e293b' }}>
-          <div style={{ fontSize: '10px', color: '#64748b' }}>STEPS</div>
-          <div style={{ fontSize: '13px', fontWeight: '700', color: '#e2e8f0', fontFamily: 'JetBrains Mono, monospace' }}>
-            {reportCard.total_steps}
-          </div>
-        </div>
-        <div style={{ background: '#0f172a', padding: '8px 10px', borderRadius: '6px', border: '1px solid #1e293b' }}>
-          <div style={{ fontSize: '10px', color: '#64748b' }}>CRITIQUE</div>
-          <div style={{ fontSize: '13px', fontWeight: '700', color: '#c084fc', fontFamily: 'JetBrains Mono, monospace' }}>
-            {reportCard.critique_rounds || 0} round(s)
-          </div>
-        </div>
-        <div style={{ background: '#0f172a', padding: '8px 10px', borderRadius: '6px', border: '1px solid #1e293b' }}>
-          <div style={{ fontSize: '10px', color: '#64748b' }}>TOTAL COST</div>
-          <div style={{ fontSize: '13px', fontWeight: '700', color: '#10b981', fontFamily: 'JetBrains Mono, monospace' }}>
-            ${(reportCard.total_cost_usd || 0).toFixed(5)}
-          </div>
-        </div>
+      <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '13px', color: '#94a3b8' }}>
+        {elapsedSec && <span>⏱ {elapsedSec}s</span>}
+        {reportCard.total_steps && <span>🔢 {reportCard.total_steps} steps</span>}
+        {reportCard.critique_rounds > 0 && (
+          <span>🔍 {reportCard.critique_rounds} quality check{reportCard.critique_rounds !== 1 ? 's' : ''}</span>
+        )}
       </div>
-
-      {reportCard.tier_breakdown && (
-        <div style={{ fontSize: '11px', color: '#94a3b8', background: '#0f172a', padding: '8px 10px', borderRadius: '6px', border: '1px solid #1e293b' }}>
-          <div style={{ fontWeight: '600', marginBottom: '4px', color: '#cbd5e1' }}>Model Tier Attribution:</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}>
-            {Object.entries(reportCard.tier_breakdown).map(([tier, cost]) => (
-              <span key={tier} style={{ color: cost > 0 ? '#60a5fa' : '#64748b' }}>
-                • {tier}: <strong style={{ color: cost > 0 ? '#34d399' : '#94a3b8' }}>${cost.toFixed(5)}</strong>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -303,42 +383,46 @@ function StepCard({ step, index }) {
 
 
 
-      {/* Realist Arithmetic Box */}
+      {/* Workload Check Box */}
       {step.metadata?.verdict && (
         <div style={{
           margin: '8px 0',
-          background: 'rgba(15, 23, 42, 0.85)',
-          border: `1px solid ${step.metadata.verdict.verdict === 'FEASIBLE' ? '#22c55e55' : '#ef444455'}`,
-          borderRadius: '6px',
-          padding: '10px 12px',
-          fontFamily: 'JetBrains Mono, monospace',
-          fontSize: '11px',
+          background: step.metadata.verdict.verdict === 'FEASIBLE'
+            ? 'rgba(34, 197, 94, 0.08)'
+            : 'rgba(239, 68, 68, 0.08)',
+          border: `1px solid ${step.metadata.verdict.verdict === 'FEASIBLE' ? '#22c55e44' : '#ef444444'}`,
+          borderRadius: '8px',
+          padding: '12px 14px',
+          fontSize: '13px',
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <span style={{
               fontWeight: '700',
               color: step.metadata.verdict.verdict === 'FEASIBLE' ? '#4ade80' : '#f87171',
+              fontSize: '14px',
             }}>
-              REALIST VERDICT: {step.metadata.verdict.verdict}
+              {step.metadata.verdict.verdict === 'FEASIBLE' ? '✅ You can do it!' : '⚠️ Too much to fit in the time'}
             </span>
-            <span style={{ color: '#94a3b8' }}>
-              Utilisation: <strong style={{ color: step.metadata.verdict.utilisation_pct > 100 ? '#f87171' : '#4ade80' }}>{step.metadata.verdict.utilisation_pct}%</strong>
+            <span style={{ color: '#94a3b8', fontSize: '12px' }}>
+              {step.metadata.verdict.utilisation_pct}% of your available time
             </span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', color: '#cbd5e1' }}>
-            <div>Demand: <strong>{step.metadata.verdict.demand_hours}h</strong></div>
-            <div>Capacity: <strong>{step.metadata.verdict.capacity_hours}h</strong></div>
-            <div>Overcommit: <strong style={{ color: step.metadata.verdict.overcommit_hours > 0 ? '#f87171' : '#4ade80' }}>{step.metadata.verdict.overcommit_hours}h</strong></div>
+          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', color: '#cbd5e1', fontSize: '12px' }}>
+            <span>📋 Work needed: <strong>{step.metadata.verdict.demand_hours}h</strong></span>
+            <span>🕐 Time available: <strong>{step.metadata.verdict.capacity_hours}h</strong></span>
+            {step.metadata.verdict.overcommit_hours > 0 && (
+              <span style={{ color: '#f87171' }}>🚨 Over by: <strong>{step.metadata.verdict.overcommit_hours}h</strong></span>
+            )}
           </div>
           {step.metadata.verdict.must_cut_hours > 0 && (
-            <div style={{ marginTop: '6px', color: '#fbbf24' }}>
-              ✂️ Must cut: <strong>{step.metadata.verdict.must_cut_hours}h</strong>
+            <div style={{ marginTop: '8px', color: '#fbbf24', fontSize: '12px' }}>
+              ✂️ You'll need to cut about <strong>{step.metadata.verdict.must_cut_hours}h</strong> of work to stay realistic.
             </div>
           )}
           {step.metadata.verdict.challenged_estimates?.length > 0 && (
-            <div style={{ marginTop: '6px', borderTop: '1px solid #334155', paddingTop: '6px' }}>
-              <span style={{ color: '#f87171', fontWeight: '600' }}>Challenged Estimates:</span>
-              <ul style={{ margin: '4px 0 0 16px', padding: 0, color: '#94a3b8' }}>
+            <div style={{ marginTop: '8px', borderTop: '1px solid #334155', paddingTop: '8px' }}>
+              <span style={{ color: '#f87171', fontWeight: '600', fontSize: '12px' }}>⏱ These time estimates might be too optimistic:</span>
+              <ul style={{ margin: '4px 0 0 16px', padding: 0, color: '#94a3b8', fontSize: '12px' }}>
                 {step.metadata.verdict.challenged_estimates.map((c, i) => (
                   <li key={i}>{c}</li>
                 ))}
@@ -351,19 +435,20 @@ function StepCard({ step, index }) {
       {/* Not enough info warning */}
       {isAbstained && (
         <div style={{
-          background: 'rgba(245, 158, 11, 0.15)',
-          border: '1px solid #f59e0b',
-          borderRadius: '6px',
-          padding: '8px 12px',
+          background: 'rgba(245, 158, 11, 0.12)',
+          border: '1px solid rgba(245,158,11,0.35)',
+          borderRadius: '8px',
+          padding: '10px 14px',
           marginBottom: '8px',
           color: '#fbbf24',
-          fontSize: '12px',
-          fontWeight: '600',
+          fontSize: '13px',
+          fontWeight: '500',
           display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
+          alignItems: 'flex-start',
+          gap: '8px',
         }}>
-          🤷 Not enough information — the assistant couldn't answer this confidently without guessing.
+          <span style={{ fontSize: '18px', flexShrink: 0 }}>🤷</span>
+          <span>I don't have enough information to answer this confidently. Try giving me more context, or ask something I can check in your tasks or calendar.</span>
         </div>
       )}
 
@@ -377,10 +462,10 @@ function StepCard({ step, index }) {
         whiteSpace: 'pre-wrap',
         wordBreak: 'break-word',
       }}>
-        {step.type === 'done' ? formatDoneSummary(step.content) : step.content}
+        {formatStepContent(step)}
       </div>
 
-      {/* Feasibility Triage Artifact */}
+      {/* Plan Breakdown Box */}
       {step.type === 'done' && step.metadata?.artifact_markdown && (
         <div style={{
           marginTop: '12px',
@@ -390,31 +475,30 @@ function StepCard({ step, index }) {
           padding: '14px 16px',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <span style={{ fontSize: '12px', fontWeight: '700', color: '#38bdf8', letterSpacing: '0.05em' }}>
-              📋 FEASIBILITY TRIAGE ARTIFACT
+            <span style={{ fontSize: '13px', fontWeight: '700', color: '#38bdf8', letterSpacing: '0.02em' }}>
+              📋 Your Personalized Action Plan
             </span>
             <button
               onClick={() => navigator.clipboard.writeText(step.metadata.artifact_markdown)}
               style={{
                 background: '#1e293b',
                 border: '1px solid #475569',
-                borderRadius: '4px',
+                borderRadius: '6px',
                 color: '#cbd5e1',
-                padding: '3px 8px',
-                fontSize: '10px',
+                padding: '4px 10px',
+                fontSize: '11px',
                 cursor: 'pointer',
-                fontFamily: 'JetBrains Mono, monospace',
               }}
             >
-              📋 Copy Markdown
+              📋 Copy Plan
             </button>
           </div>
           <div style={{
-            fontSize: '12px',
+            fontSize: '13px',
             lineHeight: '1.6',
             color: '#e2e8f0',
             whiteSpace: 'pre-wrap',
-            fontFamily: 'system-ui, -apple-system, sans-serif',
+            fontFamily: 'Inter, system-ui, sans-serif',
           }}>
             {step.metadata.artifact_markdown}
           </div>
@@ -430,7 +514,16 @@ function StepCard({ step, index }) {
 function formatDoneSummary(content) {
   try {
     const data = JSON.parse(content)
-    return `Completed in ${data.total_steps} steps. Tools used: ${(data.tools_used || []).join(', ') || 'none'}. ${(data.pending_confirmations || []).length > 0 ? `⚠️ ${data.pending_confirmations.length} action(s) awaiting your approval.` : ''}`
+    const pendingCount = (data.pending_confirmations || []).length
+    const toolsUsed = (data.tools_used || []).map(t => friendlyTool(t)).filter(Boolean)
+    let summary = `Finished in ${data.total_steps} step${data.total_steps !== 1 ? 's' : ''}.`
+    if (toolsUsed.length > 0) {
+      summary += ` Checked: ${toolsUsed.join(', ')}.`
+    }
+    if (pendingCount > 0) {
+      summary += ` ⚠️ ${pendingCount} change${pendingCount !== 1 ? 's' : ''} waiting for your approval below.`
+    }
+    return summary
   } catch {
     return content
   }
@@ -452,7 +545,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
   const [runsList, setRunsList] = useState([])
   const [showHistory, setShowHistory] = useState(false)
   const [copyFeedback, setCopyFeedback] = useState(false)
-  const traceEndRef = useRef(null)
+  const scrollContainerRef = useRef(null)
   const abortRef = useRef(null)
 
   const getApiBase = () => {
@@ -547,12 +640,20 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
     fetchRunsHistory()
   }, [])
 
-  // Auto-scroll to bottom as new steps appear
+  // Smoothly scroll internal container when steps or confirmations pop in
+  // Avoid window / parent scroll chaining
   useEffect(() => {
-    if (traceEndRef.current) {
-      traceEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    if (scrollContainerRef.current) {
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTo({
+            top: scrollContainerRef.current.scrollHeight,
+            behavior: 'smooth',
+          })
+        }
+      })
     }
-  }, [steps])
+  }, [steps.length, pendingActions.length])
 
   const loadPastRun = (run) => {
     setGoal(run.goal || '')
@@ -562,12 +663,9 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
   }
 
   const copyTraceAsMarkdown = () => {
-    const totalCost = steps.reduce((sum, s) => sum + (s.step_cost_usd || 0), 0)
     const mdLines = [
-      `# 🧭 Compass Agent Trace — ${goal || 'Goal'}`,
-      `**Run ID**: \`${currentRunId || 'unknown'}\``,
+      `# 🧭 Compass Plan — ${goal || 'Question'}`,
       `**Total Steps**: ${steps.length}`,
-      `**Estimated Cost**: $${totalCost.toFixed(5)} USD (Nebius Token Factory)`,
       '',
       '---',
       '',
@@ -575,14 +673,9 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
     steps.forEach((s) => {
       const icon = STEP_STYLES[s.type]?.icon || '•'
       const label = STEP_STYLES[s.type]?.label || s.type.toUpperCase()
-      mdLines.push(`### ${icon} Step ${s.step}: ${label} ${s.model_tier ? `(\`${s.model_tier}\`)` : ''}`)
+      mdLines.push(`### ${icon} Step ${s.step}: ${label}`)
       if (s.tool) {
-        mdLines.push(`**Tool**: \`${s.tool}\``)
-        if (s.args) {
-          mdLines.push('```json')
-          mdLines.push(JSON.stringify(s.args, null, 2))
-          mdLines.push('```')
-        }
+        mdLines.push(`**Action**: ${friendlyTool(s.tool)}`)
       }
       if (s.content) {
         mdLines.push(`> ${s.content}`)
@@ -665,7 +758,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                       drop_ids: (tp.drop || []).map(t => t.task_id),
                       defer_ids: (tp.defer || []).map(t => t.task_id),
                     },
-                    summary: `Apply Triage Plan: drop ${tp.drop?.length || 0} task(s), defer ${tp.defer?.length || 0} task(s)`,
+                    summary: `Adjust workload: drop ${tp.drop?.length || 0} task(s) and reschedule ${tp.defer?.length || 0} task(s)`,
                   }])
                 }
               }
@@ -737,8 +830,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
           type: 'observe',
           step: prev.length + 1,
           elapsed_ms: 0,
-          content: 'Triage mutations applied to database: deferred and dropped tasks updated in Neon PostgreSQL.',
-          model_tier: 'Neon Postgres Engine',
+          content: 'Your workload adjustment has been applied. Selected tasks were updated.',
         }])
         onTaskMutated?.()
       } catch (err) {
@@ -746,7 +838,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
           type: 'error',
           step: prev.length + 1,
           elapsed_ms: 0,
-          content: `Failed to apply triage plan: ${err.message}`,
+          content: `Failed to apply plan: ${err.message}`,
         }])
       }
       return
@@ -763,7 +855,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
   }
 
   const rejectActions = async () => {
-    const feedback = rejectFeedback.trim() || 'User declined proposed change. Do not modify this task and propose an alternative plan.'
+    const feedback = rejectFeedback.trim() || 'User declined proposed change. Propose an alternative without modifying this task.'
     const wasTriage = pendingActions.some(a => a.tool === 'apply_triage_plan')
     const triageAction = pendingActions.find(a => a.tool === 'apply_triage_plan')
     setPendingActions([])
@@ -773,14 +865,13 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
     if (wasTriage) {
       const diff = {
         declined_action: triageAction,
-        feedback: feedback || 'User declined proposed triage mutations. Zero database records modified. Plan retained as advisory only.',
+        feedback: feedback || 'User chose not to proceed with these changes. All tasks remain unchanged.',
       }
       setSteps(prev => [...prev, {
         type: 'observe',
         step: prev.length + 1,
         elapsed_ms: 0,
-        content: 'Human veto applied: Triage mutations declined. All original task statuses, priorities, and deadlines remain unchanged in PostgreSQL.',
-        model_tier: 'Human Authorization Gate',
+        content: 'No changes made: Your tasks, priorities, and deadlines remain unchanged.',
         metadata: { replan_diff: diff },
       }])
       return
@@ -811,7 +902,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
         setUndoStatus(data.message || 'Action reverted')
         setSteps(prev => [...prev, {
           type: 'observe',
-          content: `↩️ UNDO: ${data.message} (${JSON.stringify(data.reverted || {})})`,
+          content: `↩️ ${data.message || 'The previous change has been undone.'}`,
           step: prev.length + 1,
           elapsed_ms: 0,
         }])
@@ -854,6 +945,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
       flex: 1,
       display: 'flex',
       flexDirection: 'column',
+      minHeight: 0,
       overflow: 'hidden',
       padding: '0',
     }}>
@@ -888,13 +980,13 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
             gap: '12px',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '20px' }}>🌙</span>
+              <span style={{ fontSize: '22px' }}>🌅</span>
               <div>
-                <div style={{ fontSize: '12px', fontWeight: '700', color: '#38bdf8', letterSpacing: '0.03em' }}>
-                  Autonomous Overnight Briefing Ready
+                <div style={{ fontSize: '13px', fontWeight: '700', color: '#38bdf8', letterSpacing: '0.02em' }}>
+                  Your Morning Briefing is Ready
                 </div>
-                <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-                  Generated by Nightly Consolidation Worker ({proactiveBriefing.accumulated_steps?.length || 0} reasoning steps · {proactiveBriefing.run_id})
+                <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                  Prepared overnight based on your tasks and upcoming deadlines
                 </div>
               </div>
             </div>
@@ -903,12 +995,12 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                 id="load-proactive-briefing-btn"
                 onClick={loadProactiveBriefingTrace}
                 style={{
-                  padding: '5px 12px',
+                  padding: '6px 14px',
                   background: '#0284c7',
                   border: 'none',
                   borderRadius: '6px',
                   color: '#fff',
-                  fontSize: '11px',
+                  fontSize: '12px',
                   fontWeight: '600',
                   cursor: 'pointer',
                   display: 'flex',
@@ -916,24 +1008,24 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                   gap: '4px',
                 }}
               >
-                📥 View Overnight Trace
+                📥 View Briefing
               </button>
               <button
                 id="trigger-nightly-btn"
                 onClick={triggerNightlyJob}
                 disabled={triggeringNightly}
                 style={{
-                  padding: '5px 10px',
+                  padding: '6px 12px',
                   background: '#1e293b',
                   border: '1px solid #334155',
                   borderRadius: '6px',
                   color: '#94a3b8',
-                  fontSize: '11px',
+                  fontSize: '12px',
                   cursor: 'pointer',
                 }}
-                title="Trigger nightly consolidation job on-demand"
+                title="Generate an updated briefing right now"
               >
-                {triggeringNightly ? '⏳ Running...' : '↻ Run Job Now'}
+                {triggeringNightly ? '⏳ Updating…' : '↻ Refresh Now'}
               </button>
             </div>
           </div>
@@ -950,7 +1042,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
             value={goal}
             onChange={e => setGoal(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && !isRunning && runAgent(goal)}
-            placeholder="What should the agent work on?"
+            placeholder="Ask a question or plan your schedule (e.g. 'What are my top priorities today?')"
             disabled={isRunning}
             style={{
               flex: 1,
@@ -999,7 +1091,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                 whiteSpace: 'nowrap',
               }}
             >
-              🧠 Run Agent
+              Ask Assistant
             </button>
           )}
 
@@ -1020,9 +1112,9 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
               alignItems: 'center',
               gap: '6px',
             }}
-            title="Toggle Agent Run History"
+            title="View past plans and questions"
           >
-            📜 History ({runsList.length})
+            📜 Past Plans ({runsList.length})
           </button>
 
           {steps.length > 0 && (
@@ -1040,9 +1132,9 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
               }}
-              title="Copy execution trace as Markdown"
+              title="Copy this plan to clipboard"
             >
-              {copyFeedback ? '✓ Copied' : '📋 Copy Trace'}
+              {copyFeedback ? '✓ Copied' : '📋 Copy Plan'}
             </button>
           )}
         </div>
@@ -1059,22 +1151,22 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                 runAgent(demoGoal)
               }}
               style={{
-                padding: '5px 12px',
-                background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(217, 119, 6, 0.25))',
-                border: '1px solid #ef444488',
+                padding: '6px 13px',
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid rgba(239, 68, 68, 0.35)',
                 borderRadius: '14px',
-                color: '#f87171',
-                fontSize: '11px',
-                fontWeight: '700',
+                color: '#fca5a5',
+                fontSize: '11.5px',
+                fontWeight: '600',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
+                gap: '5px',
                 transition: 'all 0.2s',
               }}
-              title="Click to run the flagship Deadline Conflict scenario ready for reject & re-planning"
+              title="Resolves conflicting deadlines and allows you to guide the plan"
             >
-              ⚡ Demo: Reject-Path Scenario
+              ⚡ Resolve Deadline Conflicts
             </button>
 
             <button
@@ -1085,22 +1177,22 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                 runAgent(demoGoal)
               }}
               style={{
-                padding: '5px 12px',
-                background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.25), rgba(147, 51, 234, 0.25))',
-                border: '1px solid #3b82f688',
+                padding: '6px 13px',
+                background: 'rgba(59, 130, 246, 0.15)',
+                border: '1px solid rgba(59, 130, 246, 0.35)',
                 borderRadius: '14px',
-                color: '#60a5fa',
-                fontSize: '11px',
-                fontWeight: '700',
+                color: '#93c5fd',
+                fontSize: '11.5px',
+                fontWeight: '600',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
+                gap: '5px',
                 transition: 'all 0.2s',
               }}
-              title="Chains query_tasks, query_code_context, and query_coursework_notes in a single run"
+              title="Balances hackathon, coursework, and code commitments"
             >
-              ⚡ 3-Domain Triage
+              ⚡ Balance My Workload
             </button>
 
             <button
@@ -1111,22 +1203,22 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                 runAgent(demoGoal)
               }}
               style={{
-                padding: '5px 12px',
-                background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(217, 119, 6, 0.25))',
-                border: '1px solid #f59e0b88',
+                padding: '6px 13px',
+                background: 'rgba(245, 158, 11, 0.15)',
+                border: '1px solid rgba(245, 158, 11, 0.35)',
                 borderRadius: '14px',
-                color: '#fbbf24',
-                fontSize: '11px',
-                fontWeight: '700',
+                color: '#fde68a',
+                fontSize: '11.5px',
+                fontWeight: '600',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
+                gap: '5px',
                 transition: 'all 0.2s',
               }}
-              title="Demonstrates epistemic abstention when required context is missing"
+              title="Shows how the assistant asks for clarification when info is missing"
             >
-              🛡️ Epistemic Abstention
+              🛡️ Check Missing Info
             </button>
 
             {SUGGESTED_GOALS.map((sg, i) => (
@@ -1153,14 +1245,18 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
         )}
       </div>
 
-      {/* Execution Trace — capped height so it never overflows the page */}
-      <div style={{
-        flex: 1,
-        overflowY: 'auto',
-        maxHeight: 'calc(100vh - 220px)',
-        padding: '16px 20px',
-        boxSizing: 'border-box',
-      }}>
+      {/* Execution Trace — fills remaining space without page overflow */}
+      <div
+        ref={scrollContainerRef}
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          overscrollBehavior: 'contain',
+          padding: '16px 20px',
+          boxSizing: 'border-box',
+        }}
+      >
         {/* Run History Flyout Drawer */}
         {showHistory && (
           <div style={{
@@ -1172,22 +1268,29 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
             boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <span style={{ fontSize: '12px', fontWeight: '700', color: '#e2e8f0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                📜 Past Agent Runs ({runsList.length})
+              <span style={{ fontSize: '13px', fontWeight: '700', color: '#e2e8f0', letterSpacing: '0.02em' }}>
+                📜 Past Plans & Answers ({runsList.length})
               </span>
               <button
                 onClick={() => setShowHistory(false)}
-                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '14px' }}
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '15px' }}
               >
                 ✕
               </button>
             </div>
             {runsList.length === 0 ? (
               <div style={{ fontSize: '12px', color: '#64748b', fontStyle: 'italic', padding: '12px 0', textAlign: 'center' }}>
-                No past agent runs recorded yet. Run any goal above to see persistent execution history.
+                No past plans yet. Ask a question or run a plan above to see history here.
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '220px', overflowY: 'auto' }}>
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+                maxHeight: '220px',
+                overflowY: 'auto',
+                overscrollBehavior: 'contain',
+              }}>
                 {runsList.map(r => (
                   <div
                     key={r.id}
@@ -1196,7 +1299,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      padding: '8px 12px',
+                      padding: '9px 12px',
                       background: currentRunId === r.id ? 'rgba(37, 99, 235, 0.2)' : 'rgba(30, 41, 59, 0.6)',
                       border: `1px solid ${currentRunId === r.id ? '#2563eb' : '#334155'}`,
                       borderRadius: '6px',
@@ -1205,27 +1308,22 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                     }}
                   >
                     <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
-                      <span style={{ fontSize: '12px', color: '#f1f5f9', fontWeight: '500' }}>{r.goal || 'Untitled Goal'}</span>
-                      <div style={{ fontSize: '10px', color: '#64748b', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span>{r.id} · {r.created_at ? r.created_at.slice(0, 19).replace('T', ' ') : ''}</span>
-                        {r.conversation_id && (
-                          <span style={{ color: '#60a5fa', background: 'rgba(37, 99, 235, 0.15)', padding: '1px 4px', borderRadius: '4px' }}>
-                            💬 conv:{r.conversation_id.slice(0, 8)}
-                          </span>
-                        )}
+                      <span style={{ fontSize: '13px', color: '#f1f5f9', fontWeight: '500' }}>{r.goal || 'Question'}</span>
+                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                        {formatFriendlyTime(r.created_at)}
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span style={{ fontSize: '11px', color: '#94a3b8' }}>{r.steps_count} steps</span>
                       <span style={{
-                        fontSize: '9px',
-                        fontWeight: '700',
-                        padding: '2px 6px',
-                        borderRadius: '4px',
-                        background: r.status === 'completed' ? 'rgba(34, 197, 94, 0.2)' : r.status === 'paused' ? 'rgba(234, 179, 8, 0.2)' : 'rgba(100, 116, 139, 0.2)',
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        padding: '2px 8px',
+                        borderRadius: '10px',
+                        background: r.status === 'completed' ? 'rgba(34, 197, 94, 0.15)' : r.status === 'paused' ? 'rgba(234, 179, 8, 0.15)' : 'rgba(100, 116, 139, 0.2)',
                         color: r.status === 'completed' ? '#4ade80' : r.status === 'paused' ? '#facc15' : '#94a3b8',
                       }}>
-                        {r.status.toUpperCase()}
+                        {r.status === 'completed' ? 'Completed' : r.status === 'paused' ? 'Needs approval' : 'In progress'}
                       </span>
                     </div>
                   </div>
@@ -1244,13 +1342,13 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
             border: '1px solid #1e293b',
             borderRadius: '8px',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', fontSize: '11px', color: '#94a3b8' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', color: isRunning ? '#38bdf8' : '#34d399' }}>
-                <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: isRunning ? '#38bdf8' : '#34d399', animation: isRunning ? 'pulse 1s infinite' : 'none' }} />
-                {isRunning ? 'Working on it…' : 'Done ✓'}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', fontSize: '13px', color: isRunning ? '#38bdf8' : '#34d399' }}>
+                <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: isRunning ? '#38bdf8' : '#34d399', animation: isRunning ? 'pulse 1s infinite' : 'none' }} />
+                {isRunning ? 'Working on it…' : 'All done ✓'}
               </span>
-              <span style={{ fontSize: '11px', color: '#64748b' }}>
-                {steps.length} step{steps.length !== 1 ? 's' : ''} completed
+              <span style={{ fontSize: '12px', color: '#64748b' }}>
+                {steps.length} action{steps.length !== 1 ? 's' : ''} taken
               </span>
             </div>
             <div style={{ width: '100%', height: '4px', background: '#1e293b', borderRadius: '2px', overflow: 'hidden' }}>
@@ -1271,14 +1369,14 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
             padding: '60px 20px',
             color: '#475569',
           }}>
-            <div style={{ fontSize: '48px', marginBottom: '12px' }}>🧠</div>
+            <div style={{ fontSize: '48px', marginBottom: '12px' }}>🧭</div>
             <div style={{ fontSize: '16px', fontWeight: '600', color: '#64748b', marginBottom: '8px' }}>
-              Compass Agent
+              Your Compass Assistant
             </div>
-            <div style={{ fontSize: '13px', lineHeight: '1.6', maxWidth: '420px', margin: '0 auto' }}>
-              The agent autonomously plans, queries your tasks and code memory,
-              detects conflicts, and proposes concrete solutions.
-              State-changing actions require your approval before execution.
+            <div style={{ fontSize: '13px', lineHeight: '1.8', maxWidth: '400px', margin: '0 auto', color: '#475569' }}>
+              Ask anything about your tasks, deadlines, or schedule — in plain English.
+              I'll look through everything and give you a clear answer.
+              Before making any changes, I'll always ask for your approval first.
             </div>
           </div>
         )}
@@ -1290,7 +1388,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
             color: '#60a5fa',
           }}>
             <div style={{ fontSize: '20px', animation: 'pulse 1.5s ease-in-out infinite' }}>
-              🧠 Agent is initializing...
+              🧭 Getting started…
             </div>
           </div>
         )}
@@ -1304,52 +1402,54 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
         {/* Confirmation gate UI */}
         {pendingActions.length > 0 && !isRunning && (
           <div style={{
-            background: 'rgba(95, 30, 30, 0.2)',
-            border: '1px solid #ef4444',
-            borderRadius: '8px',
+            background: 'rgba(37, 99, 235, 0.08)',
+            border: '1px solid rgba(59,130,246,0.35)',
+            borderRadius: '10px',
             padding: '16px',
             marginTop: '8px',
           }}>
-            <div style={{ fontSize: '14px', fontWeight: '600', color: '#f87171', marginBottom: '8px' }}>
-              ⚠️ The assistant wants to make {pendingActions.length} change{pendingActions.length !== 1 ? 's' : ''} — do you approve?
+            <div style={{ fontSize: '15px', fontWeight: '700', color: '#e2e8f0', marginBottom: '6px' }}>
+              🙋 Ready to make {pendingActions.length} change{pendingActions.length !== 1 ? 's' : ''} — is that ok?
             </div>
-            <div style={{ fontSize: '12px', color: '#e2e8f0', marginBottom: '12px' }}>
-              These changes will be saved to your data. You can undo them afterwards if needed.
+            <div style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '14px' }}>
+              Nothing has been saved yet. Review below, then say yes or no. You can always undo changes.
             </div>
             {pendingActions.map((action, i) => (
               <div key={i} style={{
-                background: '#1e293b',
-                borderRadius: '6px',
+                background: 'rgba(30, 41, 59, 0.8)',
+                borderRadius: '8px',
                 padding: '10px 14px',
                 marginBottom: '6px',
                 fontSize: '13px',
-                color: '#fbbf24',
+                color: '#e2e8f0',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
+                gap: '10px',
+                border: '1px solid #1e293b',
               }}>
-                <span>🔄</span>
-                <span>{action.summary || friendlyAction(action.tool)}</span>
+                <span style={{ fontSize: '16px' }}>📝</span>
+                <span style={{ fontWeight: '500' }}>{formatActionDescription(action)}</span>
               </div>
             ))}
-            <div style={{ marginTop: '10px' }}>
+            <div style={{ marginTop: '12px' }}>
               <input
                 id="agent-reject-input"
                 type="text"
                 value={rejectFeedback}
                 onChange={e => setRejectFeedback(e.target.value)}
-                placeholder="Tell the assistant what to avoid (e.g. 'don't move the exam deadline')..."
+                placeholder="Optional: tell me what NOT to change (e.g. 'don't touch my exam date')…"
                 style={{
                   width: '100%',
-                  padding: '8px 12px',
+                  padding: '9px 12px',
                   background: '#0f172a',
                   border: '1px solid #334155',
-                  borderRadius: '6px',
+                  borderRadius: '8px',
                   color: '#e2e8f0',
-                  fontSize: '12px',
+                  fontSize: '13px',
                   marginBottom: '10px',
                   outline: 'none',
                   boxSizing: 'border-box',
+                  fontFamily: 'Inter, system-ui, sans-serif',
                 }}
               />
             </div>
@@ -1358,33 +1458,33 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                 id="agent-approve-btn"
                 onClick={approveActions}
                 style={{
-                  padding: '8px 16px',
+                  padding: '9px 20px',
                   background: '#16a34a',
                   border: 'none',
-                  borderRadius: '6px',
+                  borderRadius: '8px',
                   color: '#fff',
-                  fontSize: '13px',
+                  fontSize: '14px',
                   fontWeight: '600',
                   cursor: 'pointer',
                 }}
               >
-                ✅ Approve & Execute
+                ✅ Yes, go ahead
               </button>
               <button
                 id="agent-reject-btn"
                 onClick={rejectActions}
                 style={{
-                  padding: '8px 16px',
-                  background: '#dc2626',
-                  border: 'none',
-                  borderRadius: '6px',
-                  color: '#fff',
-                  fontSize: '13px',
+                  padding: '9px 20px',
+                  background: 'transparent',
+                  border: '1px solid #ef4444',
+                  borderRadius: '8px',
+                  color: '#f87171',
+                  fontSize: '14px',
                   fontWeight: '600',
                   cursor: 'pointer',
                 }}
               >
-                ❌ Reject & Re-plan
+                ❌ No, try a different way
               </button>
             </div>
           </div>
@@ -1392,27 +1492,27 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
 
         {/* Global Undo Button when steps or mutations exist */}
         {steps.some(s => s.type === 'observe' && (s.tool === 'add_task' || s.tool === 'edit_task' || s.tool === 'update_task_status' || s.tool === 'delete_task' || (s.content && s.content.includes('applied')))) && (
-          <div style={{ marginTop: '12px', marginBottom: '8px' }}>
+          <div style={{ marginTop: '12px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <button
               id="agent-undo-btn"
               onClick={undoLastAction}
               style={{
-                padding: '6px 14px',
-                background: '#475569',
-                border: '1px solid #64748b',
-                borderRadius: '6px',
+                padding: '7px 16px',
+                background: '#1e293b',
+                border: '1px solid #475569',
+                borderRadius: '8px',
                 color: '#e2e8f0',
-                fontSize: '12px',
+                fontSize: '13px',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
               }}
             >
-              ↩️ Undo Last Change
+              ↩️ Undo last change
             </button>
             {undoStatus && (
-              <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: '10px' }}>
+              <span style={{ fontSize: '12px', color: '#94a3b8' }}>
                 {undoStatus}
               </span>
             )}
@@ -1426,10 +1526,10 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
             gap: '8px',
             padding: '8px 0',
             color: '#60a5fa',
-            fontSize: '12px',
+            fontSize: '13px',
           }}>
             <span style={{ animation: 'pulse 1s ease-in-out infinite' }}>●</span>
-            Agent is reasoning...
+            Still thinking…
           </div>
         )}
 
@@ -1451,7 +1551,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                 fontWeight: '700',
                 color: '#e2e8f0',
               }}>
-                📋 Recent changes ({activityList.length})
+                📋 Recent changes{activityList.length > 0 ? ` (${activityList.length})` : ''}
               </span>
             </div>
             <button
@@ -1477,8 +1577,9 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
               display: 'flex',
               flexDirection: 'column',
               gap: '6px',
-              maxHeight: '280px',
+              maxHeight: '260px',
               overflowY: 'auto',
+              overscrollBehavior: 'contain',
               paddingRight: '2px',
             }}>
               {activityList.map((item) => (
@@ -1502,13 +1603,10 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                       {item.tool === 'add_task' ? '➕' : item.tool === 'delete_task' ? '🗑️' : item.tool?.includes('ingest') ? '📥' : '✏️'}
                     </span>
                     <span style={{ color: '#e2e8f0', fontWeight: '600', fontSize: '12.5px' }}>
-                      {friendlyAction(item.tool)}
+                      {formatActivityItem(item)}
                     </span>
                     <span style={{ fontSize: '11px', color: '#64748b' }}>
-                      {friendlyTable(item.affected_table)}
-                    </span>
-                    <span style={{ fontSize: '11px', color: '#475569' }}>
-                      {item.created_at ? item.created_at.slice(11, 16) : ''}
+                      {formatFriendlyTime(item.created_at)}
                     </span>
                     {item.is_reverted && (
                       <span style={{
@@ -1550,8 +1648,6 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
             </div>
           )}
         </div>
-
-        <div ref={traceEndRef} />
       </div>
     </div>
   )
