@@ -65,6 +65,12 @@ Compass is an autonomous productivity agent and conversational copilot with pers
 - Automated GitHub commit webhooks to log architecture changes passively into vector memory.
 - Activating the prepared Nebius Serverless Compute manifests (`deploy/`) once tenant billing verification clears.
 
+#### Team & Contributors
+- **Rhythm**: Backend Architecture, Database Schema, and Nebius Token Factory Tool Registration
+- **Nandani**: Frontend Web Dashboard, Real-Time Context Stream UI, and Chat Interface
+- **Kunal**: Frontend UI Contributor (Timeline Modernizations, UI Components & Refinements per PR #8 & #11)
+- **Ratnesh Singh** (VIT+IIT): System Integration, Deployment Engineering (Render, Vercel, Nebius Manifests), and Terminal CLI
+
 ---
 
 ### 🎁 Bonus Award 1 Justification: Best Use of Tavily ($3,000)

@@ -256,7 +256,7 @@ Queried directly from `compass admin usage` and `/api/usage/summary` after multi
 - **Total Tokens Consumed**: 36,688 tokens (24,130 input / 12,558 output)
 - **Total Observed Spend**: **$0.0199 USD** (~2 cents)
 - **Funded Credit Remaining**: **>$28.98 USD** out of $29.00 allocated credit.
-- **Automated Test Suite**: 72 passed, 0 skipped, 0 failed (100% passing) across unit, integration, agent loop, and multi-domain suites.
+- **Automated Test Suite**: 150 passed, 0 skipped, 0 failed (100% passing) across unit, integration, agent loop, specialist confirm gate, and multi-domain suites.
 
 ### Cost Tiering Alignment
 In Compass's token accounting engine (`backend/services/usage.py`), per-token costs are computed using effective blended rates per 1,000,000 tokens (USD):

@@ -278,7 +278,7 @@ compass admin usage
 ### 6. Running the Test Suite
 ```powershell
 python -m pytest tests -v
-# 72 passed, 0 skipped, 0 failed (Python 3.12+)
+# 150 passed, 0 skipped, 0 failed (Python 3.12+)
 ```
 
 ---
@@ -373,20 +373,22 @@ Compass provides 8 core memory skills, a conversational fallback, and a cross-do
 
 ## Testing
 
-Compass includes an automated regression test suite (**72 tests**, 100% passing, 0 skipped) covering all critical application surfaces, run against a live Postgres instance:
+Compass includes an automated regression test suite (**150 tests**, 100% passing, 0 skipped) covering all critical application surfaces, run against a live Postgres instance:
 
 ```text
-======================= 72 passed in 100% =======================
+====================== 150 passed in 100% ======================
 ```
 
 - **Autonomous Agent Engine (`tests/test_agent.py`)**: 26 tests validating the ReAct loop, SSE event stream protocol, step production (`think`, `tool_call`, `observe`, `critic`, `synthesize`), safe state-mutation gating (`add_task`, `edit_task`, `delete_task`, `update_task_status`), reject path re-planning, confirmation timeouts, self-critique pass capping (2 rounds), reconnect persistence in `agent_runs`, audit logging in `agent_audit_log`, undo endpoint (`POST /api/agent/undo`), live per-step costs, model tier attribution, deadline conflict detection, and report card generation.
+- **Specialist Team & Confirm-Gate Audit (`tests/test_specialist_agent.py`, `tests/test_specialist_confirm_gate.py`)**: 12 tests verifying domain specialists (Coursework, Research, Calendar, Memory), safe fallback execution, strict read-only tool registration (`delegate_to_specialist`), zero DB writes on adversarial injection, advisory proposed actions, and Northstar confirm-gate enforcement before any state mutation.
+- **Feasibility Engine & The Realist (`tests/test_feasibility.py`)**: 10 tests verifying capacity-vs-demand arithmetic, model JSON parse fallbacks, 2-round negotiation caps, confirm-gated `apply_triage_plan`, and zero database mutations during evaluation.
+- **Calendar & Reactive Scheduling (`tests/test_scheduling.py`, `tests/test_reactive_scheduling.py`, `tests/test_google_calendar_auth.py`)**: 29 tests verifying deterministic slot allocation, topological prerequisite sorting, working hours, ICS generation, conflict detection, slipped task re-planning, Google OAuth flow, AES token encryption, and calendar sync.
+- **Web Research & Grounding (`tests/test_tavily.py`)**: 12 tests validating Tavily web search, citation extraction, 768-dim vector embeddings, confirm-gated `ingest_url`, 1-click undo chunk rollback, prompt injection scanning, credit tracking, and deadline drift verification.
 - **Gap Closure & Subsystem Hardening (`tests/test_gap_closures.py`)**: 15 tests verifying server-side task domain filtering, public `/api/usage/summary` endpoint, per-IP sliding window rate limiting, gated `search_web` skill, CLI streaming fallback, usage-summary cost deltas, Bearer auth enforcement on confirm/undo/nightly endpoints, deadline conflict scanning, agent run list/conversation_id filtering, and CLI agent commands.
-- **API & Authentication (`tests/test_api_endpoints.py`)**: 14 tests verifying root redirect, health checks, Bearer token authentication enforcement on protected routes, valid credentials handling, and CORS headers.
-- **CLI Operations (`tests/test_cli.py`)**: 8 tests validating terminal commands, argument parsing, config viewing/updating, status tables, project grouping, domain filtering, memory logging, and interactive REPL chat.
-- **End-to-End Demo Flow (`tests/test_demo_flow.py`)**: 4 tests validating the full multi-domain workflow across memory ingestion, tool calls, and roadmap generation.
-- **Structured Memory (`tests/test_structured_memory.py`)**: 3 tests validating database schema migrations, project creation with fuzzy matching, task lifecycle (add/edit/query/complete/delete), and task isolation across domains against live Postgres.
-- **Multi-Turn Context (`tests/test_multi_turn.py`)**: 1 test validating multi-turn conversational context persistence across turns.
-- **SSE Streaming (`tests/test_streaming.py`)**: 1 test verifying `text/event-stream` headers, `X-Accel-Buffering: no`, and incremental token delivery.
+- **API & Authentication (`tests/test_api_endpoints.py`, `tests/test_user_isolation.py`)**: 18 tests verifying root redirect, health checks, Bearer token authentication enforcement on protected routes, valid credentials handling, CORS headers, multi-user Google OAuth isolation, and account switcher.
+- **Direct Tasks & Conversations Memory (`tests/test_direct_tasks.py`, `tests/test_conversations_memory.py`)**: 10 tests validating REST task CRUD lifecycle, demo ID protection, status transitions, conversation pin/archive/rename, and multi-turn persistence.
+- **CLI Operations (`tests/test_cli.py`)**: 9 tests validating terminal commands, argument parsing, config viewing/updating, status tables, project grouping, domain filtering, memory logging, triage interactive CLI, and interactive REPL chat.
+- **End-to-End Demo Flow & Streaming (`tests/test_demo_flow.py`, `tests/test_structured_memory.py`, `tests/test_multi_turn.py`, `tests/test_streaming.py`)**: 9 tests validating end-to-end multi-domain demo workflows, database migrations, pgvector HNSW indexing, multi-turn conversational memory, and SSE token streaming.
 
 ---
 
@@ -406,6 +408,7 @@ Compass includes an automated regression test suite (**72 tests**, 100% passing,
 
 - **Rhythm**: Backend Architecture, Database Schema, and Nebius Token Factory Tool Registration
 - **Nandani**: Frontend Web Dashboard, Real-Time Context Stream UI, and Chat Interface
+- **Kunal**: Frontend UI Contributor (Timeline Modernizations, UI Components & Refinements per PR #8 & #11)
 - **Ratnesh Singh** (VIT+IIT): System Integration, Deployment Engineering (Render, Vercel, Nebius Manifests), and Terminal CLI
 
 ---

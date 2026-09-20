@@ -2403,7 +2403,7 @@ async def get_schedule_conflicts_endpoint(
 
 
 # ---- Specialist Multi-Agent Dispatch Endpoint ----------------------------
-@app.post("/api/specialist/dispatch")
+@app.post("/api/specialist/dispatch", dependencies=[Depends(rate_limit)])
 async def dispatch_specialist_endpoint(request_data: dict):
     """Direct thin API endpoint for the Specialist Multi-Agent System UI.
     Validates request -> delegates to SpecialistDispatcher -> returns structured SpecialistResult.

@@ -8,7 +8,7 @@
 - **Production Instance (Render Backend):** Neon Serverless PostgreSQL Frankfurt (`ep-sweet-fire-b2y9w95z-pooler.eu-central-1.aws.neon.tech`) configured on `compass-backend-qryu.onrender.com`.
 - **Development & Verification Instance:** Neon Serverless PostgreSQL Ohio (`ep-restless-frog-a5icimeu-pooler.us-east-2.aws.neon.tech`), used for safe, isolated test execution, mutation gating, and audit rollbacks without mutating production data.
 - **Auto-Migration:** Schema additions (`agent_runs`, `agent_audit_log`, `conversation_id` column) are self-applying on startup via `backend/memory/db.py:init_db`.  
-**Test Suite Status:** **72 passed, 0 skipped, 0 failed** in 664.49s (100% passing)
+**Test Suite Status:** **150 passed, 0 skipped, 0 failed** in 692.90s (100% passing)
 
 ---
 
@@ -230,7 +230,7 @@ summarize_across_domains  -> [OK] Daily summary: 56 total open task(s) (GENERAL:
 
 ### 5.1 Pytest Suite Execution
 - **Command:** `python -m pytest tests/ -v`
-- **Result:** **72 passed, 0 skipped, 0 failed** in 664.49s (100% passing).
+- **Result:** **150 passed, 0 skipped, 0 failed** in 692.90s (100% passing).
 - **Python Version:** 3.13 / 3.12 compatible.
 
 ### 5.2 Token Usage & Cost Overview
