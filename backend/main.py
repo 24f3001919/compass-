@@ -180,7 +180,7 @@ class ChatResponse(BaseModel):
     conversation_id: str
     response: str
     skill_used: Optional[str] = None
-    data: Optional[dict] = None
+    data: Optional[Any] = None
 
 
 class MessageOut(BaseModel):

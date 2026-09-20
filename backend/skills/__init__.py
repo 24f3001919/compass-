@@ -638,7 +638,13 @@ async def handle_query_code_context(args: Dict[str, Any], pool: Any) -> Dict[str
 
     try:
         async with pool.acquire() as conn:
-            chunks = await vector.search_chunks(conn, query=query, domain=domain, limit=3, user_id=user_id)
+            if user_id:
+                try:
+                    chunks = await vector.search_chunks(conn, query=query, domain=domain, limit=3, user_id=user_id)
+                except TypeError:
+                    chunks = await vector.search_chunks(conn, query=query, domain=domain, limit=3)
+            else:
+                chunks = await vector.search_chunks(conn, query=query, domain=domain, limit=3)
         count = len(chunks)
 
         # Synthesize technical response using SKILL_MODEL (nvidia/nemotron-3-super-120b-a12b)

@@ -35,9 +35,9 @@ async def get_calendar_connection_status(
             "account_email": None,
             "connected_at": None,
             "last_synced_at": None,
-            "mode": "none",
-            "is_simulated": False,
-            "label": "Google Calendar: Not signed in",
+            "mode": "demo",
+            "is_simulated": True,
+            "label": "Google Calendar: Not signed in (Demo Mode)",
             "note": "Sign in to connect your Google Calendar",
         }
 
@@ -79,9 +79,9 @@ async def get_calendar_connection_status(
         "account_email": user_id,
         "connected_at": None,
         "last_synced_at": None,
-        "mode": "unlinked",
-        "is_simulated": False,
-        "label": f"Google Calendar: {user_id} (Not linked)",
+        "mode": "demo",
+        "is_simulated": True,
+        "label": f"Google Calendar: {user_id} (Demo Mode — not linked)",
         "note": "Calendar not yet linked via Google OAuth",
     }
 
