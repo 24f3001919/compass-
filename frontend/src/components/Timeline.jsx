@@ -108,7 +108,7 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(2, 6, 15, 0.78)',
+        background: 'rgba(22, 21, 42, 0.45)',
         backdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'center',
@@ -120,34 +120,34 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          background: '#0d131f',
-          borderRadius: '14px',
-          border: '1px solid #1e293b',
+          background: 'var(--bg-card)',
+          borderRadius: '16px',
+          border: '1px solid var(--border)',
           width: '100%',
           maxWidth: '540px',
           maxHeight: '90vh',
           overflowY: 'auto',
           padding: '24px',
-          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.65)',
-          color: '#f8fafc'
+          boxShadow: 'var(--shadow-lg)',
+          color: 'var(--text-primary)'
         }}
       >
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <div>
-            <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#f8fafc', margin: 0, letterSpacing: '-0.3px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.3px' }}>
               ➕ Add New Deadline
             </h3>
-            <p style={{ fontSize: '12.5px', color: '#94a3b8', margin: '4px 0 0' }}>
+            <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', margin: '4px 0 0' }}>
               Create a standalone deadline without relying on AI chat
             </p>
           </div>
           <button
             onClick={onClose}
             style={{
-              background: '#1e293b',
-              border: '1px solid #334155',
-              color: '#94a3b8',
+              background: 'var(--bg-card-soft)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-muted)',
               width: '28px',
               height: '28px',
               borderRadius: '7px',
@@ -164,9 +164,9 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
 
         {error && (
           <div style={{
-            background: 'rgba(239, 68, 68, 0.12)',
-            border: '1px solid rgba(239, 68, 68, 0.35)',
-            color: '#fca5a5',
+            background: 'var(--danger-bg)',
+            border: '1px solid #ef4444',
+            color: '#b91c1c',
             padding: '10px 14px',
             borderRadius: '8px',
             fontSize: '13px',
@@ -179,7 +179,7 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Domain Selection */}
           <div>
-            <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', fontWeight: '700', marginBottom: '8px' }}>
+            <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)', fontWeight: '700', marginBottom: '8px' }}>
               Domain / Category
             </label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
@@ -194,9 +194,9 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
                     style={{
                       padding: '8px 4px',
                       borderRadius: '8px',
-                      border: isSelected ? `1.5px solid ${meta.color}` : '1px solid #1e293b',
-                      background: isSelected ? 'rgba(30, 41, 59, 0.9)' : '#111827',
-                      color: isSelected ? meta.color : '#94a3b8',
+                      border: isSelected ? `1.5px solid ${meta.color}` : '1px solid var(--border)',
+                      background: isSelected ? 'var(--bg-card-soft)' : 'var(--bg-app)',
+                      color: isSelected ? meta.color : 'var(--text-secondary)',
                       fontSize: '11.5px',
                       fontWeight: isSelected ? '700' : '500',
                       cursor: 'pointer',
@@ -216,7 +216,7 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
 
             {domain === 'other' && (
               <div style={{ marginTop: '10px' }}>
-                <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#a78bfa', fontWeight: '700', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--coursework-text)', fontWeight: '700', marginBottom: '6px' }}>
                   Custom Category Name
                 </label>
                 <input
@@ -229,9 +229,9 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
                     width: '100%',
                     padding: '8px 12px',
                     borderRadius: '8px',
-                    border: '1px solid #7c3aed',
-                    background: '#131127',
-                    color: '#f8fafc',
+                    border: '1px solid var(--border)',
+                    background: 'var(--bg-app)',
+                    color: 'var(--text-primary)',
                     fontSize: '13px',
                     outline: 'none',
                     boxSizing: 'border-box'
@@ -243,7 +243,7 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
 
           {/* Title */}
           <div>
-            <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', fontWeight: '700', marginBottom: '6px' }}>
+            <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)', fontWeight: '700', marginBottom: '6px' }}>
               Title <span style={{ color: '#ef4444' }}>*</span>
             </label>
             <input
@@ -257,9 +257,9 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
                 width: '100%',
                 padding: '10px 12px',
                 borderRadius: '8px',
-                border: '1px solid #334155',
-                background: '#111827',
-                color: '#f8fafc',
+                border: '1px solid var(--border)',
+                background: 'var(--bg-app)',
+                color: 'var(--text-primary)',
                 fontSize: '13.5px',
                 outline: 'none',
                 boxSizing: 'border-box'
@@ -270,7 +270,7 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
           {/* Project & Due Date Row */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', fontWeight: '700', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)', fontWeight: '700', marginBottom: '6px' }}>
                 Project
               </label>
               <input
@@ -283,9 +283,9 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
                   width: '100%',
                   padding: '9px 12px',
                   borderRadius: '8px',
-                  border: '1px solid #334155',
-                  background: '#111827',
-                  color: '#f8fafc',
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-app)',
+                  color: 'var(--text-primary)',
                   fontSize: '13px',
                   outline: 'none',
                   boxSizing: 'border-box'
@@ -293,7 +293,7 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', fontWeight: '700', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)', fontWeight: '700', marginBottom: '6px' }}>
                 Deadline Date
               </label>
               <input
@@ -305,13 +305,12 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
                   width: '100%',
                   padding: '9px 12px',
                   borderRadius: '8px',
-                  border: '1px solid #334155',
-                  background: '#111827',
-                  color: '#f8fafc',
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-app)',
+                  color: 'var(--text-primary)',
                   fontSize: '13px',
                   outline: 'none',
-                  boxSizing: 'border-box',
-                  colorScheme: 'dark'
+                  boxSizing: 'border-box'
                 }}
               />
             </div>
@@ -320,7 +319,7 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
           {/* Priority & Duration Row */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', fontWeight: '700', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)', fontWeight: '700', marginBottom: '6px' }}>
                 Priority
               </label>
               <select
@@ -331,9 +330,9 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
                   width: '100%',
                   padding: '9px 12px',
                   borderRadius: '8px',
-                  border: '1px solid #334155',
-                  background: '#111827',
-                  color: '#f8fafc',
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-app)',
+                  color: 'var(--text-primary)',
                   fontSize: '13px',
                   outline: 'none',
                   boxSizing: 'border-box'
@@ -346,7 +345,7 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', fontWeight: '700', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)', fontWeight: '700', marginBottom: '6px' }}>
                 Duration (minutes)
               </label>
               <input
@@ -361,9 +360,9 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
                   width: '100%',
                   padding: '9px 12px',
                   borderRadius: '8px',
-                  border: '1px solid #334155',
-                  background: '#111827',
-                  color: '#f8fafc',
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-app)',
+                  color: 'var(--text-primary)',
                   fontSize: '13px',
                   outline: 'none',
                   boxSizing: 'border-box'
@@ -374,7 +373,7 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
 
           {/* Notes / Description */}
           <div>
-            <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', fontWeight: '700', marginBottom: '6px' }}>
+            <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)', fontWeight: '700', marginBottom: '6px' }}>
               Notes & Details
             </label>
             <textarea
@@ -387,9 +386,9 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
                 width: '100%',
                 padding: '10px 12px',
                 borderRadius: '8px',
-                border: '1px solid #334155',
-                background: '#111827',
-                color: '#f8fafc',
+                border: '1px solid var(--border)',
+                background: 'var(--bg-app)',
+                color: 'var(--text-primary)',
                 fontSize: '13px',
                 outline: 'none',
                 resize: 'vertical',
@@ -406,9 +405,9 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
               style={{
                 padding: '9px 16px',
                 borderRadius: '8px',
-                border: '1px solid #334155',
-                background: '#1e293b',
-                color: '#cbd5e1',
+                border: '1px solid var(--border)',
+                background: 'var(--bg-card-soft)',
+                color: 'var(--text-secondary)',
                 fontSize: '13px',
                 fontWeight: '500',
                 cursor: 'pointer'
@@ -449,14 +448,13 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
 const inputStyle = {
   width: '100%',
   padding: '8px 11px',
-  borderRadius: '7px',
-  border: '1px solid #334155',
-  background: '#0d131f',
-  color: '#f8fafc',
+  borderRadius: '8px',
+  border: '1px solid var(--border)',
+  background: 'var(--bg-app)',
+  color: 'var(--text-primary)',
   fontSize: '13px',
   outline: 'none',
   boxSizing: 'border-box',
-  colorScheme: 'dark',
 }
 
 function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
@@ -524,8 +522,8 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
         status: editStatus,
         notes: editNotes.trim() || null,
       })
-      setIsEditing(false)
       if (onUpdated) onUpdated(updated)
+      setIsEditing(false)
     } catch (err) {
       setSaveError(err.message || 'Failed to save changes.')
     } finally {
@@ -534,16 +532,17 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
   }
 
   const handleCancelEdit = () => {
-    // Reset to task values
-    setEditTitle(task.title || '')
-    setEditDomain(task.domain || 'general')
-    setEditProject(task.project || '')
-    setEditDueDate(task.due_date || '')
-    setEditPriority(task.priority || 'medium')
-    setEditStatus(task.status || 'open')
-    setEditNotes(task.description || task.notes || '')
-    setSaveError(null)
+    if (task) {
+      setEditTitle(task.title || '')
+      setEditDomain(task.domain || 'general')
+      setEditProject(task.project || '')
+      setEditDueDate(task.due_date || '')
+      setEditPriority(task.priority || 'medium')
+      setEditStatus(task.status || 'open')
+      setEditNotes(task.description || task.notes || '')
+    }
     setIsEditing(false)
+    setSaveError(null)
   }
 
   const labelStyle = {
@@ -551,7 +550,7 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
     fontSize: '10px',
     textTransform: 'uppercase',
     letterSpacing: '0.07em',
-    color: '#64748b',
+    color: 'var(--text-secondary)',
     fontWeight: '700',
     marginBottom: '5px'
   }
@@ -562,7 +561,7 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(2, 6, 15, 0.78)',
+        background: 'rgba(22, 21, 42, 0.45)',
         backdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'center',
@@ -574,16 +573,16 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          background: '#0d1320',
-          borderRadius: '14px',
-          border: '1px solid #1e293b',
+          background: 'var(--bg-card)',
+          borderRadius: '16px',
+          border: '1px solid var(--border)',
           width: '100%',
           maxWidth: '580px',
           maxHeight: '90vh',
           overflowY: 'auto',
           padding: '24px',
-          boxShadow: '0 25px 70px rgba(0,0,0,0.7)',
-          color: '#f8fafc'
+          boxShadow: 'var(--shadow-lg)',
+          color: 'var(--text-primary)'
         }}
       >
         {/* ── Header ─────────────────────────────────────────────────────── */}
@@ -592,7 +591,7 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
             <span className={`badge-${task.domain}`} style={{ fontSize: '10.5px', padding: '3px 9px', borderRadius: '20px', textTransform: 'uppercase', fontWeight: '700' }}>
               {task.domain}
             </span>
-            <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '500' }}>• {task.project}</span>
+            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '500' }}>• {task.project}</span>
             <div className={`countdown-badge ${isOverdue ? 'countdown-overdue' : ''}`} style={{ fontSize: '11px' }}>
               {isOverdue && '⚠️ '}{task.countdown}
             </div>
@@ -600,7 +599,7 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
           <button
             onClick={onClose}
             style={{
-              background: '#1e293b', border: '1px solid #334155', color: '#94a3b8',
+              background: 'var(--bg-card-soft)', border: '1px solid var(--border)', color: 'var(--text-muted)',
               width: '28px', height: '28px', borderRadius: '7px', cursor: 'pointer',
               fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center',
               flexShrink: 0
@@ -611,8 +610,8 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
         {/* ── Error Banner ────────────────────────────────────────────────── */}
         {saveError && (
           <div style={{
-            background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)',
-            color: '#fca5a5', padding: '9px 13px', borderRadius: '7px',
+            background: 'var(--danger-bg)', border: '1px solid #ef4444',
+            color: '#b91c1c', padding: '9px 13px', borderRadius: '7px',
             fontSize: '12.5px', marginBottom: '14px'
           }}>
             ⚠️ {saveError}
@@ -632,7 +631,7 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
               placeholder="Deadline title..."
             />
           ) : (
-            <div style={{ fontSize: '18px', fontWeight: '700', color: '#f8fafc', lineHeight: '1.4' }}>
+            <div style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)', lineHeight: '1.4' }}>
               {task.title}
             </div>
           )}
@@ -652,10 +651,10 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
             />
           ) : (
             <div style={{
-              fontSize: '13.5px', color: editNotes ? '#cbd5e1' : '#475569',
+              fontSize: '13.5px', color: editNotes ? 'var(--text-primary)' : 'var(--text-muted)',
               lineHeight: '1.65', whiteSpace: 'pre-wrap', fontStyle: editNotes ? 'normal' : 'italic',
-              background: '#111827', borderRadius: '8px', padding: '10px 12px',
-              border: '1px solid #1e293b', minHeight: '48px'
+              background: 'var(--bg-card-soft)', borderRadius: '8px', padding: '10px 12px',
+              border: '1px solid var(--border)', minHeight: '48px'
             }}>
               {editNotes || 'No description added. Click "Edit" to add one.'}
             </div>
@@ -681,9 +680,9 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
                 )}
               </select>
             ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#e2e8f0', padding: '8px 0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-primary)', padding: '8px 0' }}>
                 <span>{getDomainMeta(task.domain).icon}</span>
-                <span style={{ color: getDomainMeta(task.domain).color }}>{getDomainMeta(task.domain).label}</span>
+                <span style={{ color: getDomainMeta(task.domain).color, fontWeight: '600' }}>{getDomainMeta(task.domain).label}</span>
               </div>
             )}
           </div>
@@ -699,7 +698,7 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
                 placeholder="e.g. HackMIT, Compass"
               />
             ) : (
-              <div style={{ fontSize: '13px', color: '#e2e8f0', padding: '8px 0' }}>{task.project}</div>
+              <div style={{ fontSize: '13px', color: 'var(--text-primary)', padding: '8px 0', fontWeight: '500' }}>{task.project}</div>
             )}
           </div>
         </div>
@@ -717,8 +716,8 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
                 style={inputStyle}
               />
             ) : (
-              <div style={{ fontSize: '13px', color: '#e2e8f0', padding: '8px 0' }}>
-                {task.due_date || <span style={{ color: '#475569', fontStyle: 'italic' }}>No date set</span>}
+              <div style={{ fontSize: '13px', color: 'var(--text-primary)', padding: '8px 0' }}>
+                {task.due_date || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>No date set</span>}
               </div>
             )}
           </div>
@@ -740,10 +739,10 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
               <div style={{
                 display: 'inline-flex', alignItems: 'center', gap: '5px',
                 fontSize: '12.5px', padding: '4px 10px', borderRadius: '6px', marginTop: '6px',
-                background: task.priority === 'urgent' ? 'rgba(239,68,68,0.18)' :
-                  task.priority === 'high' ? 'rgba(251,146,60,0.18)' : 'rgba(100,116,139,0.18)',
-                color: task.priority === 'urgent' ? '#f87171' :
-                  task.priority === 'high' ? '#fb923c' : '#94a3b8',
+                background: task.priority === 'urgent' ? 'var(--danger-bg)' :
+                  task.priority === 'high' ? 'var(--hackathon-bg)' : 'var(--bg-card-soft)',
+                color: task.priority === 'urgent' ? '#ef4444' :
+                  task.priority === 'high' ? 'var(--hackathon-text)' : 'var(--text-secondary)',
                 fontWeight: '600'
               }}>
                 {task.priority === 'urgent' ? '🔴' : task.priority === 'high' ? '🟠' : task.priority === 'medium' ? '🟡' : '⚪'}
@@ -772,10 +771,10 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: '5px',
               fontSize: '12px', padding: '3px 10px', borderRadius: '6px',
-              background: task.status === 'done' ? 'rgba(52,211,153,0.18)' :
-                task.status === 'in_progress' ? 'rgba(96,165,250,0.18)' : 'rgba(100,116,139,0.18)',
-              color: task.status === 'done' ? '#34d399' :
-                task.status === 'in_progress' ? '#60a5fa' : '#94a3b8',
+              background: task.status === 'done' ? 'var(--code-bg)' :
+                task.status === 'in_progress' ? 'var(--coursework-bg)' : 'var(--bg-card-soft)',
+              color: task.status === 'done' ? 'var(--code-text)' :
+                task.status === 'in_progress' ? 'var(--coursework-text)' : 'var(--text-secondary)',
               fontWeight: '600', textTransform: 'capitalize'
             }}>
               {task.status === 'done' ? '✓' : task.status === 'in_progress' ? '⏳' : '○'}
@@ -787,20 +786,20 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
         {/* ── Meta Row ────────────────────────────────────────────────────── */}
         <div style={{
           display: 'grid', gridTemplateColumns: '110px 1fr', rowGap: '8px', columnGap: '12px',
-          fontSize: '12.5px', borderTop: '1px solid #1e293b', paddingTop: '14px', marginBottom: '18px'
+          fontSize: '12.5px', borderTop: '1px solid var(--border)', paddingTop: '14px', marginBottom: '18px'
         }}>
-          <div style={{ color: '#4b5563' }}>Task ID</div>
-          <div style={{ color: '#94a3b8', fontFamily: "'JetBrains Mono', monospace", fontSize: '11px' }}>{task.id}</div>
+          <div style={{ color: 'var(--text-muted)' }}>Task ID</div>
+          <div style={{ color: 'var(--text-secondary)', fontFamily: "'JetBrains Mono', monospace", fontSize: '11px' }}>{task.id}</div>
 
-          <div style={{ color: '#4b5563' }}>Logged</div>
-          <div style={{ color: '#94a3b8' }}>{task.timestamp}</div>
+          <div style={{ color: 'var(--text-muted)' }}>Logged</div>
+          <div style={{ color: 'var(--text-secondary)' }}>{task.timestamp}</div>
 
           {(task.tags || []).length > 0 && (
             <>
-              <div style={{ color: '#4b5563' }}>Tags</div>
+              <div style={{ color: 'var(--text-muted)' }}>Tags</div>
               <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
                 {task.tags.map(tag => (
-                  <span key={tag} style={{ fontSize: '10.5px', background: '#1e293b', color: '#94a3b8', padding: '2px 7px', borderRadius: '4px' }}>
+                  <span key={tag} style={{ fontSize: '10.5px', background: 'var(--bg-card-soft)', color: 'var(--text-secondary)', padding: '2px 7px', borderRadius: '4px', border: '1px solid var(--border)' }}>
                     #{tag}
                   </span>
                 ))}
@@ -811,7 +810,7 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
 
         {/* ── Actions ─────────────────────────────────────────────────────── */}
         <div style={{
-          paddingTop: '14px', borderTop: '1px solid #1e293b',
+          paddingTop: '14px', borderTop: '1px solid var(--border)',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap'
         }}>
           {/* Left: Delete */}
@@ -821,8 +820,8 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
             onClick={handleDelete}
             style={{
               display: 'flex', alignItems: 'center', gap: '6px',
-              padding: '8px 14px', background: 'rgba(239,68,68,0.1)',
-              border: '1px solid rgba(239,68,68,0.3)', color: '#f87171',
+              padding: '8px 14px', background: 'var(--danger-bg)',
+              border: '1px solid rgba(239,68,68,0.3)', color: '#dc2626',
               borderRadius: '8px', fontSize: '12.5px', fontWeight: '600',
               cursor: (deleting || saving) ? 'not-allowed' : 'pointer',
               opacity: (deleting || saving) ? 0.5 : 1, transition: 'all 0.15s ease'
@@ -839,8 +838,8 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
                   onClick={handleCancelEdit}
                   disabled={saving}
                   style={{
-                    padding: '8px 16px', background: '#1e293b',
-                    border: '1px solid #334155', color: '#cbd5e1',
+                    padding: '8px 16px', background: 'var(--bg-card-soft)',
+                    border: '1px solid var(--border)', color: 'var(--text-secondary)',
                     borderRadius: '8px', fontSize: '12.5px', fontWeight: '500',
                     cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1
                   }}
@@ -869,8 +868,8 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
                 <button
                   onClick={onClose}
                   style={{
-                    padding: '8px 16px', background: '#1e293b',
-                    border: '1px solid #334155', color: '#cbd5e1',
+                    padding: '8px 16px', background: 'var(--bg-card-soft)',
+                    border: '1px solid var(--border)', color: 'var(--text-secondary)',
                     borderRadius: '8px', fontSize: '12.5px', fontWeight: '500', cursor: 'pointer'
                   }}
                 >

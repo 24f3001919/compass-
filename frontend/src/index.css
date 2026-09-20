@@ -42,6 +42,11 @@
 
   --border-soft: #f1ede3;
   --shadow-lg: 0 12px 32px rgba(31, 27, 46, 0.10);
+
+  /* Compatibility aliases for legacy/subagent component tokens */
+  --text-main: #1f1b2e;
+  --bg-input: #ffffff;
+  --bg-modal: #ffffff;
 }
 
 html, body {
@@ -250,7 +255,7 @@ code, pre, .mono {
 
 .card-hackathon:hover, .card-coursework:hover, .card-code:hover, .card-general:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-md);
 }
 
 .timeline-container {

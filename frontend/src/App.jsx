@@ -186,101 +186,41 @@ export default function App() {
           flexShrink: 0,
           background: 'var(--bg-card, var(--bg-app))'
         }}>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              id="tab-northstar"
-              onClick={() => setActiveTab('northstar')}
-              style={{
-                padding: '6px 12px',
-                borderRadius: '6px',
-                border: 'none',
-                background: activeTab === 'northstar' ? 'var(--bg-sidebar-active, rgba(255,255,255,0.08))' : 'transparent',
-                color: activeTab === 'northstar' ? 'var(--text-main, #fff)' : 'var(--text-muted, #64748b)',
-                cursor: 'pointer',
-                fontWeight: '600',
-                fontSize: '13px'
-              }}>
-              🧭 Northstar AI
-            </button>
-            <button
-              id="tab-specialist"
-              onClick={() => setActiveTab('specialist')}
-              style={{
-                padding: '6px 12px',
-                borderRadius: '6px',
-                border: 'none',
-                background: activeTab === 'specialist' ? 'var(--bg-sidebar-active, rgba(255,255,255,0.08))' : 'transparent',
-                color: activeTab === 'specialist' ? 'var(--text-main, #fff)' : 'var(--text-muted, #64748b)',
-                cursor: 'pointer',
-                fontWeight: '600',
-                fontSize: '13px'
-              }}>
-              🧠 Specialist Team
-            </button>
-            <button
-              id="tab-timeline"
-              onClick={() => setActiveTab('timeline')}
-              style={{
-                padding: '6px 12px',
-                borderRadius: '6px',
-                border: 'none',
-                background: activeTab === 'timeline' ? 'var(--bg-sidebar-active, rgba(255,255,255,0.08))' : 'transparent',
-                color: activeTab === 'timeline' ? 'var(--text-main, #fff)' : 'var(--text-muted, #64748b)',
-                cursor: 'pointer',
-                fontWeight: '600',
-                fontSize: '13px'
-              }}>
-              📅 Timeline Feed
-            </button>
-            <button
-              id="tab-chat"
-              onClick={() => setActiveTab('chat')}
-              style={{
-                padding: '6px 12px',
-                borderRadius: '6px',
-                border: 'none',
-                background: activeTab === 'chat' ? 'var(--bg-sidebar-active, rgba(255,255,255,0.08))' : 'transparent',
-                color: activeTab === 'chat' ? 'var(--text-main, #fff)' : 'var(--text-muted, #64748b)',
-                cursor: 'pointer',
-                fontWeight: '600',
-                fontSize: '13px'
-              }}>
-              💬 Assistant Chat
-            </button>
-            <button
-              id="tab-agent"
-              onClick={() => setActiveTab('agent')}
-              style={{
-                padding: '6px 12px',
-                borderRadius: '6px',
-                border: 'none',
-                background: activeTab === 'agent' ? 'var(--bg-sidebar-active, rgba(255,255,255,0.08))' : 'transparent',
-                color: activeTab === 'agent' ? 'var(--text-main, #fff)' : 'var(--text-muted, #64748b)',
-                cursor: 'pointer',
-                fontWeight: '600',
-                fontSize: '13px'
-              }}>
-              🧭 Agent Planner
-            </button>
-            <button
-              id="tab-calendar"
-              onClick={() => setActiveTab('calendar')}
-              style={{
-                padding: '6px 12px',
-                borderRadius: '6px',
-                border: 'none',
-                background: activeTab === 'calendar' ? 'var(--bg-sidebar-active, rgba(255,255,255,0.08))' : 'transparent',
-                color: activeTab === 'calendar' ? 'var(--text-main, #fff)' : 'var(--text-muted, #64748b)',
-                cursor: 'pointer',
-                fontWeight: '600',
-                fontSize: '13px'
-              }}>
-              🗓️ Schedule & Calendar
-            </button>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {[
+              { id: 'tab-northstar', key: 'northstar', label: '🧭 Northstar AI' },
+              { id: 'tab-specialist', key: 'specialist', label: '🧠 Specialist Team' },
+              { id: 'tab-timeline', key: 'timeline', label: '📅 Timeline Feed' },
+              { id: 'tab-chat', key: 'chat', label: '💬 Assistant Chat' },
+              { id: 'tab-agent', key: 'agent', label: '🧭 Agent Planner' },
+              { id: 'tab-calendar', key: 'calendar', label: '🗓️ Schedule & Calendar' },
+            ].map(tab => {
+              const isActive = activeTab === tab.key
+              return (
+                <button
+                  key={tab.key}
+                  id={tab.id}
+                  onClick={() => setActiveTab(tab.key)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    border: isActive ? '1px solid var(--border)' : '1px solid transparent',
+                    background: isActive ? 'var(--bg-card-soft)' : 'transparent',
+                    color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    boxShadow: isActive ? 'var(--shadow-sm)' : 'none',
+                    cursor: 'pointer',
+                    fontWeight: isActive ? '700' : '500',
+                    fontSize: '12.5px',
+                    transition: 'all 0.15s ease'
+                  }}>
+                  {tab.label}
+                </button>
+              )
+            })}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             {/* P0.2: Live usage counter — updates after every chat message */}
-            <div id="usage-badge" className="header-model-badge" style={{ fontSize: '11px', color: 'var(--text-muted, #64748b)', fontFamily: 'JetBrains Mono, monospace' }}>
+            <div id="usage-badge" className="header-model-badge" style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
               {usageBadge}
             </div>
 
@@ -294,13 +234,14 @@ export default function App() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
-                  background: 'var(--bg-input, rgba(30, 41, 59, 0.8))',
+                  background: 'var(--bg-card-soft)',
                   border: '1px solid var(--border)',
                   padding: '5px 12px',
                   borderRadius: '20px',
                   fontSize: '12px',
-                  color: 'var(--text-main)',
+                  color: 'var(--text-primary)',
                   cursor: 'pointer',
+                  boxShadow: 'var(--shadow-sm)',
                   transition: 'all 0.15s ease',
                 }}>
                 <span style={{
@@ -310,7 +251,7 @@ export default function App() {
                   background: '#10b981',
                   boxShadow: '0 0 6px #10b981',
                 }} />
-                <span style={{ fontWeight: '600', color: 'var(--text-main)', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ fontWeight: '600', color: 'var(--text-primary)', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {currentUser.email}
                 </span>
                 <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>▾</span>

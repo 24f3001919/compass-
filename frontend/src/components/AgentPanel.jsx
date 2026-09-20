@@ -9,81 +9,81 @@ import React, { useState, useRef, useEffect } from 'react'
 
 const STEP_STYLES = {
   think: {
-    bg: 'rgba(30, 58, 95, 0.35)',
-    border: '#2563eb',
+    bg: 'rgba(59, 130, 246, 0.08)',
+    border: '#3b82f6',
     icon: '🧠',
     label: 'Thinking',
-    labelColor: '#60a5fa',
+    labelColor: '#2563eb',
   },
   tool_call: {
-    bg: 'rgba(74, 55, 40, 0.35)',
+    bg: 'rgba(245, 158, 11, 0.08)',
     border: '#d97706',
     icon: '🔍',
     label: 'Checking your data',
-    labelColor: '#fbbf24',
+    labelColor: '#b45309',
   },
   observe: {
-    bg: 'rgba(26, 58, 42, 0.35)',
-    border: '#16a34a',
+    bg: 'rgba(16, 185, 129, 0.08)',
+    border: '#10b981',
     icon: '📄',
     label: 'Found',
-    labelColor: '#4ade80',
+    labelColor: '#059669',
   },
   confirm_request: {
-    bg: 'rgba(95, 30, 30, 0.35)',
+    bg: 'rgba(239, 68, 68, 0.08)',
     border: '#ef4444',
     icon: '⚠️',
     label: 'Needs your approval',
-    labelColor: '#f87171',
+    labelColor: '#dc2626',
   },
   critic: {
-    bg: 'rgba(58, 42, 74, 0.35)',
+    bg: 'rgba(147, 51, 234, 0.08)',
     border: '#9333ea',
     icon: '✔️',
     label: 'Quality check',
-    labelColor: '#c084fc',
+    labelColor: '#7e22ce',
   },
   synthesize: {
-    bg: 'linear-gradient(135deg, rgba(30, 58, 95, 0.25), rgba(58, 42, 74, 0.25))',
+    bg: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(168, 85, 247, 0.08))',
     border: '#8b5cf6',
     icon: '✨',
     label: 'Summary',
-    labelColor: '#a78bfa',
+    labelColor: '#6d28d9',
   },
   error: {
-    bg: 'rgba(95, 30, 30, 0.35)',
+    bg: 'rgba(239, 68, 68, 0.08)',
     border: '#ef4444',
     icon: '❌',
     label: 'Something went wrong',
-    labelColor: '#f87171',
+    labelColor: '#dc2626',
   },
   done: {
-    bg: 'rgba(26, 58, 42, 0.2)',
-    border: '#16a34a',
+    bg: 'rgba(16, 185, 129, 0.08)',
+    border: '#10b981',
     icon: '✅',
     label: 'Done',
-    labelColor: '#4ade80',
+    labelColor: '#059669',
   },
   propose: {
-    bg: 'rgba(6, 78, 59, 0.3)',
+    bg: 'rgba(6, 182, 212, 0.08)',
     border: '#06b6d4',
     icon: '📋',
     label: 'Proposed plan',
-    labelColor: '#22d3ee',
+    labelColor: '#0891b2',
   },
   verdict: {
-    bg: 'rgba(95, 30, 30, 0.4)',
+    bg: 'rgba(239, 68, 68, 0.08)',
     border: '#ef4444',
     icon: '⚖️',
     label: 'Feasibility check',
-    labelColor: '#f87171',
+    labelColor: '#dc2626',
   },
   replan: {
-    bg: 'rgba(74, 55, 40, 0.4)',
+    bg: 'rgba(245, 158, 11, 0.08)',
     border: '#f59e0b',
     icon: '🔄',
     label: 'Replanning',
-    labelColor: '#fbbf24',
+    labelColor: '#b45309',
   },
 }
 
@@ -275,15 +275,15 @@ function ReplanDiffCard({ diff }) {
       padding: '10px 14px',
       fontSize: '13px',
     }}>
-      <div style={{ color: '#fbbf24', fontWeight: '700', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+      <div style={{ color: '#b45309', fontWeight: '700', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
         🔄 Change was declined — finding a better approach
       </div>
       {diff.feedback && (
-        <div style={{ color: '#94a3b8', marginBottom: '4px' }}>
-          Your feedback: <span style={{ color: '#e2e8f0' }}>"{diff.feedback}"</span>
+        <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>
+          Your feedback: <span style={{ color: 'var(--text-primary)' }}>"{diff.feedback}"</span>
         </div>
       )}
-      <div style={{ color: '#4ade80', fontSize: '12px' }}>
+      <div style={{ color: '#059669', fontSize: '12px' }}>
         ✓ Replanning without touching your data
       </div>
     </div>
@@ -296,15 +296,15 @@ function ReportCard({ reportCard }) {
   return (
     <div id="agent-report-card" style={{
       marginTop: '12px',
-      background: 'rgba(15, 23, 42, 0.7)',
-      border: '1px solid #1e293b',
+      background: 'var(--bg-card-soft)',
+      border: '1px solid var(--border)',
       borderRadius: '10px',
       padding: '12px 16px',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '16px' }}>✅</span>
-          <span style={{ fontWeight: '700', fontSize: '13px', color: '#94a3b8' }}>
+          <span style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-secondary)' }}>
             Run summary
           </span>
         </div>
@@ -313,13 +313,13 @@ function ReportCard({ reportCard }) {
           fontWeight: '600',
           padding: '2px 10px',
           borderRadius: '12px',
-          background: reportCard.abstained ? 'rgba(245, 158, 11, 0.2)' : 'rgba(34, 197, 94, 0.2)',
-          color: reportCard.abstained ? '#fbbf24' : '#4ade80',
+          background: reportCard.abstained ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+          color: reportCard.abstained ? '#b45309' : '#059669',
         }}>
           {reportCard.abstained ? 'Needs more info' : 'Completed'}
         </span>
       </div>
-      <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '13px', color: '#94a3b8' }}>
+      <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '13px', color: 'var(--text-secondary)' }}>
         {elapsedSec && <span>⏱ {elapsedSec}s</span>}
         {reportCard.total_steps && <span>🔢 {reportCard.total_steps} steps</span>}
         {reportCard.critique_rounds > 0 && (
@@ -367,14 +367,14 @@ function StepCard({ step, index }) {
 
         {/* Show friendly tool description instead of raw tool name for tool_call steps */}
         {step.type === 'tool_call' && step.tool && (
-          <span style={{ fontSize: '11px', color: '#cbd5e1' }}>
+          <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
             — {friendlyTool(step.tool)}
           </span>
         )}
 
         <span style={{
           fontSize: '10px',
-          color: '#475569',
+          color: 'var(--text-muted)',
           marginLeft: 'auto',
         }}>
           {step.elapsed_ms > 0 ? `${(step.elapsed_ms / 1000).toFixed(1)}s` : ''}
@@ -388,9 +388,9 @@ function StepCard({ step, index }) {
         <div style={{
           margin: '8px 0',
           background: step.metadata.verdict.verdict === 'FEASIBLE'
-            ? 'rgba(34, 197, 94, 0.08)'
+            ? 'rgba(16, 185, 129, 0.08)'
             : 'rgba(239, 68, 68, 0.08)',
-          border: `1px solid ${step.metadata.verdict.verdict === 'FEASIBLE' ? '#22c55e44' : '#ef444444'}`,
+          border: `1px solid ${step.metadata.verdict.verdict === 'FEASIBLE' ? '#10b98144' : '#ef444444'}`,
           borderRadius: '8px',
           padding: '12px 14px',
           fontSize: '13px',
@@ -398,31 +398,31 @@ function StepCard({ step, index }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <span style={{
               fontWeight: '700',
-              color: step.metadata.verdict.verdict === 'FEASIBLE' ? '#4ade80' : '#f87171',
+              color: step.metadata.verdict.verdict === 'FEASIBLE' ? '#059669' : '#dc2626',
               fontSize: '14px',
             }}>
               {step.metadata.verdict.verdict === 'FEASIBLE' ? '✅ You can do it!' : '⚠️ Too much to fit in the time'}
             </span>
-            <span style={{ color: '#94a3b8', fontSize: '12px' }}>
+            <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
               {step.metadata.verdict.utilisation_pct}% of your available time
             </span>
           </div>
-          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', color: '#cbd5e1', fontSize: '12px' }}>
-            <span>📋 Work needed: <strong>{step.metadata.verdict.demand_hours}h</strong></span>
-            <span>🕐 Time available: <strong>{step.metadata.verdict.capacity_hours}h</strong></span>
+          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', color: 'var(--text-secondary)', fontSize: '12px' }}>
+            <span>📋 Work needed: <strong style={{ color: 'var(--text-primary)' }}>{step.metadata.verdict.demand_hours}h</strong></span>
+            <span>🕐 Time available: <strong style={{ color: 'var(--text-primary)' }}>{step.metadata.verdict.capacity_hours}h</strong></span>
             {step.metadata.verdict.overcommit_hours > 0 && (
-              <span style={{ color: '#f87171' }}>🚨 Over by: <strong>{step.metadata.verdict.overcommit_hours}h</strong></span>
+              <span style={{ color: '#dc2626' }}>🚨 Over by: <strong>{step.metadata.verdict.overcommit_hours}h</strong></span>
             )}
           </div>
           {step.metadata.verdict.must_cut_hours > 0 && (
-            <div style={{ marginTop: '8px', color: '#fbbf24', fontSize: '12px' }}>
+            <div style={{ marginTop: '8px', color: '#b45309', fontSize: '12px' }}>
               ✂️ You'll need to cut about <strong>{step.metadata.verdict.must_cut_hours}h</strong> of work to stay realistic.
             </div>
           )}
           {step.metadata.verdict.challenged_estimates?.length > 0 && (
-            <div style={{ marginTop: '8px', borderTop: '1px solid #334155', paddingTop: '8px' }}>
-              <span style={{ color: '#f87171', fontWeight: '600', fontSize: '12px' }}>⏱ These time estimates might be too optimistic:</span>
-              <ul style={{ margin: '4px 0 0 16px', padding: 0, color: '#94a3b8', fontSize: '12px' }}>
+            <div style={{ marginTop: '8px', borderTop: '1px solid var(--border)', paddingTop: '8px' }}>
+              <span style={{ color: '#dc2626', fontWeight: '600', fontSize: '12px' }}>⏱ These time estimates might be too optimistic:</span>
+              <ul style={{ margin: '4px 0 0 16px', padding: 0, color: 'var(--text-secondary)', fontSize: '12px' }}>
                 {step.metadata.verdict.challenged_estimates.map((c, i) => (
                   <li key={i}>{c}</li>
                 ))}
@@ -435,12 +435,12 @@ function StepCard({ step, index }) {
       {/* Not enough info warning */}
       {isAbstained && (
         <div style={{
-          background: 'rgba(245, 158, 11, 0.12)',
-          border: '1px solid rgba(245,158,11,0.35)',
+          background: 'rgba(245, 158, 11, 0.08)',
+          border: '1px solid rgba(245,158,11,0.3)',
           borderRadius: '8px',
           padding: '10px 14px',
           marginBottom: '8px',
-          color: '#fbbf24',
+          color: '#b45309',
           fontSize: '13px',
           fontWeight: '500',
           display: 'flex',
@@ -457,7 +457,7 @@ function StepCard({ step, index }) {
 
       <div style={{
         fontSize: '13px',
-        color: '#e2e8f0',
+        color: 'var(--text-primary)',
         lineHeight: '1.6',
         whiteSpace: 'pre-wrap',
         wordBreak: 'break-word',
@@ -469,22 +469,23 @@ function StepCard({ step, index }) {
       {step.type === 'done' && step.metadata?.artifact_markdown && (
         <div style={{
           marginTop: '12px',
-          background: 'rgba(15, 23, 42, 0.95)',
-          border: '1px solid #38bdf8',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
           borderRadius: '8px',
           padding: '14px 16px',
+          boxShadow: 'var(--shadow-sm)'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <span style={{ fontSize: '13px', fontWeight: '700', color: '#38bdf8', letterSpacing: '0.02em' }}>
+            <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--primary)', letterSpacing: '0.02em' }}>
               📋 Your Personalized Action Plan
             </span>
             <button
               onClick={() => navigator.clipboard.writeText(step.metadata.artifact_markdown)}
               style={{
-                background: '#1e293b',
-                border: '1px solid #475569',
+                background: 'var(--bg-card-soft)',
+                border: '1px solid var(--border)',
                 borderRadius: '6px',
-                color: '#cbd5e1',
+                color: 'var(--text-secondary)',
                 padding: '4px 10px',
                 fontSize: '11px',
                 cursor: 'pointer',
@@ -496,7 +497,7 @@ function StepCard({ step, index }) {
           <div style={{
             fontSize: '13px',
             lineHeight: '1.6',
-            color: '#e2e8f0',
+            color: 'var(--text-primary)',
             whiteSpace: 'pre-wrap',
             fontFamily: 'Inter, system-ui, sans-serif',
           }}>
@@ -963,14 +964,14 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
       {/* Goal Input Area */}
       <div style={{
         padding: '16px 20px',
-        borderBottom: '1px solid #1e293b',
+        borderBottom: '1px solid var(--border)',
         flexShrink: 0,
       }}>
         {/* Proactive Autonomous Overnight Briefing Banner */}
         {proactiveBriefing && (
           <div style={{
-            background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.95))',
-            border: '1px solid #38bdf855',
+            background: 'var(--bg-card-soft)',
+            border: '1px solid var(--border)',
             borderRadius: '8px',
             padding: '10px 14px',
             marginBottom: '12px',
@@ -982,10 +983,10 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <span style={{ fontSize: '22px' }}>🌅</span>
               <div>
-                <div style={{ fontSize: '13px', fontWeight: '700', color: '#38bdf8', letterSpacing: '0.02em' }}>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--primary)', letterSpacing: '0.02em' }}>
                   Your Morning Briefing is Ready
                 </div>
-                <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                   Prepared overnight based on your tasks and upcoming deadlines
                 </div>
               </div>
@@ -996,7 +997,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                 onClick={loadProactiveBriefingTrace}
                 style={{
                   padding: '6px 14px',
-                  background: '#0284c7',
+                  background: 'var(--primary)',
                   border: 'none',
                   borderRadius: '6px',
                   color: '#fff',
@@ -1016,10 +1017,10 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                 disabled={triggeringNightly}
                 style={{
                   padding: '6px 12px',
-                  background: '#1e293b',
-                  border: '1px solid #334155',
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border)',
                   borderRadius: '6px',
-                  color: '#94a3b8',
+                  color: 'var(--text-secondary)',
                   fontSize: '12px',
                   cursor: 'pointer',
                 }}
@@ -1047,10 +1048,10 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
             style={{
               flex: 1,
               padding: '10px 14px',
-              background: '#0f172a',
-              border: '1px solid #1e293b',
+              background: 'var(--bg-app)',
+              border: '1px solid var(--border)',
               borderRadius: '8px',
-              color: '#e2e8f0',
+              color: 'var(--text-primary)',
               fontSize: '14px',
               outline: 'none',
               fontFamily: 'Inter, system-ui, sans-serif',
@@ -1081,10 +1082,10 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
               disabled={!goal.trim()}
               style={{
                 padding: '10px 18px',
-                background: goal.trim() ? '#2563eb' : '#1e293b',
-                border: 'none',
+                background: goal.trim() ? 'var(--primary)' : 'var(--bg-card-soft)',
+                border: '1px solid var(--border)',
                 borderRadius: '8px',
-                color: goal.trim() ? '#fff' : '#64748b',
+                color: goal.trim() ? '#fff' : 'var(--text-muted)',
                 fontSize: '13px',
                 fontWeight: '600',
                 cursor: goal.trim() ? 'pointer' : 'not-allowed',
@@ -1100,10 +1101,10 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
             onClick={() => { fetchRunsHistory(); setShowHistory(!showHistory) }}
             style={{
               padding: '10px 14px',
-              background: showHistory ? '#334155' : '#1e293b',
-              border: '1px solid #334155',
+              background: showHistory ? 'var(--primary)' : 'var(--bg-card-soft)',
+              border: '1px solid var(--border)',
               borderRadius: '8px',
-              color: '#94a3b8',
+              color: showHistory ? '#fff' : 'var(--text-secondary)',
               fontSize: '13px',
               fontWeight: '600',
               cursor: 'pointer',
@@ -1123,10 +1124,10 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
               onClick={copyTraceAsMarkdown}
               style={{
                 padding: '10px 14px',
-                background: '#1e293b',
-                border: '1px solid #334155',
+                background: 'var(--bg-card-soft)',
+                border: '1px solid var(--border)',
                 borderRadius: '8px',
-                color: copyFeedback ? '#34d399' : '#94a3b8',
+                color: copyFeedback ? '#059669' : 'var(--text-secondary)',
                 fontSize: '13px',
                 fontWeight: '600',
                 cursor: 'pointer',
@@ -1152,10 +1153,10 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
               }}
               style={{
                 padding: '6px 13px',
-                background: 'rgba(239, 68, 68, 0.15)',
-                border: '1px solid rgba(239, 68, 68, 0.35)',
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
                 borderRadius: '14px',
-                color: '#fca5a5',
+                color: '#dc2626',
                 fontSize: '11.5px',
                 fontWeight: '600',
                 cursor: 'pointer',
@@ -1178,10 +1179,10 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
               }}
               style={{
                 padding: '6px 13px',
-                background: 'rgba(59, 130, 246, 0.15)',
-                border: '1px solid rgba(59, 130, 246, 0.35)',
+                background: 'rgba(59, 130, 246, 0.08)',
+                border: '1px solid rgba(59, 130, 246, 0.25)',
                 borderRadius: '14px',
-                color: '#93c5fd',
+                color: '#2563eb',
                 fontSize: '11.5px',
                 fontWeight: '600',
                 cursor: 'pointer',
@@ -1204,10 +1205,10 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
               }}
               style={{
                 padding: '6px 13px',
-                background: 'rgba(245, 158, 11, 0.15)',
-                border: '1px solid rgba(245, 158, 11, 0.35)',
+                background: 'rgba(245, 158, 11, 0.08)',
+                border: '1px solid rgba(245, 158, 11, 0.25)',
                 borderRadius: '14px',
-                color: '#fde68a',
+                color: '#b45309',
                 fontSize: '11.5px',
                 fontWeight: '600',
                 cursor: 'pointer',
@@ -1227,16 +1228,16 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                 onClick={() => { setGoal(sg); runAgent(sg) }}
                 style={{
                   padding: '5px 10px',
-                  background: '#1e293b',
-                  border: '1px solid #334155',
+                  background: 'var(--bg-card-soft)',
+                  border: '1px solid var(--border)',
                   borderRadius: '14px',
-                  color: '#94a3b8',
+                  color: 'var(--text-secondary)',
                   fontSize: '11px',
                   cursor: 'pointer',
                   transition: 'all 0.2s',
                 }}
-                onMouseEnter={e => { e.target.style.background = '#334155'; e.target.style.color = '#e2e8f0' }}
-                onMouseLeave={e => { e.target.style.background = '#1e293b'; e.target.style.color = '#94a3b8' }}
+                onMouseEnter={e => { e.target.style.background = 'var(--bg-card)'; e.target.style.color = 'var(--text-primary)' }}
+                onMouseLeave={e => { e.target.style.background = 'var(--bg-card-soft)'; e.target.style.color = 'var(--text-secondary)' }}
               >
                 {sg}
               </button>
@@ -1261,25 +1262,25 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
         {showHistory && (
           <div style={{
             marginBottom: '16px',
-            background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95))',
-            border: '1px solid #334155',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
             borderRadius: '8px',
             padding: '14px',
-            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+            boxShadow: 'var(--shadow-md)',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <span style={{ fontSize: '13px', fontWeight: '700', color: '#e2e8f0', letterSpacing: '0.02em' }}>
+              <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', letterSpacing: '0.02em' }}>
                 📜 Past Plans & Answers ({runsList.length})
               </span>
               <button
                 onClick={() => setShowHistory(false)}
-                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '15px' }}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '15px' }}
               >
                 ✕
               </button>
             </div>
             {runsList.length === 0 ? (
-              <div style={{ fontSize: '12px', color: '#64748b', fontStyle: 'italic', padding: '12px 0', textAlign: 'center' }}>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic', padding: '12px 0', textAlign: 'center' }}>
                 No past plans yet. Ask a question or run a plan above to see history here.
               </div>
             ) : (
@@ -1300,28 +1301,28 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       padding: '9px 12px',
-                      background: currentRunId === r.id ? 'rgba(37, 99, 235, 0.2)' : 'rgba(30, 41, 59, 0.6)',
-                      border: `1px solid ${currentRunId === r.id ? '#2563eb' : '#334155'}`,
+                      background: currentRunId === r.id ? 'rgba(99, 102, 241, 0.08)' : 'var(--bg-card-soft)',
+                      border: `1px solid ${currentRunId === r.id ? 'var(--primary)' : 'var(--border)'}`,
                       borderRadius: '6px',
                       cursor: 'pointer',
                       transition: 'all 0.15s',
                     }}
                   >
                     <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
-                      <span style={{ fontSize: '13px', color: '#f1f5f9', fontWeight: '500' }}>{r.goal || 'Question'}</span>
-                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                      <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: '500' }}>{r.goal || 'Question'}</span>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
                         {formatFriendlyTime(r.created_at)}
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '11px', color: '#94a3b8' }}>{r.steps_count} steps</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{r.steps_count} steps</span>
                       <span style={{
                         fontSize: '11px',
                         fontWeight: '600',
                         padding: '2px 8px',
                         borderRadius: '10px',
-                        background: r.status === 'completed' ? 'rgba(34, 197, 94, 0.15)' : r.status === 'paused' ? 'rgba(234, 179, 8, 0.15)' : 'rgba(100, 116, 139, 0.2)',
-                        color: r.status === 'completed' ? '#4ade80' : r.status === 'paused' ? '#facc15' : '#94a3b8',
+                        background: r.status === 'completed' ? 'rgba(16, 185, 129, 0.15)' : r.status === 'paused' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(100, 116, 139, 0.15)',
+                        color: r.status === 'completed' ? '#059669' : r.status === 'paused' ? '#b45309' : 'var(--text-muted)',
                       }}>
                         {r.status === 'completed' ? 'Completed' : r.status === 'paused' ? 'Needs approval' : 'In progress'}
                       </span>
@@ -1338,26 +1339,25 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
           <div style={{
             marginBottom: '14px',
             padding: '10px 14px',
-            background: 'rgba(15, 23, 42, 0.7)',
-            border: '1px solid #1e293b',
+            background: 'var(--bg-card-soft)',
+            border: '1px solid var(--border)',
             borderRadius: '8px',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', fontSize: '13px', color: isRunning ? '#38bdf8' : '#34d399' }}>
-                <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: isRunning ? '#38bdf8' : '#34d399', animation: isRunning ? 'pulse 1s infinite' : 'none' }} />
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', fontSize: '13px', color: isRunning ? 'var(--primary)' : '#059669' }}>
+                <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: isRunning ? 'var(--primary)' : '#10b981', animation: isRunning ? 'pulse 1s infinite' : 'none' }} />
                 {isRunning ? 'Working on it…' : 'All done ✓'}
               </span>
-              <span style={{ fontSize: '12px', color: '#64748b' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                 {steps.length} action{steps.length !== 1 ? 's' : ''} taken
               </span>
             </div>
-            <div style={{ width: '100%', height: '4px', background: '#1e293b', borderRadius: '2px', overflow: 'hidden' }}>
+            <div style={{ width: '100%', height: '4px', background: 'var(--border)', borderRadius: '2px', overflow: 'hidden' }}>
               <div style={{
                 width: `${Math.min(100, (steps.length / 8) * 100)}%`,
                 height: '100%',
-                background: isRunning ? 'linear-gradient(90deg, #2563eb, #38bdf8)' : '#10b981',
+                background: isRunning ? 'var(--primary)' : '#10b981',
                 transition: 'width 0.3s ease',
-                boxShadow: isRunning ? '0 0 8px #38bdf8' : 'none',
               }} />
             </div>
           </div>
@@ -1367,13 +1367,13 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
           <div style={{
             textAlign: 'center',
             padding: '60px 20px',
-            color: '#475569',
+            color: 'var(--text-muted)',
           }}>
             <div style={{ fontSize: '48px', marginBottom: '12px' }}>🧭</div>
-            <div style={{ fontSize: '16px', fontWeight: '600', color: '#64748b', marginBottom: '8px' }}>
+            <div style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '8px' }}>
               Your Compass Assistant
             </div>
-            <div style={{ fontSize: '13px', lineHeight: '1.8', maxWidth: '400px', margin: '0 auto', color: '#475569' }}>
+            <div style={{ fontSize: '13px', lineHeight: '1.8', maxWidth: '400px', margin: '0 auto', color: 'var(--text-secondary)' }}>
               Ask anything about your tasks, deadlines, or schedule — in plain English.
               I'll look through everything and give you a clear answer.
               Before making any changes, I'll always ask for your approval first.
@@ -1385,7 +1385,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
           <div style={{
             textAlign: 'center',
             padding: '40px',
-            color: '#60a5fa',
+            color: 'var(--primary)',
           }}>
             <div style={{ fontSize: '20px', animation: 'pulse 1.5s ease-in-out infinite' }}>
               🧭 Getting started…
@@ -1402,30 +1402,30 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
         {/* Confirmation gate UI */}
         {pendingActions.length > 0 && !isRunning && (
           <div style={{
-            background: 'rgba(37, 99, 235, 0.08)',
-            border: '1px solid rgba(59,130,246,0.35)',
+            background: 'rgba(99, 102, 241, 0.05)',
+            border: '1px solid rgba(99, 102, 241, 0.25)',
             borderRadius: '10px',
             padding: '16px',
             marginTop: '8px',
           }}>
-            <div style={{ fontSize: '15px', fontWeight: '700', color: '#e2e8f0', marginBottom: '6px' }}>
+            <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>
               🙋 Ready to make {pendingActions.length} change{pendingActions.length !== 1 ? 's' : ''} — is that ok?
             </div>
-            <div style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '14px' }}>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '14px' }}>
               Nothing has been saved yet. Review below, then say yes or no. You can always undo changes.
             </div>
             {pendingActions.map((action, i) => (
               <div key={i} style={{
-                background: 'rgba(30, 41, 59, 0.8)',
+                background: 'var(--bg-card)',
                 borderRadius: '8px',
                 padding: '10px 14px',
                 marginBottom: '6px',
                 fontSize: '13px',
-                color: '#e2e8f0',
+                color: 'var(--text-primary)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '10px',
-                border: '1px solid #1e293b',
+                border: '1px solid var(--border)',
               }}>
                 <span style={{ fontSize: '16px' }}>📝</span>
                 <span style={{ fontWeight: '500' }}>{formatActionDescription(action)}</span>
@@ -1441,10 +1441,10 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                 style={{
                   width: '100%',
                   padding: '9px 12px',
-                  background: '#0f172a',
-                  border: '1px solid #334155',
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border)',
                   borderRadius: '8px',
-                  color: '#e2e8f0',
+                  color: 'var(--text-primary)',
                   fontSize: '13px',
                   marginBottom: '10px',
                   outline: 'none',
@@ -1478,7 +1478,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                   background: 'transparent',
                   border: '1px solid #ef4444',
                   borderRadius: '8px',
-                  color: '#f87171',
+                  color: '#dc2626',
                   fontSize: '14px',
                   fontWeight: '600',
                   cursor: 'pointer',
@@ -1498,10 +1498,10 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
               onClick={undoLastAction}
               style={{
                 padding: '7px 16px',
-                background: '#1e293b',
-                border: '1px solid #475569',
+                background: 'var(--bg-card-soft)',
+                border: '1px solid var(--border)',
                 borderRadius: '8px',
-                color: '#e2e8f0',
+                color: 'var(--text-primary)',
                 fontSize: '13px',
                 cursor: 'pointer',
                 display: 'flex',
@@ -1512,7 +1512,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
               ↩️ Undo last change
             </button>
             {undoStatus && (
-              <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                 {undoStatus}
               </span>
             )}
@@ -1525,7 +1525,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
             alignItems: 'center',
             gap: '8px',
             padding: '8px 0',
-            color: '#60a5fa',
+            color: 'var(--primary)',
             fontSize: '13px',
           }}>
             <span style={{ animation: 'pulse 1s ease-in-out infinite' }}>●</span>
@@ -1536,7 +1536,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
         {/* Activity Feed */}
         <div id="agent-activity-feed" style={{
           marginTop: '24px',
-          borderTop: '1px solid #1e293b',
+          borderTop: '1px solid var(--border)',
           paddingTop: '16px',
         }}>
           <div style={{
@@ -1549,7 +1549,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
               <span style={{
                 fontSize: '13px',
                 fontWeight: '700',
-                color: '#e2e8f0',
+                color: 'var(--text-primary)',
               }}>
                 📋 Recent changes{activityList.length > 0 ? ` (${activityList.length})` : ''}
               </span>
@@ -1560,7 +1560,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                 fontSize: '11px',
                 background: 'transparent',
                 border: 'none',
-                color: '#60a5fa',
+                color: 'var(--primary)',
                 cursor: 'pointer',
               }}
             >
@@ -1569,7 +1569,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
           </div>
 
           {activityList.length === 0 ? (
-            <div style={{ fontSize: '12px', color: '#64748b', fontStyle: 'italic', padding: '8px 0' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic', padding: '8px 0' }}>
               No changes made by the assistant yet.
             </div>
           ) : (
@@ -1591,8 +1591,8 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '9px 12px',
-                    background: item.is_reverted ? 'rgba(30, 41, 59, 0.2)' : 'rgba(30, 41, 59, 0.5)',
-                    border: `1px solid ${item.is_reverted ? '#334155' : '#1e293b'}`,
+                    background: item.is_reverted ? 'var(--bg-card)' : 'var(--bg-card-soft)',
+                    border: `1px solid var(--border)`,
                     borderRadius: '8px',
                     fontSize: '12px',
                     opacity: item.is_reverted ? 0.55 : 1,
@@ -1602,10 +1602,10 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                     <span style={{ fontSize: '14px' }}>
                       {item.tool === 'add_task' ? '➕' : item.tool === 'delete_task' ? '🗑️' : item.tool?.includes('ingest') ? '📥' : '✏️'}
                     </span>
-                    <span style={{ color: '#e2e8f0', fontWeight: '600', fontSize: '12.5px' }}>
+                    <span style={{ color: 'var(--text-primary)', fontWeight: '600', fontSize: '12.5px' }}>
                       {formatActivityItem(item)}
                     </span>
-                    <span style={{ fontSize: '11px', color: '#64748b' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                       {formatFriendlyTime(item.created_at)}
                     </span>
                     {item.is_reverted && (
@@ -1614,9 +1614,9 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                         padding: '1px 7px',
                         borderRadius: '10px',
                         fontWeight: '700',
-                        background: 'rgba(239, 68, 68, 0.15)',
-                        color: '#f87171',
-                        border: '1px solid #ef444430',
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        color: '#dc2626',
+                        border: '1px solid rgba(239, 68, 68, 0.25)',
                       }}>
                         Undone
                       </span>
@@ -1629,10 +1629,10 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
                       onClick={() => revertActivityItem(item.id)}
                       style={{
                         padding: '4px 10px',
-                        background: '#1e293b',
-                        border: '1px solid #334155',
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border)',
                         borderRadius: '6px',
-                        color: '#94a3b8',
+                        color: 'var(--text-secondary)',
                         fontSize: '11px',
                         fontWeight: '600',
                         cursor: 'pointer',

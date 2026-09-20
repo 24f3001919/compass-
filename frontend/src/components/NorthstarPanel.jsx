@@ -17,30 +17,30 @@ export default function NorthstarPanel({
   const [activeSubTab, setActiveSubTab] = useState('assistant') // 'assistant' | 'planner'
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', minWidth: 0, overflow: 'hidden' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 56px)', minWidth: 0, overflow: 'hidden', background: 'var(--bg-app)' }}>
       {/* Northstar Header Sub-bar */}
       <div style={{
-        height: '46px',
-        borderBottom: '1px solid #1e293b',
-        background: '#0d131f',
+        height: '48px',
+        borderBottom: '1px solid var(--border)',
+        background: 'var(--bg-card)',
         display: 'flex',
         alignItems: 'center',
-        justify: 'space-between',
+        justifyContent: 'space-between',
         padding: '0 20px',
         flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '16px' }}>🧭</span>
-          <span style={{ fontSize: '13px', fontWeight: '800', color: '#f8fafc', letterSpacing: '-0.2px' }}>
+          <span style={{ fontSize: '13px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.2px' }}>
             Northstar
           </span>
-          <span style={{ fontSize: '11px', color: '#64748b', background: 'rgba(30, 41, 59, 0.6)', padding: '2px 8px', borderRadius: '10px' }}>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)', background: 'var(--bg-card-soft)', border: '1px solid var(--border)', padding: '2px 8px', borderRadius: '10px' }}>
             Main AI Assistant & Execution Engine
           </span>
         </div>
 
         {/* View Toggle */}
-        <div style={{ display: 'flex', background: '#0b0f17', padding: '3px', borderRadius: '8px', border: '1px solid #1e293b' }}>
+        <div style={{ display: 'flex', background: 'var(--bg-card-soft)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border)' }}>
           <button
             id="northstar-subtab-chat"
             onClick={() => setActiveSubTab('assistant')}
@@ -48,8 +48,9 @@ export default function NorthstarPanel({
               padding: '4px 12px',
               borderRadius: '6px',
               border: 'none',
-              background: activeSubTab === 'assistant' ? '#2563eb' : 'transparent',
-              color: activeSubTab === 'assistant' ? '#fff' : '#64748b',
+              background: activeSubTab === 'assistant' ? 'var(--bg-card)' : 'transparent',
+              color: activeSubTab === 'assistant' ? 'var(--text-primary)' : 'var(--text-secondary)',
+              boxShadow: activeSubTab === 'assistant' ? 'var(--shadow-sm)' : 'none',
               fontSize: '12px',
               fontWeight: '600',
               cursor: 'pointer',
@@ -64,8 +65,9 @@ export default function NorthstarPanel({
               padding: '4px 12px',
               borderRadius: '6px',
               border: 'none',
-              background: activeSubTab === 'planner' ? '#2563eb' : 'transparent',
-              color: activeSubTab === 'planner' ? '#fff' : '#64748b',
+              background: activeSubTab === 'planner' ? 'var(--bg-card)' : 'transparent',
+              color: activeSubTab === 'planner' ? 'var(--text-primary)' : 'var(--text-secondary)',
+              boxShadow: activeSubTab === 'planner' ? 'var(--shadow-sm)' : 'none',
               fontSize: '12px',
               fontWeight: '600',
               cursor: 'pointer',

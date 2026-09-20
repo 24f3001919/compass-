@@ -238,20 +238,20 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
   }
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: '#0b0f17' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--bg-app)' }}>
       {/* Top Header Bar */}
       <div style={{
         padding: '16px 24px',
-        borderBottom: '1px solid #1e293b',
+        borderBottom: '1px solid var(--border)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        background: '#0d131f',
+        background: 'var(--bg-card)',
         flexShrink: 0
       }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#f8fafc', letterSpacing: '-0.3px' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
               🗓️ Dynamic Schedule & Google Calendar
             </h2>
             <div
@@ -266,32 +266,32 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                 gap: '6px',
                 padding: '4px 10px',
                 borderRadius: '12px',
-                background: calendarStatus.connected && calendarStatus.mode === 'live' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)',
-                border: calendarStatus.connected && calendarStatus.mode === 'live' ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)',
+                background: calendarStatus.connected && calendarStatus.mode === 'live' ? 'var(--code-bg)' : 'var(--hackathon-bg)',
+                border: calendarStatus.connected && calendarStatus.mode === 'live' ? '1px solid rgba(20, 184, 132, 0.4)' : '1px solid rgba(245, 166, 35, 0.4)',
                 fontSize: '11px',
-                color: calendarStatus.connected && calendarStatus.mode === 'live' ? '#34d399' : '#fbbf24',
-                fontWeight: '500',
+                color: calendarStatus.connected && calendarStatus.mode === 'live' ? 'var(--code-text)' : 'var(--hackathon-text)',
+                fontWeight: '600',
                 cursor: 'pointer'
               }}>
               <span style={{
                 width: '6px',
                 height: '6px',
                 borderRadius: '50%',
-                background: calendarStatus.connected && calendarStatus.mode === 'live' ? '#10b981' : '#f59e0b'
+                background: calendarStatus.connected && calendarStatus.mode === 'live' ? '#10b981' : '#f5a623'
               }} />
               {calendarStatus.connected && calendarStatus.mode === 'live'
                 ? `Google Calendar: ${calendarStatus.account_email} (Live OAuth Connected)`
                 : `Google Calendar: ${calendarStatus.account_email || 'demo-scholar@compass.ai'} (simulated / demo mode — click to link)`}
             </div>
           </div>
-          <p style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
             Deterministic Python interval slot allocator · Working hours (09:00–18:00) · 15m inter-task buffer
             {calendarStatus.mode === 'demo' && ' · Simulated calendar commitments (live OAuth available)'}
           </p>
         </div>
 
         {/* Action Controls */}
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             id="btn-sync-gcal"
             onClick={async () => {
@@ -328,11 +328,11 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
               gap: '6px',
               padding: '7px 12px',
               borderRadius: '8px',
-              background: calendarStatus.connected && calendarStatus.mode === 'live' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-              border: calendarStatus.connected && calendarStatus.mode === 'live' ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(59, 130, 246, 0.4)',
-              color: calendarStatus.connected && calendarStatus.mode === 'live' ? '#34d399' : '#60a5fa',
+              background: calendarStatus.connected && calendarStatus.mode === 'live' ? 'var(--code-bg)' : 'var(--coursework-bg)',
+              border: calendarStatus.connected && calendarStatus.mode === 'live' ? '1px solid var(--code)' : '1px solid var(--coursework)',
+              color: calendarStatus.connected && calendarStatus.mode === 'live' ? 'var(--code-text)' : 'var(--coursework-text)',
               fontSize: '12px',
-              fontWeight: '500',
+              fontWeight: '600',
               cursor: syncingCalendar ? 'wait' : 'pointer',
               transition: 'all 0.15s ease'
             }}>
@@ -351,9 +351,9 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                   gap: '4px',
                   padding: '7px 10px',
                   borderRadius: '8px',
-                  background: '#1e293b',
-                  border: '1px solid #334155',
-                  color: '#94a3b8',
+                  background: 'var(--bg-card-soft)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-secondary)',
                   fontSize: '12px',
                   textDecoration: 'none'
                 }}>
@@ -369,11 +369,11 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                     gap: '6px',
                     padding: '7px 12px',
                     borderRadius: '8px',
-                    background: 'rgba(59, 130, 246, 0.15)',
-                    border: '1px solid rgba(59, 130, 246, 0.4)',
-                    color: '#60a5fa',
+                    background: 'var(--coursework-bg)',
+                    border: '1px solid var(--coursework)',
+                    color: 'var(--coursework-text)',
                     fontSize: '12px',
-                    fontWeight: '500',
+                    fontWeight: '600',
                     textDecoration: 'none',
                     cursor: 'pointer',
                     transition: 'all 0.15s ease'
@@ -391,9 +391,9 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                 style={{
                   padding: '7px 10px',
                   borderRadius: '8px',
-                  background: '#1e293b',
-                  border: '1px solid #334155',
-                  color: '#ef4444',
+                  background: 'var(--danger-bg)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  color: '#dc2626',
                   fontSize: '12px',
                   cursor: 'pointer'
                 }}>
@@ -414,11 +414,11 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                   gap: '6px',
                   padding: '7px 12px',
                   borderRadius: '8px',
-                  background: 'rgba(59, 130, 246, 0.15)',
-                  border: '1px solid rgba(59, 130, 246, 0.4)',
-                  color: '#60a5fa',
+                  background: 'var(--coursework-bg)',
+                  border: '1px solid var(--coursework)',
+                  color: 'var(--coursework-text)',
                   fontSize: '12px',
-                  fontWeight: '500',
+                  fontWeight: '600',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}>
@@ -436,9 +436,9 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                   gap: '4px',
                   padding: '7px 10px',
                   borderRadius: '8px',
-                  background: '#1e293b',
-                  border: '1px solid #334155',
-                  color: '#cbd5e1',
+                  background: 'var(--bg-card-soft)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-primary)',
                   fontSize: '12px',
                   cursor: 'pointer'
                 }}>
@@ -458,9 +458,9 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                 gap: '6px',
                 padding: '7px 12px',
                 borderRadius: '8px',
-                background: '#1e293b',
-                border: '1px solid #334155',
-                color: '#cbd5e1',
+                background: 'var(--bg-card-soft)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-primary)',
                 fontSize: '12px',
                 fontWeight: '500',
                 textDecoration: 'none',
@@ -473,9 +473,9 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
               onClick={() => setShowIcsModal(true)}
               title="How to import into Google Calendar"
               style={{
-                background: '#1e293b',
-                border: '1px solid #334155',
-                color: '#38bdf8',
+                background: 'var(--bg-card-soft)',
+                border: '1px solid var(--border)',
+                color: 'var(--coursework-text)',
                 borderRadius: '8px',
                 padding: '7px 10px',
                 fontSize: '12px',
@@ -496,11 +496,11 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
               gap: '6px',
               padding: '7px 12px',
               borderRadius: '8px',
-              background: 'rgba(245, 158, 11, 0.12)',
-              border: '1px solid rgba(245, 158, 11, 0.35)',
-              color: '#fbbf24',
+              background: 'var(--hackathon-bg)',
+              border: '1px solid rgba(245, 166, 35, 0.4)',
+              color: 'var(--hackathon-text)',
               fontSize: '12px',
-              fontWeight: '500',
+              fontWeight: '600',
               cursor: checkingReactive ? 'wait' : 'pointer',
               transition: 'all 0.15s ease'
             }}>
@@ -517,13 +517,13 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
               gap: '6px',
               padding: '7px 14px',
               borderRadius: '8px',
-              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              background: 'linear-gradient(135deg, #6c5ce7, #8b5cf6)',
               border: 'none',
               color: '#ffffff',
               fontSize: '12.5px',
               fontWeight: '600',
               cursor: proposing ? 'wait' : 'pointer',
-              boxShadow: '0 0 14px rgba(99, 102, 241, 0.35)',
+              boxShadow: 'var(--shadow-sm)',
               opacity: proposing ? 0.7 : 1,
               transition: 'all 0.15s ease'
             }}>
@@ -536,9 +536,9 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
       {bannerMessage && (
         <div style={{
           padding: '10px 24px',
-          background: bannerMessage.type === 'error' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-          borderBottom: bannerMessage.type === 'error' ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)',
-          color: bannerMessage.type === 'error' ? '#fca5a5' : '#86efac',
+          background: bannerMessage.type === 'error' ? 'var(--danger-bg)' : 'var(--code-bg)',
+          borderBottom: bannerMessage.type === 'error' ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(20, 184, 132, 0.3)',
+          color: bannerMessage.type === 'error' ? '#b91c1c' : 'var(--code-text)',
           fontSize: '12.5px',
           display: 'flex',
           justifyContent: 'space-between',
@@ -556,14 +556,14 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
       {/* Date Horizon Navigator */}
       <div style={{
         padding: '10px 24px',
-        borderBottom: '1px solid #1e293b',
+        borderBottom: '1px solid var(--border)',
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
-        background: '#090d14',
+        background: 'var(--bg-card-soft)',
         flexShrink: 0
       }}>
-        <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', marginRight: '8px' }}>
+        <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '600', marginRight: '8px' }}>
           HORIZON:
         </span>
         {dayTabs.map(tab => {
@@ -575,11 +575,11 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
-                border: isSelected ? '1px solid #6366f1' : '1px solid #1e293b',
-                background: isSelected ? 'rgba(99, 102, 241, 0.15)' : '#0d131f',
-                color: isSelected ? '#a5b4fc' : '#94a3b8',
+                border: isSelected ? '1px solid var(--brand)' : '1px solid var(--border)',
+                background: isSelected ? 'var(--brand)' : 'var(--bg-card)',
+                color: isSelected ? '#16152a' : 'var(--text-secondary)',
                 fontSize: '12px',
-                fontWeight: isSelected ? '600' : '500',
+                fontWeight: isSelected ? '700' : '500',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease'
               }}>
@@ -596,7 +596,7 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
           flex: '1 1 70%',
           display: 'flex',
           flexDirection: 'column',
-          borderRight: '1px solid #1e293b',
+          borderRight: '1px solid var(--border)',
           overflowY: 'auto',
           position: 'relative'
         }}>
@@ -604,7 +604,7 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
             position: 'relative',
             minHeight: '720px',
             padding: '10px 20px 20px 70px',
-            background: '#0b0f17'
+            background: 'var(--bg-app)'
           }}>
             {/* Hour Markers */}
             {HOURS.map((hour) => (
@@ -612,7 +612,7 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                 key={hour}
                 style={{
                   height: '60px',
-                  borderTop: '1px solid #1e293b',
+                  borderTop: '1px solid var(--border)',
                   position: 'relative'
                 }}>
                 <span style={{
@@ -620,7 +620,7 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                   left: '-55px',
                   top: '-9px',
                   fontSize: '11px',
-                  color: '#475569',
+                  color: 'var(--text-muted)',
                   fontFamily: 'JetBrains Mono, monospace'
                 }}>
                   {String(hour).padStart(2, '0')}:00
@@ -640,11 +640,11 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                     right: '20px',
                     top: pos.top,
                     height: pos.height,
-                    background: 'rgba(30, 41, 59, 0.75)',
-                    border: '1px dashed #475569',
-                    borderRadius: '6px',
+                    background: 'rgba(22, 21, 42, 0.05)',
+                    border: '1px dashed var(--border)',
+                    borderRadius: '8px',
                     padding: '6px 12px',
-                    color: '#94a3b8',
+                    color: 'var(--text-secondary)',
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'center',
@@ -653,9 +653,9 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                   }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span style={{ fontSize: '11px' }}>📅 Google Calendar:</span>
-                    <strong style={{ fontSize: '12px', color: '#e2e8f0' }}>{ev.title}</strong>
+                    <strong style={{ fontSize: '12px', color: 'var(--text-primary)' }}>{ev.title}</strong>
                   </div>
-                  <span style={{ fontSize: '10.5px', color: '#64748b', fontFamily: 'JetBrains Mono, monospace' }}>
+                  <span style={{ fontSize: '10.5px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
                     {ev.start.slice(11, 16)} - {ev.end.slice(11, 16)} UTC (Busy Window)
                   </span>
                 </div>
@@ -683,7 +683,7 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                     flexDirection: 'column',
                     justifyContent: 'space-between',
                     zIndex: 4,
-                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+                    boxShadow: 'var(--shadow-sm)',
                     transition: 'transform 0.15s ease'
                   }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -691,12 +691,12 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                       <span className={style.badgeClass} style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '10.5px', fontWeight: '700' }}>
                         {task.domain.toUpperCase()}
                       </span>
-                      <strong style={{ fontSize: '13px', color: '#f8fafc' }}>{task.title}</strong>
+                      <strong style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{task.title}</strong>
                     </div>
                     <span style={{
                       fontSize: '11px',
-                      color: calendarStatus.connected && calendarStatus.mode === 'live' ? '#10b981' : '#38bdf8',
-                      fontWeight: '600',
+                      color: calendarStatus.connected && calendarStatus.mode === 'live' ? '#10b981' : '#6c5ce7',
+                      fontWeight: '700',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '4px'
@@ -710,11 +710,11 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                       ⏰ {task.scheduled_start.slice(11, 16)} → {task.scheduled_end.slice(11, 16)} UTC ({task.duration_minutes || 60}m)
                     </span>
                     {task.project && (
-                      <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
                         📁 {task.project}
                       </span>
                     )}
-                    <span style={{ fontSize: '11px', color: '#64748b' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                       Prio: {task.priority || 'medium'}
                     </span>
                   </div>
@@ -729,11 +729,11 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
                 textAlign: 'center',
-                color: '#475569'
+                color: 'var(--text-muted)'
               }}>
                 <div style={{ fontSize: '32px', marginBottom: '8px' }}>🗓️</div>
-                <p style={{ fontSize: '14px', fontWeight: '500' }}>No tasks or events scheduled for this day</p>
-                <p style={{ fontSize: '12px', marginTop: '4px' }}>Click "Auto-Schedule Unplaced Tasks" to automatically place open tasks into working hours.</p>
+                <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>No tasks or events scheduled for this day</p>
+                <p style={{ fontSize: '12px', marginTop: '4px', color: 'var(--text-secondary)' }}>Click "Auto-Schedule Unplaced Tasks" to automatically place open tasks into working hours.</p>
               </div>
             )}
           </div>
@@ -745,15 +745,16 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
           minWidth: '280px',
           display: 'flex',
           flexDirection: 'column',
-          background: '#0d131f',
+          background: 'var(--bg-card)',
+          borderLeft: '1px solid var(--border)',
           padding: '16px',
           overflowY: 'auto'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <h3 style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8', fontWeight: '700' }}>
+            <h3 style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-primary)', fontWeight: '700' }}>
               Pending Tasks ({unscheduledTasks.length})
             </h3>
-            <span style={{ fontSize: '11px', color: '#64748b' }}>Unscheduled</span>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Unscheduled</span>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
@@ -765,14 +766,14 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                   style={{
                     padding: '10px 12px',
                     borderRadius: '8px',
-                    background: '#131c2e',
-                    border: '1px solid #1e293b',
+                    background: 'var(--bg-card-soft)',
+                    border: '1px solid var(--border)',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '4px'
                   }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <span style={{ fontSize: '12.5px', color: '#f1f5f9', fontWeight: '500' }}>
+                    <span style={{ fontSize: '12.5px', color: 'var(--text-primary)', fontWeight: '600' }}>
                       {task.title}
                     </span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -795,7 +796,7 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                         style={{
                           background: 'transparent',
                           border: 'none',
-                          color: '#64748b',
+                          color: 'var(--text-muted)',
                           cursor: 'pointer',
                           padding: '2px 4px',
                           borderRadius: '4px',
@@ -806,17 +807,17 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                           transition: 'color 0.15s ease'
                         }}
                         onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
-                        onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+                        onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
                       >
                         🗑️
                       </button>
                     </div>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
-                    <span style={{ fontSize: '11px', color: '#64748b' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                       ⏱️ {task.duration_minutes || 60}m · {task.priority || 'medium'}
                     </span>
-                    <span style={{ fontSize: '11px', color: '#f59e0b' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--hackathon-text)', fontWeight: '600' }}>
                       {task.countdown || 'Needs slot'}
                     </span>
                   </div>
@@ -828,13 +829,13 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
               <div style={{
                 padding: '24px 16px',
                 textAlign: 'center',
-                color: '#64748b',
-                background: '#131c2e',
+                color: 'var(--text-muted)',
+                background: 'var(--bg-card-soft)',
                 borderRadius: '8px',
-                border: '1px dashed #1e293b'
+                border: '1px dashed var(--border)'
               }}>
                 <span style={{ fontSize: '20px' }}>🎉</span>
-                <p style={{ fontSize: '12px', marginTop: '6px' }}>All tasks are scheduled into calendar time slots!</p>
+                <p style={{ fontSize: '12px', marginTop: '6px', color: 'var(--text-secondary)' }}>All tasks are scheduled into calendar time slots!</p>
               </div>
             )}
           </div>
@@ -844,13 +845,13 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
             marginTop: 'auto',
             padding: '14px',
             borderRadius: '8px',
-            background: 'rgba(99, 102, 241, 0.05)',
-            border: '1px solid rgba(99, 102, 241, 0.2)'
+            background: 'var(--coursework-bg)',
+            border: '1px solid rgba(108, 92, 231, 0.25)'
           }}>
-            <h4 style={{ fontSize: '12px', fontWeight: '700', color: '#a5b4fc', marginBottom: '8px' }}>
+            <h4 style={{ fontSize: '12px', fontWeight: '700', color: 'var(--coursework-text)', marginBottom: '8px' }}>
               ⚙️ Deterministic Policy
             </h4>
-            <ul style={{ fontSize: '11px', color: '#94a3b8', lineHeight: '1.6', paddingLeft: '14px' }}>
+            <ul style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.6', paddingLeft: '14px' }}>
               <li>Working Window: 09:00 - 18:00 UTC</li>
               <li>Days: Monday - Friday (workdays)</li>
               <li>Inter-task buffer: 15 minutes</li>
@@ -869,7 +870,7 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
+          background: 'rgba(22, 21, 42, 0.45)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -879,27 +880,27 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
           <div style={{
             width: '580px',
             maxWidth: '90vw',
-            background: '#0d131f',
-            borderRadius: '12px',
-            border: '1px solid #334155',
-            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)',
+            background: 'var(--bg-card)',
+            borderRadius: '16px',
+            border: '1px solid var(--border)',
+            boxShadow: 'var(--shadow-lg)',
             padding: '24px',
             display: 'flex',
             flexDirection: 'column',
             gap: '16px'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#f8fafc' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-primary)' }}>
                 ⚡ Review Proposed Schedule Allocation
               </h3>
               <button
                 onClick={() => setProposedPlan(null)}
-                style={{ background: 'transparent', border: 'none', color: '#64748b', fontSize: '16px', cursor: 'pointer' }}>
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '16px', cursor: 'pointer' }}>
                 ✕
               </button>
             </div>
 
-            <p style={{ fontSize: '13px', color: '#94a3b8', lineHeight: '1.5' }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
               {proposedPlan.summary}
             </p>
 
@@ -909,30 +910,30 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
               display: 'flex',
               flexDirection: 'column',
               gap: '8px',
-              background: '#090d14',
+              background: 'var(--bg-card-soft)',
               padding: '12px',
-              borderRadius: '8px',
-              border: '1px solid #1e293b'
+              borderRadius: '10px',
+              border: '1px solid var(--border)'
             }}>
               {proposedPlan.scheduled && proposedPlan.scheduled.map(s => (
                 <div
                   key={s.task_id}
                   style={{
                     padding: '8px 12px',
-                    borderRadius: '6px',
-                    background: '#131c2e',
-                    border: '1px solid #1e293b',
+                    borderRadius: '8px',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border)',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center'
                   }}>
                   <div>
-                    <strong style={{ fontSize: '12.5px', color: '#f8fafc' }}>{s.title}</strong>
-                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                    <strong style={{ fontSize: '12.5px', color: 'var(--text-primary)' }}>{s.title}</strong>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
                       Domain: {s.domain} · Duration: {s.duration_minutes}m
                     </div>
                   </div>
-                  <span style={{ fontSize: '11.5px', color: '#a5b4fc', fontFamily: 'JetBrains Mono, monospace', fontWeight: '600' }}>
+                  <span style={{ fontSize: '11.5px', color: 'var(--coursework-text)', fontFamily: 'JetBrains Mono, monospace', fontWeight: '700' }}>
                     {s.scheduled_start.slice(0, 10)} {s.scheduled_start.slice(11, 16)} → {s.scheduled_end.slice(11, 16)}
                   </span>
                 </div>
@@ -945,10 +946,11 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                 style={{
                   padding: '8px 16px',
                   borderRadius: '8px',
-                  background: '#1e293b',
-                  border: '1px solid #334155',
-                  color: '#94a3b8',
+                  background: 'var(--bg-card-soft)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-secondary)',
                   fontSize: '13px',
+                  fontWeight: '500',
                   cursor: 'pointer'
                 }}>
                 Cancel
@@ -964,9 +966,9 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                   border: 'none',
                   color: '#ffffff',
                   fontSize: '13px',
-                  fontWeight: '600',
+                  fontWeight: '700',
                   cursor: committing ? 'wait' : 'pointer',
-                  boxShadow: '0 0 12px rgba(16, 185, 129, 0.4)'
+                  boxShadow: '0 0 12px rgba(16, 185, 129, 0.3)'
                 }}>
                 {committing ? 'Committing...' : '✅ Approve & Commit to Google Calendar'}
               </button>
@@ -983,7 +985,7 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
+          background: 'rgba(22, 21, 42, 0.45)',
           backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
@@ -991,16 +993,16 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
           zIndex: 9999
         }}>
           <div style={{
-            background: '#131c2e',
-            border: '1px solid #334155',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
             borderRadius: '16px',
             padding: '28px',
             width: '100%',
             maxWidth: '420px',
-            boxShadow: '0 20px 40px rgba(0,0,0,0.6)'
+            boxShadow: 'var(--shadow-lg)'
           }}>
-            <h3 style={{ margin: '0 0 8px', color: '#f8fafc', fontSize: '18px' }}>⚡ Connect Your Gmail</h3>
-            <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 20px', lineHeight: '1.5' }}>
+            <h3 style={{ margin: '0 0 8px', color: 'var(--text-primary)', fontSize: '18px', fontWeight: '800' }}>⚡ Connect Your Gmail</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: '0 0 20px', lineHeight: '1.5' }}>
               Enter your Gmail address to activate your schedule profile. Tasks will be slotted deterministically and can be imported or subscribed directly in Google Calendar.
             </p>
             <input
@@ -1026,12 +1028,13 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                 width: '100%',
                 padding: '10px 14px',
                 borderRadius: '8px',
-                background: '#0f172a',
-                border: '1px solid #334155',
-                color: '#f8fafc',
+                background: 'var(--bg-app)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-primary)',
                 fontSize: '14px',
                 marginBottom: '18px',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                outline: 'none'
               }}
             />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
@@ -1040,10 +1043,11 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                 style={{
                   padding: '8px 16px',
                   borderRadius: '8px',
-                  background: '#1e293b',
-                  border: '1px solid #334155',
-                  color: '#94a3b8',
+                  background: 'var(--bg-card-soft)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-secondary)',
                   fontSize: '13px',
+                  fontWeight: '500',
                   cursor: 'pointer'
                 }}>
                 Cancel
@@ -1069,11 +1073,11 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                 style={{
                   padding: '8px 18px',
                   borderRadius: '8px',
-                  background: quickEmailInput.includes('@') ? 'linear-gradient(135deg, #2563eb, #3b82f6)' : '#334155',
+                  background: quickEmailInput.includes('@') ? 'linear-gradient(135deg, #2563eb, #3b82f6)' : 'var(--bg-card-soft)',
                   border: 'none',
-                  color: '#ffffff',
+                  color: quickEmailInput.includes('@') ? '#ffffff' : 'var(--text-muted)',
                   fontSize: '13px',
-                  fontWeight: '600',
+                  fontWeight: '700',
                   cursor: quickEmailInput.includes('@') ? 'pointer' : 'not-allowed'
                 }}>
                 Connect Account
@@ -1091,7 +1095,7 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
+          background: 'rgba(22, 21, 42, 0.45)',
           backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
@@ -1099,36 +1103,36 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
           zIndex: 9999
         }}>
           <div style={{
-            background: '#131c2e',
-            border: '1px solid #334155',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
             borderRadius: '16px',
             padding: '28px',
             width: '100%',
             maxWidth: '520px',
-            boxShadow: '0 20px 40px rgba(0,0,0,0.6)'
+            boxShadow: 'var(--shadow-lg)'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '18px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 🗓️ Sync Tasks to Google Calendar
               </h3>
               <button
                 onClick={() => setShowIcsModal(false)}
-                style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '18px', cursor: 'pointer' }}>
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '18px', cursor: 'pointer' }}>
                 ✕
               </button>
             </div>
 
-            <p style={{ color: '#94a3b8', fontSize: '13px', lineHeight: '1.5', margin: '0 0 16px' }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.5', margin: '0 0 16px' }}>
               Because direct Google Calendar API write requires registered Google Cloud OAuth credentials, you can sync all your scheduled tasks into your Google Calendar right now in 2 easy steps:
             </p>
 
-            <div style={{ background: '#0b0f17', border: '1px solid #1e293b', borderRadius: '10px', padding: '14px', marginBottom: '16px' }}>
-              <h4 style={{ margin: '0 0 8px', color: '#38bdf8', fontSize: '13px', fontWeight: '600' }}>
+            <div style={{ background: 'var(--bg-card-soft)', border: '1px solid var(--border)', borderRadius: '10px', padding: '14px', marginBottom: '16px' }}>
+              <h4 style={{ margin: '0 0 8px', color: 'var(--coursework-text)', fontSize: '13px', fontWeight: '700' }}>
                 Option 1: Instant 1-Click File Import (Recommended)
               </h4>
-              <ol style={{ margin: '0 0 10px', paddingLeft: '18px', color: '#cbd5e1', fontSize: '12.5px', lineHeight: '1.6' }}>
+              <ol style={{ margin: '0 0 10px', paddingLeft: '18px', color: 'var(--text-primary)', fontSize: '12.5px', lineHeight: '1.6' }}>
                 <li>
-                  Click below to download the <code style={{ color: '#38bdf8' }}>compass_schedule.ics</code> file:
+                  Click below to download the <code style={{ color: 'var(--coursework-text)' }}>compass_schedule.ics</code> file:
                   <div style={{ marginTop: '6px', marginBottom: '6px' }}>
                     <a
                       href={getCalendarExportUrl(activeDomain)}
@@ -1138,11 +1142,11 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                         alignItems: 'center',
                         gap: '6px',
                         padding: '6px 12px',
-                        background: '#2563eb',
+                        background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
                         borderRadius: '6px',
                         color: '#ffffff',
                         fontSize: '12px',
-                        fontWeight: '600',
+                        fontWeight: '700',
                         textDecoration: 'none'
                       }}>
                       📥 Download compass_schedule.ics
@@ -1151,14 +1155,14 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                 </li>
                 <li>In Google Calendar, look at the left sidebar under <b>Other calendars</b> and click <b>+</b>.</li>
                 <li>Click <b>Import</b>, select the downloaded file, and click <b>Import</b>.</li>
-                <li>All 16 tasks immediately appear in your Google Calendar!</li>
+                <li>All scheduled tasks immediately appear in your Google Calendar!</li>
               </ol>
 
-              <div style={{ borderTop: '1px solid #1e293b', paddingTop: '10px', marginTop: '10px' }}>
-                <h4 style={{ margin: '0 0 8px', color: '#34d399', fontSize: '13px', fontWeight: '600' }}>
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '10px', marginTop: '10px' }}>
+                <h4 style={{ margin: '0 0 8px', color: 'var(--code-text)', fontSize: '13px', fontWeight: '700' }}>
                   Option 2: Live Auto-Sync via Calendar Subscription URL
                 </h4>
-                <p style={{ color: '#94a3b8', fontSize: '12px', margin: '0 0 8px' }}>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '12px', margin: '0 0 8px' }}>
                   In Google Calendar &gt; <b>Other calendars (+)</b> &gt; <b>From URL</b>, paste this feed URL:
                 </p>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -1169,9 +1173,9 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                       flex: 1,
                       padding: '6px 10px',
                       borderRadius: '6px',
-                      background: '#131c2e',
-                      border: '1px solid #334155',
-                      color: '#94a3b8',
+                      background: 'var(--bg-app)',
+                      border: '1px solid var(--border)',
+                      color: 'var(--text-primary)',
                       fontSize: '11.5px',
                       fontFamily: 'JetBrains Mono, monospace'
                     }}
@@ -1185,10 +1189,11 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                     style={{
                       padding: '6px 12px',
                       borderRadius: '6px',
-                      background: '#334155',
-                      border: 'none',
-                      color: '#f8fafc',
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border)',
+                      color: 'var(--text-primary)',
                       fontSize: '12px',
+                      fontWeight: '600',
                       cursor: 'pointer'
                     }}>
                     Copy
@@ -1205,10 +1210,11 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                 style={{
                   padding: '8px 16px',
                   borderRadius: '8px',
-                  background: '#1e293b',
-                  border: '1px solid #334155',
-                  color: '#f8fafc',
+                  background: 'var(--bg-card-soft)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-primary)',
                   fontSize: '13px',
+                  fontWeight: '600',
                   textDecoration: 'none'
                 }}>
                 Open Google Calendar ↗
@@ -1218,11 +1224,11 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
                 style={{
                   padding: '8px 18px',
                   borderRadius: '8px',
-                  background: '#2563eb',
+                  background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
                   border: 'none',
                   color: '#ffffff',
                   fontSize: '13px',
-                  fontWeight: '600',
+                  fontWeight: '700',
                   cursor: 'pointer'
                 }}>
                 Done

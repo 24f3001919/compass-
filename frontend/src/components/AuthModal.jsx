@@ -92,7 +92,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(2, 6, 15, 0.78)',
+        background: 'rgba(15, 23, 42, 0.45)',
         backdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'center',
@@ -104,16 +104,16 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          background: '#0d131f',
+          background: 'var(--bg-card)',
           borderRadius: '16px',
-          border: '1px solid #1e293b',
+          border: '1px solid var(--border)',
           width: '100%',
           maxWidth: '560px',
           maxHeight: '90vh',
           overflowY: 'auto',
           padding: '26px',
-          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7)',
-          color: '#f8fafc'
+          boxShadow: 'var(--shadow-lg)',
+          color: 'var(--text-primary)'
         }}
       >
         {/* Header */}
@@ -121,10 +121,10 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '24px' }}>👤</span>
             <div>
-              <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: '#f8fafc' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: 'var(--text-primary)' }}>
                 Account & Google Calendar
               </h3>
-              <p style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 0' }}>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
                 Select your account and manage individual memory isolation
               </p>
             </div>
@@ -132,9 +132,9 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
           <button
             onClick={onClose}
             style={{
-              background: '#1e293b',
-              border: '1px solid #334155',
-              color: '#94a3b8',
+              background: 'var(--bg-card-soft)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-secondary)',
               width: '28px',
               height: '28px',
               borderRadius: '7px',
@@ -152,9 +152,9 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
         {/* Status Banners */}
         {error && (
           <div style={{
-            background: 'rgba(239, 68, 68, 0.12)',
-            border: '1px solid rgba(239, 68, 68, 0.35)',
-            color: '#fca5a5',
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            color: '#dc2626',
             padding: '10px 14px',
             borderRadius: '8px',
             fontSize: '13px',
@@ -165,9 +165,9 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
         )}
         {successMsg && (
           <div style={{
-            background: 'rgba(16, 185, 129, 0.12)',
-            border: '1px solid rgba(16, 185, 129, 0.35)',
-            color: '#6ee7b7',
+            background: 'rgba(16, 185, 129, 0.1)',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            color: '#059669',
             padding: '10px 14px',
             borderRadius: '8px',
             fontSize: '13px',
@@ -179,18 +179,18 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
 
         {/* Current Session Overview */}
         <div style={{
-          background: '#131c2e',
-          border: '1px solid #1e293b',
+          background: 'var(--bg-card-soft)',
+          border: '1px solid var(--border)',
           borderRadius: '12px',
           padding: '16px',
           marginBottom: '20px'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', fontWeight: '700' }}>
+              <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', fontWeight: '700' }}>
                 Active Account
               </div>
-              <div style={{ fontSize: '15px', fontWeight: '700', color: activeEmail ? '#38bdf8' : '#94a3b8', marginTop: '2px' }}>
+              <div style={{ fontSize: '15px', fontWeight: '700', color: activeEmail ? 'var(--primary)' : 'var(--text-secondary)', marginTop: '2px' }}>
                 {activeEmail || 'Guest Mode (No active account)'}
               </div>
             </div>
@@ -199,23 +199,23 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                 width: '8px',
                 height: '8px',
                 borderRadius: '50%',
-                background: activeEmail ? '#10b981' : '#64748b',
+                background: activeEmail ? '#10b981' : '#94a3b8',
                 boxShadow: activeEmail ? '0 0 8px #10b981' : 'none'
               }} />
-              <span style={{ fontSize: '12px', color: activeEmail ? '#10b981' : '#64748b', fontWeight: '600' }}>
+              <span style={{ fontSize: '12px', color: activeEmail ? '#059669' : 'var(--text-muted)', fontWeight: '600' }}>
                 {activeEmail ? 'Isolated Memory Active' : 'Unauthenticated'}
               </span>
             </div>
           </div>
 
-          <div style={{ marginTop: '10px', fontSize: '12px', color: '#94a3b8', lineHeight: '1.5' }}>
+          <div style={{ marginTop: '10px', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
             🔒 <strong>Per-Account Privacy:</strong> Deadlines, tasks, and assistant memory chunks belong strictly to your active account. Switching accounts automatically isolates all workspace state.
           </div>
         </div>
 
         {/* Account Selection */}
         <div style={{ marginBottom: '24px' }}>
-          <h4 style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#cbd5e1', fontWeight: '700', marginBottom: '12px' }}>
+          <h4 style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)', fontWeight: '700', marginBottom: '12px' }}>
             1. Select Login Account
           </h4>
 
@@ -230,9 +230,9 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                 justifyContent: 'space-between',
                 padding: '10px 14px',
                 borderRadius: '8px',
-                border: activeEmail === 'kumarinandan911@gmail.com' ? '1.5px solid #3b82f6' : '1px solid #1e293b',
-                background: activeEmail === 'kumarinandan911@gmail.com' ? 'rgba(59, 130, 246, 0.15)' : '#111827',
-                color: '#f8fafc',
+                border: activeEmail === 'kumarinandan911@gmail.com' ? '1.5px solid var(--primary)' : '1px solid var(--border)',
+                background: activeEmail === 'kumarinandan911@gmail.com' ? 'rgba(99, 102, 241, 0.08)' : 'var(--bg-card-soft)',
+                color: 'var(--text-primary)',
                 cursor: 'pointer',
                 textAlign: 'left',
                 transition: 'all 0.15s ease'
@@ -241,18 +241,18 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <span style={{ fontSize: '16px' }}>⭐</span>
                 <div>
-                  <div style={{ fontSize: '13.5px', fontWeight: '600', color: '#f8fafc' }}>
+                  <div style={{ fontSize: '13.5px', fontWeight: '600', color: 'var(--text-primary)' }}>
                     kumarinandan911@gmail.com
                   </div>
-                  <div style={{ fontSize: '11px', color: '#64748b' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                     Primary User Account (Isolated Workspace)
                   </div>
                 </div>
               </div>
               {activeEmail === 'kumarinandan911@gmail.com' ? (
-                <span style={{ fontSize: '11.5px', color: '#38bdf8', fontWeight: '700' }}>✓ Active</span>
+                <span style={{ fontSize: '11.5px', color: 'var(--primary)', fontWeight: '700' }}>✓ Active</span>
               ) : (
-                <span style={{ fontSize: '12px', color: '#60a5fa', fontWeight: '600' }}>Switch →</span>
+                <span style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: '600' }}>Switch →</span>
               )}
             </button>
           </div>
@@ -274,9 +274,9 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                 flex: 1,
                 padding: '9px 12px',
                 borderRadius: '8px',
-                border: '1px solid #334155',
-                background: '#111827',
-                color: '#f8fafc',
+                border: '1px solid var(--border)',
+                background: 'var(--bg-app)',
+                color: 'var(--text-primary)',
                 fontSize: '13px',
                 outline: 'none'
               }}
@@ -288,7 +288,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                 padding: '9px 16px',
                 borderRadius: '8px',
                 border: 'none',
-                background: '#2563eb',
+                background: 'var(--primary)',
                 color: '#fff',
                 fontSize: '13px',
                 fontWeight: '600',
@@ -303,18 +303,18 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
 
         {/* Google Calendar Section */}
         <div style={{
-          borderTop: '1px solid #1e293b',
+          borderTop: '1px solid var(--border)',
           paddingTop: '20px',
           marginBottom: '20px'
         }}>
-          <h4 style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#cbd5e1', fontWeight: '700', marginBottom: '12px' }}>
+          <h4 style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)', fontWeight: '700', marginBottom: '12px' }}>
             2. Google Calendar Linking
           </h4>
 
           {isLiveCalendarLinked ? (
             <div style={{
-              background: 'rgba(16, 185, 129, 0.1)',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
+              background: 'rgba(16, 185, 129, 0.08)',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
               borderRadius: '10px',
               padding: '14px',
               display: 'flex',
@@ -325,10 +325,10 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
               marginBottom: '16px'
             }}>
               <div>
-                <div style={{ fontSize: '13px', fontWeight: '700', color: '#34d399' }}>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: '#059669' }}>
                   ✓ Google Calendar Live Sync Connected
                 </div>
-                <div style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '2px' }}>
+                <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>
                   Account: {currentUser?.calendar?.account_email || activeEmail}
                 </div>
               </div>
@@ -355,8 +355,8 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                   }}
                   style={{
                     padding: '6px 12px', borderRadius: '6px',
-                    border: '1px solid #334155', background: '#1e293b',
-                    color: '#f8fafc', fontSize: '12px', fontWeight: '600', cursor: 'pointer'
+                    border: '1px solid var(--border)', background: 'var(--bg-card)',
+                    color: 'var(--text-primary)', fontSize: '12px', fontWeight: '600', cursor: 'pointer'
                   }}
                 >
                   ⚡ Sync Now
@@ -369,8 +369,8 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                   style={{
                     padding: '6px 12px', borderRadius: '6px',
                     border: '1px solid rgba(239, 68, 68, 0.3)',
-                    background: 'rgba(239, 68, 68, 0.1)',
-                    color: '#f87171', fontSize: '12px', fontWeight: '600', cursor: 'pointer'
+                    background: 'rgba(239, 68, 68, 0.08)',
+                    color: '#dc2626', fontSize: '12px', fontWeight: '600', cursor: 'pointer'
                   }}
                 >
                   Disconnect
@@ -391,10 +391,10 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                   gap: '10px'
                 }}>
                   <div>
-                    <div style={{ fontSize: '12.5px', fontWeight: '700', color: '#fbbf24' }}>
+                    <div style={{ fontSize: '12.5px', fontWeight: '700', color: '#b45309' }}>
                       ⚡ Demo Mode Active (Simulated Calendar)
                     </div>
-                    <div style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '2px' }}>
+                    <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>
                       Mock calendar commitments active. Connect genuine Google OAuth below to sync live events to Google Calendar.
                     </div>
                   </div>
@@ -406,8 +406,8 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                     style={{
                       padding: '5px 10px', borderRadius: '6px',
                       border: '1px solid rgba(239, 68, 68, 0.3)',
-                      background: 'rgba(239, 68, 68, 0.1)',
-                      color: '#f87171', fontSize: '11px', fontWeight: '600', cursor: 'pointer', flexShrink: 0
+                      background: 'rgba(239, 68, 68, 0.08)',
+                      color: '#dc2626', fontSize: '11px', fontWeight: '600', cursor: 'pointer', flexShrink: 0
                     }}
                   >
                     Reset Demo
@@ -417,29 +417,29 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
 
               {/* ── Option A: Google OAuth ──────────────────────────────── */}
               <div style={{
-                background: '#111827', border: '1px solid #1e293b',
+                background: 'var(--bg-card-soft)', border: '1px solid var(--border)',
                 borderRadius: '10px', padding: '14px'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '13px', fontWeight: '700', color: '#f8fafc' }}>
+                    <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>
                       Option A: Connect with Google OAuth
                     </div>
-                    <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px', lineHeight: '1.4' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', lineHeight: '1.4' }}>
                       Links your Google Calendar for live two-way sync.
                     </div>
                   </div>
 
                   {/* Show connect button only when credentials are configured */}
                   {oauthStatus === null ? (
-                    <div style={{ fontSize: '12px', color: '#64748b', padding: '8px' }}>Checking…</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px' }}>Checking…</div>
                   ) : oauthStatus.configured ? (
                     <a
                       href={getGoogleOAuthConnectUrl(activeEmail)}
                       style={{
                         display: 'inline-flex', alignItems: 'center', gap: '6px',
                         padding: '8px 14px', borderRadius: '8px',
-                        background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                        background: 'var(--primary)',
                         color: '#ffffff', fontSize: '12.5px', fontWeight: '600',
                         textDecoration: 'none', flexShrink: 0
                       }}
@@ -448,7 +448,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                     </a>
                   ) : (
                     <span style={{
-                      fontSize: '11px', color: '#f59e0b', fontWeight: '600',
+                      fontSize: '11px', color: '#b45309', fontWeight: '600',
                       background: 'rgba(245, 158, 11, 0.12)',
                       border: '1px solid rgba(245, 158, 11, 0.3)',
                       borderRadius: '6px', padding: '5px 9px', flexShrink: 0
@@ -462,11 +462,11 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                   <div style={{
                     marginTop: '12px',
                     padding: '8px 12px',
-                    background: 'rgba(56, 189, 248, 0.08)',
-                    border: '1px solid rgba(56, 189, 248, 0.2)',
+                    background: 'rgba(99, 102, 241, 0.08)',
+                    border: '1px solid rgba(99, 102, 241, 0.2)',
                     borderRadius: '6px',
                     fontSize: '11.5px',
-                    color: '#bae6fd',
+                    color: 'var(--text-secondary)',
                     lineHeight: '1.5'
                   }}>
                     💡 <strong>Test App Setup Note:</strong> If Google blocks sign-in with <em>Error 403: access_denied ("App has not completed verification")</em>, add your email ({activeEmail || 'your email'}) under <strong>Google Cloud Console → OAuth consent screen → Test users</strong>.
@@ -477,52 +477,54 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                 {oauthStatus && !oauthStatus.configured && (
                   <div style={{
                     marginTop: '14px',
-                    background: 'rgba(245, 158, 11, 0.06)',
-                    border: '1px solid rgba(245, 158, 11, 0.2)',
+                    background: 'var(--bg-app)',
+                    border: '1px solid var(--border)',
                     borderRadius: '8px',
                     padding: '14px'
                   }}>
-                    <div style={{ fontSize: '12px', fontWeight: '700', color: '#fbbf24', marginBottom: '10px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: '700', color: '#b45309', marginBottom: '10px' }}>
                       📋 One-time Google Cloud setup (5 minutes)
                     </div>
-                    <ol style={{ fontSize: '11.5px', color: '#94a3b8', lineHeight: '1.8', margin: 0, paddingLeft: '18px' }}>
+                    <ol style={{ fontSize: '11.5px', color: 'var(--text-secondary)', lineHeight: '1.8', margin: 0, paddingLeft: '18px' }}>
                       <li>
                         Go to{' '}
                         <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer"
-                          style={{ color: '#38bdf8' }}>
+                          style={{ color: 'var(--primary)' }}>
                           console.cloud.google.com/apis/credentials
                         </a>
                       </li>
-                      <li>Click <strong style={{ color: '#e2e8f0' }}>"+ Create Credentials" → "OAuth client ID"</strong></li>
-                      <li>Set Application type: <strong style={{ color: '#e2e8f0' }}>Web application</strong></li>
+                      <li>Click <strong style={{ color: 'var(--text-primary)' }}>"+ Create Credentials" → "OAuth client ID"</strong></li>
+                      <li>Set Application type: <strong style={{ color: 'var(--text-primary)' }}>Web application</strong></li>
                       <li>
                         Add Authorised redirect URI:{' '}
                         <code style={{
-                          background: '#1e293b', padding: '1px 5px', borderRadius: '4px',
-                          color: '#a5b4fc', fontSize: '11px'
+                          background: 'var(--bg-card)', padding: '2px 6px', borderRadius: '4px',
+                          border: '1px solid var(--border)',
+                          color: 'var(--primary)', fontSize: '11px'
                         }}>
                           http://localhost:8000/api/calendar/callback
                         </code>
                       </li>
-                      <li>Copy the <strong style={{ color: '#e2e8f0' }}>Client ID</strong> and <strong style={{ color: '#e2e8f0' }}>Client Secret</strong></li>
+                      <li>Copy the <strong style={{ color: 'var(--text-primary)' }}>Client ID</strong> and <strong style={{ color: 'var(--text-primary)' }}>Client Secret</strong></li>
                       <li>
                         Add to your{' '}
                         <code style={{
-                          background: '#1e293b', padding: '1px 5px', borderRadius: '4px',
-                          color: '#a5b4fc', fontSize: '11px'
+                          background: 'var(--bg-card)', padding: '2px 6px', borderRadius: '4px',
+                          border: '1px solid var(--border)',
+                          color: 'var(--primary)', fontSize: '11px'
                         }}>
                           .env
                         </code>
                         {' '}file:
                         <div style={{
                           marginTop: '8px',
-                          background: '#0f172a',
-                          border: '1px solid #334155',
+                          background: 'var(--bg-card)',
+                          border: '1px solid var(--border)',
                           borderRadius: '6px',
                           padding: '10px 12px',
                           fontFamily: "'JetBrains Mono', monospace",
                           fontSize: '11px',
-                          color: '#7dd3fc',
+                          color: 'var(--text-primary)',
                           lineHeight: '1.8',
                           userSelect: 'all'
                         }}>
@@ -530,9 +532,9 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                           GOOGLE_CLIENT_SECRET=GOCSPX-your-secret
                         </div>
                       </li>
-                      <li>Restart the backend server — then come back and click <strong style={{ color: '#e2e8f0' }}>"Connect Google"</strong></li>
+                      <li>Restart the backend server — then come back and click <strong style={{ color: 'var(--text-primary)' }}>"Connect Google"</strong></li>
                     </ol>
-                    <div style={{ marginTop: '10px', fontSize: '11px', color: '#64748b' }}>
+                    <div style={{ marginTop: '10px', fontSize: '11px', color: 'var(--text-muted)' }}>
                       💡 Also add your Gmail to <strong>"Test users"</strong> in the OAuth consent screen if your app is in development/testing mode.
                     </div>
                   </div>
@@ -541,26 +543,26 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
 
               {/* ── Option B: iCal Subscription ───────────────────────── */}
               <div style={{
-                background: '#111827', border: '1px solid #1e293b',
+                background: 'var(--bg-card-soft)', border: '1px solid var(--border)',
                 borderRadius: '10px', padding: '14px'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
                   <div>
-                    <div style={{ fontSize: '13px', fontWeight: '700', color: '#f8fafc' }}>
+                    <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>
                       Option B: Instant 1-Click Google Calendar Subscription (RFC 5545)
                     </div>
-                    <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px', lineHeight: '1.4' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', lineHeight: '1.4' }}>
                       Zero OAuth setup required! In Google Calendar, click{' '}
-                      <strong style={{ color: '#e2e8f0' }}>Other calendars '+' → 'From URL'</strong> and paste this link:
+                      <strong style={{ color: 'var(--text-primary)' }}>Other calendars '+' → 'From URL'</strong> and paste this link:
                     </div>
                   </div>
                   <button
                     onClick={handleCopyIcs}
                     style={{
                       padding: '8px 14px', borderRadius: '8px',
-                      border: '1px solid #334155',
-                      background: copiedIcs ? 'rgba(16, 185, 129, 0.2)' : '#1e293b',
-                      color: copiedIcs ? '#34d399' : '#f8fafc',
+                      border: '1px solid var(--border)',
+                      background: copiedIcs ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-card)',
+                      color: copiedIcs ? '#059669' : 'var(--text-primary)',
                       fontSize: '12px', fontWeight: '600', cursor: 'pointer', flexShrink: 0
                     }}
                   >
@@ -574,7 +576,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
 
         {/* Footer Actions */}
         <div style={{
-          borderTop: '1px solid #1e293b',
+          borderTop: '1px solid var(--border)',
           paddingTop: '16px',
           display: 'flex',
           justifyContent: 'space-between',
@@ -588,8 +590,8 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                 padding: '8px 16px',
                 borderRadius: '8px',
                 border: '1px solid rgba(239, 68, 68, 0.3)',
-                background: 'rgba(239, 68, 68, 0.1)',
-                color: '#f87171',
+                background: 'rgba(239, 68, 68, 0.08)',
+                color: '#dc2626',
                 fontSize: '12.5px',
                 fontWeight: '600',
                 cursor: 'pointer'
@@ -604,9 +606,9 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
             style={{
               padding: '8px 18px',
               borderRadius: '8px',
-              border: '1px solid #334155',
-              background: '#1e293b',
-              color: '#cbd5e1',
+              border: '1px solid var(--border)',
+              background: 'var(--bg-card-soft)',
+              color: 'var(--text-primary)',
               fontSize: '12.5px',
               fontWeight: '500',
               cursor: 'pointer'
