@@ -1,0 +1,28 @@
+# Label mappings for GitHub PR Labeler
+
+"area: frontend":
+  - changed-files:
+      - any-glob-to-any-file: 'frontend/**'
+
+"area: backend":
+  - changed-files:
+      - any-glob-to-any-file: 'backend/**'
+
+"area: cli":
+  - changed-files:
+      - any-glob-to-any-file: 'cli/**'
+
+"area: tests":
+  - changed-files:
+      - any-glob-to-any-file: 'tests/**'
+
+"area: docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'docs/**'
+          - '*.md'
+
+"area: ci":
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/**'

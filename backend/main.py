@@ -791,7 +791,7 @@ async def create_frontend_task(request: Request, req: CreateTaskRequest):
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid due_date format (expected YYYY-MM-DD)")
 
-    dom_clean = str(req.domain or "general").lower().strip()
+    dom_clean = (req.domain or "general").lower().strip()
     if dom_clean not in structured.VALID_DOMAINS:
         dom_clean = "general"
 
@@ -1150,7 +1150,8 @@ async def stream_chat(req: StreamChatRequest, _rl: None = Depends(rate_limit)):
     Non-tool-call messages are streamed; tool-call responses (e.g. add_task) fall back
     to a single 'done' event since the skill output is not streaming text.
     """
-    from openai import AsyncOpenAI
+    from openai import AsyncOpenAI, AsyncStream
+    from openai.types.chat import ChatCompletionChunk
     from backend.config import get_settings as _gs
     from backend.router import TOOLS
     from backend.services.usage import record_usage
@@ -1187,14 +1188,17 @@ async def stream_chat(req: StreamChatRequest, _rl: None = Depends(rate_limit)):
             ]
             tools: list[ChatCompletionToolParam] = cast(list[ChatCompletionToolParam], TOOLS)
 
-            stream = await client.chat.completions.create(
-                model=_settings.ROUTER_MODEL,
-                messages=messages,
-                tools=tools,
-                tool_choice="auto",
-                max_tokens=512,
-                temperature=0.7,
-                stream=True,
+            stream = cast(
+                AsyncStream[ChatCompletionChunk],
+                await client.chat.completions.create(
+                    model=_settings.ROUTER_MODEL,
+                    messages=messages,
+                    tools=tools,
+                    tool_choice="auto",
+                    max_tokens=512,
+                    temperature=0.7,
+                    stream=True,
+                ),
             )
 
             full_text = ""
@@ -1851,6 +1855,23 @@ async def auth_quick_connect(body: QuickConnectBody, response: Response):
     }
 
 
+def _resolve_oauth_redirect_uri(request: Request) -> str:
+    """Consistently resolve OAuth callback URL across local dev and production reverse-proxies."""
+    settings = get_settings()
+    fwd_host = request.headers.get("x-forwarded-host")
+    host = fwd_host or request.headers.get("host", "localhost:8000")
+
+    if "localhost" in host or "127.0.0.1" in host:
+        return "http://localhost:8000/api/calendar/callback"
+
+    if getattr(settings, "GOOGLE_REDIRECT_URI", None) and "localhost" not in settings.GOOGLE_REDIRECT_URI:
+        return settings.GOOGLE_REDIRECT_URI
+
+    fwd_proto = request.headers.get("x-forwarded-proto")
+    scheme = fwd_proto or ("https" if request.url.scheme == "https" or "vercel.app" in host or "onrender.com" in host else "http")
+    return f"{scheme}://{host}/api/calendar/callback"
+
+
 @app.get("/api/calendar/connect")
 async def calendar_connect(
     request: Request,
@@ -1871,15 +1892,7 @@ async def calendar_connect(
             "message": "Google OAuth credentials are not set in .env. Use Account Switcher or configure GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.",
         }
 
-    host = request.headers.get("host", "localhost:8000")
-    scheme = "https" if request.url.scheme == "https" or "vercel.app" in host else "http"
-    base_url = f"{scheme}://{host}"
-    redirect_uri = f"{base_url}/api/calendar/callback"
-
-    settings = get_settings()
-    if getattr(settings, "GOOGLE_REDIRECT_URI", None) and "localhost" in settings.GOOGLE_REDIRECT_URI and "localhost" in host:
-        redirect_uri = settings.GOOGLE_REDIRECT_URI
-
+    redirect_uri = _resolve_oauth_redirect_uri(request)
     current_user = _get_current_user_id(request)
     effective_hint = login_hint or (current_user if current_user and "@" in current_user else None)
     url = generate_google_oauth_url(redirect_uri=redirect_uri, login_hint=effective_hint)
@@ -1917,11 +1930,20 @@ async def calendar_callback(
     from backend.services.oauth import exchange_code_for_tokens
     from backend.services.calendar import save_calendar_connection
 
-    host = request.headers.get("host", "localhost:8000")
-    scheme = "https" if request.url.scheme == "https" or "vercel.app" in host else "http"
-    redirect_uri = f"{scheme}://{host}/api/calendar/callback"
-
+    redirect_uri = _resolve_oauth_redirect_uri(request)
     tokens = await exchange_code_for_tokens(code, redirect_uri=redirect_uri)
+
+    if "error" in tokens:
+        return HTMLResponse(
+            f"<html><body style='font-family:sans-serif;padding:40px;background:#0f172a;color:#f87171;'>"
+            f"<h3>Google Calendar Authorization Error</h3>"
+            f"<p style='color:#fca5a5;'>{tokens['error']}</p>"
+            f"<p style='color:#94a3b8;font-size:13px;'>Redirect URI sent to Google: <code style='color:#38bdf8;'>{redirect_uri}</code></p>"
+            f"<p><a style='color:#38bdf8;' href='/'>Return to Compass</a></p>"
+            f"</body></html>",
+            status_code=400,
+        )
+
     email = tokens.get("email") or tokens.get("account_email") or "scholar.authenticated@gmail.com"
 
     pool = await get_pool()

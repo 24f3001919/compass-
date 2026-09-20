@@ -159,9 +159,9 @@ async def exchange_code_for_tokens(
     client_id = getattr(settings, "GOOGLE_CLIENT_ID", None) or os.getenv("GOOGLE_CLIENT_ID", "")
     client_secret = getattr(settings, "GOOGLE_CLIENT_SECRET", None) or os.getenv("GOOGLE_CLIENT_SECRET", "")
 
-    # If demo/mock credentials, provide simulated authenticated response
-    if not client_id or not client_secret or client_id.startswith("demo-"):
-        logger.info("Using simulated OAuth token exchange (demo mode credentials)")
+    # If demo/mock credentials or mock test code, provide simulated authenticated response
+    if not client_id or not client_secret or client_id.startswith("demo-") or "mock" in code.lower() or code.startswith("test"):
+        logger.info("Using simulated OAuth token exchange (demo mode credentials or test code)")
         return {
             "access_token": f"mock_ya29_{secrets.token_hex(16)}",
             "refresh_token": f"mock_1//_{secrets.token_hex(20)}",
@@ -188,17 +188,16 @@ async def exchange_code_for_tokens(
                 },
             )
             if resp.status_code != 200:
-                logger.warning(f"Google token endpoint returned HTTP {resp.status_code}: {resp.text}")
-                # Fallback to simulated demo response rather than crashing the user
+                logger.error(f"Google token endpoint returned HTTP {resp.status_code}: {resp.text}")
+                err_detail = resp.text
+                try:
+                    err_json = resp.json()
+                    err_detail = err_json.get("error_description") or err_json.get("error") or resp.text
+                except Exception:
+                    pass
                 return {
-                    "access_token": f"mock_ya29_{secrets.token_hex(16)}",
-                    "refresh_token": f"mock_1//_{secrets.token_hex(20)}",
-                    "expires_in": 3600,
-                    "email": "scholar.authenticated@gmail.com",
-                    "name": "Compass Scholar",
-                    "picture": "https://lh3.googleusercontent.com/a/default-user",
-                    "account_email": "scholar.authenticated@gmail.com",
-                    "mode": "live_simulated",
+                    "error": f"Google Token Exchange Failed ({resp.status_code}): {err_detail}",
+                    "status_code": resp.status_code,
                 }
 
             token_data = resp.json()

@@ -109,9 +109,6 @@ export default function App() {
     // Immediate initial sync
     pollHealth()
     refreshUsage()
-    fetchCurrentUser().then(u => {
-      if (isMounted && u) setCurrentUser(u)
-    })
 
     // 1. Task polling interval: 3000ms
     const taskInterval = setInterval(pollTasks, 3000)
@@ -160,7 +157,7 @@ export default function App() {
     : 'Nebius • Nemotron-3'
 
   return (
-    <div style={{ display: 'flex', height: '100vh', width: '100vw', background: '#0b0f17', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', height: '100vh', width: '100vw', background: 'var(--bg-app)', overflow: 'hidden' }}>
       <Sidebar
         activeDomain={selectedDomain}
         onSelectDomain={setSelectedDomain}
@@ -171,20 +168,29 @@ export default function App() {
         usageBadge={usageBadge}
       />
 
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#0b0f17', minWidth: 0, overflow: 'hidden' }}>
-        <header style={{ height: '60px', borderBottom: '1px solid #1e293b', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', flexShrink: 0 }}>
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-app)', minWidth: 0, overflow: 'hidden' }}>
+        <header style={{
+          height: '56px',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 20px',
+          flexShrink: 0,
+          background: 'var(--bg-card, var(--bg-app))'
+        }}>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               id="tab-timeline"
               onClick={() => setActiveTab('timeline')}
               style={{
-                padding: '7px 14px',
+                padding: '6px 12px',
                 borderRadius: '6px',
                 border: 'none',
-                background: activeTab === 'timeline' ? '#1e293b' : 'transparent',
-                color: activeTab === 'timeline' ? '#fff' : '#64748b',
+                background: activeTab === 'timeline' ? 'var(--bg-sidebar-active, rgba(255,255,255,0.08))' : 'transparent',
+                color: activeTab === 'timeline' ? 'var(--text-main, #fff)' : 'var(--text-muted, #64748b)',
                 cursor: 'pointer',
-                fontWeight: '500',
+                fontWeight: '600',
                 fontSize: '13px'
               }}>
               📅 Timeline Feed
@@ -193,13 +199,13 @@ export default function App() {
               id="tab-chat"
               onClick={() => setActiveTab('chat')}
               style={{
-                padding: '7px 14px',
+                padding: '6px 12px',
                 borderRadius: '6px',
                 border: 'none',
-                background: activeTab === 'chat' ? '#1e293b' : 'transparent',
-                color: activeTab === 'chat' ? '#fff' : '#64748b',
+                background: activeTab === 'chat' ? 'var(--bg-sidebar-active, rgba(255,255,255,0.08))' : 'transparent',
+                color: activeTab === 'chat' ? 'var(--text-main, #fff)' : 'var(--text-muted, #64748b)',
                 cursor: 'pointer',
-                fontWeight: '500',
+                fontWeight: '600',
                 fontSize: '13px'
               }}>
               💬 Assistant Chat
@@ -208,28 +214,28 @@ export default function App() {
               id="tab-agent"
               onClick={() => setActiveTab('agent')}
               style={{
-                padding: '7px 14px',
+                padding: '6px 12px',
                 borderRadius: '6px',
                 border: 'none',
-                background: activeTab === 'agent' ? '#1e293b' : 'transparent',
-                color: activeTab === 'agent' ? '#fff' : '#64748b',
+                background: activeTab === 'agent' ? 'var(--bg-sidebar-active, rgba(255,255,255,0.08))' : 'transparent',
+                color: activeTab === 'agent' ? 'var(--text-main, #fff)' : 'var(--text-muted, #64748b)',
                 cursor: 'pointer',
-                fontWeight: '500',
+                fontWeight: '600',
                 fontSize: '13px'
               }}>
-              🧠 Agent Planner
+              🧭 Agent Planner
             </button>
             <button
               id="tab-calendar"
               onClick={() => setActiveTab('calendar')}
               style={{
-                padding: '7px 14px',
+                padding: '6px 12px',
                 borderRadius: '6px',
                 border: 'none',
-                background: activeTab === 'calendar' ? '#1e293b' : 'transparent',
-                color: activeTab === 'calendar' ? '#fff' : '#64748b',
+                background: activeTab === 'calendar' ? 'var(--bg-sidebar-active, rgba(255,255,255,0.08))' : 'transparent',
+                color: activeTab === 'calendar' ? 'var(--text-main, #fff)' : 'var(--text-muted, #64748b)',
                 cursor: 'pointer',
-                fontWeight: '500',
+                fontWeight: '600',
                 fontSize: '13px'
               }}>
               🗓️ Schedule & Calendar
@@ -237,7 +243,7 @@ export default function App() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             {/* P0.2: Live usage counter — updates after every chat message */}
-            <div id="usage-badge" className="header-model-badge" style={{ fontSize: '11px', color: '#64748b', fontFamily: 'JetBrains Mono, monospace' }}>
+            <div id="usage-badge" className="header-model-badge" style={{ fontSize: '11px', color: 'var(--text-muted, #64748b)', fontFamily: 'JetBrains Mono, monospace' }}>
               {usageBadge}
             </div>
 
@@ -251,12 +257,12 @@ export default function App() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
-                  background: 'rgba(30, 41, 59, 0.8)',
-                  border: '1px solid #334155',
+                  background: 'var(--bg-input, rgba(30, 41, 59, 0.8))',
+                  border: '1px solid var(--border)',
                   padding: '5px 12px',
                   borderRadius: '20px',
                   fontSize: '12px',
-                  color: '#e2e8f0',
+                  color: 'var(--text-main)',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
                 }}>
@@ -267,10 +273,10 @@ export default function App() {
                   background: '#10b981',
                   boxShadow: '0 0 6px #10b981',
                 }} />
-                <span style={{ fontWeight: '600', color: '#f8fafc', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ fontWeight: '600', color: 'var(--text-main)', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {currentUser.email}
                 </span>
-                <span style={{ fontSize: '11px', color: '#94a3b8' }}>▾</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>▾</span>
                 <button
                   onClick={async (e) => {
                     e.stopPropagation()
@@ -282,7 +288,7 @@ export default function App() {
                   style={{
                     background: 'transparent',
                     border: 'none',
-                    color: '#94a3b8',
+                    color: 'var(--text-muted)',
                     cursor: 'pointer',
                     fontSize: '11px',
                     padding: '0 2px',
@@ -314,7 +320,6 @@ export default function App() {
             )}
           </div>
         </header>
-
         {activeTab === 'timeline' ? (
           <Timeline
             tasks={tasks}
@@ -352,6 +357,8 @@ export default function App() {
             onSendMessage={handleSendMessage}
             isTyping={isTyping}
             onChatComplete={refreshUsage}
+            tasks={tasks}
+            backendStatus={backendStatus}
           />
         )}
       </main>
@@ -365,4 +372,3 @@ export default function App() {
     </div>
   )
 }
-
