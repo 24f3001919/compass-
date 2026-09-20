@@ -556,9 +556,9 @@ export async function dispatchSpecialist({ capability, user_goal, relevant_conte
 /**
  * Fetch previous chat conversations list.
  */
-export async function fetchConversations(limit = 30) {
+export async function fetchConversations(limit = 30, includeArchived = false) {
   try {
-    const res = await fetch(`${API_BASE}/api/conversations?limit=${limit}`, {
+    const res = await fetch(`${API_BASE}/api/conversations?limit=${limit}&include_archived=${includeArchived}`, {
       headers: getAuthHeaders(),
     })
     if (!res.ok) return []
@@ -587,6 +587,26 @@ export async function fetchConversationMessages(conversationId) {
     }))
   } catch {
     return []
+  }
+}
+
+/**
+ * Update conversation metadata (title, is_pinned, is_archived).
+ */
+export async function updateConversation(conversationId, updates) {
+  if (!conversationId) return false
+  try {
+    const res = await fetch(`${API_BASE}/api/conversations/${conversationId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify(updates),
+    })
+    return res.ok
+  } catch {
+    return false
   }
 }
 

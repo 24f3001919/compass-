@@ -41,6 +41,8 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
 
         ALTER TABLE conversations ADD COLUMN IF NOT EXISTS title TEXT;
         ALTER TABLE conversations ADD COLUMN IF NOT EXISTS user_id TEXT;
+        ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE;
         CREATE INDEX IF NOT EXISTS idx_conversations_last_active ON conversations(last_active_at DESC);
 
         CREATE TABLE IF NOT EXISTS agent_audit_log (

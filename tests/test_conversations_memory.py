@@ -29,6 +29,7 @@ from backend.memory.conversations import (
     list_conversations,
     get_cross_conversation_memory,
     delete_conversation,
+    update_conversation,
 )
 
 settings = get_settings()
@@ -135,3 +136,41 @@ async def test_list_conversations_mixed_type_params(db_conn):
     # Run without user_id
     res2 = await list_conversations(db_conn, limit=5, user_id=None)
     assert isinstance(res2, list)
+
+
+@pytest.mark.asyncio
+async def test_update_conversation_pin_archive_rename(db_conn):
+    """Test updating conversation: rename, pin to top, and archive filtering."""
+    test_user_id = f"user_{uuid.uuid4().hex[:6]}"
+    cid1 = await get_or_create_conversation(db_conn, user_id=test_user_id)
+    cid2 = await get_or_create_conversation(db_conn, user_id=test_user_id)
+
+    await add_message(db_conn, conversation_id=cid1, role="user", content="Chat One")
+    await add_message(db_conn, conversation_id=cid2, role="user", content="Chat Two")
+
+    # 1. Rename cid1
+    ok_rename = await update_conversation(db_conn, cid1, title="Sprint Planning Q3")
+    assert ok_rename is True
+
+    # 2. Pin cid1
+    ok_pin = await update_conversation(db_conn, cid1, is_pinned=True)
+    assert ok_pin is True
+
+    # Check that cid1 is pinned and appears first
+    convs = await list_conversations(db_conn, limit=10, user_id=test_user_id)
+    assert convs[0]["id"] == cid1
+    assert convs[0]["title"] == "Sprint Planning Q3"
+    assert convs[0]["is_pinned"] is True
+
+    # 3. Archive cid2
+    ok_archive = await update_conversation(db_conn, cid2, is_archived=True)
+    assert ok_archive is True
+
+    # Check list without archived: cid2 should not be in standard list
+    convs_active = await list_conversations(db_conn, limit=10, user_id=test_user_id, include_archived=False)
+    assert not any(c["id"] == cid2 for c in convs_active)
+
+    # Check list with archived: cid2 should be included
+    convs_all = await list_conversations(db_conn, limit=10, user_id=test_user_id, include_archived=True)
+    assert any(c["id"] == cid2 for c in convs_all)
+

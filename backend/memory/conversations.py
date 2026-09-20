@@ -126,10 +126,11 @@ async def list_conversations(
     conn: DbConn,
     limit: int = 30,
     user_id: Optional[str] = None,
+    include_archived: bool = False,
 ) -> List[Dict[str, Any]]:
-    """Retrieve list of previous conversations with metadata and last message preview."""
+    """Retrieve list of previous conversations with metadata, pinned state, and last message preview."""
     try:
-        # Check if title column exists
+        # Check column existence safely
         has_title_col = await conn.fetchval(
             """
             SELECT EXISTS (
@@ -138,8 +139,6 @@ async def list_conversations(
             )
             """
         )
-
-        title_expr = "c.title" if has_title_col else "NULL"
         has_user_col = await conn.fetchval(
             """
             SELECT EXISTS (
@@ -148,10 +147,32 @@ async def list_conversations(
             )
             """
         )
+        has_pinned_col = await conn.fetchval(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'conversations' AND column_name = 'is_pinned'
+            )
+            """
+        )
+        has_archived_col = await conn.fetchval(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'conversations' AND column_name = 'is_archived'
+            )
+            """
+        )
+
+        title_expr = "c.title" if has_title_col else "NULL"
+        pinned_expr = "c.is_pinned" if has_pinned_col else "FALSE"
+        archived_expr = "c.is_archived" if has_archived_col else "FALSE"
 
         query = f"""
             SELECT c.id, c.started_at, c.last_active_at,
                    {title_expr} AS title,
+                   {pinned_expr} AS is_pinned,
+                   {archived_expr} AS is_archived,
                    COUNT(m.id) AS message_count,
                    (
                        SELECT content FROM messages
@@ -167,14 +188,32 @@ async def list_conversations(
             LEFT JOIN messages m ON m.conversation_id = c.id
         """
 
+        where_clauses = []
         params: List[Any] = []
+
         if user_id and has_user_col:
-            query += " WHERE c.user_id = $1 OR c.user_id IS NULL "
             params.append(user_id)
+            where_clauses.append(f"(c.user_id = ${len(params)} OR c.user_id IS NULL)")
+
+        if not include_archived and has_archived_col:
+            where_clauses.append("(c.is_archived = FALSE OR c.is_archived IS NULL)")
+
+        if where_clauses:
+            query += f" WHERE {' AND '.join(where_clauses)} "
+
+        group_cols = ["c.id", "c.started_at", "c.last_active_at"]
+        if has_title_col:
+            group_cols.append("c.title")
+        if has_pinned_col:
+            group_cols.append("c.is_pinned")
+        if has_archived_col:
+            group_cols.append("c.is_archived")
+
+        order_by = "ORDER BY c.is_pinned DESC, c.last_active_at DESC" if has_pinned_col else "ORDER BY c.last_active_at DESC"
 
         query += f"""
-            GROUP BY c.id, c.started_at, c.last_active_at {', c.title' if has_title_col else ''}
-            ORDER BY c.last_active_at DESC
+            GROUP BY {', '.join(group_cols)}
+            {order_by}
             LIMIT ${len(params) + 1}
         """
         params.append(limit)
@@ -188,6 +227,8 @@ async def list_conversations(
             conversations_list.append({
                 "id": str(r["id"]),
                 "title": title,
+                "is_pinned": bool(r.get("is_pinned", False)),
+                "is_archived": bool(r.get("is_archived", False)),
                 "started_at": r["started_at"].isoformat() if hasattr(r["started_at"], "isoformat") else str(r["started_at"]),
                 "last_active_at": r["last_active_at"].isoformat() if hasattr(r["last_active_at"], "isoformat") else str(r["last_active_at"]),
                 "message_count": int(r["message_count"] or 0),
@@ -196,6 +237,52 @@ async def list_conversations(
         return conversations_list
     except Exception as e:
         return []
+
+
+async def update_conversation(
+    conn: DbConn,
+    conversation_id: str,
+    title: Optional[str] = None,
+    is_pinned: Optional[bool] = None,
+    is_archived: Optional[bool] = None,
+) -> bool:
+    """Update title, pinned status, or archive status of a conversation."""
+    try:
+        cid = uuid.UUID(conversation_id)
+        updates: List[str] = []
+        params: List[Any] = [cid]
+
+        if title is not None:
+            clean_title = title.strip()[:100]
+            params.append(clean_title)
+            updates.append(f"title = ${len(params)}")
+
+        if is_pinned is not None:
+            has_pinned = await conn.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversations' AND column_name = 'is_pinned')"
+            )
+            if not has_pinned:
+                await conn.execute("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE")
+            params.append(bool(is_pinned))
+            updates.append(f"is_pinned = ${len(params)}")
+
+        if is_archived is not None:
+            has_archived = await conn.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversations' AND column_name = 'is_archived')"
+            )
+            if not has_archived:
+                await conn.execute("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE")
+            params.append(bool(is_archived))
+            updates.append(f"is_archived = ${len(params)}")
+
+        if not updates:
+            return True
+
+        query = f"UPDATE conversations SET {', '.join(updates)} WHERE id = $1"
+        await conn.execute(query, *params)
+        return True
+    except Exception:
+        return False
 
 
 async def delete_conversation(

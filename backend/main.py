@@ -352,9 +352,16 @@ async def get_messages(
 
 
 # ---- 2b. GET /api/conversations  — List past chat sessions ----------------
+class ConversationUpdate(BaseModel):
+    title: Optional[str] = None
+    is_pinned: Optional[bool] = None
+    is_archived: Optional[bool] = None
+
+
 @app.get("/api/conversations")
 async def list_past_conversations(
     limit: int = Query(30, ge=1, le=100),
+    include_archived: bool = Query(False),
     request: Request = None,
 ):
     """List previous chat conversations with titles, timestamps, and message counts."""
@@ -364,14 +371,37 @@ async def list_past_conversations(
     user_id = request.headers.get("x-user-id") if request else None
     try:
         async with pool.acquire() as conn:
-            convs = await conversations.list_conversations(conn, limit=limit, user_id=user_id)
+            convs = await conversations.list_conversations(
+                conn, limit=limit, user_id=user_id, include_archived=include_archived
+            )
             return {"conversations": convs, "total": len(convs)}
     except Exception as e:
         logger.warning(f"Error listing past conversations: {e}")
         return {"conversations": [], "total": 0}
 
 
-# ---- 2c. DELETE /api/conversations/{conversation_id} ---------------------
+# ---- 2c. PATCH /api/conversations/{conversation_id} ----------------------
+@app.patch("/api/conversations/{conversation_id}")
+async def update_past_conversation(conversation_id: str, payload: ConversationUpdate):
+    """Update title, pinned state, or archive state of a conversation."""
+    pool = await get_pool()
+    if not pool:
+        return {"ok": False, "error": "Database unavailable"}
+    try:
+        async with pool.acquire() as conn:
+            ok = await conversations.update_conversation(
+                conn,
+                conversation_id,
+                title=payload.title,
+                is_pinned=payload.is_pinned,
+                is_archived=payload.is_archived,
+            )
+            return {"ok": ok}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+# ---- 2d. DELETE /api/conversations/{conversation_id} ---------------------
 @app.delete("/api/conversations/{conversation_id}")
 async def delete_past_conversation(conversation_id: str):
     """Delete a past conversation session and its messages."""

@@ -3,6 +3,7 @@ import {
   streamQueryFromAssistant,
   fetchConversations,
   fetchConversationMessages,
+  updateConversation,
   deleteConversation,
   fetchMemoryOverview,
 } from '../api/client'
@@ -29,6 +30,14 @@ export default function ChatPanel({
   const [memoryOverview, setMemoryOverview] = useState(null)
   const [loadingHistory, setLoadingHistory] = useState(false)
 
+  // Options menu, renaming, archiving, and delete modal state
+  const [openMenuConvId, setOpenMenuConvId] = useState(null)
+  const [editingConvId, setEditingConvId] = useState(null)
+  const [editingTitle, setEditingTitle] = useState('')
+  const [confirmDeleteConv, setConfirmDeleteConv] = useState(null)
+  const [showArchived, setShowArchived] = useState(false)
+  const [toast, setToast] = useState(null)
+
   const messagesEndRef = useRef(null)
   const streamTimerRef = useRef(null)
   const isSendingRef = useRef(false)
@@ -38,10 +47,17 @@ export default function ChatPanel({
     setLoadingHistory(true)
     try {
       const [convs, mem] = await Promise.all([
-        fetchConversations(30),
+        fetchConversations(50, true),
         fetchMemoryOverview(),
       ])
-      if (convs) setPastConversations(convs)
+      if (convs) {
+        // Sort: pinned first, then last_active_at desc
+        const sorted = [...convs].sort((a, b) => {
+          if (Boolean(a.is_pinned) !== Boolean(b.is_pinned)) return a.is_pinned ? -1 : 1
+          return new Date(b.last_active_at) - new Date(a.last_active_at)
+        })
+        setPastConversations(sorted)
+      }
       if (mem) {
         setMemoryOverview(mem)
         if (mem.recent_plans) setPastPlans(mem.recent_plans)
@@ -62,6 +78,17 @@ export default function ChatPanel({
       loadHistoryData()
     }
   }, [showHistoryDrawer])
+
+  // Close context menu when clicking anywhere outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.chat-item-menu-container') && !e.target.closest('.chat-item-menu-btn')) {
+        setOpenMenuConvId(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -238,14 +265,97 @@ export default function ChatPanel({
     }
   }
 
-  const handleDeletePastChat = async (e, pastConvId) => {
-    e.stopPropagation()
-    const ok = await deleteConversation(pastConvId)
+  const showToast = (msg) => {
+    setToast(msg)
+    setTimeout(() => setToast(null), 2500)
+  }
+
+  const handleShareChat = async (conv) => {
+    setOpenMenuConvId(null)
+    try {
+      const msgs = await fetchConversationMessages(conv.id)
+      const lines = [
+        `# Compass Chat: ${conv.title || 'Session'}`,
+        `Date: ${new Date(conv.last_active_at).toLocaleString()}`,
+        `Messages: ${conv.message_count}`,
+        '',
+      ]
+      if (msgs && msgs.length > 0) {
+        msgs.forEach(m => {
+          lines.push(`**${m.role === 'user' ? 'User' : 'Compass'}**: ${m.text}\n`)
+        })
+      } else if (conv.preview) {
+        lines.push(`Preview: ${conv.preview}`)
+      }
+      await navigator.clipboard.writeText(lines.join('\n'))
+      showToast('Chat transcript copied to clipboard! 📋')
+    } catch {
+      showToast('Failed to copy transcript to clipboard')
+    }
+  }
+
+  const handleStartRename = (conv) => {
+    setOpenMenuConvId(null)
+    setEditingConvId(conv.id)
+    setEditingTitle(conv.title || '')
+  }
+
+  const handleSaveRename = async (convId) => {
+    const clean = editingTitle.trim()
+    if (!clean) {
+      setEditingConvId(null)
+      return
+    }
+    setPastConversations(prev => prev.map(c => c.id === convId ? { ...c, title: clean } : c))
+    setEditingConvId(null)
+    await updateConversation(convId, { title: clean })
+    showToast('Chat renamed ✏️')
+  }
+
+  const handleCancelRename = () => {
+    setEditingConvId(null)
+  }
+
+  const handleTogglePin = async (conv) => {
+    setOpenMenuConvId(null)
+    const nextPinned = !conv.is_pinned
+    setPastConversations(prev => {
+      const updated = prev.map(c => c.id === conv.id ? { ...c, is_pinned: nextPinned } : c)
+      return [...updated].sort((a, b) => {
+        if (Boolean(a.is_pinned) !== Boolean(b.is_pinned)) return a.is_pinned ? -1 : 1
+        return new Date(b.last_active_at) - new Date(a.last_active_at)
+      })
+    })
+    await updateConversation(conv.id, { is_pinned: nextPinned })
+    showToast(nextPinned ? 'Chat pinned to top 📌' : 'Chat unpinned')
+  }
+
+  const handleToggleArchive = async (conv) => {
+    setOpenMenuConvId(null)
+    const nextArchived = !conv.is_archived
+    setPastConversations(prev => prev.map(c => c.id === conv.id ? { ...c, is_archived: nextArchived } : c))
+    await updateConversation(conv.id, { is_archived: nextArchived })
+    showToast(nextArchived ? 'Chat moved to Archive 🗃️' : 'Chat unarchived')
+  }
+
+  const handleOpenDeleteConfirm = (conv) => {
+    setOpenMenuConvId(null)
+    setConfirmDeleteConv(conv)
+  }
+
+  const handleExecuteDelete = async () => {
+    if (!confirmDeleteConv) return
+    const convId = confirmDeleteConv.id
+    setConfirmDeleteConv(null)
+    const ok = await deleteConversation(convId)
     if (ok) {
-      setPastConversations(prev => prev.filter(c => c.id !== pastConvId))
-      if (conversationId === pastConvId) {
+      setPastConversations(prev => prev.filter(c => c.id !== convId))
+      if (conversationId === convId) {
         handleNewChat()
       }
+      showToast('Chat deleted 🗑️')
+    } else {
+      showToast('Failed to delete chat')
     }
   }
 
@@ -538,65 +648,331 @@ export default function ChatPanel({
 
             {/* Drawer Body Items */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px' }}>
-              {historyTab === 'chats' && (
-                pastConversations.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '30px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>
-                    <div style={{ fontSize: '24px', marginBottom: '8px' }}>💬</div>
-                    <div>No previous chats yet.</div>
-                    <div style={{ fontSize: '11px', marginTop: '4px' }}>Chats are automatically stored and remembered across sessions.</div>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    {pastConversations.map(conv => {
-                      const isCurrent = conversationId === conv.id
-                      return (
-                        <div
-                          key={conv.id}
-                          onClick={() => handleSelectPastChat(conv.id)}
+              {historyTab === 'chats' && (() => {
+                const visibleConversations = pastConversations.filter(c => showArchived ? Boolean(c.is_archived) : !c.is_archived)
+                const archivedCount = pastConversations.filter(c => c.is_archived).length
+
+                return (
+                  <div>
+                    {/* Active vs Archived Sub-header */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: '8px',
+                      padding: '0 4px',
+                      fontSize: '11px',
+                      color: 'var(--text-muted)'
+                    }}>
+                      <span style={{ fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {showArchived ? `Archived (${archivedCount})` : 'Recent Chats'}
+                      </span>
+                      {archivedCount > 0 && (
+                        <button
+                          onClick={() => setShowArchived(v => !v)}
                           style={{
-                            padding: '10px 12px',
-                            borderRadius: '8px',
-                            border: `1px solid ${isCurrent ? 'var(--primary)' : 'var(--border)'}`,
-                            background: isCurrent ? 'var(--bg-card-soft)' : 'var(--bg-card)',
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--brand)',
                             cursor: 'pointer',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '4px',
-                            transition: 'all 0.15s ease',
+                            fontSize: '11px',
+                            fontWeight: '700',
+                            padding: '2px 4px'
                           }}
-                          onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--brand)'}
-                          onMouseLeave={e => e.currentTarget.style.borderColor = isCurrent ? 'var(--primary)' : 'var(--border)'}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                            <span style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                              {conv.title || 'Chat Session'}
-                            </span>
-                            <button
-                              onClick={(e) => handleDeletePastChat(e, conv.id)}
-                              style={{
-                                background: 'none', border: 'none', color: 'var(--text-muted)',
-                                fontSize: '12px', cursor: 'pointer', padding: '0 2px'
-                              }}
-                              title="Delete conversation"
-                            >
-                              🗑️
-                            </button>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '10.5px', color: 'var(--text-muted)' }}>
-                            <span>{new Date(conv.last_active_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
-                            <span>{conv.message_count} message{conv.message_count !== 1 ? 's' : ''}</span>
-                          </div>
-                          {conv.preview && (
-                            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: 0.85 }}>
-                              {conv.preview}
-                            </div>
-                          )}
+                          {showArchived ? '← Active Chats' : `Archived (${archivedCount})`}
+                        </button>
+                      )}
+                    </div>
+
+                    {visibleConversations.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '30px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>
+                        <div style={{ fontSize: '24px', marginBottom: '8px' }}>{showArchived ? '🗃️' : '💬'}</div>
+                        <div>{showArchived ? 'No archived chats.' : 'No previous chats yet.'}</div>
+                        <div style={{ fontSize: '11px', marginTop: '4px' }}>
+                          {showArchived ? 'Chats you archive will be stored here.' : 'Chats are automatically stored and remembered across sessions.'}
                         </div>
-                      )
-                    })}
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {visibleConversations.map(conv => {
+                          const isCurrent = conversationId === conv.id
+                          const isMenuOpen = openMenuConvId === conv.id
+                          const isEditing = editingConvId === conv.id
+
+                          return (
+                            <div
+                              key={conv.id}
+                              onClick={() => {
+                                if (!isEditing) handleSelectPastChat(conv.id)
+                              }}
+                              style={{
+                                padding: '10px 12px',
+                                borderRadius: '8px',
+                                border: `1px solid ${isCurrent ? 'var(--primary)' : 'var(--border)'}`,
+                                background: isCurrent ? 'var(--bg-card-soft)' : 'var(--bg-card)',
+                                cursor: isEditing ? 'default' : 'pointer',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '4px',
+                                transition: 'all 0.15s ease',
+                                position: 'relative',
+                              }}
+                              onMouseEnter={e => {
+                                if (!isCurrent) e.currentTarget.style.borderColor = 'var(--brand)'
+                              }}
+                              onMouseLeave={e => {
+                                if (!isCurrent) e.currentTarget.style.borderColor = 'var(--border)'
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                                {isEditing ? (
+                                  <form
+                                    onSubmit={(e) => {
+                                      e.preventDefault()
+                                      e.stopPropagation()
+                                      handleSaveRename(conv.id)
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1 }}
+                                  >
+                                    <input
+                                      autoFocus
+                                      value={editingTitle}
+                                      onChange={(e) => setEditingTitle(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Escape') {
+                                          e.stopPropagation()
+                                          handleCancelRename()
+                                        }
+                                      }}
+                                      style={{
+                                        flex: 1,
+                                        padding: '3px 6px',
+                                        fontSize: '12px',
+                                        borderRadius: '4px',
+                                        border: '1px solid var(--primary)',
+                                        background: 'var(--bg-app)',
+                                        color: 'var(--text-primary)',
+                                        outline: 'none',
+                                      }}
+                                    />
+                                    <button
+                                      type="submit"
+                                      style={{
+                                        background: 'var(--primary)',
+                                        color: '#fff',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        padding: '3px 6px',
+                                        fontSize: '11px',
+                                        cursor: 'pointer',
+                                        fontWeight: '700'
+                                      }}
+                                      title="Save name"
+                                    >
+                                      ✓
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={handleCancelRename}
+                                      style={{
+                                        background: 'transparent',
+                                        color: 'var(--text-muted)',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        padding: '3px 6px',
+                                        fontSize: '11px',
+                                        cursor: 'pointer'
+                                      }}
+                                      title="Cancel"
+                                    >
+                                      ✕
+                                    </button>
+                                  </form>
+                                ) : (
+                                  <>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', flex: 1 }}>
+                                      {conv.is_pinned && (
+                                        <span style={{ fontSize: '11.5px', flexShrink: 0 }} title="Pinned chat">📌</span>
+                                      )}
+                                      <span style={{
+                                        fontSize: '12.5px',
+                                        fontWeight: '700',
+                                        color: 'var(--text-primary)',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap'
+                                      }}>
+                                        {conv.title || 'Chat Session'}
+                                      </span>
+                                    </div>
+
+                                    {/* Three dots options button */}
+                                    <button
+                                      className="chat-item-menu-btn"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setOpenMenuConvId(isMenuOpen ? null : conv.id)
+                                      }}
+                                      style={{
+                                        background: isMenuOpen ? 'var(--bg-card-soft)' : 'none',
+                                        border: 'none',
+                                        color: isMenuOpen ? 'var(--text-primary)' : 'var(--text-muted)',
+                                        fontSize: '16px',
+                                        fontWeight: '800',
+                                        cursor: 'pointer',
+                                        padding: '1px 5px',
+                                        borderRadius: '4px',
+                                        lineHeight: 1,
+                                        letterSpacing: '-0.5px',
+                                        transition: 'color 0.15s ease',
+                                      }}
+                                      title="Chat options"
+                                    >
+                                      ···
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '10.5px', color: 'var(--text-muted)' }}>
+                                <span>{new Date(conv.last_active_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                                <span>{conv.message_count} message{conv.message_count !== 1 ? 's' : ''}</span>
+                              </div>
+
+                              {conv.preview && (
+                                <div style={{ fontSize: '11px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: 0.85 }}>
+                                  {conv.preview}
+                                </div>
+                              )}
+
+                              {/* Floating Context Options Menu matching ChatGPT/Claude design */}
+                              {isMenuOpen && (
+                                <div
+                                  className="chat-item-menu-container"
+                                  onClick={(e) => e.stopPropagation()}
+                                  style={{
+                                    position: 'absolute',
+                                    right: '8px',
+                                    top: '32px',
+                                    zIndex: 100,
+                                    background: '#202123',
+                                    border: '1px solid rgba(255, 255, 255, 0.14)',
+                                    borderRadius: '12px',
+                                    boxShadow: '0 10px 28px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.4)',
+                                    padding: '5px',
+                                    minWidth: '150px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '2px',
+                                  }}
+                                >
+                                  {/* Share */}
+                                  <button
+                                    onClick={() => handleShareChat(conv)}
+                                    style={{
+                                      display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
+                                      padding: '8px 12px', borderRadius: '8px', border: 'none', background: 'transparent',
+                                      color: '#ececed', fontSize: '12.5px', fontWeight: '500', cursor: 'pointer', textAlign: 'left'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
+                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                  >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+                                      <polyline points="16 6 12 2 8 6"/>
+                                      <line x1="12" y1="2" x2="12" y2="15"/>
+                                    </svg>
+                                    <span>Share</span>
+                                  </button>
+
+                                  {/* Rename */}
+                                  <button
+                                    onClick={() => handleStartRename(conv)}
+                                    style={{
+                                      display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
+                                      padding: '8px 12px', borderRadius: '8px', border: 'none', background: 'transparent',
+                                      color: '#ececed', fontSize: '12.5px', fontWeight: '500', cursor: 'pointer', textAlign: 'left'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
+                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                  >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                    </svg>
+                                    <span>Rename</span>
+                                  </button>
+
+                                  {/* Pin chat */}
+                                  <button
+                                    onClick={() => handleTogglePin(conv)}
+                                    style={{
+                                      display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
+                                      padding: '8px 12px', borderRadius: '8px', border: 'none', background: 'transparent',
+                                      color: '#ececed', fontSize: '12.5px', fontWeight: '500', cursor: 'pointer', textAlign: 'left'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
+                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                  >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <line x1="12" y1="17" x2="12" y2="22"/>
+                                      <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/>
+                                    </svg>
+                                    <span>{conv.is_pinned ? 'Unpin chat' : 'Pin chat'}</span>
+                                  </button>
+
+                                  {/* Archive */}
+                                  <button
+                                    onClick={() => handleToggleArchive(conv)}
+                                    style={{
+                                      display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
+                                      padding: '8px 12px', borderRadius: '8px', border: 'none', background: 'transparent',
+                                      color: '#ececed', fontSize: '12.5px', fontWeight: '500', cursor: 'pointer', textAlign: 'left'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
+                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                  >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <polyline points="21 8 21 21 3 21 3 8"/>
+                                      <rect x="1" y="3" width="22" height="5"/>
+                                      <line x1="10" y1="12" x2="14" y2="12"/>
+                                    </svg>
+                                    <span>{conv.is_archived ? 'Unarchive' : 'Archive'}</span>
+                                  </button>
+
+                                  <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.08)', margin: '2px 0' }} />
+
+                                  {/* Delete */}
+                                  <button
+                                    onClick={() => handleOpenDeleteConfirm(conv)}
+                                    style={{
+                                      display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
+                                      padding: '8px 12px', borderRadius: '8px', border: 'none', background: 'transparent',
+                                      color: '#ef4444', fontSize: '12.5px', fontWeight: '600', cursor: 'pointer', textAlign: 'left'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.14)'}
+                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                  >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <polyline points="3 6 5 6 21 6"/>
+                                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                      <line x1="10" y1="11" x2="10" y2="17"/>
+                                      <line x1="14" y1="11" x2="14" y2="17"/>
+                                    </svg>
+                                    <span>Delete</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 )
-              )}
+              })()}
 
               {historyTab === 'plans' && (
                 pastPlans.length === 0 ? (
@@ -919,6 +1295,110 @@ export default function ChatPanel({
       </div>
           </div>
         </div>
+
+        {/* Delete Confirmation Modal */}
+        {confirmDeleteConv && (
+          <div
+            onClick={() => setConfirmDeleteConv(null)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0, 0, 0, 0.65)',
+              backdropFilter: 'blur(3px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+              padding: '16px',
+            }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: '14px',
+                padding: '22px',
+                maxWidth: '400px',
+                width: '100%',
+                boxShadow: 'var(--shadow-lg)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '14px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: '38px', height: '38px', borderRadius: '10px',
+                  background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0
+                }}>
+                  🗑️
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)' }}>
+                    Delete chat?
+                  </h3>
+                  <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+                    This action cannot be undone.
+                  </p>
+                </div>
+              </div>
+
+              <p style={{ margin: 0, fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                This will permanently delete <strong>"{confirmDeleteConv.title || 'Chat Session'}"</strong> and all associated messages from your workspace memory.
+              </p>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+                <button
+                  onClick={() => setConfirmDeleteConv(null)}
+                  style={{
+                    padding: '8px 15px', borderRadius: '8px', border: '1px solid var(--border)',
+                    background: 'transparent', color: 'var(--text-primary)', fontSize: '12.5px',
+                    fontWeight: '600', cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleExecuteDelete}
+                  style={{
+                    padding: '8px 18px', borderRadius: '8px', border: 'none',
+                    background: '#ef4444', color: '#ffffff', fontSize: '12.5px',
+                    fontWeight: '700', cursor: 'pointer', boxShadow: '0 2px 8px rgba(239, 68, 68, 0.35)'
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Global Action Toast Notification */}
+        {toast && (
+          <div style={{
+            position: 'fixed',
+            bottom: '28px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: '#1f2937',
+            color: '#ffffff',
+            border: '1px solid rgba(255, 255, 255, 0.18)',
+            padding: '9px 18px',
+            borderRadius: '10px',
+            fontSize: '12.5px',
+            fontWeight: '600',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45)',
+            zIndex: 2000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            pointerEvents: 'none',
+          }}>
+            {toast}
+          </div>
+        )}
       </div>
   )
 }
