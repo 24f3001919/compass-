@@ -127,12 +127,17 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const domainCounts = {
-    hackathon: tasks.filter(t => t.domain === 'hackathon').length,
-    coursework: tasks.filter(t => t.domain === 'coursework').length,
-    code: tasks.filter(t => t.domain === 'code').length,
-    general: tasks.filter(t => t.domain === 'general').length,
-  }
+  const domainCounts = tasks.reduce((acc, t) => {
+    const dom = (t.domain || 'general').toLowerCase().trim()
+    acc[dom] = (acc[dom] || 0) + 1
+    return acc
+  }, {
+    hackathon: 0,
+    coursework: 0,
+    code: 0,
+    general: 0,
+    other: 0,
+  })
 
   const handleSendMessage = async (userText) => {
     setIsTyping(true)

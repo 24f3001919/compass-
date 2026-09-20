@@ -136,3 +136,34 @@ async def test_direct_update_task_invalid_id(client: AsyncClient):
     resp = await client.patch("/api/tasks/invalid-id", json={"title": "New Title"})
     assert resp.status_code == 400
 
+
+@pytest.mark.asyncio
+async def test_direct_create_task_custom_and_other_domain(client: AsyncClient):
+    """Creating tasks with 'other' and custom domains succeeds and preserves domain name."""
+    # 1. Domain 'other'
+    resp_other = await client.post("/api/tasks", json={
+        "title": "Clean Office Workspace",
+        "domain": "other",
+        "priority": "low",
+    })
+    assert resp_other.status_code == 200
+    data_other = resp_other.json()
+    assert data_other["domain"] == "other"
+
+    # 2. Custom domain 'fitness'
+    resp_custom = await client.post("/api/tasks", json={
+        "title": "Complete 5k Training",
+        "domain": "fitness",
+        "priority": "high",
+    })
+    assert resp_custom.status_code == 200
+    data_custom = resp_custom.json()
+    assert data_custom["domain"] == "fitness"
+
+    # Clean up created tasks if persisted in DB
+    if str(data_other["id"]).isdigit():
+        await client.delete(f"/api/tasks/{data_other['id']}")
+    if str(data_custom["id"]).isdigit():
+        await client.delete(f"/api/tasks/{data_custom['id']}")
+
+

@@ -791,9 +791,7 @@ async def create_frontend_task(request: Request, req: CreateTaskRequest):
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid due_date format (expected YYYY-MM-DD)")
 
-    dom_clean = (req.domain or "general").lower().strip()
-    if dom_clean not in structured.VALID_DOMAINS:
-        dom_clean = "general"
+    dom_clean = structured.normalize_domain(req.domain)
 
     proj_name = req.project.strip() if req.project else "General"
     user_id = _get_current_user_id(request)

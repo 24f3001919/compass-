@@ -65,6 +65,9 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
         CREATE INDEX IF NOT EXISTS idx_tavily_usage_created_at ON tavily_usage_log(created_at);
 
         -- Dynamic Scheduling & Calendar Extensions
+        ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_domain_check;
+        ALTER TABLE projects DROP CONSTRAINT IF EXISTS projects_domain_check;
+        ALTER TABLE memory_chunks DROP CONSTRAINT IF EXISTS memory_chunks_domain_check;
         ALTER TABLE tasks ADD COLUMN IF NOT EXISTS user_id VARCHAR(255) DEFAULT 'default_user';
         CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id);
         ALTER TABLE memory_chunks ADD COLUMN IF NOT EXISTS user_id VARCHAR(255) DEFAULT 'default_user';

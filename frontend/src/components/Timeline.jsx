@@ -11,6 +11,19 @@ const DOMAIN_META = {
   coursework: { label: 'Coursework', icon: '📚', color: '#60a5fa', border: 'rgba(59, 130, 246, 0.4)' },
   code: { label: 'Code', icon: '💻', color: '#34d399', border: 'rgba(16, 185, 129, 0.4)' },
   general: { label: 'General', icon: '🌐', color: '#94a3b8', border: 'rgba(100, 116, 139, 0.4)' },
+  other: { label: 'Other', icon: '🏷️', color: '#a78bfa', border: 'rgba(167, 139, 250, 0.4)' },
+}
+
+export function getDomainMeta(dom) {
+  if (!dom) return DOMAIN_META.general
+  const key = String(dom).toLowerCase().trim()
+  if (DOMAIN_META[key]) return DOMAIN_META[key]
+  return {
+    label: key.charAt(0).toUpperCase() + key.slice(1),
+    icon: '🏷️',
+    color: '#c084fc',
+    border: 'rgba(192, 132, 252, 0.4)',
+  }
 }
 
 function formatFieldLabel(key) {
@@ -29,6 +42,7 @@ function formatFieldValue(value) {
 function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
   const [title, setTitle] = useState('')
   const [domain, setDomain] = useState('general')
+  const [customDomain, setCustomDomain] = useState('')
   const [project, setProject] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [priority, setPriority] = useState('medium')
@@ -41,6 +55,7 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
     if (isOpen) {
       setTitle('')
       setDomain(defaultDomain && defaultDomain !== 'all' ? defaultDomain : 'general')
+      setCustomDomain('')
       setProject('')
       setDueDate('')
       setPriority('medium')
@@ -61,12 +76,18 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
       return
     }
 
+    let finalDomain = domain
+    if (domain === 'other') {
+      const cleanCustom = customDomain.trim().toLowerCase().replace(/\s+/g, '-')
+      finalDomain = cleanCustom || 'other'
+    }
+
     setLoading(true)
     setError(null)
     try {
       await createTask({
         title: cleanTitle,
-        domain,
+        domain: finalDomain,
         project: project.trim() || 'General',
         due_date: dueDate || null,
         priority,
@@ -159,23 +180,24 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
           {/* Domain Selection */}
           <div>
             <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', fontWeight: '700', marginBottom: '8px' }}>
-              Domain
+              Domain / Category
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
               {Object.entries(DOMAIN_META).map(([domKey, meta]) => {
                 const isSelected = domain === domKey
                 return (
                   <button
                     key={domKey}
+                    id={`btn-select-domain-${domKey}`}
                     type="button"
                     onClick={() => setDomain(domKey)}
                     style={{
-                      padding: '8px 6px',
+                      padding: '8px 4px',
                       borderRadius: '8px',
                       border: isSelected ? `1.5px solid ${meta.color}` : '1px solid #1e293b',
                       background: isSelected ? 'rgba(30, 41, 59, 0.9)' : '#111827',
                       color: isSelected ? meta.color : '#94a3b8',
-                      fontSize: '12px',
+                      fontSize: '11.5px',
                       fontWeight: isSelected ? '700' : '500',
                       cursor: 'pointer',
                       display: 'flex',
@@ -186,11 +208,37 @@ function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain }) {
                     }}
                   >
                     <span style={{ fontSize: '15px' }}>{meta.icon}</span>
-                    <span>{meta.label}</span>
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{meta.label}</span>
                   </button>
                 )
               })}
             </div>
+
+            {domain === 'other' && (
+              <div style={{ marginTop: '10px' }}>
+                <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#a78bfa', fontWeight: '700', marginBottom: '6px' }}>
+                  Custom Category Name
+                </label>
+                <input
+                  id="input-custom-domain"
+                  type="text"
+                  placeholder="e.g. Personal, Research, Fitness, Design (or leave as Other)"
+                  value={customDomain}
+                  onChange={e => setCustomDomain(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #7c3aed',
+                    background: '#131127',
+                    color: '#f8fafc',
+                    fontSize: '13px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            )}
           </div>
 
           {/* Title */}
@@ -628,11 +676,14 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
                 {Object.entries(DOMAIN_META).map(([k, m]) => (
                   <option key={k} value={k}>{m.icon} {m.label}</option>
                 ))}
+                {!DOMAIN_META[editDomain] && editDomain && (
+                  <option value={editDomain}>🏷️ {editDomain.charAt(0).toUpperCase() + editDomain.slice(1)}</option>
+                )}
               </select>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#e2e8f0', padding: '8px 0' }}>
-                <span>{DOMAIN_META[task.domain]?.icon || '🌐'}</span>
-                <span style={{ color: DOMAIN_META[task.domain]?.color }}>{DOMAIN_META[task.domain]?.label || task.domain}</span>
+                <span>{getDomainMeta(task.domain).icon}</span>
+                <span style={{ color: getDomainMeta(task.domain).color }}>{getDomainMeta(task.domain).label}</span>
               </div>
             )}
           </div>
@@ -914,15 +965,27 @@ export default function Timeline({ tasks, activeDomain, onSelectDomain, onTasksU
 
       {/* Filter pills */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '22px', flexWrap: 'wrap' }}>
-        {['all', 'hackathon', 'coursework', 'code', 'general'].map(dom => (
-          <button
-            key={dom}
-            onClick={() => onSelectDomain(dom)}
-            className={`filter-pill ${activeDomain === dom ? 'active' : ''}`}
-          >
-            {dom}
-          </button>
-        ))}
+        {(() => {
+          const basePills = ['all', 'hackathon', 'coursework', 'code', 'general', 'other']
+          const customPills = tasks
+            .map(t => (t.domain || '').toLowerCase().trim())
+            .filter(d => d && !basePills.includes(d))
+          const uniquePills = Array.from(new Set([...basePills, ...customPills]))
+
+          return uniquePills.map(dom => {
+            const pillMeta = dom === 'all' ? { label: 'all', icon: '▦' } : getDomainMeta(dom)
+            return (
+              <button
+                key={dom}
+                id={`filter-pill-${dom}`}
+                onClick={() => onSelectDomain(dom)}
+                className={`filter-pill ${activeDomain === dom ? 'active' : ''}`}
+              >
+                <span style={{ marginRight: '4px' }}>{pillMeta.icon}</span> {pillMeta.label}
+              </button>
+            )
+          })
+        })()}
       </div>
 
       {/* Task Stream Feed */}
@@ -971,7 +1034,7 @@ export default function Timeline({ tasks, activeDomain, onSelectDomain, onTasksU
           </div>
         ) : filtered.map(task => {
           const isOverdue = (task.countdown || '').toLowerCase().includes('overdue')
-          const meta = DOMAIN_META[task.domain] || DOMAIN_META.general
+          const meta = getDomainMeta(task.domain)
 
           return (
             <div
@@ -1011,7 +1074,17 @@ export default function Timeline({ tasks, activeDomain, onSelectDomain, onTasksU
 
                 {/* Badge & Quick Delete Action */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span className={`badge-${task.domain}`} style={{ fontSize: '10.5px', padding: '3px 9px', borderRadius: '20px', textTransform: 'uppercase', fontWeight: '700', flexShrink: 0 }}>
+                  <span className={`badge-${task.domain}`} style={{
+                    fontSize: '10.5px',
+                    padding: '3px 9px',
+                    borderRadius: '20px',
+                    textTransform: 'uppercase',
+                    fontWeight: '700',
+                    flexShrink: 0,
+                    background: 'rgba(255,255,255,0.06)',
+                    color: meta.color,
+                    border: '1px solid ' + (meta.border || 'rgba(255,255,255,0.1)')
+                  }}>
                     {meta.label}
                   </span>
                   <button

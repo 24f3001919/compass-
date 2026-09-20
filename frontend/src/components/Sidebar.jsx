@@ -17,7 +17,27 @@ export default function Sidebar({
   usageBadge
 }) {
   const isOnline = backendStatus.toLowerCase().includes('neon') || backendStatus.toLowerCase().includes('live')
-  const totalActive = (domainCounts.hackathon || 0) + (domainCounts.coursework || 0) + (domainCounts.code || 0) + (domainCounts.general || 0)
+  const totalActive = Object.values(domainCounts || {}).reduce((sum, n) => sum + (typeof n === 'number' ? n : 0), 0)
+
+  const baseDomains = [
+    { key: 'hackathon', label: 'Hackathon', icon: '🚀', color: '#fbbf24' },
+    { key: 'coursework', label: 'Coursework', icon: '📚', color: '#60a5fa' },
+    { key: 'code', label: 'Code', icon: '💻', color: '#34d399' },
+    { key: 'general', label: 'General', icon: '🌐', color: '#94a3b8' },
+    { key: 'other', label: 'Other', icon: '🏷️', color: '#a78bfa' },
+  ]
+
+  // Show any user-defined custom domains present in active tasks
+  const extraDomains = Object.keys(domainCounts || {})
+    .filter(k => !baseDomains.some(b => b.key === k) && ((domainCounts[k] || 0) > 0 || activeDomain === k))
+    .map(k => ({
+      key: k,
+      label: k.charAt(0).toUpperCase() + k.slice(1),
+      icon: '🏷️',
+      color: '#c084fc'
+    }))
+
+  const displayDomains = [...baseDomains, ...extraDomains]
 
   return (
     <aside style={{
@@ -90,12 +110,7 @@ export default function Sidebar({
           )}
         </div>
 
-        {[
-          { key: 'hackathon', label: 'Hackathon', icon: '🚀', color: '#fbbf24' },
-          { key: 'coursework', label: 'Coursework', icon: '📚', color: '#60a5fa' },
-          { key: 'code', label: 'Code', icon: '💻', color: '#34d399' },
-          { key: 'general', label: 'General', icon: '🌐', color: '#94a3b8' },
-        ].map(dom => (
+        {displayDomains.map(dom => (
           <div
             key={dom.key}
             onClick={() => onSelectDomain(dom.key)}

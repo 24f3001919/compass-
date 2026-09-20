@@ -26,7 +26,17 @@ STATUS_MAP = {
     "overdue": "overdue",
 }
 
-VALID_DOMAINS = {"hackathon", "coursework", "code", "general"}
+VALID_DOMAINS = {"hackathon", "coursework", "code", "general", "other"}
+
+
+def normalize_domain(domain: Optional[str]) -> str:
+    """Sanitize and normalize domain name, supporting standard domains, 'other', and custom categories."""
+    if not domain:
+        return "general"
+    clean = str(domain).lower().strip().replace(" ", "-")
+    import re
+    clean = re.sub(r"[^a-z0-9_-]", "", clean)
+    return clean[:32] if clean else "general"
 
 
 # ---------------------------------------------------------------------------
@@ -78,7 +88,7 @@ async def get_or_create_project(
             return dict(row)
 
     # 3. Create new project if domain is valid
-    target_domain = domain if domain in VALID_DOMAINS else "general"
+    target_domain = normalize_domain(domain)
 
     row = await conn.fetchrow(
         """
@@ -125,9 +135,8 @@ async def create_task(
     user_id: Optional[str] = None,
 ) -> dict:
     """Insert a new task into the structured tasks table with normalized inputs and user identity."""
-    # Normalize domain, status, and priority to satisfy SQL CHECK constraints
-    dom_clean = str(domain or "general").lower().strip()
-    norm_domain = dom_clean if dom_clean in VALID_DOMAINS else "general"
+    # Normalize domain, status, and priority
+    norm_domain = normalize_domain(domain)
 
     stat_clean = str(status or "open").lower().strip()
     norm_status = STATUS_MAP.get(stat_clean, "open")
@@ -242,8 +251,7 @@ async def update_task(
 
     # Normalize fields if provided
     if "domain" in updates and updates["domain"]:
-        d_val = str(updates["domain"]).lower().strip()
-        updates["domain"] = d_val if d_val in VALID_DOMAINS else "general"
+        updates["domain"] = normalize_domain(updates["domain"])
     if "status" in updates and updates["status"]:
         s_val = str(updates["status"]).lower().strip()
         updates["status"] = STATUS_MAP.get(s_val, "open")
