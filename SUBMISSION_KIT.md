@@ -115,3 +115,66 @@ Compass implements Tavily not as an afterthought, but as a core architectural pi
 3. **Nemotron-3 Ultra (550B) Context-Escalation Performance**:
    - *Praise*: Synthesis quality across multi-domain structured payloads was remarkably thorough, identifying subtle schedule conflicts that smaller models missed.
    - *Constructive Suggestion*: Adding streaming support (`stream=True`) for Ultra in Token Factory with lower initial time-to-first-token (TTFT) would significantly enhance interactive executive summary user experiences.
+
+---
+
+## 🔀 Part 4: Pull Request Description Template (Reuse Over Replacement)
+
+> **Use this text when opening or updating your Pull Request to `Ratnesh-101/compass` to clearly communicate that Northstar and Specialist Team coexist with and build upon the existing system rather than replacing it.**
+
+### Title:
+`feat: introduce Northstar AI workspace, Specialist Team, and ChatGPT-style chat sharing (composition & reuse)`
+
+### Description:
+```markdown
+### Summary of Changes: Composition & Reuse, Not Replacement
+
+This PR introduces the **Northstar AI** workspace, the **Specialist Team** multi-agent layer, and **ChatGPT-style chat management with 1-click public sharing**, designed around **composition and reuse rather than replacement**.
+
+Every existing foundational component remains 100% intact, active, and leveraged:
+- **Existing Chat**: Preserved and integrated inside the unified Northstar shell.
+- **Existing Agent Planner (ReAct)**: Preserved and integrated inside the Northstar shell.
+- **Existing Timeline**: Preserved as the primary task and deadline feed.
+- **Existing Calendar**: Preserved with Google Calendar OAuth sync.
+- **Existing Confirmation Flow**: Preserved and reused across all mutating tool calls.
+- **Existing Audit & Undo**: Preserved (`agent_audit_log` with 1-click rollback via `/api/agent/undo`).
+
+### System Architecture:
+```text
+                    COMPASS
+                       │
+          ┌────────────┴────────────┐
+          │                         │
+     🧭 NORTHSTAR             🧠 SPECIALIST TEAM
+          │                         │
+    ┌─────┴─────┐          ┌────────┼────────┐
+    │           │          │        │        │
+   Chat     Agent/ReAct  Coursework Research Calendar Memory
+    │           │
+    └─────┬─────┘
+          │
+          │ delegate when needed
+          ▼
+    Specialist Team
+          │
+          ▼
+       Result
+          │
+          ▼
+      Northstar
+          │
+          ▼
+ Confirmation → Execution → Audit → Undo
+```
+
+### Why This Architecture?
+Rather than forcing users to treat Chat and Agent Planner as two competing AI destinations, **Northstar** serves as the unified top-level assistant shell combining conversational chat and goal planning. Meanwhile, the **Specialist Team** (Coursework, Research, Calendar, Memory) remains a dedicated first-class workspace for direct specialist interaction or autonomous delegation.
+
+### Key Additions:
+1. **Unified Northstar Shell**: Seamless switching between Conversational Chat and Autonomous ReAct Goal Planning.
+2. **Specialist Multi-Agent Layer**: Dedicated experts with scoped toolkits and system prompts.
+3. **ChatGPT-Style Session Management**: Pin, rename, archive, and delete chats with interactive confirmation dialogs.
+4. **1-Click Public Sharing**: Instant unauthenticated share URLs (`/?share=<id>`) for public viewing with zero login barriers.
+5. **Full Test Suite & Zero Regressions**: All 145+ tests passing against live PostgreSQL.
+```
+

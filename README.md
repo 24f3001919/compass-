@@ -87,6 +87,48 @@ flowchart TD
     Ultra -->|Synthesized Roadmap| FastAPI
 ```
 
+### System Hierarchy: Reuse & Coexistence (Northstar & Specialist Team)
+
+Compass is built around **composition and reuse rather than replacement**. Every existing foundational capability—conversational chat, autonomous ReAct planning, timeline feeds, calendar views, confirmation gates, and audit logs—remains 100% intact, active, and fully leveraged:
+
+```text
+                    COMPASS
+                       │
+          ┌────────────┴────────────┐
+          │                         │
+     🧭 NORTHSTAR             🧠 SPECIALIST TEAM
+          │                         │
+    ┌─────┴─────┐          ┌────────┼────────┐
+    │           │          │        │        │
+   Chat     Agent/ReAct  Coursework Research Calendar Memory
+    │           │
+    └─────┬─────┘
+          │
+          │ delegate when needed
+          ▼
+    Specialist Team
+          │
+          ▼
+       Result
+          │
+          ▼
+      Northstar
+          │
+          ▼
+ Confirmation → Execution → Audit → Undo
+```
+
+| Subsystem / Layer | Architectural Role | Status & Integration |
+| :--- | :--- | :--- |
+| **Existing Chat** | Fast conversational copilot (Nano-30B) | **Preserved & Reused** inside Northstar shell |
+| **Existing Agent Planner** | Multi-step ReAct autonomous engine (Super-120B) | **Preserved & Reused** inside Northstar shell |
+| **Existing Timeline** | Default task & deadline feed | **Preserved & Unchanged** |
+| **Existing Calendar** | Schedule & Google Calendar sync | **Preserved & Unchanged** |
+| **Confirmation Flow** | Safe state-mutation gate | **Preserved & Reused** across all agents |
+| **Audit & Undo** | `agent_audit_log` with 1-click rollback | **Preserved & Reused** across all mutations |
+| **🧭 Northstar AI** | Unified primary AI workspace | **New Top-Level Workspace** combining Chat + Planner |
+| **🧠 Specialist Team** | Modular domain expert agents | **New First-Class Workspace** (Coursework, Research, Calendar, Memory) |
+
 ### Public vs. Protected Endpoint Design Decision
 The four interactive endpoints (`/api/chat`, `/api/chat/stream`, `/api/agent/run`, and `/api/log`) are intentionally **public by design** (protected by per-IP sliding-window rate limiters: 30 req/min on chat/stream/log, 10 req/min on agent runs) rather than requiring authentication. This is an explicit, documented architectural decision: hackathon evaluators and judges can test the live interactive UI and autonomous agent flows without needing pre-configured credentials or bearer tokens. Conversely, mutation execution and approval endpoints (`/api/agent/confirm`, `/api/agent/undo`, and `/api/agent/trigger-nightly`) strictly require the Bearer token (`AUTH_TOKEN`) specifically because they execute or reverse persistent state changes in the database.
 
