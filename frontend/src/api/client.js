@@ -549,3 +549,76 @@ export async function dispatchSpecialist({ capability, user_goal, relevant_conte
   return await res.json()
 }
 
+// ---------------------------------------------------------------------------
+// Conversations History & Connected Memory
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch previous chat conversations list.
+ */
+export async function fetchConversations(limit = 30) {
+  try {
+    const res = await fetch(`${API_BASE}/api/conversations?limit=${limit}`, {
+      headers: getAuthHeaders(),
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.conversations || []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Fetch all messages from a specific previous conversation.
+ */
+export async function fetchConversationMessages(conversationId) {
+  if (!conversationId) return []
+  try {
+    const res = await fetch(`${API_BASE}/api/conversations/${conversationId}/messages`, {
+      headers: getAuthHeaders(),
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    return (data.messages || []).map(m => ({
+      role: m.role,
+      text: m.content,
+      created_at: m.created_at,
+    }))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Delete a past conversation.
+ */
+export async function deleteConversation(conversationId) {
+  if (!conversationId) return false
+  try {
+    const res = await fetch(`${API_BASE}/api/conversations/${conversationId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Fetch complete memory overview (previous chats, past plans, active tasks).
+ */
+export async function fetchMemoryOverview() {
+  try {
+    const res = await fetch(`${API_BASE}/api/memory/overview`, {
+      headers: getAuthHeaders(),
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+

@@ -30,6 +30,7 @@ def get_openai_client() -> AsyncOpenAI:
 async def route_message(
     message: str,
     history: Optional[list[dict[str, str]]] = None,
+    memory_context: Optional[str] = None,
 ) -> Tuple[Optional[str], Optional[dict[str, Any]], str]:
     """Route a message through Nemotron-3 Nano using native tool calling.
 
@@ -39,21 +40,27 @@ async def route_message(
         - If regular chat: (None, None, 'Assistant text response')
     """
     client = get_openai_client()
+    system_prompt = (
+        "You are Compass, an intelligent personal assistant with persistent memory across chat sessions. "
+        "You maintain context across conversation history AND prior chats/plans. "
+        "When the user asks follow-up questions about recently created tasks, deadlines, or status, "
+        "either call query_tasks with the relevant domain/project or answer directly from conversation history. "
+        "When the user asks what they asked earlier, recalls past decisions, or asks to plan or schedule without clashing, "
+        "refer to the provided long-term workspace memory and active schedule. "
+        "CRITICAL: When the user requests adding, scheduling, or tracking a task, action item, or deadline, "
+        "you MUST call the add_task tool with properly extracted fields. "
+        "When the user asks whether their open workload is achievable or feasible, what to prioritise, "
+        "what to drop, whether they can finish in time, feels overloaded, or asks for a feasibility review / workload triage, "
+        "call the assess_feasibility tool with extracted days and hours_per_day. "
+        "For general inquiries or conversation, respond directly with helpful text."
+    )
+    if memory_context:
+        system_prompt += f"\n\n[WORKSPACE MEMORY & PAST SESSIONS - USE TO PREVENT SCHEDULE CLASHES & RECALL PAST CONTEXT]:\n{memory_context}"
+
     messages: Any = [
         {
             "role": "system",
-            "content": (
-                "You are Compass, an intelligent personal assistant. "
-                "You maintain context across conversation history. "
-                "When the user asks follow-up questions about recently created tasks, deadlines, or status, "
-                "either call query_tasks with the relevant domain/project or answer directly from conversation history. "
-                "When the user requests adding, scheduling, or tracking a task, action item, or deadline, "
-                "call the add_task tool with properly extracted fields. "
-                "When the user asks whether their open workload is achievable or feasible, what to prioritise, "
-                "what to drop, whether they can finish in time, feels overloaded, or asks for a feasibility review / workload triage, "
-                "call the assess_feasibility tool with extracted days and hours_per_day. "
-                "For general inquiries or conversation, respond directly with helpful text."
-            ),
+            "content": system_prompt,
         }
     ]
 
@@ -93,6 +100,24 @@ async def route_message(
             logger.info(f"Router invoked tool: {func_name} with args: {args}")
             return func_name, args, ""
         else:
+            # Fallback if model responded with conversational text to an explicit task creation command
+            msg_lower = message.lower()
+            if any(term in msg_lower for term in ("add a task", "add task", "new task", "create task")):
+                title = message
+                domain = "general"
+                for prefix in ("add a task:", "add task:", "add a task", "add task", "create task:"):
+                    if prefix in msg_lower:
+                        idx = msg_lower.find(prefix) + len(prefix)
+                        title = message[idx:].strip()
+                        break
+                if "domain" in title.lower():
+                    import re
+                    d_match = re.search(r"domain\s*[:=]?\s*([a-zA-Z0-9_-]+)", title, re.IGNORECASE)
+                    if d_match:
+                        domain = d_match.group(1).lower()
+                        title = re.sub(r"[,;]?\s*domain\s*[:=]?\s*[a-zA-Z0-9_-]+", "", title, flags=re.IGNORECASE).strip()
+                return "add_task", {"title": title, "domain": domain}, ""
+
             reply = choice.message.content or "How can I help you today?"
             return None, None, reply
 

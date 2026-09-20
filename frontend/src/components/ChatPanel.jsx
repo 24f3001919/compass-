@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { streamQueryFromAssistant } from '../api/client'
+import {
+  streamQueryFromAssistant,
+  fetchConversations,
+  fetchConversationMessages,
+  deleteConversation,
+  fetchMemoryOverview,
+} from '../api/client'
 
 function getTimeGreeting() {
   const hour = new Date().getHours()
@@ -15,10 +21,47 @@ export default function ChatPanel({
   const [input, setInput] = useState('')
   const [streamingText, setStreamingText] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
-  const [showContext, setShowContext] = useState(true)
+  const [showContext, setShowContext] = useState(false)
+  const [showHistoryDrawer, setShowHistoryDrawer] = useState(false)
+  const [historyTab, setHistoryTab] = useState('chats') // 'chats' | 'plans' | 'memory'
+  const [pastConversations, setPastConversations] = useState([])
+  const [pastPlans, setPastPlans] = useState([])
+  const [memoryOverview, setMemoryOverview] = useState(null)
+  const [loadingHistory, setLoadingHistory] = useState(false)
+
   const messagesEndRef = useRef(null)
   const streamTimerRef = useRef(null)
   const isSendingRef = useRef(false)
+
+  // Load past conversations and memory overview on mount & drawer open
+  const loadHistoryData = async () => {
+    setLoadingHistory(true)
+    try {
+      const [convs, mem] = await Promise.all([
+        fetchConversations(30),
+        fetchMemoryOverview(),
+      ])
+      if (convs) setPastConversations(convs)
+      if (mem) {
+        setMemoryOverview(mem)
+        if (mem.recent_plans) setPastPlans(mem.recent_plans)
+      }
+    } catch (e) {
+      console.warn('Error loading history data:', e)
+    } finally {
+      setLoadingHistory(false)
+    }
+  }
+
+  useEffect(() => {
+    loadHistoryData()
+  }, [])
+
+  useEffect(() => {
+    if (showHistoryDrawer) {
+      loadHistoryData()
+    }
+  }, [showHistoryDrawer])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -170,10 +213,51 @@ export default function ChatPanel({
     setMessages([
       {
         role: 'assistant',
-        text: "Hey! I'm Compass, your productivity copilot. I can track tasks, recall code context, synthesize cross-domain roadmaps, and search the web. What's on your mind?"
+        text: "New conversation started! Long-term memory is active across sessions, so I remember your past decisions, tasks, and deadlines. How can I help you plan today?"
       }
     ])
     if (setConversationId) setConversationId(null)
+    setShowHistoryDrawer(false)
+  }
+
+  const handleSelectPastChat = async (pastConvId) => {
+    if (isStreaming || isTyping) return
+    try {
+      if (setConversationId) setConversationId(pastConvId)
+      const msgs = await fetchConversationMessages(pastConvId)
+      if (msgs && msgs.length > 0) {
+        setMessages(msgs)
+      } else {
+        setMessages([
+          { role: 'assistant', text: 'Resumed conversation. All memory from previous sessions is loaded. What would you like to discuss next?' }
+        ])
+      }
+      setShowHistoryDrawer(false)
+    } catch (e) {
+      console.warn('Failed to load past conversation:', e)
+    }
+  }
+
+  const handleDeletePastChat = async (e, pastConvId) => {
+    e.stopPropagation()
+    const ok = await deleteConversation(pastConvId)
+    if (ok) {
+      setPastConversations(prev => prev.filter(c => c.id !== pastConvId))
+      if (conversationId === pastConvId) {
+        handleNewChat()
+      }
+    }
+  }
+
+  const handleSelectPastPlan = (plan) => {
+    setMessages(prev => [
+      ...prev,
+      {
+        role: 'assistant',
+        text: `📋 **Loaded Past Plan: "${plan.goal}"**\n- **Status:** ${plan.status.toUpperCase()}\n- **Executed on:** ${new Date(plan.created_at).toLocaleString()}\n\nI have this plan in active context. Would you like me to adjust deadlines, reschedule items, or check for conflicts?`
+      }
+    ])
+    setShowHistoryDrawer(false)
   }
 
   /**
@@ -263,36 +347,89 @@ export default function ChatPanel({
   const overdueCount = tasks.filter(t => (t.countdown || '').toLowerCase().includes('overdue')).length
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100%', minWidth: 0, background: 'var(--bg-app)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100%', minWidth: 0, background: 'var(--bg-app)', position: 'relative' }}>
       {/* Sleek Context & Control Sub-bar */}
       <div style={{
-        padding: '10px 24px', borderBottom: '1px solid var(--border)', background: 'var(--bg-card)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0
+        padding: '10px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-card)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, gap: '12px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-          <span style={{
-            width: '7px', height: '7px', borderRadius: '50%',
-            background: isOnline ? '#10b981' : '#f5a623', display: 'inline-block'
-          }} />
-          <span>{isOnline ? 'Workspace connected · Aware of tasks & schedule' : 'Reconnecting to workspace…'}</span>
+        {/* Left: History drawer toggle & Live connection indicator */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+          <button
+            id="btn-toggle-history-drawer"
+            onClick={() => setShowHistoryDrawer(v => !v)}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '8px',
+              border: '1px solid var(--border)',
+              background: showHistoryDrawer ? 'var(--primary)' : 'var(--bg-card-soft)',
+              color: showHistoryDrawer ? '#fff' : 'var(--text-primary)',
+              fontSize: '12px',
+              fontWeight: '700',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.15s ease',
+              boxShadow: 'var(--shadow-sm)',
+              flexShrink: 0,
+            }}
+            title="View previous chats, plans, and long-term memory"
+          >
+            <span>📜</span>
+            <span>History & Memory</span>
+            {pastConversations.length > 0 && (
+              <span style={{
+                background: showHistoryDrawer ? 'rgba(255,255,255,0.25)' : 'var(--brand)',
+                color: showHistoryDrawer ? '#fff' : '#2a1a00',
+                fontSize: '10.5px',
+                padding: '1px 6px',
+                borderRadius: '10px',
+                fontWeight: '800'
+              }}>
+                {pastConversations.length}
+              </span>
+            )}
+          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: 'var(--text-secondary)' }}>
+            <span style={{
+              width: '7px', height: '7px', borderRadius: '50%',
+              background: isOnline ? '#10b981' : '#f5a623', display: 'inline-block'
+            }} />
+            <span style={{ whiteSpace: 'nowrap' }}>{isOnline ? 'Workspace connected' : 'Connecting…'}</span>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
+
+        {/* Right: Connected memory pill, Context toggle & New Chat */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '12px',
+            background: 'var(--code-bg)', border: '1px solid rgba(16, 185, 129, 0.3)',
+            fontSize: '11px', color: 'var(--code-text)', fontWeight: '600'
+          }} title="Compass long-term memory is active across sessions to prevent schedule clashes">
+            <span>🧠</span>
+            <span>Memory Active</span>
+          </div>
+
           <button
             onClick={() => setShowContext(v => !v)}
             style={{
-              padding: '5px 12px', borderRadius: '6px', border: '1px solid var(--border)',
+              padding: '5px 11px', borderRadius: '6px', border: '1px solid var(--border)',
               background: showContext ? 'var(--bg-card-soft)' : 'transparent',
               color: 'var(--text-secondary)', fontSize: '11.5px', fontWeight: '600', cursor: 'pointer'
             }}>
-            {showContext ? 'Hide Context' : 'Show Workspace Context'}
+            {showContext ? 'Hide Context' : 'Show Context'}
           </button>
+
           <button
+            id="btn-chat-new"
             onClick={handleNewChat}
             disabled={isInputDisabled}
             style={{
               padding: '5px 12px', borderRadius: '6px', border: '1px solid var(--border)',
               background: 'transparent', color: 'var(--text-secondary)',
-              fontSize: '11.5px', fontWeight: '600', cursor: isInputDisabled ? 'not-allowed' : 'pointer',
+              fontSize: '11.5px', fontWeight: '700', cursor: isInputDisabled ? 'not-allowed' : 'pointer',
               opacity: isInputDisabled ? 0.5 : 1
             }}>
             + New Chat
@@ -300,52 +437,325 @@ export default function ChatPanel({
         </div>
       </div>
 
-      {/* Context chips — only real, wired data */}
-      {showContext && (
-        <div style={{
-          display: 'flex', gap: '10px', padding: '14px 28px', borderBottom: '1px solid var(--border)',
-          background: 'var(--bg-card)', flexShrink: 0, flexWrap: 'wrap'
-        }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 14px', borderRadius: '10px',
-            background: overdueCount > 0 ? 'var(--danger-bg)' : 'var(--code-bg)', minWidth: '180px'
+      {/* Main Body: History Drawer + Chat View */}
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        {/* Claude-style History & Memory Drawer */}
+        {showHistoryDrawer && (
+          <aside style={{
+            width: '320px',
+            minWidth: '280px',
+            maxWidth: '360px',
+            background: 'var(--bg-card)',
+            borderRight: '1px solid var(--border)',
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+            overflow: 'hidden',
+            boxShadow: 'var(--shadow-md)',
+            zIndex: 10,
           }}>
-            <span style={{ fontSize: '16px' }}>{overdueCount > 0 ? '⚠️' : '✅'}</span>
-            <div>
-              <div style={{ fontSize: '12.5px', fontWeight: '700', color: overdueCount > 0 ? '#b23b3b' : 'var(--code-text)' }}>
-                {overdueCount > 0 ? `${overdueCount} task${overdueCount === 1 ? '' : 's'} overdue` : 'No overdue tasks'}
+            {/* Drawer Header */}
+            <div style={{
+              padding: '14px 16px',
+              borderBottom: '1px solid var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'var(--bg-card-soft)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '16px' }}>📜</span>
+                <span style={{ fontSize: '13px', fontWeight: '800', color: 'var(--text-primary)' }}>
+                  History & Memory
+                </span>
               </div>
-              <div style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>Across all domains</div>
+              <button
+                onClick={() => setShowHistoryDrawer(false)}
+                style={{
+                  background: 'none', border: 'none', color: 'var(--text-muted)',
+                  fontSize: '16px', cursor: 'pointer', padding: '2px 6px'
+                }}
+                title="Close drawer"
+              >
+                ✕
+              </button>
             </div>
-          </div>
 
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 14px', borderRadius: '10px',
-            background: 'var(--coursework-bg)', minWidth: '180px'
-          }}>
-            <span style={{ fontSize: '16px' }}>📋</span>
-            <div>
-              <div style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--coursework-text)' }}>
-                {tasks.length} task{tasks.length === 1 ? '' : 's'} tracked
-              </div>
-              <div style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>Live from Neon</div>
+            {/* New Chat Primary Action */}
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+              <button
+                onClick={handleNewChat}
+                style={{
+                  width: '100%',
+                  padding: '9px 14px',
+                  borderRadius: '8px',
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontSize: '12.5px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  boxShadow: '0 3px 10px rgba(37, 99, 235, 0.3)'
+                }}
+              >
+                <span>+</span> Start New Chat
+              </button>
             </div>
-          </div>
 
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 14px', borderRadius: '10px',
-            background: isOnline ? 'var(--code-bg)' : 'var(--hackathon-bg)', minWidth: '180px'
-          }}>
-            <span style={{ fontSize: '16px' }}>{isOnline ? '🟢' : '🟡'}</span>
-            <div>
-              <div style={{ fontSize: '12.5px', fontWeight: '700', color: isOnline ? 'var(--code-text)' : 'var(--hackathon-text)' }}>
-                {isOnline ? 'Backend live' : 'Backend offline'}
-              </div>
-              <div style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>{backendStatus}</div>
+            {/* Drawer Sub-tab selector */}
+            <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '6px 12px', gap: '6px', background: 'var(--bg-app)' }}>
+              {[
+                { key: 'chats', label: `Chats (${pastConversations.length})`, icon: '💬' },
+                { key: 'plans', label: `Plans (${pastPlans.length})`, icon: '📋' },
+                { key: 'memory', label: 'Memory Bank', icon: '🧠' },
+              ].map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setHistoryTab(tab.key)}
+                  style={{
+                    flex: 1,
+                    padding: '6px 4px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    background: historyTab === tab.key ? 'var(--bg-card)' : 'transparent',
+                    color: historyTab === tab.key ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    fontWeight: historyTab === tab.key ? '700' : '500',
+                    fontSize: '11px',
+                    cursor: 'pointer',
+                    boxShadow: historyTab === tab.key ? 'var(--shadow-sm)' : 'none',
+                    textAlign: 'center',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {tab.icon} {tab.label}
+                </button>
+              ))}
             </div>
-          </div>
-        </div>
-      )}
+
+            {/* Drawer Body Items */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px' }}>
+              {historyTab === 'chats' && (
+                pastConversations.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '30px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>
+                    <div style={{ fontSize: '24px', marginBottom: '8px' }}>💬</div>
+                    <div>No previous chats yet.</div>
+                    <div style={{ fontSize: '11px', marginTop: '4px' }}>Chats are automatically stored and remembered across sessions.</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {pastConversations.map(conv => {
+                      const isCurrent = conversationId === conv.id
+                      return (
+                        <div
+                          key={conv.id}
+                          onClick={() => handleSelectPastChat(conv.id)}
+                          style={{
+                            padding: '10px 12px',
+                            borderRadius: '8px',
+                            border: `1px solid ${isCurrent ? 'var(--primary)' : 'var(--border)'}`,
+                            background: isCurrent ? 'var(--bg-card-soft)' : 'var(--bg-card)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px',
+                            transition: 'all 0.15s ease',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--brand)'}
+                          onMouseLeave={e => e.currentTarget.style.borderColor = isCurrent ? 'var(--primary)' : 'var(--border)'}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                            <span style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                              {conv.title || 'Chat Session'}
+                            </span>
+                            <button
+                              onClick={(e) => handleDeletePastChat(e, conv.id)}
+                              style={{
+                                background: 'none', border: 'none', color: 'var(--text-muted)',
+                                fontSize: '12px', cursor: 'pointer', padding: '0 2px'
+                              }}
+                              title="Delete conversation"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '10.5px', color: 'var(--text-muted)' }}>
+                            <span>{new Date(conv.last_active_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                            <span>{conv.message_count} message{conv.message_count !== 1 ? 's' : ''}</span>
+                          </div>
+                          {conv.preview && (
+                            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: 0.85 }}>
+                              {conv.preview}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              )}
+
+              {historyTab === 'plans' && (
+                pastPlans.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '30px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>
+                    <div style={{ fontSize: '24px', marginBottom: '8px' }}>📋</div>
+                    <div>No previous plans yet.</div>
+                    <div style={{ fontSize: '11px', marginTop: '4px' }}>Goals decomposed by the Planner will be recorded here.</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {pastPlans.map(plan => (
+                      <div
+                        key={plan.id}
+                        onClick={() => handleSelectPastPlan(plan)}
+                        style={{
+                          padding: '10px 12px',
+                          borderRadius: '8px',
+                          border: '1px solid var(--border)',
+                          background: 'var(--bg-card)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px',
+                          transition: 'all 0.15s ease',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--brand)'}
+                        onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                        title="Click to reference this plan in chat"
+                      >
+                        <div style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', lineHeight: 1.3 }}>
+                          {plan.goal}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px' }}>
+                          <span style={{
+                            padding: '2px 7px',
+                            borderRadius: '6px',
+                            fontSize: '10px',
+                            fontWeight: '700',
+                            background: plan.status === 'completed' ? 'var(--code-bg)' : 'var(--hackathon-bg)',
+                            color: plan.status === 'completed' ? 'var(--code-text)' : 'var(--hackathon-text)',
+                            textTransform: 'uppercase'
+                          }}>
+                            {plan.status}
+                          </span>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '10.5px' }}>
+                            {new Date(plan.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
+
+              {historyTab === 'memory' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ padding: '12px', borderRadius: '8px', background: 'var(--code-bg)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: '700', color: 'var(--code-text)', marginBottom: '4px' }}>
+                      <span>🟢</span> Cross-Session Recall Active
+                    </div>
+                    <p style={{ margin: 0, fontSize: '11.5px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                      Compass automatically recalls your past chats, deadlines, and schedule commitments in new chats so schedules never clash.
+                    </p>
+                  </div>
+
+                  <div style={{ padding: '12px', borderRadius: '8px', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '8px' }}>
+                      Memory Metrics
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                      <span>Active Tasks & Deadlines:</span>
+                      <strong style={{ color: 'var(--text-primary)' }}>{tasks.length}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                      <span>Recorded Conversations:</span>
+                      <strong style={{ color: 'var(--text-primary)' }}>{pastConversations.length}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: 'var(--text-secondary)' }}>
+                      <span>Executed Agent Plans:</span>
+                      <strong style={{ color: 'var(--text-primary)' }}>{pastPlans.length}</strong>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setShowHistoryDrawer(false)
+                      handleSend('Check for any schedule conflicts between my upcoming deadlines and past discussions')
+                    }}
+                    style={{
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      background: 'var(--bg-card-soft)',
+                      border: '1px solid var(--border)',
+                      color: 'var(--text-primary)',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <span>🔍</span> Check for Schedule Clashes Now
+                  </button>
+                </div>
+              )}
+            </div>
+          </aside>
+        )}
+
+          {/* Main Chat Feed & Input */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100%', overflow: 'hidden' }}>
+            {/* Context chips — only real, wired data */}
+            {showContext && (
+              <div style={{
+                display: 'flex', gap: '10px', padding: '12px 24px', borderBottom: '1px solid var(--border)',
+                background: 'var(--bg-card)', flexShrink: 0, flexWrap: 'wrap'
+              }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', borderRadius: '10px',
+                  background: overdueCount > 0 ? 'var(--danger-bg)' : 'var(--code-bg)', minWidth: '170px'
+                }}>
+                  <span style={{ fontSize: '16px' }}>{overdueCount > 0 ? '⚠️' : '✅'}</span>
+                  <div>
+                    <div style={{ fontSize: '12px', fontWeight: '700', color: overdueCount > 0 ? '#b23b3b' : 'var(--code-text)' }}>
+                      {overdueCount > 0 ? `${overdueCount} overdue` : 'On schedule'}
+                    </div>
+                    <div style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>Across all domains</div>
+                  </div>
+                </div>
+
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', borderRadius: '10px',
+                  background: 'var(--coursework-bg)', minWidth: '170px'
+                }}>
+                  <span style={{ fontSize: '16px' }}>📋</span>
+                  <div>
+                    <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--coursework-text)' }}>
+                      {tasks.length} task{tasks.length === 1 ? '' : 's'} tracked
+                    </div>
+                    <div style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>Live in Neon</div>
+                  </div>
+                </div>
+
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', borderRadius: '10px',
+                  background: isOnline ? 'var(--code-bg)' : 'var(--hackathon-bg)', minWidth: '170px'
+                }}>
+                  <span style={{ fontSize: '16px' }}>{isOnline ? '🟢' : '🟡'}</span>
+                  <div>
+                    <div style={{ fontSize: '12px', fontWeight: '700', color: isOnline ? 'var(--code-text)' : 'var(--hackathon-text)' }}>
+                      {isOnline ? 'Backend live' : 'Backend offline'}
+                    </div>
+                    <div style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>{backendStatus}</div>
+                  </div>
+                </div>
+              </div>
+            )}
 
       {/* Message Feed Container */}
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', padding: '24px 28px', minWidth: 0 }}>
@@ -507,6 +917,8 @@ export default function ChatPanel({
           </button>
         </form>
       </div>
-    </div>
+          </div>
+        </div>
+      </div>
   )
 }

@@ -322,10 +322,13 @@ async def chat(request: ChatRequest, _token: str = Depends(verify_token)):
     "/conversations/{conversation_id}/messages",
     response_model=MessagesResponse,
 )
+@app.get(
+    "/api/conversations/{conversation_id}/messages",
+    response_model=MessagesResponse,
+)
 async def get_messages(
     conversation_id: str,
     limit: int = Query(50, ge=1, le=200),
-    _token: str = Depends(verify_token),
 ):
     """Get message history for a conversation from PostgreSQL."""
     try:
@@ -346,6 +349,90 @@ async def get_messages(
     except Exception as e:
         logger.warning(f"Database query failed for get_messages, returning empty list: {e}")
         return MessagesResponse(conversation_id=conversation_id, messages=[])
+
+
+# ---- 2b. GET /api/conversations  — List past chat sessions ----------------
+@app.get("/api/conversations")
+async def list_past_conversations(
+    limit: int = Query(30, ge=1, le=100),
+    request: Request = None,
+):
+    """List previous chat conversations with titles, timestamps, and message counts."""
+    pool = await get_pool()
+    if not pool:
+        return {"conversations": [], "total": 0}
+    user_id = request.headers.get("x-user-id") if request else None
+    try:
+        async with pool.acquire() as conn:
+            convs = await conversations.list_conversations(conn, limit=limit, user_id=user_id)
+            return {"conversations": convs, "total": len(convs)}
+    except Exception as e:
+        logger.warning(f"Error listing past conversations: {e}")
+        return {"conversations": [], "total": 0}
+
+
+# ---- 2c. DELETE /api/conversations/{conversation_id} ---------------------
+@app.delete("/api/conversations/{conversation_id}")
+async def delete_past_conversation(conversation_id: str):
+    """Delete a past conversation session and its messages."""
+    pool = await get_pool()
+    if not pool:
+        return {"ok": False, "error": "Database unavailable"}
+    try:
+        async with pool.acquire() as conn:
+            ok = await conversations.delete_conversation(conn, conversation_id)
+            return {"ok": ok}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+# ---- 2d. GET /api/memory/overview ----------------------------------------
+@app.get("/api/memory/overview")
+async def get_memory_overview(request: Request = None):
+    """Unified memory overview: previous chats, past planner runs, and active workspace memory."""
+    pool = await get_pool()
+    if not pool:
+        return {
+            "status": "offline",
+            "recent_chats": [],
+            "recent_plans": [],
+            "total_tasks": 0,
+            "total_memories": 0,
+        }
+    user_id = request.headers.get("x-user-id") if request else None
+    try:
+        async with pool.acquire() as conn:
+            convs = await conversations.list_conversations(conn, limit=10, user_id=user_id)
+            runs_rows = await conn.fetch(
+                "SELECT id, goal, status, created_at FROM agent_runs ORDER BY created_at DESC LIMIT 10"
+            )
+            runs = [
+                {
+                    "id": r["id"],
+                    "goal": r["goal"],
+                    "status": r["status"],
+                    "created_at": r["created_at"].isoformat() if hasattr(r["created_at"], "isoformat") else str(r["created_at"]),
+                }
+                for r in runs_rows
+            ]
+            tasks_count = await conn.fetchval("SELECT COUNT(*) FROM tasks")
+            chunks_count = await conn.fetchval("SELECT COUNT(*) FROM memory_chunks")
+            return {
+                "status": "connected",
+                "recent_chats": convs,
+                "recent_plans": runs,
+                "total_tasks": int(tasks_count or 0),
+                "total_memories": int(chunks_count or 0),
+            }
+    except Exception as e:
+        logger.warning(f"Error getting memory overview: {e}")
+        return {
+            "status": "degraded",
+            "recent_chats": [],
+            "recent_plans": [],
+            "total_tasks": 0,
+            "total_memories": 0,
+        }
 
 
 # ---- 3. GET /projects ----------------------------------------------------
@@ -1179,11 +1266,60 @@ async def stream_chat(req: StreamChatRequest, _rl: None = Depends(rate_limit)):
                 timeout=30.0,
             )
 
-            # Build minimal message list for streaming (no history injection to keep latency low)
+            # Build messages list with history and long-term memory to prevent schedule clashes
+            history_items = []
+            if req.conversation_id:
+                try:
+                    pool = await get_pool()
+                    if pool:
+                        async with pool.acquire() as conn:
+                            rows = await conversations.get_recent_messages(conn, req.conversation_id, limit=6)
+                            for r in rows:
+                                role = r.get("role", "user")
+                                content = r.get("content", "")
+                                if role in ("user", "assistant") and content:
+                                    history_items.append({"role": role, "content": content})
+                except Exception:
+                    pass
+
+            # Load cross-conversation memory & active tasks
+            memory_context = ""
+            try:
+                pool = await get_pool()
+                if pool:
+                    async with pool.acquire() as conn:
+                        prior = await conversations.get_cross_conversation_memory(conn, exclude_conversation_id=req.conversation_id, limit=6)
+                        tasks_rows = await conn.fetch(
+                            "SELECT title, domain, due_date, status, priority FROM tasks WHERE status != 'completed' ORDER BY due_date ASC NULLS LAST LIMIT 8"
+                        )
+                        mem_parts = []
+                        if prior:
+                            prior_text = "\n".join([f"- [{p.get('role', 'user')}]: {p.get('content', '')[:100]}" for p in prior])
+                            mem_parts.append(f"Past Chats Recall:\n{prior_text}")
+                        if tasks_rows:
+                            tasks_text = "\n".join([f"- {t['title']} ({t['domain']}) | Due: {t['due_date'] or 'None'} | {t['priority']}" for t in tasks_rows])
+                            mem_parts.append(f"Active Tasks & Deadlines (Prevent schedule clashes):\n{tasks_text}")
+                        if mem_parts:
+                            memory_context = "\n\n".join(mem_parts)
+            except Exception:
+                pass
+
+            sys_prompt = (
+                "You are Compass, an intelligent personal assistant with long-term memory across sessions. "
+                "You maintain context across conversation history AND prior chats/plans. "
+                "When the user asks follow-up questions, recalls earlier conversations, or asks to plan or schedule without clashing, "
+                "use the provided memory and active schedule context. Be concise, friendly, and helpful."
+            )
+            if memory_context:
+                sys_prompt += f"\n\n[WORKSPACE MEMORY & PAST CONTEXT]:\n{memory_context}"
+
             messages: list[ChatCompletionMessageParam] = [
-                {"role": "system", "content": "You are Compass, a friendly and intelligent personal assistant. Be concise and helpful."},
-                {"role": "user", "content": message},
+                {"role": "system", "content": sys_prompt},
             ]
+            if history_items:
+                messages.extend(history_items)
+            messages.append({"role": "user", "content": message})
+
             tools: list[ChatCompletionToolParam] = cast(list[ChatCompletionToolParam], TOOLS)
 
             stream = cast(
@@ -1227,6 +1363,17 @@ async def stream_chat(req: StreamChatRequest, _rl: None = Depends(rate_limit)):
                 yield f"data: {json.dumps({'type': 'token', 'value': response_text})}\n\n"
                 yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': result.get('skill_used', 'add_task')})}\n\n"
                 return
+
+            # Persist streamed conversation to PostgreSQL for future recall and history
+            try:
+                pool = await get_pool()
+                if pool and full_text:
+                    async with pool.acquire() as conn:
+                        real_cid = await conversations.get_or_create_conversation(conn, conv_id)
+                        await conversations.add_message(conn, real_cid, role="user", content=message)
+                        await conversations.add_message(conn, real_cid, role="assistant", content=full_text, skill_called="chat")
+            except Exception as save_err:
+                logger.warning(f"Could not persist streamed messages: {save_err}")
 
             # Record usage estimate (no real usage object in streaming mode)
             prompt_est = len(message.split()) * 3

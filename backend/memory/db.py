@@ -39,6 +39,10 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
         CREATE INDEX IF NOT EXISTS idx_agent_runs_created_at      ON agent_runs(created_at);
         CREATE INDEX IF NOT EXISTS idx_agent_runs_conversation_id ON agent_runs(conversation_id);
 
+        ALTER TABLE conversations ADD COLUMN IF NOT EXISTS title TEXT;
+        ALTER TABLE conversations ADD COLUMN IF NOT EXISTS user_id TEXT;
+        CREATE INDEX IF NOT EXISTS idx_conversations_last_active ON conversations(last_active_at DESC);
+
         CREATE TABLE IF NOT EXISTS agent_audit_log (
             id                 SERIAL        PRIMARY KEY,
             run_id             TEXT,

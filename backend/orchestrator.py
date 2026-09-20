@@ -64,8 +64,57 @@ async def handle_message(
         except Exception as e:
             logger.debug(f"Could not load conversation history: {e}")
 
+    # Load long-term cross-session memory & active tasks to prevent schedule conflicts
+    memory_context = ""
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            prior_messages = await conversations.get_cross_conversation_memory(
+                conn, exclude_conversation_id=conversation_id, limit=6
+            )
+            active_tasks = await conn.fetch(
+                """
+                SELECT title, domain, due_date, status, priority, duration_minutes
+                FROM tasks
+                WHERE status != 'completed'
+                ORDER BY due_date ASC NULLS LAST, priority DESC
+                LIMIT 8
+                """
+            )
+            recent_plans = await conn.fetch(
+                """
+                SELECT goal, status
+                FROM agent_runs
+                ORDER BY created_at DESC
+                LIMIT 3
+                """
+            )
+
+            sections = []
+            if prior_messages:
+                prior_str = "\n".join([f"- [{m.get('role', 'user')}]: {m.get('content', '')[:120]}" for m in prior_messages])
+                sections.append(f"Past Chats Recall:\n{prior_str}")
+            if active_tasks:
+                task_str = "\n".join([
+                    f"- {t['title']} ({t['domain']}) | Due: {t['due_date'] or 'Unscheduled'} | {t['duration_minutes'] or 60}m | {t['priority']}"
+                    for t in active_tasks
+                ])
+                sections.append(f"Existing Tasks & Deadlines (Avoid schedule conflicts):\n{task_str}")
+            if recent_plans:
+                plan_str = "\n".join([f"- Plan: {p['goal']} ({p['status']})" for p in recent_plans])
+                sections.append(f"Recent Planner Goals:\n{plan_str}")
+
+            if sections:
+                memory_context = "\n\n".join(sections)
+    except Exception as e:
+        logger.debug(f"Could not load cross-conversation memory: {e}")
+
     # 1. Route via Nemotron-3 Nano
-    skill_name, args, text_reply = await route_message(message, history=history if history else None)
+    skill_name, args, text_reply = await route_message(
+        message,
+        history=history if history else None,
+        memory_context=memory_context if memory_context else None,
+    )
     if user_id and isinstance(args, dict):
         args["user_id"] = user_id
 
