@@ -167,7 +167,7 @@ async def list_conversations(
             LEFT JOIN messages m ON m.conversation_id = c.id
         """
 
-        params = []
+        params: List[Any] = []
         if user_id and has_user_col:
             query += " WHERE c.user_id = $1 OR c.user_id IS NULL "
             params.append(user_id)
@@ -224,7 +224,7 @@ async def get_cross_conversation_memory(
             FROM messages m
             JOIN conversations c ON m.conversation_id = c.id
         """
-        params = []
+        params: List[Any] = []
         if exclude_conversation_id:
             try:
                 cid = uuid.UUID(exclude_conversation_id)
