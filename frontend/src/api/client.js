@@ -51,6 +51,29 @@ export const FALLBACK_TASKS = [
   }
 ]
 
+export function getCurrentUserId() {
+  return localStorage.getItem('compass_user_id') || ''
+}
+
+export function setCurrentUserId(userId) {
+  if (userId) {
+    localStorage.setItem('compass_user_id', userId)
+    document.cookie = `compass_user_id=${encodeURIComponent(userId)}; path=/; max-age=2592000; SameSite=Lax`
+  } else {
+    localStorage.removeItem('compass_user_id')
+    document.cookie = `compass_user_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`
+  }
+}
+
+export function getAuthHeaders(extraHeaders = {}) {
+  const headers = { ...extraHeaders }
+  const uid = getCurrentUserId()
+  if (uid) {
+    headers['x-user-id'] = uid
+  }
+  return headers
+}
+
 /**
  * Health check ping — dynamically reports Neon connection or fallback status.
  */
@@ -61,6 +84,7 @@ export async function checkBackendHealth() {
 
     const res = await fetch(`${API_BASE}/health`, {
       method: 'GET',
+      headers: getAuthHeaders(),
       signal: controller.signal
     })
     clearTimeout(timeoutId)
@@ -80,7 +104,7 @@ export async function checkBackendHealth() {
 }
 
 /**
- * Fetch synchronized task list from Neon PostgreSQL.
+ * Fetch synchronized task list from Neon PostgreSQL with per-account isolation.
  * Accepts an optional domain string to issue a genuine server-side filtered request.
  * Returns empty array if database is empty; falls back to demo tasks only if server is unreachable.
  */
@@ -89,14 +113,12 @@ export async function fetchTasks(domain) {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 4000)
 
-    // Build URL — append ?domain=<X> when a specific domain is selected so the
-    // backend filters at the SQL level, not the client. This is what makes the
-    // filter buttons trigger real server-side requests instead of client-side slicing.
     const url = domain && domain !== 'all'
       ? `${API_BASE}/api/tasks?domain=${encodeURIComponent(domain)}`
       : `${API_BASE}/api/tasks`
 
     const res = await fetch(url, {
+      headers: getAuthHeaders(),
       signal: controller.signal
     })
     clearTimeout(timeoutId)
@@ -149,7 +171,7 @@ export async function sendQueryToAssistant(prompt, conversationId) {
 
     const res = await fetch(`${API_BASE}/api/chat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(body),
       signal: controller.signal
     })
@@ -190,7 +212,7 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
 
     const res = await fetch(`${API_BASE}/api/chat/stream`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(body),
     })
 
@@ -262,53 +284,113 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
 
 export async function fetchCalendarStatus() {
   try {
-    const res = await fetch(`${API_BASE}/api/calendar/status`)
-    if (!res.ok) return { connected: false, mode: 'demo', account_email: 'demo-scholar@compass.ai', is_simulated: true }
+    const res = await fetch(`${API_BASE}/api/calendar/status`, {
+      headers: getAuthHeaders(),
+    })
+    if (!res.ok) return { connected: false, mode: 'demo', account_email: null, is_simulated: false }
     const data = await res.json()
-    return data.calendar || { connected: false, mode: 'demo', is_simulated: true }
+    return data.calendar || { connected: false, mode: 'demo', is_simulated: false }
   } catch {
-    return { connected: false, mode: 'demo', account_email: 'demo-scholar@compass.ai', is_simulated: true }
+    return { connected: false, mode: 'demo', account_email: null, is_simulated: false }
   }
 }
 
 export async function fetchCurrentUser() {
   try {
-    const res = await fetch(`${API_BASE}/api/auth/me`)
+    const res = await fetch(`${API_BASE}/api/auth/me`, {
+      headers: getAuthHeaders(),
+    })
     if (!res.ok) return null
-    return await res.json()
+    const data = await res.json()
+    if (data.authenticated && data.user_id) {
+      setCurrentUserId(data.user_id)
+    }
+    return data
   } catch {
     return null
   }
 }
 
+export async function selectAccount(email) {
+  const clean = email.trim().toLowerCase()
+  const res = await fetch(`${API_BASE}/api/auth/select-account`, {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ email: clean }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Failed to switch account (HTTP ${res.status})`)
+  }
+  const data = await res.json()
+  setCurrentUserId(data.user_id || clean)
+  return data
+}
+
+export async function logoutUser() {
+  setCurrentUserId('')
+  try {
+    await fetch(`${API_BASE}/api/auth/logout`, { method: 'POST', headers: getAuthHeaders() })
+  } catch {}
+  return { status: 'ok' }
+}
+
+export async function checkGoogleOAuthStatus() {
+  try {
+    const res = await fetch(`${API_BASE}/api/calendar/connect?redirect=false`, {
+      headers: getAuthHeaders(),
+    })
+    if (!res.ok) return { configured: false, status: 'error' }
+    const data = await res.json()
+    return {
+      configured: Boolean(data.configured),
+      status: data.status || (data.configured ? 'ok' : 'not_configured'),
+      url: data.url,
+      message: data.message,
+    }
+  } catch {
+    return { configured: false, status: 'error' }
+  }
+}
+
 export async function quickConnectUser(email) {
+  const clean = email.trim().toLowerCase()
   const res = await fetch(`${API_BASE}/api/auth/quick-connect`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email }),
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ email: clean }),
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return await res.json()
+  const data = await res.json()
+  setCurrentUserId(clean)
+  return data
 }
 
 export async function syncCalendarNow() {
   const res = await fetch(`${API_BASE}/api/calendar/sync-now`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
   })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || err.message || `HTTP ${res.status}`)
+  }
   return await res.json()
 }
 
 export function getGoogleOAuthConnectUrl(loginHint = null) {
   let url = `${API_BASE}/api/calendar/connect?redirect=true`
-  if (loginHint) url += `&login_hint=${encodeURIComponent(loginHint)}`
+  const hint = loginHint || getCurrentUserId()
+  if (hint && hint.includes('@')) url += `&login_hint=${encodeURIComponent(hint)}`
   return url
 }
 
 export async function disconnectCalendar() {
   try {
-    const res = await fetch(`${API_BASE}/api/calendar/disconnect`, { method: 'POST' })
+    const res = await fetch(`${API_BASE}/api/calendar/disconnect`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    })
     return await res.json()
   } catch {
     return { status: 'ok' }
@@ -406,7 +488,7 @@ export async function fetchScheduleConflicts() {
 export async function createTask(taskData) {
   const res = await fetch(`${API_BASE}/api/tasks`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(taskData)
   })
   if (!res.ok) {
@@ -421,7 +503,8 @@ export async function createTask(taskData) {
  */
 export async function deleteTask(taskId) {
   const res = await fetch(`${API_BASE}/api/tasks/${taskId}`, {
-    method: 'DELETE'
+    method: 'DELETE',
+    headers: getAuthHeaders(),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
@@ -436,7 +519,7 @@ export async function deleteTask(taskId) {
 export async function updateTask(taskId, updateData) {
   const res = await fetch(`${API_BASE}/api/tasks/${taskId}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(updateData),
   })
   if (!res.ok) {
@@ -465,6 +548,4 @@ export async function dispatchSpecialist({ capability, user_goal, relevant_conte
   }
   return await res.json()
 }
-
-
 

@@ -44,12 +44,13 @@
   --shadow-lg: 0 12px 32px rgba(31, 27, 46, 0.10);
 }
 
-body {
+html, body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   background-color: var(--bg-app);
   color: var(--text-primary);
   min-height: 100vh;
   overflow-x: hidden;
+  overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -255,6 +256,7 @@ code, pre, .mono {
 .timeline-container {
   padding: 28px 32px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   flex: 1;
   min-width: 0;
   width: 100%;

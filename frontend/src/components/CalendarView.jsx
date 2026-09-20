@@ -46,7 +46,7 @@ const DOMAIN_STYLES = {
 
 const HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
 
-export default function CalendarView({ tasks, activeDomain, onTasksUpdated }) {
+export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOpenAuthModal }) {
   const [calendarStatus, setCalendarStatus] = useState({ connected: false, mode: 'demo', account_email: 'demo-scholar@compass.ai' })
   const [selectedDate, setSelectedDate] = useState(() => {
     const d = new Date()
@@ -254,18 +254,25 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated }) {
             <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#f8fafc', letterSpacing: '-0.3px' }}>
               🗓️ Dynamic Schedule & Google Calendar
             </h2>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '4px 10px',
-              borderRadius: '12px',
-              background: calendarStatus.connected && calendarStatus.mode === 'live' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)',
-              border: calendarStatus.connected && calendarStatus.mode === 'live' ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)',
-              fontSize: '11px',
-              color: calendarStatus.connected && calendarStatus.mode === 'live' ? '#34d399' : '#fbbf24',
-              fontWeight: '500'
-            }}>
+            <div
+              onClick={() => {
+                if (onOpenAuthModal) onOpenAuthModal()
+                else setShowQuickModal(true)
+              }}
+              title="Click to switch account or manage Google Calendar"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '4px 10px',
+                borderRadius: '12px',
+                background: calendarStatus.connected && calendarStatus.mode === 'live' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+                border: calendarStatus.connected && calendarStatus.mode === 'live' ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)',
+                fontSize: '11px',
+                color: calendarStatus.connected && calendarStatus.mode === 'live' ? '#34d399' : '#fbbf24',
+                fontWeight: '500',
+                cursor: 'pointer'
+              }}>
               <span style={{
                 width: '6px',
                 height: '6px',
@@ -274,7 +281,7 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated }) {
               }} />
               {calendarStatus.connected && calendarStatus.mode === 'live'
                 ? `Google Calendar: ${calendarStatus.account_email} (Live OAuth Connected)`
-                : `Google Calendar: ${calendarStatus.account_email || 'demo-scholar@compass.ai'} (simulated / demo mode — live OAuth not yet connected)`}
+                : `Google Calendar: ${calendarStatus.account_email || 'demo-scholar@compass.ai'} (simulated / demo mode — click to link)`}
             </div>
           </div>
           <p style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
@@ -395,9 +402,12 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated }) {
             </div>
           ) : (
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <a
+              <button
                 id="btn-connect-google"
-                href={getGoogleOAuthConnectUrl()}
+                onClick={() => {
+                  if (onOpenAuthModal) onOpenAuthModal()
+                  else setShowQuickModal(true)
+                }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -409,15 +419,17 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated }) {
                   color: '#60a5fa',
                   fontSize: '12px',
                   fontWeight: '500',
-                  textDecoration: 'none',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}>
-                🔗 Sign in with Google
-              </a>
+                🔗 Connect Google Calendar
+              </button>
               <button
                 id="btn-quick-login"
-                onClick={() => setShowQuickModal(true)}
+                onClick={() => {
+                  if (onOpenAuthModal) onOpenAuthModal()
+                  else setShowQuickModal(true)
+                }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -430,7 +442,7 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated }) {
                   fontSize: '12px',
                   cursor: 'pointer'
                 }}>
-                ⚡ Quick Gmail Login
+                ⚡ Switch Account
               </button>
             </div>
           )}

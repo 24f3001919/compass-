@@ -6,6 +6,7 @@ import AgentPanel from './components/AgentPanel'
 import CalendarView from './components/CalendarView'
 import NorthstarPanel from './components/NorthstarPanel'
 import SpecialistPanel from './components/SpecialistPanel'
+import AuthModal from './components/AuthModal'
 import {
   checkBackendHealth,
   fetchTasks,
@@ -24,6 +25,7 @@ export default function App() {
   const [conversationId, setConversationId] = useState(null)
   const [usageStats, setUsageStats] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
+  const [showAuthModal, setShowAuthModal] = useState(false)
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
@@ -69,6 +71,25 @@ export default function App() {
     loadTasks(selectedDomain)
   }, [selectedDomain, loadTasks])
 
+  // Check URL query parameters on mount to prompt account selection or show OAuth errors
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('oauth_error') || params.get('select_account')) {
+      setShowAuthModal(true)
+    }
+  }, [])
+
+  const handleUserChanged = useCallback(async (newEmail) => {
+    if (newEmail) {
+      const u = await fetchCurrentUser()
+      setCurrentUser(u)
+    } else {
+      setCurrentUser({ authenticated: false, email: '' })
+    }
+    loadTasks(selectedDomain)
+    refreshUsage()
+  }, [loadTasks, selectedDomain, refreshUsage])
+
   useEffect(() => {
     let isMounted = true
 
@@ -90,9 +111,6 @@ export default function App() {
     // Immediate initial sync
     pollHealth()
     refreshUsage()
-    fetchCurrentUser().then(u => {
-      if (isMounted && u) setCurrentUser(u)
-    })
 
     // 1. Task polling interval: 3000ms
     const taskInterval = setInterval(pollTasks, 3000)
@@ -153,19 +171,28 @@ export default function App() {
       />
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-app)', minWidth: 0, overflow: 'hidden' }}>
-        <header style={{ height: '60px', borderBottom: '1px solid #1e293b', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', flexShrink: 0 }}>
+        <header style={{
+          height: '56px',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 20px',
+          flexShrink: 0,
+          background: 'var(--bg-card, var(--bg-app))'
+        }}>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               id="tab-northstar"
               onClick={() => setActiveTab('northstar')}
               style={{
-                padding: '7px 14px',
+                padding: '6px 12px',
                 borderRadius: '6px',
                 border: 'none',
-                background: activeTab === 'northstar' ? '#1e293b' : 'transparent',
-                color: activeTab === 'northstar' ? '#fff' : '#64748b',
+                background: activeTab === 'northstar' ? 'var(--bg-sidebar-active, rgba(255,255,255,0.08))' : 'transparent',
+                color: activeTab === 'northstar' ? 'var(--text-main, #fff)' : 'var(--text-muted, #64748b)',
                 cursor: 'pointer',
-                fontWeight: '500',
+                fontWeight: '600',
                 fontSize: '13px'
               }}>
               🧭 Northstar AI
@@ -174,13 +201,13 @@ export default function App() {
               id="tab-specialist"
               onClick={() => setActiveTab('specialist')}
               style={{
-                padding: '7px 14px',
+                padding: '6px 12px',
                 borderRadius: '6px',
                 border: 'none',
-                background: activeTab === 'specialist' ? '#1e293b' : 'transparent',
-                color: activeTab === 'specialist' ? '#fff' : '#64748b',
+                background: activeTab === 'specialist' ? 'var(--bg-sidebar-active, rgba(255,255,255,0.08))' : 'transparent',
+                color: activeTab === 'specialist' ? 'var(--text-main, #fff)' : 'var(--text-muted, #64748b)',
                 cursor: 'pointer',
-                fontWeight: '500',
+                fontWeight: '600',
                 fontSize: '13px'
               }}>
               🧠 Specialist Team
@@ -189,28 +216,58 @@ export default function App() {
               id="tab-timeline"
               onClick={() => setActiveTab('timeline')}
               style={{
-                padding: '7px 14px',
+                padding: '6px 12px',
                 borderRadius: '6px',
                 border: 'none',
-                background: activeTab === 'timeline' ? '#1e293b' : 'transparent',
-                color: activeTab === 'timeline' ? '#fff' : '#64748b',
+                background: activeTab === 'timeline' ? 'var(--bg-sidebar-active, rgba(255,255,255,0.08))' : 'transparent',
+                color: activeTab === 'timeline' ? 'var(--text-main, #fff)' : 'var(--text-muted, #64748b)',
                 cursor: 'pointer',
-                fontWeight: '500',
+                fontWeight: '600',
                 fontSize: '13px'
               }}>
               📅 Timeline Feed
             </button>
             <button
+              id="tab-chat"
+              onClick={() => setActiveTab('chat')}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '6px',
+                border: 'none',
+                background: activeTab === 'chat' ? 'var(--bg-sidebar-active, rgba(255,255,255,0.08))' : 'transparent',
+                color: activeTab === 'chat' ? 'var(--text-main, #fff)' : 'var(--text-muted, #64748b)',
+                cursor: 'pointer',
+                fontWeight: '600',
+                fontSize: '13px'
+              }}>
+              💬 Assistant Chat
+            </button>
+            <button
+              id="tab-agent"
+              onClick={() => setActiveTab('agent')}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '6px',
+                border: 'none',
+                background: activeTab === 'agent' ? 'var(--bg-sidebar-active, rgba(255,255,255,0.08))' : 'transparent',
+                color: activeTab === 'agent' ? 'var(--text-main, #fff)' : 'var(--text-muted, #64748b)',
+                cursor: 'pointer',
+                fontWeight: '600',
+                fontSize: '13px'
+              }}>
+              🧭 Agent Planner
+            </button>
+            <button
               id="tab-calendar"
               onClick={() => setActiveTab('calendar')}
               style={{
-                padding: '7px 14px',
+                padding: '6px 12px',
                 borderRadius: '6px',
                 border: 'none',
-                background: activeTab === 'calendar' ? '#1e293b' : 'transparent',
-                color: activeTab === 'calendar' ? '#fff' : '#64748b',
+                background: activeTab === 'calendar' ? 'var(--bg-sidebar-active, rgba(255,255,255,0.08))' : 'transparent',
+                color: activeTab === 'calendar' ? 'var(--text-main, #fff)' : 'var(--text-muted, #64748b)',
                 cursor: 'pointer',
-                fontWeight: '500',
+                fontWeight: '600',
                 fontSize: '13px'
               }}>
               🗓️ Schedule & Calendar
@@ -218,24 +275,28 @@ export default function App() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             {/* P0.2: Live usage counter — updates after every chat message */}
-            <div id="usage-badge" className="header-model-badge" style={{ fontSize: '11px', color: '#64748b', fontFamily: 'JetBrains Mono, monospace' }}>
+            <div id="usage-badge" className="header-model-badge" style={{ fontSize: '11px', color: 'var(--text-muted, #64748b)', fontFamily: 'JetBrains Mono, monospace' }}>
               {usageBadge}
             </div>
 
-            {/* Google User Profile / Login Pill */}
+            {/* Account Selector Pill / Google Login */}
             {currentUser && currentUser.authenticated ? (
               <div
                 id="user-profile-badge"
+                onClick={() => setShowAuthModal(true)}
+                title="Click to switch account or manage Google Calendar"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
-                  background: 'rgba(30, 41, 59, 0.8)',
-                  border: '1px solid #334155',
-                  padding: '4px 10px',
+                  background: 'var(--bg-input, rgba(30, 41, 59, 0.8))',
+                  border: '1px solid var(--border)',
+                  padding: '5px 12px',
                   borderRadius: '20px',
                   fontSize: '12px',
-                  color: '#e2e8f0',
+                  color: 'var(--text-main)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
                 }}>
                 <span style={{
                   width: '7px',
@@ -244,53 +305,50 @@ export default function App() {
                   background: '#10b981',
                   boxShadow: '0 0 6px #10b981',
                 }} />
-                <span style={{ fontWeight: '500', color: '#f8fafc', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ fontWeight: '600', color: 'var(--text-main)', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {currentUser.email}
                 </span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>▾</span>
                 <button
-                  onClick={async () => {
+                  onClick={async (e) => {
+                    e.stopPropagation()
                     await disconnectCalendar()
                     setCurrentUser({ authenticated: false, email: '' })
+                    loadTasks(selectedDomain)
                   }}
                   title="Sign out / Disconnect"
                   style={{
                     background: 'transparent',
                     border: 'none',
-                    color: '#94a3b8',
+                    color: 'var(--text-muted)',
                     cursor: 'pointer',
                     fontSize: '11px',
                     padding: '0 2px',
+                    marginLeft: '4px'
                   }}>
                   ✕
                 </button>
               </div>
             ) : (
-              <a
-                id="header-btn-google-login"
-                href={getGoogleOAuthConnectUrl()}
+              <button
+                id="header-btn-login-account"
+                onClick={() => setShowAuthModal(true)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
-                  padding: '5px 12px',
+                  padding: '6px 14px',
                   borderRadius: '8px',
                   background: 'rgba(59, 130, 246, 0.12)',
                   border: '1px solid rgba(59, 130, 246, 0.35)',
                   color: '#60a5fa',
                   fontSize: '12px',
-                  fontWeight: '500',
-                  textDecoration: 'none',
+                  fontWeight: '600',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
                 }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
-                </svg>
-                Sign in with Google
-              </a>
+                👤 Sign in / Choose Account
+              </button>
             )}
           </div>
         </header>
@@ -320,6 +378,7 @@ export default function App() {
               loadTasks(selectedDomain)
               refreshUsage()
             }}
+            onOpenAuthModal={() => setShowAuthModal(true)}
           />
         ) : activeTab === 'agent' ? (
           <AgentPanel
@@ -338,6 +397,8 @@ export default function App() {
             onSendMessage={handleSendMessage}
             isTyping={isTyping}
             onChatComplete={refreshUsage}
+            tasks={tasks}
+            backendStatus={backendStatus}
           />
         ) : (
           <NorthstarPanel
@@ -355,7 +416,13 @@ export default function App() {
           />
         )}
       </main>
+
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        currentUser={currentUser}
+        onUserChanged={handleUserChanged}
+      />
     </div>
   )
 }
-

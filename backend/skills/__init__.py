@@ -601,9 +601,10 @@ async def handle_query_tasks(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
     from backend.memory import structured
     domain = args.get("domain")
     status = args.get("status")
+    user_id = args.get("user_id")
 
     async with pool.acquire() as conn:
-        tasks = await structured.list_tasks(conn, domain=domain, status=status)
+        tasks = await structured.list_tasks(conn, domain=domain, status=status, user_id=user_id)
 
     count = len(tasks)
     d_str = f" in {domain.upper()}" if domain else ""
@@ -618,7 +619,7 @@ async def handle_query_tasks(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
         summary = f"Found {count} task(s){d_str}{s_str}."
     return {
         "response": summary,
-        "data": {"tasks": tasks, "count": count},
+        "data": tasks,
     }
 
 
@@ -633,10 +634,11 @@ async def handle_query_code_context(args: Dict[str, Any], pool: Any) -> Dict[str
     settings = get_settings()
     query = args.get("query", "")
     domain = args.get("domain", "code")
+    user_id = args.get("user_id")
 
     try:
         async with pool.acquire() as conn:
-            chunks = await vector.search_chunks(conn, query=query, domain=domain, limit=3)
+            chunks = await vector.search_chunks(conn, query=query, domain=domain, limit=3, user_id=user_id)
         count = len(chunks)
 
         # Synthesize technical response using SKILL_MODEL (nvidia/nemotron-3-super-120b-a12b)
@@ -841,6 +843,7 @@ async def handle_add_task(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
     notes = args.get("notes")
 
     try:
+        user_id = args.get("user_id")
         async with pool.acquire() as conn:
             project_id = None
             if project_name:
@@ -856,6 +859,7 @@ async def handle_add_task(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
                 status=status,
                 priority=priority,
                 notes=notes,
+                user_id=user_id,
             )
         return {
             "response": f"Added task #{task_record.get('id')}: '{title}' in {domain}.",
@@ -1668,15 +1672,16 @@ async def handle_propose_schedule(args: Dict[str, Any], pool: Any) -> Dict[str, 
     prefs = {"work_start_time": "09:00:00", "work_end_time": "18:00:00", "work_days": [1, 2, 3, 4, 5], "buffer_minutes": 15}
 
     if pool is not None:
+        user_id = args.get("user_id")
         async with pool.acquire() as conn:
             prefs = await get_scheduling_preferences(conn)
             dep_map = await get_all_dependencies_map(conn)
             if task_ids:
-                all_tasks = await list_tasks(conn, domain=domain)
+                all_tasks = await list_tasks(conn, domain=domain, user_id=user_id)
                 id_set = set(task_ids)
                 tasks = [t for t in all_tasks if t["id"] in id_set]
             else:
-                tasks = await list_tasks(conn, domain=domain, status="open")
+                tasks = await list_tasks(conn, domain=domain, status="open", user_id=user_id)
 
     busy = await get_calendar_freebusy(start_dt, end_dt, pool=pool)
     free_windows = get_available_windows(

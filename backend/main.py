@@ -712,12 +712,13 @@ def _format_countdown(due_date: Optional[date]) -> str:
 
 
 @app.get("/api/tasks", response_model=list[FrontendTaskOut])
-async def get_frontend_tasks(domain: Optional[str] = Query(None)):
-    """Public frontend endpoint matching frontend/src/api/client.js format."""
+async def get_frontend_tasks(request: Request, domain: Optional[str] = Query(None)):
+    """Public frontend endpoint matching frontend/src/api/client.js format with per-account isolation."""
     try:
+        user_id = _get_current_user_id(request)
         pool = await get_pool()
         async with pool.acquire() as conn:
-            raw_tasks = await structured.list_tasks(conn, domain=domain)
+            raw_tasks = await structured.list_tasks(conn, domain=domain, user_id=user_id)
             result = []
             for t in raw_tasks:
                 proj_name = t.get("project", {}).get("name", "General") if t.get("project") else "General"
@@ -777,8 +778,8 @@ class CreateTaskRequest(BaseModel):
 
 @app.post("/api/tasks", response_model=FrontendTaskOut)
 @app.post("/tasks", response_model=FrontendTaskOut)
-async def create_frontend_task(req: CreateTaskRequest):
-    """Direct user endpoint to create a task or deadline without relying on AI chat."""
+async def create_frontend_task(request: Request, req: CreateTaskRequest):
+    """Direct user endpoint to create a task or deadline with per-account isolation."""
     title = req.title.strip()
     if not title:
         raise HTTPException(status_code=400, detail="Task title is required")
@@ -795,6 +796,7 @@ async def create_frontend_task(req: CreateTaskRequest):
         dom_clean = "general"
 
     proj_name = req.project.strip() if req.project else "General"
+    user_id = _get_current_user_id(request)
     try:
         pool = await get_pool()
         async with pool.acquire() as conn:
@@ -811,11 +813,12 @@ async def create_frontend_task(req: CreateTaskRequest):
                 due_date=parsed_date,
                 priority=req.priority,
                 notes=req.notes,
+                user_id=user_id,
             )
             task_id = task_row["id"]
             if req.duration_minutes:
                 try:
-                    await structured.update_task(conn, task_id, duration_minutes=req.duration_minutes)
+                    await structured.update_task(conn, task_id, duration_minutes=int(req.duration_minutes))
                 except Exception as ex:
                     logger.debug(f"Could not update duration_minutes: {ex}")
 
@@ -834,10 +837,10 @@ async def create_frontend_task(req: CreateTaskRequest):
                     tags_list.append("urgent")
                 await conn.execute(
                     """
-                    INSERT INTO memory_chunks (domain, project_id, content, embedding, source, tags)
-                    VALUES ($1, $2, $3, $4, $5, $6)
+                    INSERT INTO memory_chunks (domain, project_id, content, embedding, source, tags, user_id)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
                     """,
-                    dom_clean, project_id, emb_text, embedding, "direct_task_creation", tags_list
+                    dom_clean, project_id, emb_text, embedding, "direct_task_creation", tags_list, user_id
                 )
             except Exception as e:
                 logger.warning(f"Could not index memory chunk for new task: {e}")
@@ -864,7 +867,7 @@ async def create_frontend_task(req: CreateTaskRequest):
                 timestamp=ts_str,
                 priority=task_row.get("priority", "medium"),
                 status=task_row.get("status", "open"),
-                duration_minutes=req.duration_minutes or 60,
+                duration_minutes=int(req.duration_minutes or 60),
                 scheduled_start=None,
                 scheduled_end=None,
                 is_fixed=False,
@@ -886,7 +889,7 @@ async def create_frontend_task(req: CreateTaskRequest):
             timestamp="Just now",
             priority=req.priority,
             status="open",
-            duration_minutes=req.duration_minutes or 60,
+            duration_minutes=int(req.duration_minutes or 60),
             description=req.notes,
         )
 
@@ -1739,15 +1742,15 @@ async def update_calendar_preferences_endpoint(body: UpdatePreferencesBody):
 # 12. Google Calendar OAuth & User Authentication Endpoints
 # ---------------------------------------------------------------------------
 
-def _get_current_user_id(request: Request) -> str:
-    """Resolve current user identity from headers, cookies, or default."""
+def _get_current_user_id(request: Request) -> Optional[str]:
+    """Resolve current user identity strictly from headers or cookies."""
     user_header = request.headers.get("x-user-id")
-    if user_header:
-        return user_header
+    if user_header and user_header.strip():
+        return user_header.strip().lower()
     cookie_user = request.cookies.get("compass_user_id")
-    if cookie_user:
-        return cookie_user
-    return "default_user"
+    if cookie_user and cookie_user.strip():
+        return cookie_user.strip().lower()
+    return None
 
 
 @app.get("/api/auth/me")
@@ -1755,20 +1758,63 @@ async def auth_me(request: Request):
     """Retrieve logged-in user profile and calendar connection status."""
     from backend.services.calendar import get_calendar_connection_status
     user_id = _get_current_user_id(request)
+    
+    if not user_id:
+        return {
+            "status": "ok",
+            "authenticated": False,
+            "user_id": None,
+            "email": None,
+            "name": "Guest",
+            "calendar": {"connected": False, "mode": "none", "account_email": None},
+        }
+
     pool = await get_pool()
     cal_status = await get_calendar_connection_status(pool=pool, user_id=user_id)
-    
-    is_authenticated = cal_status.get("connected", False)
-    account_email = cal_status.get("account_email") or (user_id if "@" in user_id else "demo-scholar@compass.ai")
+    is_authenticated = bool(cal_status.get("connected", False))
     
     return {
         "status": "ok",
-        "authenticated": is_authenticated,
+        "authenticated": True,
         "user_id": user_id,
-        "email": account_email,
-        "name": account_email.split("@")[0].replace(".", " ").title(),
+        "email": user_id,
+        "name": user_id.split("@")[0].replace(".", " ").title(),
         "calendar": cal_status,
     }
+
+
+class SelectAccountBody(BaseModel):
+    email: str
+
+
+@app.post("/api/auth/select-account")
+async def auth_select_account(body: SelectAccountBody, response: Response):
+    """Select or switch active user account for memory and calendar isolation."""
+    email = body.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="A valid email address is required")
+
+    response.set_cookie(
+        key="compass_user_id",
+        value=email,
+        max_age=86400 * 30,
+        httponly=False,
+        samesite="lax",
+    )
+    return {
+        "status": "ok",
+        "user_id": email,
+        "email": email,
+        "name": email.split("@")[0].replace(".", " ").title(),
+        "message": f"Switched account to {email}",
+    }
+
+
+@app.post("/api/auth/logout")
+async def auth_logout(response: Response):
+    """Log out of current account and clear session cookies."""
+    response.delete_cookie("compass_user_id")
+    return {"status": "ok", "message": "Logged out successfully"}
 
 
 class QuickConnectBody(BaseModel):
@@ -1777,7 +1823,7 @@ class QuickConnectBody(BaseModel):
 
 @app.post("/api/auth/quick-connect")
 async def auth_quick_connect(body: QuickConnectBody, response: Response):
-    """Quick-login with Gmail for instant access and demo mode."""
+    """Quick-login with user account for instant access and testing."""
     import secrets
     from backend.services.calendar import save_calendar_connection
     email = body.email.strip().lower()
@@ -1786,19 +1832,9 @@ async def auth_quick_connect(body: QuickConnectBody, response: Response):
     
     pool = await get_pool()
     if pool:
-        # Save mock connection for this user
         await save_calendar_connection(
             pool=pool,
             user_id=email,
-            account_email=email,
-            access_token=f"mock_ya29_{secrets.token_hex(16)}",
-            refresh_token=f"mock_1//_{secrets.token_hex(20)}",
-            expires_in=86400,
-        )
-        # Also update default_user
-        await save_calendar_connection(
-            pool=pool,
-            user_id="default_user",
             account_email=email,
             access_token=f"mock_ya29_{secrets.token_hex(16)}",
             refresh_token=f"mock_1//_{secrets.token_hex(20)}",
@@ -1843,15 +1879,28 @@ async def calendar_connect(
     login_hint: Optional[str] = Query(None),
 ):
     """Generate Google OAuth 2.0 authorization URL or redirect directly."""
-    from backend.services.oauth import generate_google_oauth_url
-    redirect_uri = _resolve_oauth_redirect_uri(request)
-    url = generate_google_oauth_url(redirect_uri=redirect_uri, login_hint=login_hint)
+    from backend.services.oauth import generate_google_oauth_url, is_google_oauth_configured
     
-    # If caller is browser navigation or requested redirect=true
+    configured = is_google_oauth_configured()
+    if not configured:
+        # Avoid redirecting to Google's broken 401 invalid_client error page
+        if redirect:
+            return RedirectResponse(url="/?oauth_error=not_configured")
+        return {
+            "status": "not_configured",
+            "configured": False,
+            "message": "Google OAuth credentials are not set in .env. Use Account Switcher or configure GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.",
+        }
+
+    redirect_uri = _resolve_oauth_redirect_uri(request)
+    current_user = _get_current_user_id(request)
+    effective_hint = login_hint or (current_user if current_user and "@" in current_user else None)
+    url = generate_google_oauth_url(redirect_uri=redirect_uri, login_hint=effective_hint)
+    
     accept = request.headers.get("accept", "")
     if redirect or "text/html" in accept:
         return RedirectResponse(url=url)
-    return {"status": "ok", "url": url}
+    return {"status": "ok", "configured": True, "url": url}
 
 
 @app.get("/api/calendar/callback")
@@ -1899,7 +1948,7 @@ async def calendar_callback(
 
     pool = await get_pool()
     if pool:
-        # Save connection for both specific email and default_user
+        # Save connection strictly for this specific authenticated user
         await save_calendar_connection(
             pool=pool,
             user_id=email,
@@ -1908,16 +1957,7 @@ async def calendar_callback(
             refresh_token=tokens.get("refresh_token"),
             expires_in=tokens.get("expires_in", 3600),
         )
-        await save_calendar_connection(
-            pool=pool,
-            user_id="default_user",
-            account_email=email,
-            access_token=tokens.get("access_token", ""),
-            refresh_token=tokens.get("refresh_token"),
-            expires_in=tokens.get("expires_in", 3600),
-        )
 
-    # Return redirect response with cookie and popup message
     response = HTMLResponse(
         f"""<!DOCTYPE html>
 <html>
@@ -1955,6 +1995,8 @@ async def calendar_sync_now(request: Request):
     """Explicitly synchronize all scheduled tasks to the connected user's Google Calendar."""
     from backend.services.calendar import sync_all_tasks_to_google_calendar
     user_id = _get_current_user_id(request)
+    if not user_id:
+        return {"status": "error", "message": "Sign in to sync tasks with Google Calendar"}
     pool = await get_pool()
     result = await sync_all_tasks_to_google_calendar(pool, user_id=user_id)
     return result
@@ -1962,13 +2004,12 @@ async def calendar_sync_now(request: Request):
 
 @app.post("/api/calendar/disconnect")
 async def calendar_disconnect(request: Request, response: Response):
-    """Disconnect Google Calendar OAuth integration and revert to simulated mode."""
+    """Disconnect Google Calendar OAuth integration and clear session."""
     from backend.services.calendar import disconnect_calendar_connection
     user_id = _get_current_user_id(request)
     pool = await get_pool()
-    if pool:
+    if pool and user_id:
         await disconnect_calendar_connection(pool, user_id=user_id)
-        await disconnect_calendar_connection(pool, user_id="default_user")
     response.delete_cookie("compass_user_id")
     return {"status": "ok", "message": "Google Calendar disconnected."}
 

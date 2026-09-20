@@ -122,8 +122,9 @@ async def create_task(
     status: str = "open",
     priority: str = "medium",
     notes: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> dict:
-    """Insert a new task into the structured tasks table with normalized inputs."""
+    """Insert a new task into the structured tasks table with normalized inputs and user identity."""
     # Normalize domain, status, and priority to satisfy SQL CHECK constraints
     dom_clean = str(domain or "general").lower().strip()
     norm_domain = dom_clean if dom_clean in VALID_DOMAINS else "general"
@@ -136,11 +137,11 @@ async def create_task(
 
     row = await conn.fetchrow(
         """
-        INSERT INTO tasks (domain, project_id, title, due_date, status, priority, notes)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id, domain, project_id, title, due_date, status, priority, notes, created_at, updated_at
+        INSERT INTO tasks (domain, project_id, title, due_date, status, priority, notes, user_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id, domain, project_id, title, due_date, status, priority, notes, user_id, created_at, updated_at
         """,
-        norm_domain, project_id, title.strip(), due_date, norm_status, norm_priority, notes
+        norm_domain, project_id, title.strip(), due_date, norm_status, norm_priority, notes, user_id
     )
     return dict(row) if row else {}
 
@@ -151,7 +152,7 @@ async def get_task(conn: DbConn, task_id: int) -> Optional[dict]:
         """
         SELECT t.id, t.domain, t.title, t.due_date, t.status, t.priority, t.notes,
                t.duration_minutes, t.scheduled_start, t.scheduled_end, t.is_fixed, t.recurrence_rule,
-               t.created_at, t.updated_at,
+               t.created_at, t.updated_at, t.user_id,
                p.id AS project_id, p.name AS project_name
         FROM tasks t
         LEFT JOIN projects p ON t.project_id = p.id
@@ -178,12 +179,13 @@ async def list_tasks(
     due_before: Optional[date] = None,
     scheduled_only: bool = False,
     unscheduled_only: bool = False,
+    user_id: Optional[str] = None,
 ) -> list[dict]:
-    """Query tasks with optional filters."""
+    """Query tasks with optional filters and per-account isolation."""
     query = """
         SELECT t.id, t.domain, t.title, t.due_date, t.status, t.priority, t.notes,
                t.duration_minutes, t.scheduled_start, t.scheduled_end, t.is_fixed, t.recurrence_rule,
-               t.created_at, t.updated_at,
+               t.created_at, t.updated_at, t.user_id,
                p.id AS project_id, p.name AS project_name
         FROM tasks t
         LEFT JOIN projects p ON t.project_id = p.id
@@ -191,6 +193,9 @@ async def list_tasks(
     """
     params: list[Any] = []
 
+    if user_id:
+        params.append(user_id)
+        query += f" AND (t.user_id = ${len(params)} OR (t.user_id IS NULL AND NOT EXISTS (SELECT 1 FROM tasks WHERE user_id = ${len(params)})))"
     if domain:
         params.append(domain)
         query += f" AND t.domain = ${len(params)}"

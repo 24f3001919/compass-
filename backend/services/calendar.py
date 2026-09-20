@@ -25,9 +25,22 @@ logger = logging.getLogger("compass.calendar")
 
 async def get_calendar_connection_status(
     pool: Any = None,
-    user_id: str = "default_user",
+    user_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Retrieve the current calendar connection status with honest mode reporting."""
+    """Retrieve the current calendar connection status strictly for the specified user."""
+    if not user_id:
+        return {
+            "connected": False,
+            "provider": "google",
+            "account_email": None,
+            "connected_at": None,
+            "last_synced_at": None,
+            "mode": "none",
+            "is_simulated": False,
+            "label": "Google Calendar: Not signed in",
+            "note": "Sign in to connect your Google Calendar",
+        }
+
     if pool is not None:
         try:
             async with pool.acquire() as conn:
@@ -35,8 +48,8 @@ async def get_calendar_connection_status(
                     """
                     SELECT provider, account_email, access_token, connected_at, last_synced_at
                     FROM calendar_connections
-                    WHERE (user_id = $1 OR account_email = $1 OR $1 = 'default_user') AND provider = 'google'
-                    ORDER BY CASE WHEN (user_id = $1 OR account_email = $1) THEN 0 ELSE 1 END, last_synced_at DESC NULLS LAST
+                    WHERE (user_id = $1 OR account_email = $1) AND provider = 'google'
+                    ORDER BY last_synced_at DESC NULLS LAST
                     LIMIT 1
                     """,
                     user_id,
@@ -45,7 +58,7 @@ async def get_calendar_connection_status(
                     from backend.services.oauth import decrypt_token
                     decrypted = decrypt_token(row["access_token"])
                     is_mock = not decrypted or decrypted.startswith("mock_")
-                    email = row["account_email"] or "user@gmail.com"
+                    email = row["account_email"] or user_id or "user@gmail.com"
                     return {
                         "connected": True,
                         "provider": row["provider"],
@@ -60,17 +73,16 @@ async def get_calendar_connection_status(
         except Exception as e:
             logger.warning(f"Could not read calendar_connections: {e}")
 
-    # Honest default state: Simulated demo mode
     return {
         "connected": False,
         "provider": "google",
-        "account_email": "demo-scholar@compass.ai",
-        "connected_at": datetime.now(timezone.utc).isoformat(),
-        "last_synced_at": datetime.now(timezone.utc).isoformat(),
-        "mode": "demo",
-        "is_simulated": True,
-        "label": "Google Calendar: demo-scholar@compass.ai (simulated / demo mode — live OAuth not yet connected)",
-        "note": "simulated / demo mode — live OAuth not yet connected",
+        "account_email": user_id,
+        "connected_at": None,
+        "last_synced_at": None,
+        "mode": "unlinked",
+        "is_simulated": False,
+        "label": f"Google Calendar: {user_id} (Not linked)",
+        "note": "Calendar not yet linked via Google OAuth",
     }
 
 

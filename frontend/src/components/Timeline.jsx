@@ -474,7 +474,7 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
         due_date: editDueDate || null,
         priority: editPriority,
         status: editStatus,
-        notes: editNotes.trim(),
+        notes: editNotes.trim() || null,
       })
       setIsEditing(false)
       if (onUpdated) onUpdated(updated)
