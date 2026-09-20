@@ -188,18 +188,6 @@ export default function App() {
               refreshUsage()
             }}
           />
-        ) : activeTab === 'chat' ? (
-          <ChatPanel
-            messages={messages}
-            setMessages={setMessages}
-            conversationId={conversationId}
-            setConversationId={setConversationId}
-            onSendMessage={handleSendMessage}
-            isTyping={isTyping}
-            onChatComplete={refreshUsage}
-            tasks={tasks}
-            backendStatus={backendStatus}
-          />
         ) : activeTab === 'agent' ? (
           <AgentPanel
             onTaskMutated={() => {

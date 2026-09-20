@@ -17,7 +17,7 @@ export default function NorthstarPanel({
   const [activeSubTab, setActiveSubTab] = useState('assistant') // 'assistant' | 'planner'
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 56px)', minWidth: 0, overflow: 'hidden', background: 'var(--bg-app)' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', minWidth: 0, overflow: 'hidden', background: 'var(--bg-app)' }}>
       {/* Northstar Header Sub-bar */}
       <div style={{
         height: '48px',

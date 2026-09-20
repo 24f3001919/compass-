@@ -2,11 +2,10 @@ import React from 'react'
 
 const NAV_ITEMS = [
   { key: 'timeline', icon: '▦', label: 'Timeline', sub: 'Team feed' },
-  { key: 'chat', icon: '💬', label: 'Assistant', sub: 'Ask anything' },
-  { key: 'agent', icon: '🧭', label: 'Planner', sub: 'Agent tasks' },
-  { key: 'calendar', icon: '🗓️', label: 'Schedule', sub: 'Calendar & Sync' },
-  { key: 'northstar', icon: '⚡', label: 'Northstar AI', sub: 'Triage & priorities' },
+  { key: 'northstar', icon: '🧭', label: 'Northstar AI', sub: 'Assistant & planner' },
+  { key: 'agent', icon: '🤖', label: 'Planner', sub: 'Agent tasks' },
   { key: 'specialist', icon: '🧠', label: 'Specialist Team', sub: 'Specialized Multi-Agent' },
+  { key: 'calendar', icon: '🗓️', label: 'Schedule', sub: 'Calendar & Sync' },
 ]
 
 export default function Sidebar({
