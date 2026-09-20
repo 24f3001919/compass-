@@ -90,7 +90,7 @@ export default function SpecialistPanel({ onTaskMutated }) {
   const activeSpecObj = SPECIALISTS.find(s => s.key === selectedSpecialist)
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 56px)', overflowY: 'auto', padding: '24px', background: 'var(--bg-app)' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', padding: '24px', background: 'var(--bg-app)' }}>
       {/* Header Banner */}
       <div style={{ marginBottom: '24px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '20px', boxShadow: 'var(--shadow-sm)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>

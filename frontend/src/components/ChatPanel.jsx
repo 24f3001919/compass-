@@ -263,51 +263,39 @@ export default function ChatPanel({
   const overdueCount = tasks.filter(t => (t.countdown || '').toLowerCase().includes('overdue')).length
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100vh', minWidth: 0, background: 'var(--bg-app)' }}>
-      {/* Header */}
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100%', minWidth: 0, background: 'var(--bg-app)' }}>
+      {/* Sleek Context & Control Sub-bar */}
       <div style={{
-        padding: '18px 28px', borderBottom: '1px solid var(--border)', background: 'var(--bg-card)',
+        padding: '10px 24px', borderBottom: '1px solid var(--border)', background: 'var(--bg-card)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            width: '38px', height: '38px', borderRadius: '10px', background: 'var(--bg-sidebar)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '17px', flexShrink: 0
-          }}>
-            🧭
-          </div>
-          <div>
-            <div style={{ fontSize: '15.5px', fontWeight: '700', color: 'var(--text-primary)' }}>Compass Assistant</div>
-            <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{
-                width: '6px', height: '6px', borderRadius: '50%',
-                background: isOnline ? '#34d399' : '#f5a623', display: 'inline-block'
-              }} />
-              {isOnline ? 'Context loaded · Workspace aware' : 'Reconnecting to workspace…'}
-            </div>
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+          <span style={{
+            width: '7px', height: '7px', borderRadius: '50%',
+            background: isOnline ? '#10b981' : '#f5a623', display: 'inline-block'
+          }} />
+          <span>{isOnline ? 'Workspace connected · Aware of tasks & schedule' : 'Reconnecting to workspace…'}</span>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
             onClick={() => setShowContext(v => !v)}
             style={{
-              padding: '7px 14px', borderRadius: '8px', border: '1px solid var(--border)',
-              background: showContext ? 'var(--hackathon-bg)' : 'var(--bg-card)',
-              color: showContext ? 'var(--hackathon-text)' : 'var(--text-secondary)',
-              fontSize: '12.5px', fontWeight: '600', cursor: 'pointer'
+              padding: '5px 12px', borderRadius: '6px', border: '1px solid var(--border)',
+              background: showContext ? 'var(--bg-card-soft)' : 'transparent',
+              color: 'var(--text-secondary)', fontSize: '11.5px', fontWeight: '600', cursor: 'pointer'
             }}>
-            {showContext ? 'Hide Context' : 'Show Context'}
+            {showContext ? 'Hide Context' : 'Show Workspace Context'}
           </button>
           <button
             onClick={handleNewChat}
             disabled={isInputDisabled}
             style={{
-              padding: '7px 14px', borderRadius: '8px', border: '1px solid var(--border)',
-              background: 'var(--bg-card)', color: 'var(--text-secondary)',
-              fontSize: '12.5px', fontWeight: '600', cursor: isInputDisabled ? 'not-allowed' : 'pointer',
+              padding: '5px 12px', borderRadius: '6px', border: '1px solid var(--border)',
+              background: 'transparent', color: 'var(--text-secondary)',
+              fontSize: '11.5px', fontWeight: '600', cursor: isInputDisabled ? 'not-allowed' : 'pointer',
               opacity: isInputDisabled ? 0.5 : 1
             }}>
-            New Chat
+            + New Chat
           </button>
         </div>
       </div>
@@ -432,29 +420,53 @@ export default function ChatPanel({
 
       {/* Footer: quick prompt + input bar */}
       <div style={{ padding: '16px 28px 22px', background: 'var(--bg-app)', flexShrink: 0 }}>
-        <div style={{ marginBottom: '10px' }}>
-          <button
-            type="button"
-            onClick={handleQuickPrompt}
-            disabled={isInputDisabled}
-            style={{
-              width: '100%',
-              textAlign: 'left',
-              padding: '10px 15px',
-              borderRadius: '10px',
-              background: isInputDisabled ? 'var(--bg-card-soft)' : 'var(--coursework-bg)',
-              border: '1px solid var(--border)',
-              color: isInputDisabled ? 'var(--text-muted)' : 'var(--coursework-text)',
-              fontSize: '12.5px',
-              cursor: isInputDisabled ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              transition: 'all 0.15s ease'
-            }}>
-            <span style={{ fontSize: '14px' }}>📋</span>
-            <span>Quick prompt: <strong>"What tasks do I have coming up?"</strong></span>
-          </button>
+        {/* Quick prompt suggestions */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
+          {[
+            { icon: '📋', text: 'What tasks do I have coming up?' },
+            { icon: '⚡', text: 'Prioritize my deadlines for today' },
+            { icon: '📅', text: 'Check for schedule conflicts' },
+            { icon: '➕', text: 'Add task: Finish project slides' },
+          ].map((item, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => handleSend(item.text)}
+              disabled={isInputDisabled}
+              style={{
+                padding: '7px 13px',
+                borderRadius: '20px',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-secondary)',
+                fontSize: '12px',
+                fontWeight: '500',
+                cursor: isInputDisabled ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.15s ease',
+                boxShadow: 'var(--shadow-sm)',
+                flexShrink: 0
+              }}
+              onMouseEnter={e => {
+                if (!isInputDisabled) {
+                  e.currentTarget.style.borderColor = 'var(--brand)'
+                  e.currentTarget.style.color = 'var(--text-primary)'
+                  e.currentTarget.style.background = 'var(--bg-card-soft)'
+                }
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = 'var(--border)'
+                e.currentTarget.style.color = 'var(--text-secondary)'
+                e.currentTarget.style.background = 'var(--bg-card)'
+              }}
+            >
+              <span>{item.icon}</span>
+              <span>{item.text}</span>
+            </button>
+          ))}
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '10px' }}>

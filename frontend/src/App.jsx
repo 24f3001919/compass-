@@ -1,11 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import Sidebar from './components/Sidebar'
 import Timeline from './components/Timeline'
-import ChatPanel from './components/ChatPanel'
-import AgentPanel from './components/AgentPanel'
 import CalendarView from './components/CalendarView'
 import NorthstarPanel from './components/NorthstarPanel'
-import SpecialistPanel from './components/SpecialistPanel'
 import AuthModal from './components/AuthModal'
 import {
   checkBackendHealth,
@@ -188,14 +185,6 @@ export default function App() {
               refreshUsage()
             }}
           />
-        ) : activeTab === 'agent' ? (
-          <AgentPanel
-            onTaskMutated={() => {
-              loadTasks(selectedDomain)
-              refreshUsage()
-            }}
-            conversationId={conversationId}
-          />
         ) : activeTab === 'calendar' ? (
           <CalendarView
             tasks={tasks}
@@ -206,16 +195,15 @@ export default function App() {
             }}
             onOpenAuthModal={() => setShowAuthModal(true)}
           />
-        ) : activeTab === 'specialist' ? (
-          <SpecialistPanel
-            onTaskMutated={() => {
-              loadTasks(selectedDomain)
-              refreshUsage()
-            }}
-            onSelectTab={setActiveTab}
-          />
         ) : (
           <NorthstarPanel
+            initialSubTab={
+              activeTab === 'agent' || activeTab === 'planner'
+                ? 'planner'
+                : activeTab === 'specialist'
+                ? 'specialist'
+                : 'assistant'
+            }
             messages={messages}
             setMessages={setMessages}
             conversationId={conversationId}
