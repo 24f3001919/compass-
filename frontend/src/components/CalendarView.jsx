@@ -42,6 +42,26 @@ const DOMAIN_STYLES = {
     text: '#94a3b8',
     badgeClass: 'badge-general',
   },
+  other: {
+    bg: 'rgba(167, 139, 250, 0.15)',
+    border: '1px solid rgba(167, 139, 250, 0.45)',
+    accent: '#a78bfa',
+    text: '#c084fc',
+    badgeClass: 'badge-other',
+  },
+}
+
+export function getCalendarDomainStyle(dom) {
+  if (!dom) return DOMAIN_STYLES.general
+  const key = String(dom).toLowerCase().trim()
+  if (DOMAIN_STYLES[key]) return DOMAIN_STYLES[key]
+  return {
+    bg: 'rgba(192, 132, 252, 0.15)',
+    border: '1px solid rgba(192, 132, 252, 0.45)',
+    accent: '#c084fc',
+    text: '#e9d5ff',
+    badgeClass: 'badge-other',
+  }
 }
 
 const HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
@@ -665,7 +685,7 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
             {/* Scheduled Compass Tasks */}
             {scheduledForSelectedDay.map(task => {
               const pos = getEventPosition(task.scheduled_start, task.scheduled_end)
-              const style = DOMAIN_STYLES[task.domain] || DOMAIN_STYLES.general
+              const style = getCalendarDomainStyle(task.domain)
               return (
                 <div
                   key={task.id}
@@ -759,7 +779,7 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
             {unscheduledTasks.map(task => {
-              const style = DOMAIN_STYLES[task.domain] || DOMAIN_STYLES.general
+              const style = getCalendarDomainStyle(task.domain)
               return (
                 <div
                   key={task.id}

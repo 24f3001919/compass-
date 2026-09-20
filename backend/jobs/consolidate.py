@@ -215,6 +215,7 @@ async def archive_stale_threads(
         GROUP BY c.id
         HAVING COUNT(m.id) > 0
         ORDER BY c.last_active_at ASC
+        LIMIT 5
         """,
         cutoff
     )
@@ -244,30 +245,31 @@ async def archive_stale_threads(
             logger.info(f"    - Conversation {cid} already archived as chunk #{existing}.")
             continue
 
+        if dry_run:
+            archived_count += 1
+            logger.info(f"    - [DRY-RUN] Would summarize and archive conv {cid} ({len(messages)} msgs).")
+            continue
+
         summary = await summarize_messages(client, messages)
         emb = await get_embedding(summary)
 
         logger.info(f"    📦 Archiving conv {cid} ({len(messages)} msgs, last active {c['last_active_at'].date()}):")
         logger.info(f"       Summary: {summary[:120]}...")
 
-        if not dry_run:
-            await conn.execute(
-                """
-                INSERT INTO memory_chunks (domain, project_id, content, embedding, source, tags)
-                VALUES ($1, $2, $3, $4, $5, $6)
-                """,
-                "general",
-                None,
-                summary,
-                emb,
-                archive_source,
-                ["archived", "conversation_summary", f"conv_{cid}"]
-            )
-            archived_count += 1
-            logger.info(f"       ✅ Created consolidated memory chunk for {cid}.")
-        else:
-            archived_count += 1
-            logger.info(f"       [DRY-RUN] Would create memory chunk for {cid}.")
+        await conn.execute(
+            """
+            INSERT INTO memory_chunks (domain, project_id, content, embedding, source, tags)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            """,
+            "general",
+            None,
+            summary,
+            emb,
+            archive_source,
+            ["archived", "conversation_summary", f"conv_{cid}"]
+        )
+        archived_count += 1
+        logger.info(f"       ✅ Created consolidated memory chunk for {cid}.")
 
     return archived_count
 

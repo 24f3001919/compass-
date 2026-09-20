@@ -1033,6 +1033,7 @@ export default function Timeline({ tasks, activeDomain, onSelectDomain, onTasksU
           </div>
         ) : filtered.map(task => {
           const isOverdue = (task.countdown || '').toLowerCase().includes('overdue')
+          const isCompleted = task.status === 'completed' || task.status === 'done'
           const meta = getDomainMeta(task.domain)
 
           return (
@@ -1042,6 +1043,10 @@ export default function Timeline({ tasks, activeDomain, onSelectDomain, onTasksU
               onClick={() => setSelectedTask(task)}
               role="button"
               tabIndex={0}
+              style={{
+                opacity: isCompleted ? 0.75 : 1,
+                transition: 'all 0.15s ease'
+              }}
               onKeyDown={e => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault()
@@ -1127,8 +1132,61 @@ export default function Timeline({ tasks, activeDomain, onSelectDomain, onTasksU
                 </div>
               </div>
 
-              <div style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '12px', lineHeight: '1.4' }}>
-                {task.title}
+              {/* Title with Quick Completion Checkbox */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                <button
+                  className="btn-toggle-task-status"
+                  id={`btn-toggle-status-${task.id}`}
+                  title={isCompleted ? 'Mark as open' : 'Mark as completed'}
+                  onClick={async (e) => {
+                    e.stopPropagation()
+                    try {
+                      await updateTask(task.id, { status: isCompleted ? 'open' : 'completed' })
+                      if (onTasksUpdated) onTasksUpdated()
+                    } catch (err) {
+                      console.warn('Failed to toggle status:', err)
+                    }
+                  }}
+                  style={{
+                    width: '22px',
+                    height: '22px',
+                    borderRadius: '50%',
+                    border: isCompleted ? '1.5px solid #10b981' : '1.5px solid var(--border)',
+                    background: isCompleted ? '#10b981' : 'var(--bg-card-soft)',
+                    color: isCompleted ? '#ffffff' : 'var(--text-muted)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    flexShrink: 0,
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={e => {
+                    if (!isCompleted) {
+                      e.currentTarget.style.borderColor = '#10b981'
+                      e.currentTarget.style.color = '#10b981'
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (!isCompleted) {
+                      e.currentTarget.style.borderColor = 'var(--border)'
+                      e.currentTarget.style.color = 'var(--text-muted)'
+                    }
+                  }}
+                >
+                  ✓
+                </button>
+                <div style={{
+                  fontSize: '15px',
+                  fontWeight: '600',
+                  color: isCompleted ? 'var(--text-muted)' : 'var(--text-primary)',
+                  textDecoration: isCompleted ? 'line-through' : 'none',
+                  lineHeight: '1.4',
+                  flex: 1
+                }}>
+                  {task.title}
+                </div>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
