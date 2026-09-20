@@ -19,7 +19,7 @@ import {
 
 export default function App() {
   const [tasks, setTasks] = useState([])
-  const [activeTab, setActiveTab] = useState('northstar')
+  const [activeTab, setActiveTab] = useState('timeline')
   const [selectedDomain, setSelectedDomain] = useState('all')
   const [backendStatus, setBackendStatus] = useState('Connecting...')
   const [conversationId, setConversationId] = useState(null)
@@ -173,140 +173,12 @@ export default function App() {
         activeTab={activeTab}
         onSelectTab={setActiveTab}
         usageBadge={usageBadge}
+        currentUser={currentUser}
+        onOpenAuth={() => setShowAuthModal(true)}
       />
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-app)', minWidth: 0, overflow: 'hidden' }}>
-        <header style={{
-          height: '56px',
-          borderBottom: '1px solid var(--border)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 20px',
-          flexShrink: 0,
-          background: 'var(--bg-card, var(--bg-app))'
-        }}>
-          <div style={{ display: 'flex', gap: '6px' }}>
-            {[
-              { id: 'tab-northstar', key: 'northstar', label: '🧭 Northstar AI' },
-              { id: 'tab-specialist', key: 'specialist', label: '🧠 Specialist Team' },
-              { id: 'tab-timeline', key: 'timeline', label: '📅 Timeline Feed' },
-              { id: 'tab-chat', key: 'chat', label: '💬 Assistant Chat' },
-              { id: 'tab-agent', key: 'agent', label: '🧭 Agent Planner' },
-              { id: 'tab-calendar', key: 'calendar', label: '🗓️ Schedule & Calendar' },
-            ].map(tab => {
-              const isActive = activeTab === tab.key
-              return (
-                <button
-                  key={tab.key}
-                  id={tab.id}
-                  onClick={() => setActiveTab(tab.key)}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    border: isActive ? '1px solid var(--border)' : '1px solid transparent',
-                    background: isActive ? 'var(--bg-card-soft)' : 'transparent',
-                    color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    boxShadow: isActive ? 'var(--shadow-sm)' : 'none',
-                    cursor: 'pointer',
-                    fontWeight: isActive ? '700' : '500',
-                    fontSize: '12.5px',
-                    transition: 'all 0.15s ease'
-                  }}>
-                  {tab.label}
-                </button>
-              )
-            })}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            {/* P0.2: Live usage counter — updates after every chat message */}
-            <div id="usage-badge" className="header-model-badge" style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
-              {usageBadge}
-            </div>
-
-            {/* Account Selector Pill / Google Login */}
-            {currentUser && currentUser.authenticated ? (
-              <div
-                id="user-profile-badge"
-                onClick={() => setShowAuthModal(true)}
-                title="Click to switch account or manage Google Calendar"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  background: 'var(--bg-card-soft)',
-                  border: '1px solid var(--border)',
-                  padding: '5px 12px',
-                  borderRadius: '20px',
-                  fontSize: '12px',
-                  color: 'var(--text-primary)',
-                  cursor: 'pointer',
-                  boxShadow: 'var(--shadow-sm)',
-                  transition: 'all 0.15s ease',
-                }}>
-                <span style={{
-                  width: '7px',
-                  height: '7px',
-                  borderRadius: '50%',
-                  background: '#10b981',
-                  boxShadow: '0 0 6px #10b981',
-                }} />
-                <span style={{ fontWeight: '600', color: 'var(--text-primary)', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {currentUser.email}
-                </span>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>▾</span>
-                <button
-                  onClick={async (e) => {
-                    e.stopPropagation()
-                    await disconnectCalendar()
-                    setCurrentUser({ authenticated: false, email: '' })
-                    loadTasks(selectedDomain)
-                  }}
-                  title="Sign out / Disconnect"
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--text-muted)',
-                    cursor: 'pointer',
-                    fontSize: '11px',
-                    padding: '0 2px',
-                    marginLeft: '4px'
-                  }}>
-                  ✕
-                </button>
-              </div>
-            ) : (
-              <button
-                id="header-btn-login-account"
-                onClick={() => setShowAuthModal(true)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '6px 14px',
-                  borderRadius: '8px',
-                  background: 'rgba(59, 130, 246, 0.12)',
-                  border: '1px solid rgba(59, 130, 246, 0.35)',
-                  color: '#60a5fa',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}>
-                👤 Sign in / Choose Account
-              </button>
-            )}
-          </div>
-        </header>
-
-        {activeTab === 'specialist' ? (
-          <SpecialistPanel
-            onTaskMutated={() => {
-              loadTasks(selectedDomain)
-              refreshUsage()
-            }}
-          />
-        ) : activeTab === 'timeline' ? (
+        {activeTab === 'timeline' ? (
           <Timeline
             tasks={tasks}
             activeDomain={selectedDomain}
@@ -315,24 +187,6 @@ export default function App() {
               loadTasks(selectedDomain)
               refreshUsage()
             }}
-          />
-        ) : activeTab === 'calendar' ? (
-          <CalendarView
-            tasks={tasks}
-            activeDomain={selectedDomain}
-            onTasksUpdated={() => {
-              loadTasks(selectedDomain)
-              refreshUsage()
-            }}
-            onOpenAuthModal={() => setShowAuthModal(true)}
-          />
-        ) : activeTab === 'agent' ? (
-          <AgentPanel
-            onTaskMutated={() => {
-              loadTasks(selectedDomain)
-              refreshUsage()
-            }}
-            conversationId={conversationId}
           />
         ) : activeTab === 'chat' ? (
           <ChatPanel
@@ -345,6 +199,32 @@ export default function App() {
             onChatComplete={refreshUsage}
             tasks={tasks}
             backendStatus={backendStatus}
+          />
+        ) : activeTab === 'agent' ? (
+          <AgentPanel
+            onTaskMutated={() => {
+              loadTasks(selectedDomain)
+              refreshUsage()
+            }}
+            conversationId={conversationId}
+          />
+        ) : activeTab === 'calendar' ? (
+          <CalendarView
+            tasks={tasks}
+            activeDomain={selectedDomain}
+            onTasksUpdated={() => {
+              loadTasks(selectedDomain)
+              refreshUsage()
+            }}
+            onOpenAuthModal={() => setShowAuthModal(true)}
+          />
+        ) : activeTab === 'specialist' ? (
+          <SpecialistPanel
+            onTaskMutated={() => {
+              loadTasks(selectedDomain)
+              refreshUsage()
+            }}
+            onSelectTab={setActiveTab}
           />
         ) : (
           <NorthstarPanel
@@ -361,6 +241,7 @@ export default function App() {
               loadTasks(selectedDomain)
               refreshUsage()
             }}
+            onSelectTab={setActiveTab}
           />
         )}
       </main>

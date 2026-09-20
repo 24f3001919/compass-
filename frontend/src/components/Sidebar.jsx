@@ -1,10 +1,12 @@
 import React from 'react'
 
 const NAV_ITEMS = [
-  { key: 'northstar', icon: '🧭', label: 'Northstar', sub: 'Main AI Assistant' },
-  { key: 'specialist', icon: '🧠', label: 'Specialist Team', sub: 'Specialized Multi-Agent' },
   { key: 'timeline', icon: '▦', label: 'Timeline', sub: 'Team feed' },
+  { key: 'chat', icon: '💬', label: 'Assistant', sub: 'Ask anything' },
+  { key: 'agent', icon: '🧭', label: 'Planner', sub: 'Agent tasks' },
   { key: 'calendar', icon: '🗓️', label: 'Schedule', sub: 'Calendar & Sync' },
+  { key: 'northstar', icon: '⚡', label: 'Northstar AI', sub: 'Triage & priorities' },
+  { key: 'specialist', icon: '🧠', label: 'Specialist Team', sub: 'Specialized Multi-Agent' },
 ]
 
 export default function Sidebar({
@@ -14,7 +16,9 @@ export default function Sidebar({
   backendStatus,
   activeTab,
   onSelectTab,
-  usageBadge
+  usageBadge,
+  currentUser,
+  onOpenAuth,
 }) {
   const isOnline = backendStatus.toLowerCase().includes('neon') || backendStatus.toLowerCase().includes('live')
   const totalActive = Object.values(domainCounts || {}).reduce((sum, n) => sum + (typeof n === 'number' ? n : 0), 0)
@@ -53,8 +57,27 @@ export default function Sidebar({
       height: '100vh',
       overflowY: 'auto'
     }}>
-      {/* Brand Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px', padding: '0 4px' }}>
+      {/* Brand Header — clickable to return to default page (Timeline) */}
+      <div
+        id="sidebar-brand-header"
+        onClick={() => {
+          onSelectTab('timeline')
+          if (onSelectDomain) onSelectDomain('all')
+        }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          marginBottom: '24px',
+          padding: '0 4px',
+          cursor: 'pointer',
+          userSelect: 'none',
+          transition: 'opacity 0.15s ease',
+        }}
+        onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+        onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+        title="Compass Workspace — Click to return to default Timeline Feed"
+      >
         <div style={{
           width: '38px',
           height: '38px',
@@ -64,13 +87,14 @@ export default function Sidebar({
           alignItems: 'center',
           justifyContent: 'center',
           fontSize: '18px',
-          flexShrink: 0
+          flexShrink: 0,
+          boxShadow: '0 4px 12px rgba(245, 166, 35, 0.25)'
         }}>
           🧭
         </div>
         <div>
-          <h1 style={{ fontSize: '16px', fontWeight: '800', letterSpacing: '-0.3px', color: 'var(--text-on-dark)' }}>Compass</h1>
-          <p style={{ fontSize: '10.5px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: '600' }}>Workspace</p>
+          <h1 style={{ fontSize: '16px', fontWeight: '800', letterSpacing: '-0.3px', color: 'var(--text-on-dark)', margin: 0 }}>Compass</h1>
+          <p style={{ fontSize: '10.5px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: '600', margin: 0 }}>Workspace</p>
         </div>
       </div>
 
@@ -173,6 +197,49 @@ export default function Sidebar({
             {usageBadge}
           </div>
         )}
+      </div>
+
+      {/* Account / Workspace Switcher */}
+      <div
+        id="sidebar-account-btn"
+        onClick={() => onOpenAuth && onOpenAuth()}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '10px 12px',
+          borderRadius: '10px',
+          background: 'rgba(255, 255, 255, 0.04)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          cursor: 'pointer',
+          marginTop: '12px',
+          transition: 'all 0.15s ease'
+        }}
+        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'}
+        title="Manage Account & Google Calendar"
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+          <span style={{ fontSize: '13px' }}>👤</span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{
+              fontSize: '12px',
+              color: 'var(--text-on-dark)',
+              fontWeight: '600',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}>
+              {currentUser?.authenticated ? currentUser.email : 'Sign in / Account'}
+            </div>
+            <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+              {currentUser?.calendar?.connected ? 'Google Calendar ✓' : 'Isolated Workspace'}
+            </div>
+          </div>
+        </div>
+        <span style={{ fontSize: '11px', color: 'var(--brand)', fontWeight: '700', flexShrink: 0, paddingLeft: '6px' }}>
+          {currentUser?.authenticated ? 'Switch ▾' : 'Login ▾'}
+        </span>
       </div>
     </aside>
   )

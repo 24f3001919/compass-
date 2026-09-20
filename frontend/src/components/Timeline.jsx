@@ -972,7 +972,7 @@ export default function Timeline({ tasks, activeDomain, onSelectDomain, onTasksU
           const uniquePills = Array.from(new Set([...basePills, ...customPills]))
 
           return uniquePills.map(dom => {
-            const pillMeta = dom === 'all' ? { label: 'all', icon: '▦' } : getDomainMeta(dom)
+            const pillMeta = dom === 'all' ? { label: 'All' } : getDomainMeta(dom)
             return (
               <button
                 key={dom}
@@ -980,7 +980,7 @@ export default function Timeline({ tasks, activeDomain, onSelectDomain, onTasksU
                 onClick={() => onSelectDomain(dom)}
                 className={`filter-pill ${activeDomain === dom ? 'active' : ''}`}
               >
-                <span style={{ marginRight: '4px' }}>{pillMeta.icon}</span> {pillMeta.label}
+                {pillMeta.label}
               </button>
             )
           })
