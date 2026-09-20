@@ -414,6 +414,8 @@ export default function App() {
             onSendMessage={handleSendMessage}
             isTyping={isTyping}
             onChatComplete={refreshUsage}
+            tasks={tasks}
+            backendStatus={backendStatus}
             onTaskMutated={() => {
               loadTasks(selectedDomain)
               refreshUsage()

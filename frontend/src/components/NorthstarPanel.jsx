@@ -11,6 +11,8 @@ export default function NorthstarPanel({
   isTyping,
   onChatComplete,
   onTaskMutated,
+  tasks = [],
+  backendStatus = 'Live • Neon Connected',
 }) {
   const [activeSubTab, setActiveSubTab] = useState('assistant') // 'assistant' | 'planner'
 
@@ -85,6 +87,8 @@ export default function NorthstarPanel({
             onSendMessage={onSendMessage}
             isTyping={isTyping}
             onChatComplete={onChatComplete}
+            tasks={tasks}
+            backendStatus={backendStatus}
           />
         ) : (
           <AgentPanel
