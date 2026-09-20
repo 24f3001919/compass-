@@ -45,9 +45,20 @@ async def test_1_chat(client: httpx.AsyncClient):
     print(f"Status: {r.status_code}")
     data = r.json()
     resp_text = data.get("response", "")
+    conv_id = data.get("conversation_id")
     print(f"Response (first 120 chars): {resp_text[:120]}...")
     assert r.status_code == 200 and len(resp_text) > 0, "Chat verification failed"
     print("✅ Chat Subsystem: VERIFIED (real message returned real response)")
+
+    # Strict Zero-Leak: Delete the verification conversation so it does not accumulate
+    if conv_id:
+        try:
+            from backend.memory.db import get_pool
+            pool = await get_pool()
+            async with pool.acquire() as conn:
+                await conn.execute("DELETE FROM conversations WHERE id::text = $1", str(conv_id))
+        except Exception as e:
+            print(f"Notice: conversation cleanup error: {e}")
 
 
 async def test_2_agent_planner(client: httpx.AsyncClient):
