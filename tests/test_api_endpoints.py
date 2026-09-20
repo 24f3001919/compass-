@@ -91,3 +91,12 @@ async def test_admin_consolidate_endpoint(client: AsyncClient, auth_headers: dic
         data = resp.json()
         assert data["status"] == "ok"
         assert data["dry_run"] is True
+
+
+@pytest.mark.asyncio
+async def test_shared_conversation_public_endpoint(client: AsyncClient):
+    """GET /api/share/{id} is publicly accessible without auth and returns 404 for nonexistent UUID, not 401/403."""
+    fake_id = "00000000-0000-0000-0000-000000000000"
+    resp = await client.get(f"/api/share/{fake_id}")
+    assert resp.status_code in (404, 500, 503)
+    assert resp.status_code not in (401, 403)

@@ -641,4 +641,18 @@ export async function fetchMemoryOverview() {
   }
 }
 
+/**
+ * Fetch a publicly shared conversation and its messages.
+ */
+export async function fetchSharedConversation(conversationId) {
+  if (!conversationId) return null
+  try {
+    const res = await fetch(`${API_BASE}/api/share/${conversationId}`)
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
 

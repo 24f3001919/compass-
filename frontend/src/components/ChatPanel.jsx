@@ -7,6 +7,7 @@ import {
   deleteConversation,
   fetchMemoryOverview,
 } from '../api/client'
+import ShareModal from './ShareModal'
 
 function getTimeGreeting() {
   const hour = new Date().getHours()
@@ -37,6 +38,7 @@ export default function ChatPanel({
   const [confirmDeleteConv, setConfirmDeleteConv] = useState(null)
   const [showArchived, setShowArchived] = useState(false)
   const [toast, setToast] = useState(null)
+  const [sharingConv, setSharingConv] = useState(null)
 
   const messagesEndRef = useRef(null)
   const streamTimerRef = useRef(null)
@@ -272,25 +274,13 @@ export default function ChatPanel({
 
   const handleShareChat = async (conv) => {
     setOpenMenuConvId(null)
+    setSharingConv(conv)
+    const shareUrl = `${window.location.origin}/?share=${conv.id}`
     try {
-      const msgs = await fetchConversationMessages(conv.id)
-      const lines = [
-        `# Compass Chat: ${conv.title || 'Session'}`,
-        `Date: ${new Date(conv.last_active_at).toLocaleString()}`,
-        `Messages: ${conv.message_count}`,
-        '',
-      ]
-      if (msgs && msgs.length > 0) {
-        msgs.forEach(m => {
-          lines.push(`**${m.role === 'user' ? 'User' : 'Compass'}**: ${m.text}\n`)
-        })
-      } else if (conv.preview) {
-        lines.push(`Preview: ${conv.preview}`)
-      }
-      await navigator.clipboard.writeText(lines.join('\n'))
-      showToast('Chat transcript copied to clipboard! 📋')
+      await navigator.clipboard.writeText(shareUrl)
+      showToast('Share link copied to clipboard! 🔗')
     } catch {
-      showToast('Failed to copy transcript to clipboard')
+      showToast('Share link generated 🔗')
     }
   }
 
@@ -1399,6 +1389,13 @@ export default function ChatPanel({
             {toast}
           </div>
         )}
+
+        {/* Share Link Modal */}
+        <ShareModal
+          isOpen={Boolean(sharingConv)}
+          onClose={() => setSharingConv(null)}
+          conversation={sharingConv}
+        />
       </div>
   )
 }

@@ -416,6 +416,51 @@ async def delete_past_conversation(conversation_id: str):
         return {"ok": False, "error": str(e)}
 
 
+# ---- 2e. GET /api/share/{conversation_id}  — Public shared chat view --------
+@app.get("/api/share/{conversation_id}")
+async def get_shared_conversation(conversation_id: str):
+    """Retrieve shared conversation details and its messages publicly."""
+    try:
+        pool = await get_pool()
+        if not pool:
+            raise HTTPException(status_code=503, detail="Database unavailable")
+        async with pool.acquire() as conn:
+            cid = uuid.UUID(conversation_id)
+            conv_row = await conn.fetchrow(
+                "SELECT id, started_at, last_active_at, COALESCE(title, 'Chat Session') AS title FROM conversations WHERE id = $1",
+                cid
+            )
+            if not conv_row:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+
+            rows = await conversations.get_recent_messages(conn, conversation_id, limit=100)
+            messages = [
+                {
+                    "id": r["id"],
+                    "role": r["role"],
+                    "content": r["content"],
+                    "skill_called": r.get("skill_called"),
+                    "created_at": r["created_at"].isoformat() if hasattr(r["created_at"], "isoformat") else str(r["created_at"]),
+                }
+                for r in rows
+            ]
+            return {
+                "id": str(conv_row["id"]),
+                "title": conv_row["title"],
+                "started_at": conv_row["started_at"].isoformat() if hasattr(conv_row["started_at"], "isoformat") else str(conv_row["started_at"]),
+                "last_active_at": conv_row["last_active_at"].isoformat() if hasattr(conv_row["last_active_at"], "isoformat") else str(conv_row["last_active_at"]),
+                "messages": messages,
+            }
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid conversation ID")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching shared conversation: {e}")
+        raise HTTPException(status_code=500, detail="Failed to load shared conversation")
+
+
+
 # ---- 2d. GET /api/memory/overview ----------------------------------------
 @app.get("/api/memory/overview")
 async def get_memory_overview(request: Request = None):
