@@ -468,28 +468,44 @@ async def sync_all_tasks_to_google_calendar(
     pool: Any,
     user_id: str = "default_user",
 ) -> Dict[str, Any]:
-    """Synchronize all scheduled tasks to the user's Google Calendar."""
+    """Synchronize all scheduled tasks and deadlines to the user's Google Calendar."""
     if pool is None:
         return {"success": False, "count": 0, "message": "Database not connected"}
 
     async with pool.acquire() as conn:
         tasks = await conn.fetch(
             """
-            SELECT id, title, domain, priority, notes, scheduled_start, scheduled_end
+            SELECT id, title, domain, priority, notes, duration_minutes, due_date, scheduled_start, scheduled_end
             FROM tasks
-            WHERE scheduled_start IS NOT NULL AND scheduled_end IS NOT NULL
-            ORDER BY scheduled_start ASC
-            """
+            WHERE (user_id = $1 OR user_id IS NULL)
+              AND (
+                (scheduled_start IS NOT NULL AND scheduled_end IS NOT NULL)
+                OR due_date IS NOT NULL
+              )
+            ORDER BY COALESCE(scheduled_start, due_date) ASC
+            """,
+            user_id,
         )
+
+    access_token = await get_valid_access_token_for_user(pool, user_id)
+    token_is_live = bool(access_token and not access_token.startswith("mock_"))
 
     synced_events = []
     live_count = 0
     simulated_count = 0
     for t in tasks:
+        start_dt = t["scheduled_start"]
+        end_dt = t["scheduled_end"]
+        if not start_dt or not end_dt:
+            due = _ensure_utc(t["due_date"])
+            dur = t.get("duration_minutes") or 60
+            start_dt = due - timedelta(minutes=dur)
+            end_dt = due
+
         res = await link_calendar_event(
             task_id=t["id"],
-            start_dt=t["scheduled_start"],
-            end_dt=t["scheduled_end"],
+            start_dt=start_dt,
+            end_dt=end_dt,
             title=t["title"],
             pool=pool,
             user_id=user_id,
@@ -517,12 +533,18 @@ async def sync_all_tasks_to_google_calendar(
     except Exception as e:
         logger.warning(f"Could not update last_synced_at: {e}")
 
-    is_live = live_count > 0
-    msg = (
-        f"Successfully synced {live_count} tasks directly to Google Calendar API."
-        if is_live else
-        f"Slotted {simulated_count} tasks in Compass (Demo Mode). Because live Google OAuth credentials are not connected, use 'Export .ics Feed' to import or subscribe directly in Google Calendar."
-    )
+    is_live = token_is_live and live_count > 0
+    if token_is_live:
+        if live_count > 0:
+            msg = f"Successfully synced {live_count} tasks directly to Google Calendar API."
+        else:
+            msg = "Google Calendar is live connected, but there were no scheduled tasks or deadlines to sync."
+            is_live = True
+    else:
+        msg = (
+            f"Slotted {simulated_count} tasks in Compass (Demo Mode). Because live Google OAuth credentials are not connected, "
+            f"use 'Export .ics Feed' to subscribe, or connect your Google Account for live synchronization."
+        )
 
     return {
         "success": True,

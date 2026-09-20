@@ -76,7 +76,15 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
   }
 
   const activeEmail = currentUser?.authenticated ? currentUser.email : null
-  const isCalendarLinked = currentUser?.calendar?.connected || false
+  const isLiveCalendarLinked = Boolean(
+    currentUser?.calendar?.connected &&
+    currentUser?.calendar?.mode === 'live' &&
+    !currentUser?.calendar?.is_simulated
+  )
+  const isDemoCalendarLinked = Boolean(
+    currentUser?.calendar?.connected &&
+    (!isLiveCalendarLinked || currentUser?.calendar?.is_simulated)
+  )
 
   return (
     <div
@@ -303,7 +311,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
             2. Google Calendar Linking
           </h4>
 
-          {isCalendarLinked ? (
+          {isLiveCalendarLinked ? (
             <div style={{
               background: 'rgba(16, 185, 129, 0.1)',
               border: '1px solid rgba(16, 185, 129, 0.3)',
@@ -313,7 +321,8 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
               justifyContent: 'space-between',
               alignItems: 'center',
               flexWrap: 'wrap',
-              gap: '10px'
+              gap: '10px',
+              marginBottom: '16px'
             }}>
               <div>
                 <div style={{ fontSize: '13px', fontWeight: '700', color: '#34d399' }}>
@@ -327,9 +336,17 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                 <button
                   onClick={async () => {
                     setLoading(true)
+                    setError(null)
+                    setSuccessMsg(null)
                     try {
-                      await syncCalendarNow()
-                      setSuccessMsg('Synchronized scheduled tasks with Google Calendar!')
+                      const res = await syncCalendarNow()
+                      if (res.is_live && res.live_count > 0) {
+                        setSuccessMsg(`Synchronized ${res.live_count} task(s) directly to your Google Calendar!`)
+                      } else if (res.is_live) {
+                        setSuccessMsg('Google Calendar connected! No pending scheduled tasks or deadlines to sync.')
+                      } else {
+                        setError(res.message || 'Could not sync with Google Calendar API. Please check your OAuth connection.')
+                      }
                     } catch (e) {
                       setError(e.message)
                     } finally {
@@ -362,6 +379,41 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {isDemoCalendarLinked && (
+                <div style={{
+                  background: 'rgba(245, 158, 11, 0.08)',
+                  border: '1px solid rgba(245, 158, 11, 0.28)',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: '10px'
+                }}>
+                  <div>
+                    <div style={{ fontSize: '12.5px', fontWeight: '700', color: '#fbbf24' }}>
+                      ⚡ Demo Mode Active (Simulated Calendar)
+                    </div>
+                    <div style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '2px' }}>
+                      Mock calendar commitments active. Connect genuine Google OAuth below to sync live events to Google Calendar.
+                    </div>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      await disconnectCalendar()
+                      if (onUserChanged) onUserChanged(activeEmail)
+                    }}
+                    style={{
+                      padding: '5px 10px', borderRadius: '6px',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      color: '#f87171', fontSize: '11px', fontWeight: '600', cursor: 'pointer', flexShrink: 0
+                    }}
+                  >
+                    Reset Demo
+                  </button>
+                </div>
+              )}
 
               {/* ── Option A: Google OAuth ──────────────────────────────── */}
               <div style={{
@@ -405,6 +457,21 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                     </span>
                   )}
                 </div>
+
+                {oauthStatus?.configured && (
+                  <div style={{
+                    marginTop: '12px',
+                    padding: '8px 12px',
+                    background: 'rgba(56, 189, 248, 0.08)',
+                    border: '1px solid rgba(56, 189, 248, 0.2)',
+                    borderRadius: '6px',
+                    fontSize: '11.5px',
+                    color: '#bae6fd',
+                    lineHeight: '1.5'
+                  }}>
+                    💡 <strong>Test App Setup Note:</strong> If Google blocks sign-in with <em>Error 403: access_denied ("App has not completed verification")</em>, add your email ({activeEmail || 'your email'}) under <strong>Google Cloud Console → OAuth consent screen → Test users</strong>.
+                  </div>
+                )}
 
                 {/* Setup Guide shown when OAuth is not configured */}
                 {oauthStatus && !oauthStatus.configured && (
