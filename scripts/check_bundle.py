@@ -1,13 +1,13 @@
 import httpx
 import re
 
-r = httpx.get('https://compass-kappa-nine.vercel.app', timeout=15.0)
+r = httpx.get('https://compass-farmlytics.vercel.app', timeout=15.0)
 print('HTML status:', r.status_code)
 scripts = re.findall(r'src=["\']([^"\']+\.js)["\']', r.text)
 print('Script tags found:', scripts)
 
 for s in scripts:
-    url = s if s.startswith('http') else f'https://compass-kappa-nine.vercel.app{s}'
+    url = s if s.startswith('http') else f'https://compass-farmlytics.vercel.app{s}'
     print('Fetching bundle:', url)
     res = httpx.get(url, timeout=30.0)
     print('Bundle size:', len(res.text))
