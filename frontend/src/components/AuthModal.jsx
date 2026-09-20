@@ -7,6 +7,8 @@ import {
   syncCalendarNow,
   getCalendarExportUrl,
   checkGoogleOAuthStatus,
+  getKnownAccounts,
+  addKnownAccount,
 } from '../api/client'
 
 export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged }) {
@@ -38,6 +40,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
     setSuccessMsg(null)
     try {
       await selectAccount(clean)
+      addKnownAccount(clean)
       setSuccessMsg(`Switched to account: ${clean}`)
       if (onUserChanged) onUserChanged(clean)
       setTimeout(() => {
@@ -75,7 +78,13 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
     setTimeout(() => setCopiedIcs(false), 2500)
   }
 
-  const activeEmail = currentUser?.authenticated ? currentUser.email : null
+  const activeEmail = currentUser?.authenticated ? currentUser.email : (
+    (currentUser?.email && currentUser.email.includes('@')) ? currentUser.email : (
+      typeof localStorage !== 'undefined'
+        ? (localStorage.getItem('compass_user_email') || (localStorage.getItem('compass_user_id')?.includes('@') ? localStorage.getItem('compass_user_id') : null))
+        : null
+    )
+  )
   const isLiveCalendarLinked = Boolean(
     currentUser?.calendar?.connected &&
     currentUser?.calendar?.mode === 'live' &&
@@ -219,42 +228,48 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
             1. Select Login Account
           </h4>
 
-          {/* Quick Picker for kumarinandan911@gmail.com */}
+          {/* Remembered Accounts Quick Picker */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
-            <button
-              onClick={() => handleSwitchAccount('kumarinandan911@gmail.com')}
-              disabled={loading}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: activeEmail === 'kumarinandan911@gmail.com' ? '1.5px solid var(--primary)' : '1px solid var(--border)',
-                background: activeEmail === 'kumarinandan911@gmail.com' ? 'rgba(99, 102, 241, 0.08)' : 'var(--bg-card-soft)',
-                color: 'var(--text-primary)',
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontSize: '16px' }}>⭐</span>
-                <div>
-                  <div style={{ fontSize: '13.5px', fontWeight: '600', color: 'var(--text-primary)' }}>
-                    kumarinandan911@gmail.com
+            {getKnownAccounts().map(accEmail => {
+              const isActive = activeEmail === accEmail
+              return (
+                <button
+                  key={accEmail}
+                  onClick={() => handleSwitchAccount(accEmail)}
+                  disabled={loading}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: isActive ? '1.5px solid var(--primary)' : '1px solid var(--border)',
+                    background: isActive ? 'rgba(99, 102, 241, 0.08)' : 'var(--bg-card-soft)',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '16px' }}>{isActive ? '⭐' : '👤'}</span>
+                    <div>
+                      <div style={{ fontSize: '13.5px', fontWeight: '600', color: 'var(--text-primary)' }}>
+                        {accEmail}
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        {accEmail === 'himynameisratnesh12@gmail.com' ? 'Ratnesh Singh (Primary User Account)' : 'Isolated Workspace'}
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    Primary User Account (Isolated Workspace)
-                  </div>
-                </div>
-              </div>
-              {activeEmail === 'kumarinandan911@gmail.com' ? (
-                <span style={{ fontSize: '11.5px', color: 'var(--primary)', fontWeight: '700' }}>✓ Active</span>
-              ) : (
-                <span style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: '600' }}>Switch →</span>
-              )}
-            </button>
+                  {isActive ? (
+                    <span style={{ fontSize: '11.5px', color: 'var(--primary)', fontWeight: '700' }}>✓ Active</span>
+                  ) : (
+                    <span style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: '600' }}>Switch →</span>
+                  )}
+                </button>
+              )
+            })}
           </div>
 
           {/* Custom Email Input */}

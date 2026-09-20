@@ -360,9 +360,9 @@ class ConversationUpdate(BaseModel):
 
 @app.get("/api/conversations")
 async def list_past_conversations(
+    request: Request,
     limit: int = Query(30, ge=1, le=100),
     include_archived: bool = Query(False),
-    request: Request = None,
 ):
     """List previous chat conversations with titles, timestamps, and message counts."""
     pool = await get_pool()
@@ -463,7 +463,7 @@ async def get_shared_conversation(conversation_id: str):
 
 # ---- 2d. GET /api/memory/overview ----------------------------------------
 @app.get("/api/memory/overview")
-async def get_memory_overview(request: Request = None):
+async def get_memory_overview(request: Request):
     """Unified memory overview: previous chats, past planner runs, and active workspace memory."""
     pool = await get_pool()
     if not pool:
@@ -1209,12 +1209,13 @@ class PublicChatResponse(BaseModel):
 
 
 @app.post("/api/chat", response_model=PublicChatResponse)
-async def public_chat(req: PublicChatRequest, _rl: None = Depends(rate_limit)):
+async def public_chat(req: PublicChatRequest, request: Request, _rl: None = Depends(rate_limit)):
     """Executes orchestrator.handle_message(), records usage, and returns response and latency."""
     from backend.orchestrator import handle_message
 
+    user_id = _get_current_user_id(request)
     msg = req.message.strip()
-    result = await handle_message(conversation_id=req.conversation_id, message=msg)
+    result = await handle_message(conversation_id=req.conversation_id, message=msg, user_id=user_id)
 
     return PublicChatResponse(
         response=result.get("response", ""),
@@ -1299,7 +1300,7 @@ class StreamChatRequest(BaseModel):
 
 
 @app.post("/api/chat/stream")
-async def stream_chat(req: StreamChatRequest, _rl: None = Depends(rate_limit)):
+async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depends(rate_limit)):
     """Real Server-Sent Events endpoint.
 
     Streams Nebius token-by-token output using stream=True on the OpenAI-compatible
@@ -1318,6 +1319,7 @@ async def stream_chat(req: StreamChatRequest, _rl: None = Depends(rate_limit)):
     from backend.orchestrator import handle_message
 
     _settings = _gs()
+    user_id = _get_current_user_id(request)
 
     async def event_generator():
         conv_id = req.conversation_id or str(uuid.uuid4())
@@ -1325,7 +1327,7 @@ async def stream_chat(req: StreamChatRequest, _rl: None = Depends(rate_limit)):
 
         # If no Nebius key, fall back to non-streaming orchestrator
         if not _settings.NEBIUS_API_KEY:
-            result = await handle_message(conversation_id=req.conversation_id, message=message)
+            result = await handle_message(conversation_id=req.conversation_id, message=message, user_id=user_id)
             response_text = result.get("response", "")
             prompt_est = max(len(message.split()) * 3, 30)
             completion_est = max(len(response_text.split()), 15)
@@ -1363,10 +1365,16 @@ async def stream_chat(req: StreamChatRequest, _rl: None = Depends(rate_limit)):
                 pool = await get_pool()
                 if pool:
                     async with pool.acquire() as conn:
-                        prior = await conversations.get_cross_conversation_memory(conn, exclude_conversation_id=req.conversation_id, limit=6)
-                        tasks_rows = await conn.fetch(
-                            "SELECT title, domain, due_date, status, priority FROM tasks WHERE status != 'completed' ORDER BY due_date ASC NULLS LAST LIMIT 8"
-                        )
+                        prior = await conversations.get_cross_conversation_memory(conn, exclude_conversation_id=req.conversation_id, user_id=user_id, limit=6)
+                        if user_id:
+                            tasks_rows = await conn.fetch(
+                                "SELECT title, domain, due_date, status, priority FROM tasks WHERE status != 'completed' AND (user_id IS NULL OR user_id = $1) ORDER BY due_date ASC NULLS LAST LIMIT 8",
+                                user_id,
+                            )
+                        else:
+                            tasks_rows = await conn.fetch(
+                                "SELECT title, domain, due_date, status, priority FROM tasks WHERE status != 'completed' ORDER BY due_date ASC NULLS LAST LIMIT 8"
+                            )
                         mem_parts = []
                         if prior:
                             prior_text = "\n".join([f"- [{p.get('role', 'user')}]: {p.get('content', '')[:100]}" for p in prior])
@@ -1429,7 +1437,7 @@ async def stream_chat(req: StreamChatRequest, _rl: None = Depends(rate_limit)):
 
             if tool_call_detected:
                 # Tool call detected — fall back to full orchestrator for structured handling
-                result = await handle_message(conversation_id=req.conversation_id, message=message)
+                result = await handle_message(conversation_id=req.conversation_id, message=message, user_id=user_id)
                 response_text = result.get("response", "")
                 prompt_est = max(len(message.split()) * 3, 30)
                 completion_est = max(len(response_text.split()), 15)
@@ -1444,7 +1452,7 @@ async def stream_chat(req: StreamChatRequest, _rl: None = Depends(rate_limit)):
                 pool = await get_pool()
                 if pool and full_text:
                     async with pool.acquire() as conn:
-                        real_cid = await conversations.get_or_create_conversation(conn, conv_id)
+                        real_cid = await conversations.get_or_create_conversation(conn, conv_id, user_id=user_id)
                         await conversations.add_message(conn, real_cid, role="user", content=message)
                         await conversations.add_message(conn, real_cid, role="assistant", content=full_text, skill_called="chat")
             except Exception as save_err:
@@ -1460,7 +1468,7 @@ async def stream_chat(req: StreamChatRequest, _rl: None = Depends(rate_limit)):
         except Exception as e:
             logger.warning(f"SSE stream error ({e}); falling back to non-streaming orchestrator")
             try:
-                result = await handle_message(conversation_id=req.conversation_id, message=message)
+                result = await handle_message(conversation_id=req.conversation_id, message=message, user_id=user_id)
                 response_text = result.get("response", "")
                 prompt_est = max(len(message.split()) * 3, 30)
                 completion_est = max(len(response_text.split()), 15)
@@ -1552,6 +1560,8 @@ async def agent_run(req: AgentRequest, request: Request):
                 detail=f"Concurrent active agent runs cap reached ({active_count}/{MAX_CONCURRENT_AGENT_RUNS}). Please complete or wait for existing runs to finish.",
             )
 
+    agent_user_id = _get_current_user_id(request)
+
     async def agent_event_generator():
         try:
             async for step in run_agent(
@@ -1566,6 +1576,7 @@ async def agent_run(req: AgentRequest, request: Request):
                 confirm_timeout_seconds=req.confirm_timeout_seconds,
                 wait_for_confirmation=req.wait_for_confirmation,
                 conversation_id=req.conversation_id,
+                user_id=agent_user_id,
             ):
                 yield step.to_sse()
         except Exception as e:
@@ -1897,17 +1908,22 @@ async def commit_schedule_endpoint(body: CommitScheduleBody):
 
 
 @app.get("/api/calendar/export.ics")
-async def export_calendar_ics_endpoint(domain: Optional[str] = Query(None)):
+async def export_calendar_ics_endpoint(
+    request: Request,
+    domain: Optional[str] = Query(None),
+    user_id: Optional[str] = Query(None),
+):
     """Export standard RFC 5545 iCalendar feed for calendar apps."""
     from backend.services.calendar import generate_ics_feed
+    target_user_id = user_id or _get_current_user_id(request)
     pool = await get_pool()
     tasks: list[dict[str, Any]] = []
     if pool is not None:
         async with pool.acquire() as conn:
-            tasks = await structured.list_tasks(conn, domain=domain, scheduled_only=True)
+            tasks = await structured.list_tasks(conn, domain=domain, user_id=target_user_id, scheduled_only=True)
             # If no tasks explicitly slotted yet, pull all open tasks and generate demo schedule
             if not tasks:
-                tasks = await structured.list_tasks(conn, domain=domain)
+                tasks = await structured.list_tasks(conn, domain=domain, user_id=target_user_id)
 
     ics_content = generate_ics_feed(tasks, calendar_name="Compass Tasks")
     return Response(
@@ -1979,11 +1995,11 @@ async def auth_me(request: Request):
     from backend.services.calendar import get_calendar_connection_status
     user_id = _get_current_user_id(request)
     
-    if not user_id:
+    if not user_id or "@" not in user_id:
         return {
             "status": "ok",
             "authenticated": False,
-            "user_id": None,
+            "user_id": user_id,
             "email": None,
             "name": "Guest",
             "calendar": {"connected": False, "mode": "none", "account_email": None},
@@ -1991,7 +2007,6 @@ async def auth_me(request: Request):
 
     pool = await get_pool()
     cal_status = await get_calendar_connection_status(pool=pool, user_id=user_id)
-    is_authenticated = bool(cal_status.get("connected", False))
     
     return {
         "status": "ok",
@@ -2017,7 +2032,7 @@ async def auth_select_account(body: SelectAccountBody, response: Response):
     response.set_cookie(
         key="compass_user_id",
         value=email,
-        max_age=86400 * 30,
+        max_age=86400 * 365,
         httponly=False,
         samesite="lax",
     )

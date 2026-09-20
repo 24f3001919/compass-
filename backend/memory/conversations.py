@@ -303,22 +303,31 @@ async def get_cross_conversation_memory(
     conn: DbConn,
     exclude_conversation_id: Optional[str] = None,
     limit: int = 6,
+    user_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Retrieve messages and decisions from prior conversations for cross-session recall."""
     try:
+        where_clauses = []
+        params: List[Any] = []
+        if exclude_conversation_id:
+            try:
+                cid = uuid.UUID(exclude_conversation_id)
+                where_clauses.append(f"c.id != ${len(params) + 1}")
+                params.append(cid)
+            except (ValueError, TypeError):
+                pass
+
+        if user_id:
+            where_clauses.append(f"(c.user_id IS NULL OR c.user_id = ${len(params) + 1})")
+            params.append(user_id)
+
         query = """
             SELECT m.role, m.content, m.created_at, c.id AS conversation_id
             FROM messages m
             JOIN conversations c ON m.conversation_id = c.id
         """
-        params: List[Any] = []
-        if exclude_conversation_id:
-            try:
-                cid = uuid.UUID(exclude_conversation_id)
-                query += " WHERE c.id != $1 "
-                params.append(cid)
-            except (ValueError, TypeError):
-                pass
+        if where_clauses:
+            query += " WHERE " + " AND ".join(where_clauses)
 
         query += f" ORDER BY m.created_at DESC LIMIT ${len(params) + 1}"
         params.append(limit)

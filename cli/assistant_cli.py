@@ -80,7 +80,9 @@ def load_config() -> tuple[str, str]:
         except Exception:
             pass
 
-    return api_url or os.getenv("COMPASS_API_URL") or "http://localhost:8000", auth_token or os.getenv("AUTH_TOKEN") or "dev-token"
+    resolved_url = (api_url or os.getenv("COMPASS_API_URL") or "http://localhost:8000").strip().rstrip("/")
+    resolved_token = (auth_token or os.getenv("AUTH_TOKEN") or "dev-token").strip()
+    return resolved_url, resolved_token
 
 
 API_BASE, AUTH_TOKEN = load_config()

@@ -70,17 +70,29 @@ async def handle_message(
         pool = await get_pool()
         async with pool.acquire() as conn:
             prior_messages = await conversations.get_cross_conversation_memory(
-                conn, exclude_conversation_id=conversation_id, limit=6
+                conn, exclude_conversation_id=conversation_id, limit=6, user_id=user_id
             )
-            active_tasks = await conn.fetch(
-                """
-                SELECT title, domain, due_date, status, priority, duration_minutes
-                FROM tasks
-                WHERE status != 'completed'
-                ORDER BY due_date ASC NULLS LAST, priority DESC
-                LIMIT 8
-                """
-            )
+            if user_id:
+                active_tasks = await conn.fetch(
+                    """
+                    SELECT title, domain, due_date, status, priority, duration_minutes
+                    FROM tasks
+                    WHERE status != 'completed' AND (user_id IS NULL OR user_id = $1)
+                    ORDER BY due_date ASC NULLS LAST, priority DESC
+                    LIMIT 8
+                    """,
+                    user_id
+                )
+            else:
+                active_tasks = await conn.fetch(
+                    """
+                    SELECT title, domain, due_date, status, priority, duration_minutes
+                    FROM tasks
+                    WHERE status != 'completed'
+                    ORDER BY due_date ASC NULLS LAST, priority DESC
+                    LIMIT 8
+                    """
+                )
             recent_plans = await conn.fetch(
                 """
                 SELECT goal, status

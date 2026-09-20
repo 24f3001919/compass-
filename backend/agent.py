@@ -439,6 +439,7 @@ async def run_agent(
     client: Optional[AsyncOpenAI] = None,
     settings: Any = None,
     conversation_id: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> AsyncGenerator[AgentStep, None]:
     """
     Core ReAct agent loop.
@@ -567,7 +568,7 @@ async def run_agent(
 
         elif action == "approve":
             # EXECUTE APPROVED MUTATIONS
-            exec_results = await execute_confirmed_actions(pending_confirmations, pool, run_id=run_id)
+            exec_results = await execute_confirmed_actions(pending_confirmations, pool, run_id=run_id, user_id=user_id)
             for r in exec_results:
                 tool_result = r.get("result", {}).get("response", str(r.get("result", "")))
                 tc_id = "call_approved"
@@ -874,6 +875,8 @@ async def run_agent(
                 # Execute tool (either read-only or pre-confirmed mutating)
                 tool_result = ""
                 if func_name in SKILL_REGISTRY:
+                    if user_id and isinstance(tool_args, dict) and "user_id" not in tool_args:
+                        tool_args["user_id"] = user_id
                     try:
                         # Capture pre-mutation state for audit log & undo if mutating
                         prev_state = None
@@ -1261,6 +1264,7 @@ async def execute_confirmed_actions(
     pool: Any,
     run_id: Optional[str] = None,
     approved_by: str = "user",
+    user_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Execute previously confirmed state-mutating actions.
 
@@ -1273,6 +1277,8 @@ async def execute_confirmed_actions(
     for action in confirmed_actions:
         tool_name = action.get("tool", "")
         tool_args = action.get("args", {})
+        if user_id and isinstance(tool_args, dict) and "user_id" not in tool_args:
+            tool_args["user_id"] = user_id
 
         if tool_name not in SKILL_REGISTRY:
             results.append({"tool": tool_name, "status": "error", "message": f"Unknown tool: {tool_name}"})

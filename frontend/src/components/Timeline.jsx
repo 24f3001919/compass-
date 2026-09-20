@@ -917,8 +917,31 @@ export default function Timeline({ tasks, activeDomain, onSelectDomain, onTasksU
     }
   }
 
+  const hasFallbackTasks = Array.isArray(tasks) && tasks.some(t => t.is_fallback)
+
   return (
     <div className="timeline-container" style={{ background: 'var(--bg-app)' }}>
+      {hasFallbackTasks && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '10px 16px',
+          background: 'rgba(245, 158, 11, 0.1)',
+          border: '1px solid rgba(245, 158, 11, 0.3)',
+          borderRadius: '10px',
+          marginBottom: '18px',
+          fontSize: '12.5px',
+          color: '#fbbf24',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '15px' }}>⚡</span>
+            <span><strong>Demo / Offline Mode:</strong> Backend server is offline or starting up. Displaying sample tasks. Your local actions will sync once connected.</span>
+          </div>
+          <span style={{ fontSize: '11px', opacity: 0.9, background: 'rgba(245, 158, 11, 0.2)', padding: '2px 8px', borderRadius: '6px', fontWeight: '600' }}>Demo Data</span>
+        </div>
+      )}
+
       {/* Header with Direct Add Deadline Button */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '22px', gap: '16px', flexWrap: 'wrap' }}>
         <div>

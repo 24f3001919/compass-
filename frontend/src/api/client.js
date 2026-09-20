@@ -51,17 +51,95 @@ export const FALLBACK_TASKS = [
   }
 ]
 
+const DEFAULT_ACCOUNTS = ['himynameisratnesh12@gmail.com', 'kumarinandan911@gmail.com']
+
+export function getKnownAccounts() {
+  try {
+    const raw = localStorage.getItem('compass_known_accounts')
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Ensure default accounts are included if not present
+        const merged = [...parsed]
+        for (const def of DEFAULT_ACCOUNTS) {
+          if (!merged.includes(def)) merged.push(def)
+        }
+        return merged
+      }
+    }
+  } catch {}
+  return DEFAULT_ACCOUNTS
+}
+
+export function addKnownAccount(email) {
+  if (!email || !email.includes('@')) return
+  const clean = email.trim().toLowerCase()
+  const list = getKnownAccounts()
+  const filtered = list.filter(e => e !== clean)
+  filtered.unshift(clean)
+  try {
+    localStorage.setItem('compass_known_accounts', JSON.stringify(filtered.slice(0, 6)))
+  } catch {}
+}
+
 export function getCurrentUserId() {
-  return localStorage.getItem('compass_user_id') || ''
+  // 1. Check explicit saved email or user id
+  let uid = localStorage.getItem('compass_user_email') || localStorage.getItem('compass_user_id')
+  if (uid && uid.trim()) {
+    return uid.trim()
+  }
+
+  // 2. Check persistent cookie
+  if (typeof document !== 'undefined') {
+    const cookieMatch = document.cookie.match(/(?:^|;\s*)compass_user_id=([^;]+)/)
+    if (cookieMatch && cookieMatch[1]) {
+      uid = decodeURIComponent(cookieMatch[1]).trim()
+      if (uid) {
+        localStorage.setItem('compass_user_id', uid)
+        if (uid.includes('@')) {
+          localStorage.setItem('compass_user_email', uid)
+          addKnownAccount(uid)
+        }
+        return uid
+      }
+    }
+  }
+
+  // 3. Fallback: generate anonymous guest workspace ID
+  const randomPart = typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID().replace(/-/g, '').slice(0, 12)
+    : Math.random().toString(36).slice(2, 14)
+  uid = `anon_${randomPart}`
+  localStorage.setItem('compass_user_id', uid)
+  try {
+    document.cookie = `compass_user_id=${encodeURIComponent(uid)}; path=/; max-age=31536000; SameSite=Lax`
+  } catch {
+    // Cookie storage fallback
+  }
+  return uid
 }
 
 export function setCurrentUserId(userId) {
-  if (userId) {
-    localStorage.setItem('compass_user_id', userId)
-    document.cookie = `compass_user_id=${encodeURIComponent(userId)}; path=/; max-age=2592000; SameSite=Lax`
+  if (userId && userId.trim()) {
+    const clean = userId.trim().toLowerCase()
+    localStorage.setItem('compass_user_id', clean)
+    if (clean.includes('@')) {
+      localStorage.setItem('compass_user_email', clean)
+      addKnownAccount(clean)
+    }
+    try {
+      document.cookie = `compass_user_id=${encodeURIComponent(clean)}; path=/; max-age=31536000; SameSite=Lax`
+    } catch {
+      // Ignore in restricted environments
+    }
   } else {
     localStorage.removeItem('compass_user_id')
-    document.cookie = `compass_user_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`
+    localStorage.removeItem('compass_user_email')
+    try {
+      document.cookie = `compass_user_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`
+    } catch {
+      // Ignore
+    }
   }
 }
 
@@ -70,6 +148,10 @@ export function getAuthHeaders(extraHeaders = {}) {
   const uid = getCurrentUserId()
   if (uid) {
     headers['x-user-id'] = uid
+  }
+  const token = localStorage.getItem('compass_auth_token')
+  if (token && !headers['Authorization']) {
+    headers['Authorization'] = `Bearer ${token}`
   }
   return headers
 }
@@ -124,16 +206,16 @@ export async function fetchTasks(domain) {
     clearTimeout(timeoutId)
 
     if (!res.ok) {
-      return FALLBACK_TASKS
+      return FALLBACK_TASKS.map(t => ({ ...t, is_fallback: true }))
     }
 
     const data = await res.json()
     if (Array.isArray(data)) {
       return data
     }
-    return FALLBACK_TASKS
+    return FALLBACK_TASKS.map(t => ({ ...t, is_fallback: true }))
   } catch {
-    return FALLBACK_TASKS
+    return FALLBACK_TASKS.map(t => ({ ...t, is_fallback: true }))
   }
 }
 
@@ -405,7 +487,7 @@ export async function fetchCalendarAvailability(startDate, endDate) {
     if (endDate) params.append('end_date', endDate)
     if (params.toString()) url += `?${params.toString()}`
 
-    const res = await fetch(url)
+    const res = await fetch(url, { headers: getAuthHeaders() })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const json = await res.json()
     return json.data || json
@@ -423,7 +505,7 @@ export async function proposeSchedule({ targetDate, domain, taskIds } = {}) {
 
   const res = await fetch(`${API_BASE}/api/schedule/propose`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -434,7 +516,7 @@ export async function proposeSchedule({ targetDate, domain, taskIds } = {}) {
 export async function commitSchedule(assignments, rationale = 'Committed via Schedule View') {
   const res = await fetch(`${API_BASE}/api/schedule/commit`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ assignments, rationale }),
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -444,7 +526,7 @@ export async function commitSchedule(assignments, rationale = 'Committed via Sch
 
 export async function fetchSchedulingPreferences() {
   try {
-    const res = await fetch(`${API_BASE}/api/calendar/preferences`)
+    const res = await fetch(`${API_BASE}/api/calendar/preferences`, { headers: getAuthHeaders() })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return await res.json()
   } catch {
@@ -459,17 +541,19 @@ export async function fetchSchedulingPreferences() {
 }
 
 export function getCalendarExportUrl(domain) {
-  if (domain && domain !== 'all') {
-    return `${API_BASE}/api/calendar/export.ics?domain=${encodeURIComponent(domain)}`
-  }
-  return `${API_BASE}/api/calendar/export.ics`
+  const uid = getCurrentUserId()
+  const params = new URLSearchParams()
+  if (domain && domain !== 'all') params.append('domain', domain)
+  if (uid) params.append('user_id', uid)
+  const qs = params.toString()
+  return qs ? `${API_BASE}/api/calendar/export.ics?${qs}` : `${API_BASE}/api/calendar/export.ics`
 }
 
 export async function checkReactiveSchedule(currentTime = null) {
   const body = currentTime ? { current_time: currentTime } : {}
   const res = await fetch(`${API_BASE}/api/schedule/reactive-check`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body),
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -477,7 +561,7 @@ export async function checkReactiveSchedule(currentTime = null) {
 }
 
 export async function fetchScheduleConflicts() {
-  const res = await fetch(`${API_BASE}/api/schedule/conflicts`)
+  const res = await fetch(`${API_BASE}/api/schedule/conflicts`, { headers: getAuthHeaders() })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return await res.json()
 }

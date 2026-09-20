@@ -227,32 +227,42 @@ LOG_LEVEL="INFO"
 PORT=8000
 ```
 
-### 3. Backend & CLI Installation
+### 3. One-Command Launch (Zero Friction)
+
+You can launch the complete stack (Backend + Frontend) in a single step:
+
+- **Windows**: Double-click `run_local.bat` or run `.\run_local.bat` in PowerShell / CMD.
+- **Linux / macOS**: Run `chmod +x run_local.sh && ./run_local.sh`.
+- **Docker Compose (Full Stack with PostgreSQL + pgvector)**:
+  ```bash
+  docker compose up
+  ```
+  *(Automatically boots pgvector PostgreSQL 16 on port 5432, FastAPI on 8000, and Nginx frontend on 5173).*
+
+---
+
+### 4. Manual Step-by-Step Setup
+If you prefer running components manually in separate terminals:
+
 ```powershell
-# Install backend dependencies
+# Step 1: Install backend dependencies
 pip install -r backend/requirements.txt
 
-# Install CLI in editable mode
+# Step 2: Install CLI in editable mode
 pip install -e ./cli
 
-# Seed initial projects and benchmark data
+# Step 3: Seed initial projects and benchmark data (optional)
 python scripts/seed_data.py
 
-# Verify pgvector HNSW index
-python scripts/verify_hnsw_index.py
-```
-
-### 4. Running Locally
-```powershell
-# Terminal 1 — Start FastAPI Server
+# Step 4: Terminal 1 — Start FastAPI Server
 python -m uvicorn backend.main:app --port 8000 --reload
 
-# Terminal 2 — Start Frontend Dashboard
+# Step 5: Terminal 2 — Start Frontend Dashboard
 cd frontend
 npm install
 npm run dev
 ```
-Open `http://localhost:5173` in your browser.
+Open `http://localhost:5173` in your browser. All visitors automatically receive an isolated anonymous workspace (`anon_...`) with instant persistence and zero cross-talk with other evaluators.
 
 ### 5. CLI Operations
 ```powershell

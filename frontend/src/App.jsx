@@ -22,7 +22,22 @@ export default function App() {
   const [backendStatus, setBackendStatus] = useState('Connecting...')
   const [conversationId, setConversationId] = useState(null)
   const [usageStats, setUsageStats] = useState(null)
-  const [currentUser, setCurrentUser] = useState(null)
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const savedEmail = localStorage.getItem('compass_user_email') || localStorage.getItem('compass_user_id')
+      if (savedEmail && savedEmail.includes('@')) {
+        const clean = savedEmail.trim().toLowerCase()
+        return {
+          authenticated: true,
+          user_id: clean,
+          email: clean,
+          name: clean.split('@')[0].replace('.', ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          calendar: { connected: false, mode: 'demo', is_simulated: true },
+        }
+      }
+    } catch {}
+    return null
+  })
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [shareId, setShareId] = useState(() => {
     const params = new URLSearchParams(window.location.search)
@@ -113,6 +128,11 @@ export default function App() {
     // Immediate initial sync
     pollHealth()
     refreshUsage()
+    fetchCurrentUser().then(u => {
+      if (isMounted && u && (u.authenticated || (u.email && u.email.includes('@')))) {
+        setCurrentUser(u)
+      }
+    })
 
     // 1. Task polling interval: 3000ms
     const taskInterval = setInterval(pollTasks, 3000)
