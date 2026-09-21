@@ -2,12 +2,31 @@
 Compass — Context, Memory, and Synthesis Handlers.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Tuple
 import logging
 
 from backend.skills.registry import register_skill
 
 logger = logging.getLogger("compass.skills.context")
+
+
+def _extract_completion_result(
+    resp: Any,
+    default_prompt: str,
+    default_prompt_tokens: Optional[int] = None,
+    default_completion_tokens: int = 100,
+) -> Tuple[Optional[str], int, int]:
+    """Extract content, prompt_tokens, and completion_tokens safely from ChatCompletion response."""
+    usage: Any = getattr(resp, "usage", None)
+    fallback_p_tok = default_prompt_tokens or (len(default_prompt.split()) * 2)
+    p_tok = getattr(usage, "prompt_tokens", None) or fallback_p_tok
+    c_tok = getattr(usage, "completion_tokens", None) or default_completion_tokens
+
+    choices = getattr(resp, "choices", None)
+    first_choice = choices[0] if choices else None
+    msg = getattr(first_choice, "message", None) if first_choice else None
+    content = getattr(msg, "content", None) if msg else None
+    return content, p_tok, c_tok
 
 
 @register_skill("query_code_context")
@@ -44,18 +63,17 @@ async def handle_query_code_context(args: Dict[str, Any], pool: Any) -> Dict[str
                     f"Context:\n{context_text}\n\n"
                     f"Question: {query}"
                 )
-                resp = await client.chat.completions.create(
+                resp: Any = await client.chat.completions.create(
                     model=settings.SKILL_MODEL,
                     messages=[
                         {"role": "system", "content": "You are a senior technical coding assistant."},
                         {"role": "user", "content": prompt}
                     ],
                     max_tokens=384,
+                    stream=False,
                 )
-                p_tok = resp.usage.prompt_tokens if resp.usage else len(prompt.split()) * 2
-                c_tok = resp.usage.completion_tokens if resp.usage else 100
+                raw_content, p_tok, c_tok = _extract_completion_result(resp, prompt, default_completion_tokens=100)
                 record_usage(settings.SKILL_MODEL, p_tok, c_tok)
-                raw_content = resp.choices[0].message.content
                 if raw_content is not None and raw_content.strip():
                     summary = raw_content.strip()
                 else:
@@ -151,18 +169,17 @@ async def handle_summarize_day(args: Dict[str, Any], pool: Any) -> Dict[str, Any
                 "Highlight the nearest deadlines across hackathon, coursework, and code:\n\n"
                 f"{task_list_str}"
             )
-            resp = await client.chat.completions.create(
+            resp: Any = await client.chat.completions.create(
                 model=settings.SYNTHESIS_MODEL,
                 messages=[
                     {"role": "system", "content": "You provide prioritized, executive daily standup summaries."},
                     {"role": "user", "content": prompt}
                 ],
                 max_tokens=256,
+                stream=False,
             )
-            p_tok = resp.usage.prompt_tokens if resp.usage else len(prompt.split()) * 2
-            c_tok = resp.usage.completion_tokens if resp.usage else 80
+            raw_content, p_tok, c_tok = _extract_completion_result(resp, prompt, default_completion_tokens=80)
             record_usage(settings.SYNTHESIS_MODEL, p_tok, c_tok)
-            raw_content = resp.choices[0].message.content
             if raw_content is not None and raw_content.strip():
                 summary = raw_content.strip()
             else:
@@ -258,18 +275,17 @@ async def handle_summarize_across_domains(args: Dict[str, Any], pool: Any) -> Di
                 "Explicitly call out dependencies between hackathon deadlines, coursework exams/labs, and code implementation.\n\n"
                 f"{combined_context}"
             )
-            resp = await client.chat.completions.create(
+            resp: Any = await client.chat.completions.create(
                 model=settings.SYNTHESIS_MODEL,
                 messages=[
                     {"role": "system", "content": "You provide comprehensive, multi-domain executive roadmap briefings."},
                     {"role": "user", "content": prompt}
                 ],
                 max_tokens=384,
+                stream=False,
             )
-            p_tok = resp.usage.prompt_tokens if resp.usage else len(prompt.split()) * 2
-            c_tok = resp.usage.completion_tokens if resp.usage else 120
+            raw_content, p_tok, c_tok = _extract_completion_result(resp, prompt, default_completion_tokens=120)
             record_usage(settings.SYNTHESIS_MODEL, p_tok, c_tok)
-            raw_content = resp.choices[0].message.content
             if raw_content is not None and raw_content.strip():
                 summary = raw_content.strip()
             else:
@@ -319,18 +335,17 @@ async def handle_chat_skill(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
     if settings.NEBIUS_API_KEY and msg != "Hello! I am Compass, your persistent multi-domain AI assistant.":
         try:
             client = AsyncOpenAI(api_key=settings.NEBIUS_API_KEY, base_url=settings.NEBIUS_BASE_URL, timeout=10.0)
-            resp = await client.chat.completions.create(
+            resp: Any = await client.chat.completions.create(
                 model=settings.ROUTER_MODEL,
                 messages=[
                     {"role": "system", "content": "You are Compass, a smart multi-domain AI assistant managing Hackathon, Coursework, and Code. Be concise, friendly, and helpful."},
                     {"role": "user", "content": str(msg)}
                 ],
                 max_tokens=150,
+                stream=False,
             )
-            p_tok = resp.usage.prompt_tokens if resp.usage else len(str(msg).split()) * 2
-            c_tok = resp.usage.completion_tokens if resp.usage else 50
+            content, p_tok, c_tok = _extract_completion_result(resp, str(msg), default_completion_tokens=50)
             record_usage(settings.ROUTER_MODEL, p_tok, c_tok)
-            content = resp.choices[0].message.content
             if content and content.strip():
                 return {"response": content.strip(), "data": {"type": "chat", "model": settings.ROUTER_MODEL}}
         except Exception as e:
