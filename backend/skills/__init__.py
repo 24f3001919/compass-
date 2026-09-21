@@ -35,6 +35,7 @@ from backend.skills.schemas import (
     BASE_TOOL_DEFINITIONS,
     get_tool_definitions,
     TOOL_DEFINITIONS,
+    MUTATING_TOOLS,
 )
 
 from backend.skills.registry import (

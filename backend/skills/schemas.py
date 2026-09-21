@@ -610,3 +610,16 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
 
 
 TOOL_DEFINITIONS: List[Dict[str, Any]] = get_tool_definitions()
+
+MUTATING_TOOLS = frozenset({
+    "add_task",
+    "edit_task",
+    "update_task_status",
+    "delete_task",
+    "log_code_context",
+    "log_code_snippet",
+    "ingest_url",
+    "apply_triage_plan",
+    "commit_schedule",
+})
+
