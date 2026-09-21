@@ -215,7 +215,38 @@ async def handle_message(
         }
 
     # 3. Dynamic Skill Execution via SKILL_REGISTRY
-    from backend.skills import SKILL_REGISTRY
+    from backend.skills import SKILL_REGISTRY, MUTATING_TOOLS
+
+    if skill_name in MUTATING_TOOLS and skill_name != "add_task":
+        gate_msg = (
+            f"The action '{skill_name}' modifies data and requires approval. "
+            f"Please run this request through the Agent Planner."
+        )
+        try:
+            pool = await get_pool()
+            async with pool.acquire() as conn:
+                real_cid = await conversations.get_or_create_conversation(conn, conv_id)
+                await conversations.add_message(conn, real_cid, role="user", content=message)
+                await conversations.add_message(
+                    conn, real_cid, role="assistant",
+                    content=gate_msg, skill_called=skill_name,
+                )
+                conv_id = real_cid
+        except Exception as e:
+            logger.debug(f"Could not persist message history: {e}")
+
+        latency_ms = int((time.perf_counter() - start_time) * 1000)
+        return {
+            "conversation_id": conv_id,
+            "response": gate_msg,
+            "message": gate_msg,
+            "skill_used": skill_name,
+            "success": False,
+            "error": "confirmation_required",
+            "data": None,
+            "routing_latency_ms": latency_ms,
+        }
+
     if skill_name and skill_name in SKILL_REGISTRY:
         try:
             pool = await get_pool()
