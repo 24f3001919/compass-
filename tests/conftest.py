@@ -2,19 +2,52 @@
 Compass — Pytest Configuration & Test Fixtures.
 """
 
+import os
 import sys
+from pathlib import Path
+from urllib.parse import urlparse
 import pytest
 import pytest_asyncio
-from pathlib import Path
 from httpx import AsyncClient, ASGITransport
 
 _project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_project_root))
 
+# Match prod by endpoint id from env PROD_DB_ENDPOINT
+prod_endpoint_id = os.environ.get("PROD_DB_ENDPOINT", "ep-sweet-fire-b2y9w95z").strip()
+test_db_url = os.environ.get("TEST_DATABASE_URL")
+
+# Set DATABASE_URL from TEST_DATABASE_URL before importing backend
+if test_db_url:
+    os.environ["DATABASE_URL"] = test_db_url
+
 from backend.main import app
 from backend.config import get_settings
 
 settings = get_settings()
+
+
+def pytest_configure(config):
+    """Guard against executing test runs against production database."""
+    if not test_db_url:
+        pytest.exit(
+            "ABORTED: TEST_DATABASE_URL environment variable is not set. Refusing to run tests.",
+            returncode=1,
+        )
+
+    parsed_test = urlparse(test_db_url)
+    if prod_endpoint_id and prod_endpoint_id in (parsed_test.hostname or ""):
+        pytest.exit(
+            f"ABORTED: TEST_DATABASE_URL matches production endpoint '{prod_endpoint_id}': {parsed_test.hostname}",
+            returncode=1,
+        )
+
+    parsed_settings = urlparse(settings.DATABASE_URL)
+    if prod_endpoint_id and prod_endpoint_id in (parsed_settings.hostname or ""):
+        pytest.exit(
+            f"ABORTED: settings.DATABASE_URL matches production endpoint '{prod_endpoint_id}': {parsed_settings.hostname}",
+            returncode=1,
+        )
 
 
 @pytest_asyncio.fixture
