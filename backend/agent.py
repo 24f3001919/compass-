@@ -79,10 +79,10 @@ class AgentStep:
         return f"data: {json.dumps(payload)}\n\n"
 
 
-def _build_agent_system_prompt(tool_names: List[str]) -> str:
+def _build_agent_system_prompt(tool_names: List[str], abstain_first: bool = False) -> str:
     """Build the system prompt that makes Super behave as a ReAct agent."""
     tool_list = ", ".join(tool_names)
-    return (
+    prompt = (
         "You are Compass Agent, an autonomous planning and scheduling assistant. "
         "You help users manage tasks, deadlines, and code context across hackathon, coursework, and code domains.\n\n"
         "You have access to these tools: " + tool_list + ".\n\n"
@@ -100,7 +100,14 @@ def _build_agent_system_prompt(tool_names: List[str]) -> str:
         "- If a user declines a proposed action, adapt and propose a feasible alternative without modifying their declined data.\n"
         "- Be specific and actionable. Don't give vague advice.\n"
         "- If you detect deadline conflicts, propose concrete rescheduling with reasoning.\n"
+        "- Accuracy: Never emit literal bracketed placeholders like '[time]' or '[date]' when source text lacks an exact value. State 'time not shown in the retrieved excerpt' instead.\n"
     )
+    if abstain_first:
+        prompt += (
+            "- Abstain-First Policy: Check stored memory first using memory tools (query_tasks, query_code_context, query_coursework_notes). "
+            "If stored memory does not cover the question, reply with '[ABSTAIN]' and state what is missing instead of guessing.\n"
+        )
+    return prompt
 
 
 # ---------------------------------------------------------------------------
@@ -490,6 +497,8 @@ async def run_agent(
     web_escalation_used: bool = False
     forced_tool_choice: Optional[Any] = None
     active_replan_diff: Optional[Dict[str, Any]] = None
+    abstain_first: bool = getattr(settings, "TAVILY_ABSTAIN_FIRST", False)
+    search_web_unlocked: bool = not abstain_first
 
     # Check for existing run state in database
     existing_run = await get_agent_run(pool, run_id) if pool else None
@@ -609,9 +618,17 @@ async def run_agent(
                 logger.debug(f"Could not load conversation context: {e}")
 
         user_content = f"{goal}{conv_context}" if conv_context else goal
+        initial_tools = [
+            t for t in agent_tools
+            if not (abstain_first and not search_web_unlocked and (
+                t.get("name") == "search_web"
+                or (isinstance(t.get("function"), dict) and t.get("function", {}).get("name") == "search_web")
+            ))
+        ]
         messages = cast(List[Dict[str, Any]], [
             {"role": "system", "content": _build_agent_system_prompt(
-                [t["function"]["name"] for t in agent_tools if "function" in t]
+                [t["function"]["name"] for t in initial_tools if "function" in t],
+                abstain_first=abstain_first,
             )},
             {"role": "user", "content": user_content},
         ])
@@ -691,11 +708,22 @@ async def run_agent(
                 current_tool_choice = forced_tool_choice if forced_tool_choice is not None else "auto"
                 forced_tool_choice = None
 
+                if abstain_first and not search_web_unlocked:
+                    current_agent_tools = [
+                        t for t in agent_tools
+                        if not (
+                            t.get("name") == "search_web"
+                            or (isinstance(t.get("function"), dict) and t.get("function", {}).get("name") == "search_web")
+                        )
+                    ]
+                else:
+                    current_agent_tools = agent_tools
+
                 completions: Any = client.chat.completions
                 response = await completions.create(
                     model=str(settings.SKILL_MODEL),
                     messages=cast(Any, messages),
-                    tools=cast(Any, agent_tools),
+                    tools=cast(Any, current_agent_tools),
                     tool_choice=current_tool_choice,
                     max_tokens=512,
                     temperature=0.4,
@@ -898,6 +926,25 @@ async def run_agent(
                         tool_result = result.get("response", str(result.get("data", "")))
                         tools_used.append(func_name)
 
+                        # Condition (b): If abstain_first is active and a memory-query tool returns 0 results, unlock search_web
+                        if abstain_first and func_name in ("query_tasks", "query_coursework_notes", "query_code_context"):
+                            is_zero = False
+                            data_field = result.get("data")
+                            if isinstance(data_field, list) and len(data_field) == 0:
+                                is_zero = True
+                            elif isinstance(data_field, dict):
+                                if data_field.get("count") == 0:
+                                    is_zero = True
+                                elif "chunks" in data_field and len(data_field.get("chunks", [])) == 0:
+                                    is_zero = True
+                                elif "tasks" in data_field and len(data_field.get("tasks", [])) == 0:
+                                    is_zero = True
+                            resp_str = str(result.get("response", "")).lower()
+                            if any(phrase in resp_str for phrase in ("found 0 task", "retrieved 0", "0 task", "0 relevant", "0 result")):
+                                is_zero = True
+                            if is_zero:
+                                search_web_unlocked = True
+
                         # Capture post-mutation state and record audit log
                         if pool and func_name in MUTATING_TOOLS:
                             new_st = None
@@ -996,6 +1043,7 @@ async def run_agent(
                         tavily_ok = False
                     if tavily_ok and not web_escalation_used:
                         web_escalation_used = True
+                        search_web_unlocked = True
                         forced_tool_choice = {"type": "function", "function": {"name": "search_web"}}
                         step_num += 1
                         escalate_step = AgentStep(
@@ -1075,7 +1123,11 @@ async def run_agent(
         try:
             messages.append({
                 "role": "user",
-                "content": "You've gathered enough information. Please produce your final comprehensive answer now.",
+                "content": (
+                    "You've gathered enough information. Please produce your final comprehensive answer now. "
+                    "Never emit literal bracketed placeholders such as '[time]' or '[date]' if an exact value was not shown in the source text; "
+                    "explicitly state 'time not shown in the retrieved excerpt' instead."
+                ),
             })
             completions = client.chat.completions
             response = await completions.create(

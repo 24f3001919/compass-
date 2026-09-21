@@ -64,7 +64,7 @@ async def handle_search_web(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
     # Build markdown response for chat interface
     parts = [f"**Web Search Results for:** *{query}*"]
     for r in results[:3]:
-        parts.append(f"• [{r.get('title', 'Untitled')}]({r.get('url', '')})\n  {r.get('content', '')[:180].strip()}...")
+        parts.append(f"• [{r.get('title', 'Untitled')}]({r.get('url', '')})\n  {r.get('content', '')[:500].strip()}...")
     formatted_response = "\n".join(parts) if results else summary
 
     return {
