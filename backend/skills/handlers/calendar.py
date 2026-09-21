@@ -40,7 +40,7 @@ async def handle_get_calendar_availability(args: Dict[str, Any], pool: Any) -> D
 
     busy = await get_calendar_freebusy(start_dt, end_dt, pool=pool)
 
-    prefs = {"work_start_time": "09:00:00", "work_end_time": "18:00:00", "work_days": [1, 2, 3, 4, 5], "buffer_minutes": 15}
+    prefs: Dict[str, Any] = {"work_start_time": "09:00:00", "work_end_time": "18:00:00", "work_days": [1, 2, 3, 4, 5], "buffer_minutes": 15}
     if pool is not None:
         try:
             async with pool.acquire() as conn:
@@ -48,14 +48,16 @@ async def handle_get_calendar_availability(args: Dict[str, Any], pool: Any) -> D
         except Exception:
             pass
 
+    raw_buf = prefs.get("buffer_minutes", 15)
+    buffer_minutes = int(raw_buf) if isinstance(raw_buf, (int, str)) else 15
     free_windows = get_available_windows(
         busy,
         start_dt,
         end_dt,
-        work_start_time=prefs.get("work_start_time", "09:00:00"),
-        work_end_time=prefs.get("work_end_time", "18:00:00"),
-        work_days=prefs.get("work_days", [1, 2, 3, 4, 5]),
-        buffer_minutes=prefs.get("buffer_minutes", 15),
+        work_start_time=str(prefs.get("work_start_time", "09:00:00")),
+        work_end_time=str(prefs.get("work_end_time", "18:00:00")),
+        work_days=list(prefs.get("work_days", [1, 2, 3, 4, 5])),
+        buffer_minutes=buffer_minutes,
     )
 
     summary = (
@@ -103,7 +105,7 @@ async def handle_propose_schedule(args: Dict[str, Any], pool: Any) -> Dict[str, 
 
     tasks: List[Dict[str, Any]] = []
     dep_map: Dict[int, List[int]] = {}
-    prefs = {"work_start_time": "09:00:00", "work_end_time": "18:00:00", "work_days": [1, 2, 3, 4, 5], "buffer_minutes": 15}
+    prefs: Dict[str, Any] = {"work_start_time": "09:00:00", "work_end_time": "18:00:00", "work_days": [1, 2, 3, 4, 5], "buffer_minutes": 15}
 
     if pool is not None:
         user_id = args.get("user_id")
@@ -118,20 +120,22 @@ async def handle_propose_schedule(args: Dict[str, Any], pool: Any) -> Dict[str, 
                 tasks = await list_tasks(conn, domain=domain, status="open", user_id=user_id)
 
     busy = await get_calendar_freebusy(start_dt, end_dt, pool=pool)
+    raw_buf = prefs.get("buffer_minutes", 15)
+    buffer_minutes = int(raw_buf) if isinstance(raw_buf, (int, str)) else 15
     free_windows = get_available_windows(
         busy,
         start_dt,
         end_dt,
-        work_start_time=prefs.get("work_start_time", "09:00:00"),
-        work_end_time=prefs.get("work_end_time", "18:00:00"),
-        work_days=prefs.get("work_days", [1, 2, 3, 4, 5]),
-        buffer_minutes=prefs.get("buffer_minutes", 15),
+        work_start_time=str(prefs.get("work_start_time", "09:00:00")),
+        work_end_time=str(prefs.get("work_end_time", "18:00:00")),
+        work_days=list(prefs.get("work_days", [1, 2, 3, 4, 5])),
+        buffer_minutes=buffer_minutes,
     )
 
     allocation = allocate_task_slots(
         tasks,
         free_windows,
-        buffer_minutes=prefs.get("buffer_minutes", 15),
+        buffer_minutes=buffer_minutes,
         dependencies=dep_map,
     )
 
