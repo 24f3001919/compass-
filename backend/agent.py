@@ -60,15 +60,16 @@ class AgentStep:
 
     def to_sse(self) -> str:
         """Serialize to SSE data line."""
-        payload: Dict[str, Any] = cast(Dict[str, Any], {})
-        payload["type"] = self.type
-        payload["content"] = self.content
-        payload["step"] = self.step_number
-        payload["elapsed_ms"] = self.elapsed_ms
+        payload: Dict[str, Any] = {
+            "type": self.type,
+            "content": self.content,
+            "step": self.step_number,
+            "elapsed_ms": self.elapsed_ms,
+        }
         if self.tool_name:
             payload["tool"] = self.tool_name
         if self.tool_args:
-            cast(Dict[str, Any], payload)["args"] = cast(Any, self.tool_args)
+            payload["args"] = self.tool_args
         if self.run_id:
             payload["run_id"] = self.run_id
         if self.model_tier:
@@ -76,7 +77,7 @@ class AgentStep:
         if self.step_cost_usd is not None:
             payload["step_cost_usd"] = self.step_cost_usd
         if self.metadata:
-            cast(Dict[str, Any], payload)["metadata"] = cast(Any, self.metadata)
+            payload["metadata"] = self.metadata
         return f"data: {json.dumps(payload)}\n\n"
 
 
