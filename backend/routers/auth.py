@@ -3,7 +3,9 @@ Compass — Authentication and Google Calendar OAuth Endpoints.
 """
 
 import logging
+import re
 import secrets
+from html import escape
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
@@ -24,15 +26,23 @@ def _resolve_oauth_redirect_uri(request: Request) -> str:
     """Consistently resolve OAuth callback URL across local dev and production reverse-proxies."""
     fwd_host = request.headers.get("x-forwarded-host")
     host = fwd_host or request.headers.get("host", "localhost:8000")
+    hostname = host.split(":")[0].lower()
 
-    if "localhost" in host or "127.0.0.1" in host:
+    if hostname in ("localhost", "127.0.0.1") or hostname.endswith(".localhost"):
         return "http://localhost:8000/api/calendar/callback"
 
     if getattr(settings, "GOOGLE_REDIRECT_URI", None) and "localhost" not in settings.GOOGLE_REDIRECT_URI:
         return settings.GOOGLE_REDIRECT_URI
 
     fwd_proto = request.headers.get("x-forwarded-proto")
-    scheme = fwd_proto or ("https" if request.url.scheme == "https" or "vercel.app" in host or "onrender.com" in host else "http")
+    is_https = (
+        request.url.scheme == "https"
+        or hostname.endswith(".vercel.app")
+        or hostname == "vercel.app"
+        or hostname.endswith(".onrender.com")
+        or hostname == "onrender.com"
+    )
+    scheme = fwd_proto or ("https" if is_https else "http")
     return f"{scheme}://{host}/api/calendar/callback"
 
 
@@ -68,7 +78,7 @@ async def auth_me(request: Request):
 @router.post("/api/auth/select-account")
 async def auth_select_account(body: SelectAccountBody, response: Response):
     """Select or switch active user account for memory and calendar isolation."""
-    email = (body.email or body.user_id or "").strip().lower()
+    email = re.sub(r"[^\w@.-]", "", (body.email or body.user_id or "").strip().lower())
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="A valid email address is required")
 
@@ -76,7 +86,8 @@ async def auth_select_account(body: SelectAccountBody, response: Response):
         key="compass_user_id",
         value=email,
         max_age=86400 * 365,
-        httponly=False,
+        httponly=True,
+        secure=True,
         samesite="lax",
     )
     return {
@@ -99,7 +110,7 @@ async def auth_logout(response: Response):
 async def auth_quick_connect(body: QuickConnectBody, response: Response):
     """Quick-login with user account for instant access and testing."""
     from backend.services.calendar import save_calendar_connection
-    raw_val = (body.email or body.auth_code or "").strip().lower()
+    raw_val = re.sub(r"[^\w@.-]", "", (body.email or body.auth_code or "").strip().lower())
     if "@" in raw_val:
         email = raw_val
     else:
@@ -120,7 +131,8 @@ async def auth_quick_connect(body: QuickConnectBody, response: Response):
         key="compass_user_id",
         value=email,
         max_age=86400 * 30,
-        httponly=False,
+        httponly=True,
+        secure=True,
         samesite="lax",
     )
     return {
@@ -168,9 +180,10 @@ async def calendar_callback(
 ):
     """Handle OAuth redirect: exchange authorization code for tokens and save connection."""
     if error:
+        safe_error = escape(error)
         return HTMLResponse(
             f"<html><body style='font-family:sans-serif;padding:40px;background:#0f172a;color:#f87171;'>"
-            f"<h3>Google Calendar Authorization Error: {error}</h3>"
+            f"<h3>Google Calendar Authorization Error: {safe_error}</h3>"
             f"<p><a style='color:#38bdf8;' href='/'>Return to Compass</a></p>"
             f"</body></html>",
             status_code=400,
@@ -214,33 +227,34 @@ async def calendar_callback(
             expires_in=tokens.get("expires_in", 3600),
         )
 
-    response = HTMLResponse(
-        f"""<!DOCTYPE html>
+    safe_email = escape(re.sub(r"[^\w@.-]", "", str(email)))
+    html_content = f"""<!DOCTYPE html>
 <html>
 <head><title>Compass — Google Calendar Connected</title></head>
 <body style="font-family:sans-serif;text-align:center;padding:60px 20px;background:#0f172a;color:#f8fafc;">
     <div style="max-width:480px;margin:0 auto;background:#1e293b;padding:32px;border-radius:16px;border:1px solid #334155;box-shadow:0 10px 25px rgba(0,0,0,0.5);">
         <div style="font-size:48px;margin-bottom:12px;">🎉</div>
         <h2 style="margin:0 0 8px;color:#38bdf8;">Google Calendar Connected!</h2>
-        <p style="color:#94a3b8;font-size:14px;margin-bottom:20px;">Logged in as <b style="color:#f8fafc;">{email}</b>.<br>Your tasks will now synchronize to your Google Calendar.</p>
-        <a style="display:inline-block;background:#2563eb;color:#ffffff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;" href="/?calendar_connected=true&email={email}">Open Compass Dashboard</a>
+        <p style="color:#94a3b8;font-size:14px;margin-bottom:20px;">Logged in as <b style="color:#f8fafc;">{safe_email}</b>.<br>Your tasks will now synchronize to your Google Calendar.</p>
+        <a style="display:inline-block;background:#2563eb;color:#ffffff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;" href="/?calendar_connected=true&email={safe_email}">Open Compass Dashboard</a>
     </div>
     <script>
         if (window.opener) {{
-            window.opener.postMessage({{type: 'compass_calendar_connected', email: '{email}'}}, '*');
+            window.opener.postMessage({{type: 'compass_calendar_connected', email: '{safe_email}'}}, '*');
             setTimeout(() => window.close(), 1000);
         }} else {{
-            setTimeout(() => {{ window.location.href = '/?calendar_connected=true&email={email}'; }}, 1500);
+            setTimeout(() => {{ window.location.href = '/?calendar_connected=true&email={safe_email}'; }}, 1500);
         }}
     </script>
 </body>
 </html>"""
-    )
+    response = HTMLResponse(html_content)
     response.set_cookie(
         key="compass_user_id",
-        value=email,
+        value=re.sub(r"[^\w@.-]", "", str(email)),
         max_age=86400 * 30,
-        httponly=False,
+        httponly=True,
+        secure=True,
         samesite="lax",
     )
     return response
