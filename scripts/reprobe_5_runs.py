@@ -1,9 +1,11 @@
+import io
 import httpx
 import json
 import time
 import sys
 
-sys.stdout.reconfigure(encoding="utf-8")
+if isinstance(sys.stdout, io.TextIOWrapper):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 URL = "https://compass-backend-qryu.onrender.com/api/agent/run"
 HEALTH_URL = "https://compass-backend-qryu.onrender.com/health"
