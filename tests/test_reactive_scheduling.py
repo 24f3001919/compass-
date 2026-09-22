@@ -244,6 +244,7 @@ def test_detect_schedule_conflicts_slipped_and_deadline():
 async def test_oauth_endpoints(client: AsyncClient, monkeypatch):
     """GET /api/calendar/connect and callback endpoint integration."""
     monkeypatch.setattr("backend.services.oauth.is_google_oauth_configured", lambda: True)
+    monkeypatch.setattr("backend.routers.auth.is_google_oauth_configured", lambda: True, raising=False)
     # 1. Connect URL
     resp = await client.get("/api/calendar/connect")
     assert resp.status_code == 200
