@@ -18,6 +18,9 @@ import os
 import sys
 from urllib.parse import urlparse
 import asyncpg
+from dotenv import load_dotenv
+
+load_dotenv()
 
 sys.stdout.reconfigure(encoding="utf-8")
 
@@ -44,8 +47,8 @@ def parse_args():
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        default=True,
-        help="Simulate cleanup without modifying any data (default: True)",
+        default=False,
+        help="Simulate cleanup without modifying any data (default: True unless --i-mean-prod)",
     )
     parser.add_argument(
         "--i-mean-prod",
