@@ -66,9 +66,9 @@ async def agent_run(req: AgentRequest, request: Request):
                 user_id=agent_user_id,
             ):
                 yield step.to_sse()
-        except Exception as e:
-            logger.error(f"Agent stream error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+        except Exception:
+            logger.exception("Agent stream error")
+            yield f"data: {json.dumps({'type': 'error', 'content': 'An internal error occurred.'})}\n\n"
 
     return StreamingResponse(
         agent_event_generator(),
@@ -305,9 +305,9 @@ async def agent_feasibility(req: FeasibilityRequest, _token: str = Depends(verif
                 domain=req.domain,
             ):
                 yield f"data: {json.dumps(ev)}\n\n"
-        except Exception as e:
-            logger.error("Feasibility stream failed: %s", e, exc_info=True)
-            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+        except Exception:
+            logger.exception("Feasibility stream failed")
+            yield f"data: {json.dumps({'type': 'error', 'content': 'An internal error occurred during feasibility streaming.'})}\n\n"
 
     return StreamingResponse(
         event_generator(),
