@@ -738,7 +738,7 @@ async def run_agent(
                     messages=cast(Any, messages),
                     tools=cast(Any, current_agent_tools),
                     tool_choice=current_tool_choice,
-                    max_tokens=512,
+                    max_tokens=1024,
                     temperature=0.4,
                 )
 
@@ -1047,8 +1047,19 @@ async def run_agent(
                         else:
                             logger.info("Critique-revise cycle cap (2 rounds) reached; proceeding to synthesis.")
 
-                # Epistemic Humility: Detect abstention and escalate to Tavily search if enabled
-                if any(k in reply.upper() for k in ("[ABSTAIN]", "[ABSTENTION]", "ABSTAIN:")) or reply.strip().startswith("[ABSTAIN]"):
+                # Implicit abstention: if abstain_first is on, no memory tools have been called,
+                # and web hasn't been used yet, treat any text reply as implicit abstention.
+                _memory_tools_called = bool(set(tools_used) & {"query_tasks", "query_code_context", "query_coursework_notes", "query_coursework_tasks", "get_hackathon_deadlines", "summarize_day", "summarize_across_domains", "list_projects", "detect_deadline_conflicts", "delegate_to_specialist"})
+                _is_implicit_abstention = (
+                    abstain_first
+                    and not web_escalation_used
+                    and not _memory_tools_called
+                    and "search_web" not in tools_used
+                )
+
+                # Epistemic Humility: Detect explicit or implicit abstention and escalate to Tavily search if enabled
+                _is_explicit_abstention = any(k in reply.upper() for k in ("[ABSTAIN]", "[ABSTENTION]", "ABSTAIN:")) or reply.strip().startswith("[ABSTAIN]")
+                if _is_explicit_abstention or _is_implicit_abstention:
                     try:
                         from backend.services.tavily import tavily_available
                         tavily_ok = tavily_available()
