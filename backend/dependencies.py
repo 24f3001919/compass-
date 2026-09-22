@@ -95,6 +95,17 @@ def _get_current_user_id(request: Request) -> Optional[str]:
     user_header = request.headers.get("x-user-id")
     if user_header and user_header.strip():
         return user_header.strip().lower()
+
+    session_token = request.cookies.get("compass_session")
+    if session_token:
+        try:
+            from backend.routers.auth import get_user_from_session
+            user = get_user_from_session(session_token)
+            if user:
+                return user.lower()
+        except Exception:
+            pass
+
     cookie_user = request.cookies.get("compass_user_id")
     if cookie_user and cookie_user.strip():
         import urllib.parse
