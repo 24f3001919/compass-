@@ -1005,10 +1005,12 @@ async def run_agent(
 
                         # Condition (b): If abstain_first is active and any read-only memory / delegation tool
                         # returns empty / 0 results / no-answer / error, unlock search_web
-                        _memory_query_tools = (
+                        _original_memory_tools = frozenset({
                             "query_tasks",
                             "query_coursework_notes",
                             "query_code_context",
+                        })
+                        _widened_memory_tools = frozenset({
                             "get_hackathon_deadlines",
                             "delegate_to_specialist",
                             "list_projects",
@@ -1016,7 +1018,8 @@ async def run_agent(
                             "detect_deadline_conflicts",
                             "summarize_day",
                             "summarize_across_domains",
-                        )
+                        })
+                        _memory_query_tools = _original_memory_tools | _widened_memory_tools
                         if abstain_first and func_name in _memory_query_tools:
                             is_zero = False
                             data_field = result.get("data")
@@ -1060,7 +1063,15 @@ async def run_agent(
                                 is_zero = True
 
                             if is_zero:
-                                search_web_unlocked = True
+                                if func_name in _original_memory_tools:
+                                    search_web_unlocked = True
+                                else:
+                                    # One-tool grace period for widened memory tools:
+                                    # Do not auto-unlock after 1 unhelpful call so model can emit [ABSTAIN]
+                                    # Fall back to silent unlock only if a 2nd memory tool is called.
+                                    memory_calls_count = sum(1 for t in tools_used if t in _memory_query_tools)
+                                    if memory_calls_count >= 2:
+                                        search_web_unlocked = True
 
                         # Capture post-mutation state and record audit log
                         if pool and func_name in MUTATING_TOOLS:
