@@ -122,8 +122,9 @@ async def update_past_conversation(conversation_id: str, payload: ConversationUp
                 is_archived=payload.is_archived,
             )
             return {"ok": ok}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    except Exception:
+        logger.exception("Error updating past conversation: %s", conversation_id)
+        return {"ok": False, "error": "Failed to update conversation"}
 
 
 # ---- DELETE /api/conversations/{conversation_id} --------------------------
@@ -137,8 +138,9 @@ async def delete_past_conversation(conversation_id: str):
         async with pool.acquire() as conn:
             ok = await conversations.delete_conversation(conn, conversation_id)
             return {"ok": ok}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    except Exception:
+        logger.exception("Failed to delete conversation: %s", conversation_id)
+        return {"ok": False, "error": "Failed to delete conversation"}
 
 
 # ---- GET /api/share/{conversation_id} -------------------------------------
@@ -466,9 +468,9 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
                 record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
                 yield f"data: {json.dumps({'type': 'token', 'value': response_text})}\n\n"
                 yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': result.get('skill_used', 'add_task' if 'task' in message.lower() else 'chat')})}\n\n"
-            except Exception as e2:
-                logger.error(f"SSE fallback error: {e2}")
-                yield f"data: {json.dumps({'type': 'error', 'message': str(e2)})}\n\n"
+            except Exception:
+                logger.exception("SSE fallback error")
+                yield f"data: {json.dumps({'type': 'error', 'message': 'An internal error occurred.'})}\n\n"
 
     return StreamingResponse(
         event_generator(),
