@@ -62,3 +62,12 @@ async def client():
 def auth_headers():
     """Valid authorization bearer header fixture."""
     return {"Authorization": f"Bearer {settings.AUTH_TOKEN}"}
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def cleanup_db_pool():
+    """Ensure database connection pool is closed within the test's event loop."""
+    yield
+    from backend.memory.db import close_pool
+    await close_pool()
+
