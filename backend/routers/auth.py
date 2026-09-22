@@ -5,6 +5,7 @@ Compass — Authentication and Google Calendar OAuth Endpoints.
 import logging
 import re
 import secrets
+import urllib.parse
 from html import escape
 from typing import Optional
 
@@ -78,13 +79,15 @@ async def auth_me(request: Request):
 @router.post("/api/auth/select-account")
 async def auth_select_account(body: SelectAccountBody, response: Response):
     """Select or switch active user account for memory and calendar isolation."""
-    email = re.sub(r"[^\w@.-]", "", (body.email or body.user_id or "").strip().lower())
+    raw_email = (body.email or body.user_id or "").strip().lower()
+    email = re.sub(r"[^\w@.-]", "", raw_email)
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="A valid email address is required")
 
+    safe_cookie_val = urllib.parse.quote(email, safe="")
     response.set_cookie(
         key="compass_user_id",
-        value=email,
+        value=safe_cookie_val,
         max_age=86400 * 365,
         httponly=True,
         secure=True,
@@ -127,9 +130,10 @@ async def auth_quick_connect(body: QuickConnectBody, response: Response):
             expires_in=86400,
         )
 
+    safe_cookie_val = urllib.parse.quote(email, safe="")
     response.set_cookie(
         key="compass_user_id",
-        value=email,
+        value=safe_cookie_val,
         max_age=86400 * 30,
         httponly=True,
         secure=True,
@@ -249,9 +253,10 @@ async def calendar_callback(
 </body>
 </html>"""
     response = HTMLResponse(html_content)
+    safe_cookie_val = urllib.parse.quote(re.sub(r"[^\w@.-]", "", str(email)), safe="")
     response.set_cookie(
         key="compass_user_id",
-        value=re.sub(r"[^\w@.-]", "", str(email)),
+        value=safe_cookie_val,
         max_age=86400 * 30,
         httponly=True,
         secure=True,
