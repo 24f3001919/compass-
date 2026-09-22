@@ -337,6 +337,8 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
           console.warn('[Compass SSE Parse Error]', e, jsonStr)
         }
       }
+    if (!fullResponse.trim()) {
+      throw new Error('Empty stream response from assistant')
     }
 
     if (onComplete) {

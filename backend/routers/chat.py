@@ -409,7 +409,7 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
                     messages=messages,
                     tools=tools,
                     tool_choice="auto",
-                    max_tokens=512,
+                    max_tokens=2048,
                     temperature=0.7,
                     stream=True,
                 ),
@@ -420,6 +420,12 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
 
             async for chunk in stream:
                 delta = chunk.choices[0].delta if chunk.choices else None
+                finish_reason = chunk.choices[0].finish_reason if chunk.choices else None
+
+                if finish_reason in ("tool_calls", "function_call"):
+                    tool_call_detected = True
+                    break
+
                 if delta is None:
                     continue
 
@@ -428,18 +434,20 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
                     break
 
                 token = delta.content or ""
+                if not full_text and not token.strip():
+                    continue
                 if token:
                     full_text += token
                     yield f"data: {json.dumps({'type': 'token', 'value': token})}\n\n"
 
-            if tool_call_detected:
+            if tool_call_detected or not full_text.strip():
                 result = await orchestrator.handle_message(conversation_id=req.conversation_id, message=message, user_id=user_id)
                 response_text = result.get("response", "")
                 prompt_est = max(len(message.split()) * 3, 30)
                 completion_est = max(len(response_text.split()), 15)
                 record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
                 yield f"data: {json.dumps({'type': 'token', 'value': response_text})}\n\n"
-                yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': result.get('skill_used', 'add_task')})}\n\n"
+                yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': result.get('skill_used', 'add_task' if 'task' in message.lower() else 'chat')})}\n\n"
                 return
 
             try:

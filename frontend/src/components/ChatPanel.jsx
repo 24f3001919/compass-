@@ -178,12 +178,17 @@ export default function ChatPanel({
           setStreamingText(full)
           messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
         },
-        onComplete: (doneData) => {
+        onComplete: async (doneData) => {
           setIsStreaming(false)
           setStreamingText('')
           isSendingRef.current = false
-          if (receivedTokens) {
+          if (receivedTokens && receivedTokens.trim()) {
             setMessages(prev => [...prev, { role: 'assistant', text: receivedTokens }])
+          } else if (onSendMessage) {
+            const reply = await onSendMessage(text)
+            if (reply) {
+              streamAssistantResponse(reply)
+            }
           }
           if (doneData?.conversation_id && setConversationId) {
             setConversationId(doneData.conversation_id)
