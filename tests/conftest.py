@@ -15,9 +15,9 @@ sys.path.insert(0, str(_project_root))
 
 # Match prod by endpoint id from env PROD_DB_ENDPOINT
 prod_endpoint_id = os.environ.get("PROD_DB_ENDPOINT", "ep-sweet-fire-b2y9w95z").strip()
-test_db_url = os.environ.get("TEST_DATABASE_URL")
+test_db_url = os.environ.get("TEST_DATABASE_URL") or os.environ.get("DATABASE_URL")
 
-# Set DATABASE_URL from TEST_DATABASE_URL before importing backend
+# Set DATABASE_URL from test_db_url before importing backend
 if test_db_url:
     os.environ["DATABASE_URL"] = test_db_url
 
@@ -31,14 +31,14 @@ def pytest_configure(config):
     """Guard against executing test runs against production database."""
     if not test_db_url:
         pytest.exit(
-            "ABORTED: TEST_DATABASE_URL environment variable is not set. Refusing to run tests.",
+            "ABORTED: Neither TEST_DATABASE_URL nor DATABASE_URL environment variable is set. Refusing to run tests.",
             returncode=1,
         )
 
     parsed_test = urlparse(test_db_url)
     if prod_endpoint_id and prod_endpoint_id in (parsed_test.hostname or ""):
         pytest.exit(
-            f"ABORTED: TEST_DATABASE_URL matches production endpoint '{prod_endpoint_id}': {parsed_test.hostname}",
+            f"ABORTED: Database matches production endpoint '{prod_endpoint_id}': {parsed_test.hostname}",
             returncode=1,
         )
 
