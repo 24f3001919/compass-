@@ -68,6 +68,10 @@ def auth_headers():
 async def cleanup_db_pool():
     """Ensure database connection pool is closed within the test's event loop."""
     yield
-    from backend.memory.db import close_pool
-    await close_pool()
+    try:
+        from backend.memory.db import close_pool
+        await close_pool()
+    except Exception:
+        pass
+
 
