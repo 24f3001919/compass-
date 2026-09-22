@@ -151,6 +151,10 @@ async def init_pool(dsn: str | None = None) -> asyncpg.Pool:
         pool_loop = getattr(_pool, "_loop", None)
         if pool_loop is not None and not pool_loop.is_closed() and (cur_loop is None or pool_loop is cur_loop):
             return _pool
+        try:
+            _pool.terminate()
+        except Exception:
+            pass
         _pool = None
 
     if dsn is None:
@@ -184,6 +188,10 @@ async def get_pool() -> asyncpg.Pool:
     if _pool is not None:
         pool_loop = getattr(_pool, "_loop", None)
         if pool_loop is None or pool_loop.is_closed() or (cur_loop and pool_loop is not cur_loop):
+            try:
+                _pool.terminate()
+            except Exception:
+                pass
             _pool = None
 
     if _pool is None:
@@ -191,10 +199,25 @@ async def get_pool() -> asyncpg.Pool:
     return _pool
 
 
-
 async def close_pool() -> None:
     """Gracefully close the pool."""
     global _pool
     if _pool is not None:
-        await _pool.close()
+        p = _pool
         _pool = None
+        pool_loop = getattr(p, "_loop", None)
+        if pool_loop is not None and pool_loop.is_closed():
+            try:
+                p.terminate()
+            except Exception:
+                pass
+            return
+        try:
+            import asyncio
+            await asyncio.wait_for(p.close(), timeout=2.0)
+        except Exception:
+            try:
+                p.terminate()
+            except Exception:
+                pass
+
