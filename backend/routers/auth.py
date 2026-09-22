@@ -22,6 +22,21 @@ settings = get_settings()
 
 router = APIRouter(tags=["auth"])
 
+# In-memory session store mapping opaque tokens to user identities
+_SESSIONS: dict[str, str] = {}
+
+
+def create_session(user_id: str) -> str:
+    """Generate an opaque session token and store mapping to user ID."""
+    token = secrets.token_hex(24)
+    _SESSIONS[token] = user_id
+    return token
+
+
+def get_user_from_session(token: str) -> Optional[str]:
+    """Look up user identity from an opaque session token."""
+    return _SESSIONS.get(token)
+
 
 def _resolve_oauth_redirect_uri(request: Request) -> str:
     """Consistently resolve OAuth callback URL across local dev and production reverse-proxies."""
@@ -64,7 +79,11 @@ async def auth_me(request: Request):
         }
 
     pool = await get_pool()
-    cal_status = await get_calendar_connection_status(pool=pool, user_id=user_id)
+    cal_status = (
+        await get_calendar_connection_status(pool, user_id)
+        if pool
+        else {"connected": False, "mode": "none", "account_email": None}
+    )
 
     return {
         "status": "ok",
@@ -84,10 +103,10 @@ async def auth_select_account(body: SelectAccountBody, response: Response):
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="A valid email address is required")
 
-    safe_cookie_val = urllib.parse.quote(email, safe="")
+    session_token = create_session(email)
     response.set_cookie(
-        key="compass_user_id",
-        value=safe_cookie_val,
+        key="compass_session",
+        value=session_token,
         max_age=86400 * 365,
         httponly=True,
         secure=True,
@@ -103,8 +122,12 @@ async def auth_select_account(body: SelectAccountBody, response: Response):
 
 
 @router.post("/api/auth/logout")
-async def auth_logout(response: Response):
+async def auth_logout(request: Request, response: Response):
     """Log out of current account and clear session cookies."""
+    token = request.cookies.get("compass_session")
+    if token:
+        _SESSIONS.pop(token, None)
+    response.delete_cookie("compass_session")
     response.delete_cookie("compass_user_id")
     return {"status": "ok", "message": "Logged out successfully"}
 
@@ -130,10 +153,10 @@ async def auth_quick_connect(body: QuickConnectBody, response: Response):
             expires_in=86400,
         )
 
-    safe_cookie_val = urllib.parse.quote(email, safe="")
+    session_token = create_session(email)
     response.set_cookie(
-        key="compass_user_id",
-        value=safe_cookie_val,
+        key="compass_session",
+        value=session_token,
         max_age=86400 * 30,
         httponly=True,
         secure=True,
@@ -253,10 +276,10 @@ async def calendar_callback(
 </body>
 </html>"""
     response = HTMLResponse(html_content)
-    safe_cookie_val = urllib.parse.quote(re.sub(r"[^\w@.-]", "", str(email)), safe="")
+    session_token = create_session(str(email))
     response.set_cookie(
-        key="compass_user_id",
-        value=safe_cookie_val,
+        key="compass_session",
+        value=session_token,
         max_age=86400 * 30,
         httponly=True,
         secure=True,
