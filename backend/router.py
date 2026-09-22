@@ -112,10 +112,10 @@ async def route_message(
                         break
                 if "domain" in title.lower():
                     import re
-                    d_match = re.search(r"domain\s*[:=]?\s*([a-zA-Z0-9_-]+)", title, re.IGNORECASE)
+                    d_match = re.search(r"\bdomain\s*[:=]?\s*([a-zA-Z0-9_-]{1,64})\b", title, re.IGNORECASE)
                     if d_match:
                         domain = d_match.group(1).lower()
-                        title = re.sub(r"[,;]?\s*domain\s*[:=]?\s*[a-zA-Z0-9_-]+", "", title, flags=re.IGNORECASE).strip()
+                        title = re.sub(r"\bdomain\s*[:=]?\s*[a-zA-Z0-9_-]{1,64}\b", "", title, flags=re.IGNORECASE).strip(" ,;")
                 return "add_task", {"title": title, "domain": domain}, ""
 
             reply = choice.message.content or "How can I help you today?"
@@ -127,8 +127,8 @@ async def route_message(
         msg_lower = message.lower()
         if any(term in msg_lower for term in ("feasibility", "can i finish", "what to drop", "what should i drop", "what i drop", "triage", "overloaded", "overcommit", "adversarial")):
             import re
-            days_match = re.search(r"(\d+)\s*days?", msg_lower)
-            hours_match = re.search(r"(\d+(?:\.\d+)?)\s*hours?", msg_lower)
+            days_match = re.search(r"\b([0-9]{1,4})\s*days?\b", msg_lower)
+            hours_match = re.search(r"\b([0-9]{1,4}(?:\.[0-9]{1,2})?)\s*hours?\b", msg_lower)
             f_days = int(days_match.group(1)) if days_match else 5
             f_hours = float(hours_match.group(1)) if hours_match else 4.0
             return "assess_feasibility", {"days": f_days, "hours_per_day": f_hours}, ""
