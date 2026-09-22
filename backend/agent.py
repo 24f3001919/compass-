@@ -91,6 +91,25 @@ def _clean_synthesis_text(text: str) -> str:
     return cleaned.strip()
 
 
+async def _extract_content_from_response(response: Any, default_text: str = "") -> str:
+    """Safely extract text content from either a ChatCompletion or an AsyncStream."""
+    if hasattr(response, "choices") and response.choices:
+        msg = getattr(response.choices[0], "message", None)
+        if msg and getattr(msg, "content", None):
+            return msg.content
+        return default_text
+    elif hasattr(response, "__aiter__"):
+        content_parts = []
+        async for chunk in response:
+            ch_choices = getattr(chunk, "choices", None) or []
+            if ch_choices:
+                delta = getattr(ch_choices[0], "delta", None)
+                if delta and getattr(delta, "content", None):
+                    content_parts.append(delta.content)
+        return "".join(content_parts) or default_text
+    return default_text
+
+
 def _build_agent_system_prompt(tool_names: List[str], abstain_first: bool = False) -> str:
     """Build the system prompt that makes Super behave as a ReAct agent."""
     tool_list = ", ".join(tool_names)
@@ -1263,7 +1282,7 @@ async def run_agent(
             forced_cost = compute_step_cost(settings.SYNTHESIS_MODEL, p_tok, c_tok)
             total_run_cost_usd += forced_cost
 
-            raw_text = response.choices[0].message.content or "Agent completed analysis."
+            raw_text = await _extract_content_from_response(response, default_text="Agent completed analysis.")
             if any(k in raw_text.upper() for k in ("[ABSTAIN]", "[ABSTENTION]", "ABSTAIN:")) or raw_text.strip().startswith("[ABSTAIN]"):
                 is_abstained = True
             final_text = _clean_synthesis_text(raw_text)
@@ -1417,7 +1436,7 @@ async def _run_critic_pass(
             record_usage(settings.SKILL_MODEL, p_tok, c_tok)
             critic_cost = compute_step_cost(settings.SKILL_MODEL, p_tok, c_tok)
 
-            critic_text = resp.choices[0].message.content or "APPROVED: Plan looks reasonable."
+            critic_text = await _extract_content_from_response(resp, default_text="APPROVED: Plan looks reasonable.")
     except Exception as e:
         logger.warning(f"Critic pass failed: {e}")
         critic_text = "APPROVED: (Critic pass skipped due to error)"
