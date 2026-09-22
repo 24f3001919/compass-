@@ -58,6 +58,7 @@ jobs:
       - name: Run Test Suite
         env:
           DATABASE_URL: postgresql://compass:compass@localhost:5432/compass
+          TEST_DATABASE_URL: postgresql://compass:compass@localhost:5432/compass
           AUTH_TOKEN: dev-token
           NEBIUS_API_KEY: ${{ secrets.NEBIUS_API_KEY || 'mock-key' }}
         run: |
