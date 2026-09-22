@@ -16,6 +16,7 @@ from backend.config import get_settings
 from backend.dependencies import _get_current_user_id
 from backend.memory.db import get_pool
 from backend.models import SelectAccountBody, QuickConnectBody
+from backend.services.oauth import generate_google_oauth_url, is_google_oauth_configured
 
 logger = logging.getLogger("compass.routers.auth")
 settings = get_settings()
@@ -176,8 +177,6 @@ async def calendar_connect(
     login_hint: Optional[str] = Query(None),
 ):
     """Generate Google OAuth 2.0 authorization URL or redirect directly."""
-    from backend.services.oauth import generate_google_oauth_url, is_google_oauth_configured
-
     configured = is_google_oauth_configured()
     if not configured:
         if redirect:
