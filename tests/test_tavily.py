@@ -735,3 +735,180 @@ async def test_abstain_first_unlocks_on_real_query_code_context_empty(monkeypatc
     assert "search_web" in names_step2
 
 
+@pytest.mark.asyncio
+async def test_run_5_repeated_memory_tools_fallback_escalates_before_max_steps(monkeypatch):
+    """Replicate Run 5's tool-call sequence across memory tools and verify fallback triggers escalation before max_steps."""
+    settings = get_settings()
+    monkeypatch.setattr(settings, "TAVILY_ABSTAIN_FIRST", True)
+    monkeypatch.setattr(tavily_service, "tavily_available", lambda: True)
+
+    run_5_tools = [
+        ("get_hackathon_deadlines", {}),
+        ("get_hackathon_deadlines", {}),
+        ("delegate_to_specialist", {"capability": "research", "task_description": "Nebius hackathon deadline"}),
+        ("delegate_to_specialist", {"capability": "research", "task_description": "Nebius hackathon deadline"}),
+        ("delegate_to_specialist", {"capability": "research", "task_description": "Nebius hackathon deadline"}),
+        ("get_hackathon_deadlines", {}),
+        ("get_hackathon_deadlines", {}),
+        ("query_tasks", {"domain": "hackathon"}),
+    ]
+
+    call_count = 0
+
+    async def mock_create(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        # If forced_tool_choice was search_web or tool_choice function is search_web
+        tool_choice = kwargs.get("tool_choice")
+        if isinstance(tool_choice, dict) and tool_choice.get("function", {}).get("name") == "search_web":
+            return _create_mock_completion(tool_name="search_web", tool_args={"query": "Nebius hackathon deadline Devpost"})
+        if any(m.get("role") == "tool" and "Devpost" in str(m.get("content", "")) for m in kwargs.get("messages", [])):
+            return _create_mock_completion(content="The official submission deadline is October 30, 2026.")
+
+        # Replicate tool calls from Run 5
+        idx = min(call_count - 1, len(run_5_tools) - 1)
+        t_name, t_args = run_5_tools[idx]
+        return _create_mock_completion(tool_name=t_name, tool_args=t_args)
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(side_effect=mock_create)
+
+    from backend.skills import SKILL_REGISTRY
+    monkeypatch.setitem(
+        SKILL_REGISTRY,
+        "get_hackathon_deadlines",
+        AsyncMock(return_value={"response": "🚀 Hackathon: 6 active deliverables for Nebius Token Factory benchmark.", "data": {"tasks": [{"title": "Demo"}], "count": 6}}),
+    )
+    monkeypatch.setitem(
+        SKILL_REGISTRY,
+        "delegate_to_specialist",
+        AsyncMock(return_value={"response": "task_id is required", "data": {"error": "task_id is required"}}),
+    )
+    monkeypatch.setitem(
+        SKILL_REGISTRY,
+        "query_tasks",
+        AsyncMock(return_value={"response": "Found 6 task(s) in HACKATHON.", "data": {"tasks": [{"title": "Task 1"}], "count": 6}}),
+    )
+    monkeypatch.setitem(
+        SKILL_REGISTRY,
+        "search_web",
+        AsyncMock(return_value={"response": "Devpost deadline: October 30, 2026 at 10:00 AM PDT", "data": {"results": []}}),
+    )
+
+    steps = []
+    async for step in run_agent(
+        goal="What is the official submission deadline date for the Nebius x NVIDIA AI Hackathon on Devpost?",
+        client=mock_client,
+        max_steps=8,
+        enable_critic=False,
+    ):
+        steps.append(step)
+
+    step_types = [s.type for s in steps]
+    assert "escalate" in step_types, f"Expected 'escalate' step in {step_types}"
+    assert any(s.tool_name == "search_web" for s in steps), "Expected search_web to be executed after escalation"
+    assert any(s.type == "done" for s in steps), "Expected run to complete with 'done'"
+
+
+@pytest.mark.asyncio
+async def test_abstain_first_unlocks_on_get_hackathon_deadlines_empty(monkeypatch):
+    """Verify abstain-first unlocks search_web when get_hackathon_deadlines returns 0 deliverables."""
+    settings = get_settings()
+    monkeypatch.setattr(settings, "TAVILY_ABSTAIN_FIRST", True)
+    monkeypatch.setattr(tavily_service, "tavily_available", lambda: True)
+
+    captured_tools = []
+
+    async def mock_create(*args, **kwargs):
+        captured_tools.append(kwargs.get("tools", []))
+        idx = len(captured_tools)
+        if idx == 1:
+            return _create_mock_completion(tool_name="get_hackathon_deadlines", tool_args={})
+        return _create_mock_completion(content="No hackathons found locally, searching web.")
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(side_effect=mock_create)
+
+    from backend.skills import SKILL_REGISTRY
+    monkeypatch.setitem(
+        SKILL_REGISTRY,
+        "get_hackathon_deadlines",
+        AsyncMock(return_value={"response": "🚀 Hackathon: 0 active deliverables.", "data": {"tasks": [], "count": 0}}),
+    )
+
+    steps = []
+    async for step in run_agent(
+        goal="Check hackathon deadlines",
+        client=mock_client,
+        max_steps=4,
+        enable_critic=False,
+    ):
+        steps.append(step)
+
+    # Step 1: search_web was absent
+    names_step1 = [
+        t.get("function", {}).get("name") if isinstance(t.get("function"), dict) else t.get("name")
+        for t in captured_tools[0]
+    ]
+    assert "search_web" not in names_step1
+
+    # Step 2: search_web must be unlocked due to zero-result hackathon query
+    assert len(captured_tools) >= 2
+    names_step2 = [
+        t.get("function", {}).get("name") if isinstance(t.get("function"), dict) else t.get("name")
+        for t in captured_tools[1]
+    ]
+    assert "search_web" in names_step2
+
+
+@pytest.mark.asyncio
+async def test_abstain_first_unlocks_on_delegate_to_specialist_empty(monkeypatch):
+    """Verify abstain-first unlocks search_web when delegate_to_specialist returns no-answer/error."""
+    settings = get_settings()
+    monkeypatch.setattr(settings, "TAVILY_ABSTAIN_FIRST", True)
+    monkeypatch.setattr(tavily_service, "tavily_available", lambda: True)
+
+    captured_tools = []
+
+    async def mock_create(*args, **kwargs):
+        captured_tools.append(kwargs.get("tools", []))
+        idx = len(captured_tools)
+        if idx == 1:
+            return _create_mock_completion(tool_name="delegate_to_specialist", tool_args={"capability": "research", "goal": "Find deadline"})
+        return _create_mock_completion(content="Specialist failed, searching web.")
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(side_effect=mock_create)
+
+    from backend.skills import SKILL_REGISTRY
+    monkeypatch.setitem(
+        SKILL_REGISTRY,
+        "delegate_to_specialist",
+        AsyncMock(return_value={"response": "task_id is required", "data": {"error": "task_id is required"}}),
+    )
+
+    steps = []
+    async for step in run_agent(
+        goal="Find deadline for hackathon",
+        client=mock_client,
+        max_steps=4,
+        enable_critic=False,
+    ):
+        steps.append(step)
+
+    # Step 1: search_web was absent
+    names_step1 = [
+        t.get("function", {}).get("name") if isinstance(t.get("function"), dict) else t.get("name")
+        for t in captured_tools[0]
+    ]
+    assert "search_web" not in names_step1
+
+    # Step 2: search_web must be unlocked due to specialist error/no-answer
+    assert len(captured_tools) >= 2
+    names_step2 = [
+        t.get("function", {}).get("name") if isinstance(t.get("function"), dict) else t.get("name")
+        for t in captured_tools[1]
+    ]
+    assert "search_web" in names_step2
+
+

@@ -767,6 +767,49 @@ async def run_agent(
                     func_name = str(getattr(getattr(tc, "function", None), "name", ""))
                     raw_args = str(getattr(getattr(tc, "function", None), "arguments", "{}") or "{}")
 
+                # Hard fallback: if step loop reaches penultimate iteration (max_steps - 2) without a text response,
+                # force [ABSTAIN]-equivalent behavior and trigger escalation directly,
+                # rather than waiting for forced synthesis with no search.
+                if (
+                    func_name not in ("search_web", "ingest_url", "verify_deadline")
+                    and not web_escalation_used
+                    and iteration >= max_steps - 2
+                ):
+                    try:
+                        from backend.services.tavily import tavily_available
+                        tavily_ok = tavily_available()
+                    except Exception:
+                        tavily_ok = False
+                    if tavily_ok:
+                        web_escalation_used = True
+                        search_web_unlocked = True
+                        forced_tool_choice = {"type": "function", "function": {"name": "search_web"}}
+                        step_num += 1
+                        escalate_step = AgentStep(
+                            type="escalate",
+                            content="Approaching step limit without an answer from stored memory. Escalating to live web search.",
+                            step_number=step_num,
+                            elapsed_ms=int((time.perf_counter() - step_start) * 1000),
+                            run_id=run_id,
+                            model_tier="Tavily Web Intelligence",
+                            step_cost_usd=0.0,
+                            metadata={"reason": "step_limit_fallback", "provider": "tavily"},
+                        )
+                        yield escalate_step
+                        accumulated_steps.append(escalate_step)
+
+                        messages.append({"role": "assistant", "content": "[ABSTAIN] Memory does not contain the required information."})
+                        messages.append({
+                            "role": "user",
+                            "content": (
+                                "Stored memory does not cover this question. Please call the 'search_web' tool "
+                                "now to retrieve current information from the live web to answer the goal."
+                            ),
+                        })
+                        continue
+                    else:
+                        is_abstained = True
+
                 try:
                     tool_args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
                 except Exception:
@@ -940,11 +983,24 @@ async def run_agent(
                         tool_result = result.get("response", str(result.get("data", "")))
                         tools_used.append(func_name)
 
-                        # Condition (b): If abstain_first is active and a memory-query tool returns 0 results, unlock search_web
-                        if abstain_first and func_name in ("query_tasks", "query_coursework_notes", "query_code_context"):
+                        # Condition (b): If abstain_first is active and any read-only memory / delegation tool
+                        # returns empty / 0 results / no-answer / error, unlock search_web
+                        _memory_query_tools = (
+                            "query_tasks",
+                            "query_coursework_notes",
+                            "query_code_context",
+                            "get_hackathon_deadlines",
+                            "delegate_to_specialist",
+                            "list_projects",
+                            "query_coursework_tasks",
+                            "detect_deadline_conflicts",
+                            "summarize_day",
+                            "summarize_across_domains",
+                        )
+                        if abstain_first and func_name in _memory_query_tools:
                             is_zero = False
                             data_field = result.get("data")
-                            if isinstance(data_field, list) and len(data_field) == 0:
+                            if data_field is None or (isinstance(data_field, (list, dict)) and len(data_field) == 0):
                                 is_zero = True
                             elif isinstance(data_field, dict):
                                 if data_field.get("count") == 0:
@@ -953,9 +1009,36 @@ async def run_agent(
                                     is_zero = True
                                 elif "tasks" in data_field and len(data_field.get("tasks", [])) == 0:
                                     is_zero = True
+                                elif "projects" in data_field and len(data_field.get("projects", [])) == 0:
+                                    is_zero = True
+                                elif "findings" in data_field and len(data_field.get("findings", {})) == 0:
+                                    is_zero = True
+                                elif data_field.get("status") in ("unavailable", "error"):
+                                    is_zero = True
+                                elif "error" in data_field:
+                                    is_zero = True
+
                             resp_str = str(result.get("response", "")).lower()
-                            if any(phrase in resp_str for phrase in ("found 0 task", "retrieved 0", "0 task", "0 relevant", "0 result")):
+                            if any(phrase in resp_str for phrase in (
+                                "found 0", "retrieved 0", "0 task", "0 active", "0 deliverable",
+                                "0 relevant", "0 result", "0 tracked", "no tracked", "no task",
+                                "no active", "no deliverable", "no deadline", "no relevant",
+                                "no matching", "not found", "task_id is required", "error",
+                                "failed", "none found"
+                            )):
                                 is_zero = True
+
+                            # Also: if returned tasks don't match specific goal query terms (e.g. asking for Devpost deadline)
+                            if not is_zero and isinstance(data_field, dict) and "tasks" in data_field:
+                                t_list = data_field.get("tasks") or []
+                                if t_list and "devpost" in goal.lower():
+                                    if not any("devpost" in str(t).lower() for t in t_list):
+                                        is_zero = True
+
+                            # If model repeats calling the same memory tool, it clearly didn't get what it needed
+                            if tools_used.count(func_name) >= 2:
+                                is_zero = True
+
                             if is_zero:
                                 search_web_unlocked = True
 
@@ -1030,48 +1113,57 @@ async def run_agent(
                 # Check for abstention first so the critic-revise loop can't eat
                 # the [ABSTAIN] signal and prevent web escalation.
                 _memory_tools_called = bool(set(tools_used) & {"query_tasks", "query_code_context", "query_coursework_notes", "query_coursework_tasks", "get_hackathon_deadlines", "summarize_day", "summarize_across_domains", "list_projects", "detect_deadline_conflicts", "delegate_to_specialist"})
+                _implicit_signals = (
+                    "don't have", "do not have", "cannot find", "no information", 
+                    "not found", "not stored", "insufficient", "no record", 
+                    "unable to find", "no data", "haven't found", "have not found"
+                )
                 _is_implicit_abstention = (
                     abstain_first
                     and not web_escalation_used
                     and not _memory_tools_called
                     and "search_web" not in tools_used
+                    and any(sig in reply.lower() for sig in _implicit_signals)
                 )
                 _is_explicit_abstention = any(k in reply.upper() for k in ("[ABSTAIN]", "[ABSTENTION]", "ABSTAIN:")) or reply.strip().startswith("[ABSTAIN]")
 
                 # Epistemic Humility: Detect explicit or implicit abstention and escalate to Tavily search
-                if (_is_explicit_abstention or _is_implicit_abstention) and not web_escalation_used:
-                    try:
-                        from backend.services.tavily import tavily_available
-                        tavily_ok = tavily_available()
-                    except Exception:
-                        tavily_ok = False
-                    if tavily_ok:
-                        web_escalation_used = True
-                        search_web_unlocked = True
-                        forced_tool_choice = {"type": "function", "function": {"name": "search_web"}}
-                        step_num += 1
-                        escalate_step = AgentStep(
-                            type="escalate",
-                            content="Memory doesn't cover this. Escalating to live web search rather than guessing.",
-                            step_number=step_num,
-                            elapsed_ms=int((time.perf_counter() - step_start) * 1000),
-                            run_id=run_id,
-                            model_tier="Tavily Web Intelligence",
-                            step_cost_usd=0.0,
-                            metadata={"reason": "abstention", "provider": "tavily"},
-                        )
-                        yield escalate_step
-                        accumulated_steps.append(escalate_step)
+                if _is_explicit_abstention or _is_implicit_abstention:
+                    if not web_escalation_used:
+                        try:
+                            from backend.services.tavily import tavily_available
+                            tavily_ok = tavily_available()
+                        except Exception:
+                            tavily_ok = False
+                        if tavily_ok:
+                            web_escalation_used = True
+                            search_web_unlocked = True
+                            forced_tool_choice = {"type": "function", "function": {"name": "search_web"}}
+                            step_num += 1
+                            escalate_step = AgentStep(
+                                type="escalate",
+                                content="Memory doesn't cover this. Escalating to live web search rather than guessing.",
+                                step_number=step_num,
+                                elapsed_ms=int((time.perf_counter() - step_start) * 1000),
+                                run_id=run_id,
+                                model_tier="Tavily Web Intelligence",
+                                step_cost_usd=0.0,
+                                metadata={"reason": "abstention", "provider": "tavily"},
+                            )
+                            yield escalate_step
+                            accumulated_steps.append(escalate_step)
 
-                        messages.append({"role": "assistant", "content": reply})
-                        messages.append({
-                            "role": "user",
-                            "content": (
-                                "Stored memory does not cover this question. Please call the 'search_web' tool "
-                                "now to retrieve current information from the live web to answer the goal."
-                            ),
-                        })
-                        continue
+                            messages.append({"role": "assistant", "content": reply})
+                            messages.append({
+                                "role": "user",
+                                "content": (
+                                    "Stored memory does not cover this question. Please call the 'search_web' tool "
+                                    "now to retrieve current information from the live web to answer the goal."
+                                ),
+                            })
+                            continue
+                        else:
+                            is_abstained = True
                     else:
                         is_abstained = True
 
