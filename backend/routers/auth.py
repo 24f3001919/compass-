@@ -23,20 +23,34 @@ settings = get_settings()
 
 router = APIRouter(tags=["auth"])
 
-# In-memory session store mapping opaque tokens to user identities
-_SESSIONS: dict[str, str] = {}
+# In-memory session store mapping opaque tokens to session metadata
+_SESSIONS: dict[str, dict] = {}
 
 
-def create_session(user_id: str) -> str:
-    """Generate an opaque session token and store mapping to user ID."""
+def create_session(user_id: str, oauth_verified: bool = False) -> str:
+    """Generate an opaque session token and store mapping to user ID and verification status."""
     token = secrets.token_hex(24)
-    _SESSIONS[token] = user_id
+    _SESSIONS[token] = {
+        "user_id": user_id,
+        "oauth_verified": bool(oauth_verified),
+    }
     return token
 
 
 def get_user_from_session(token: str) -> Optional[str]:
     """Look up user identity from an opaque session token."""
-    return _SESSIONS.get(token)
+    sess = _SESSIONS.get(token)
+    if isinstance(sess, dict):
+        return sess.get("user_id")
+    return sess if isinstance(sess, str) else None
+
+
+def is_session_oauth_verified(token: str) -> bool:
+    """Check if the session was issued by the genuine Google OAuth callback handler."""
+    sess = _SESSIONS.get(token)
+    if isinstance(sess, dict):
+        return bool(sess.get("oauth_verified", False))
+    return False
 
 
 def _resolve_oauth_redirect_uri(request: Request) -> str:
@@ -275,7 +289,7 @@ async def calendar_callback(
 </body>
 </html>"""
     response = HTMLResponse(html_content)
-    session_token = create_session(str(email))
+    session_token = create_session(str(email), oauth_verified=True)
     response.set_cookie(
         key="compass_session",
         value=session_token,
@@ -287,14 +301,42 @@ async def calendar_callback(
     return response
 
 
+def _validate_trusted_origin(request: Request) -> bool:
+    """Ensure mutating requests originate from trusted frontend origins or same-origin."""
+    origin = request.headers.get("origin") or request.headers.get("referer")
+    if not origin:
+        # Direct CLI / same-origin requests without origin header (e.g. backend curl/postman)
+        return True
+    origin_clean = origin.rstrip("/")
+    allowed = set(s.rstrip("/") for s in getattr(settings, "CORS_ORIGINS", []))
+    allowed.update({
+        "http://localhost:5173", "http://127.0.0.1:5173",
+        "http://localhost:3000", "http://127.0.0.1:3000",
+        "https://compass-farmlytics.vercel.app",
+        "https://compass-kappa-nine.vercel.app",
+        "https://compass-backend-qryu.onrender.com",
+    })
+    return any(origin_clean.startswith(a) for a in allowed)
+
+
 @router.post("/api/calendar/sync-now")
 async def calendar_sync_now(request: Request):
     """Explicitly synchronize all scheduled tasks to the connected user's Google Calendar."""
-    from backend.services.calendar import sync_all_tasks_to_google_calendar
+    if not _validate_trusted_origin(request):
+        raise HTTPException(status_code=403, detail="Untrusted origin or referer")
+
+    session_token = request.cookies.get("compass_session")
+    if not session_token or not get_user_from_session(session_token):
+        raise HTTPException(status_code=401, detail="Valid active compass_session cookie required to sync tasks")
+
+    if not is_session_oauth_verified(session_token):
+        raise HTTPException(status_code=403, detail="Sync requires a genuine Google OAuth-verified session")
+
     user_id = _get_current_user_id(request)
     if not user_id:
         return {"status": "error", "message": "Sign in to sync tasks with Google Calendar"}
     pool = await get_pool()
+    from backend.services.calendar import sync_all_tasks_to_google_calendar
     result = await sync_all_tasks_to_google_calendar(pool, user_id=user_id)
     return result
 
@@ -302,10 +344,24 @@ async def calendar_sync_now(request: Request):
 @router.post("/api/calendar/disconnect")
 async def calendar_disconnect(request: Request, response: Response):
     """Disconnect Google Calendar OAuth integration and clear session."""
-    from backend.services.calendar import disconnect_calendar_connection
+    if not _validate_trusted_origin(request):
+        raise HTTPException(status_code=403, detail="Untrusted origin or referer")
+
+    session_token = request.cookies.get("compass_session")
+    if not session_token or not get_user_from_session(session_token):
+        raise HTTPException(status_code=401, detail="Valid active compass_session cookie required to disconnect")
+
+    if not is_session_oauth_verified(session_token):
+        raise HTTPException(status_code=403, detail="Disconnect requires a genuine Google OAuth-verified session")
+
     user_id = _get_current_user_id(request)
     pool = await get_pool()
     if pool and user_id:
+        from backend.services.calendar import disconnect_calendar_connection
         await disconnect_calendar_connection(pool, user_id=user_id)
+
+    if session_token:
+        _SESSIONS.pop(session_token, None)
+    response.delete_cookie("compass_session")
     response.delete_cookie("compass_user_id")
     return {"status": "ok", "message": "Google Calendar disconnected."}

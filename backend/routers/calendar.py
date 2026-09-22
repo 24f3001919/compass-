@@ -24,10 +24,10 @@ router = APIRouter(tags=["calendar"])
 
 
 @router.get("/api/calendar/status")
-async def get_calendar_status_endpoint(request: Request, user_id: Optional[str] = Query(None)):
+async def get_calendar_status_endpoint(request: Request):
     """Check connection status for Google Calendar integration."""
     from backend.services.calendar import get_calendar_connection_status
-    uid = user_id or _get_current_user_id(request)
+    uid = _get_current_user_id(request)
     pool = await get_pool()
     status = await get_calendar_connection_status(pool=pool, user_id=uid)
     return {"status": "ok", "calendar": status}
@@ -76,11 +76,10 @@ async def commit_schedule_endpoint(body: CommitScheduleBody):
 async def export_calendar_ics_endpoint(
     request: Request,
     domain: Optional[str] = Query(None),
-    user_id: Optional[str] = Query(None),
 ):
     """Export standard RFC 5545 iCalendar feed for calendar apps."""
     from backend.services.calendar import generate_ics_feed
-    target_user_id = user_id or _get_current_user_id(request)
+    target_user_id = _get_current_user_id(request)
     pool = await get_pool()
     tasks = []
     if pool is not None:

@@ -258,8 +258,9 @@ async def test_oauth_endpoints(client: AsyncClient, monkeypatch):
     assert "text/html" in callback_resp.headers.get("content-type", "")
     assert "Google Calendar Connected" in callback_resp.text
 
-    # 3. Disconnect
-    disc_resp = await client.post("/api/calendar/disconnect")
+    # 3. Disconnect with the session cookie issued by callback
+    session_token = callback_resp.cookies.get("compass_session")
+    disc_resp = await client.post("/api/calendar/disconnect", headers={"Cookie": f"compass_session={session_token}"})
     assert disc_resp.status_code == 200
     assert disc_resp.json()["status"] == "ok"
 
