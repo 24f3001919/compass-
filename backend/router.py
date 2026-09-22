@@ -111,11 +111,27 @@ async def route_message(
                         title = message[idx:].strip()
                         break
                 if "domain" in title.lower():
-                    import re
-                    d_match = re.search(r"\bdomain\s*[:=]?\s*([a-zA-Z0-9_-]{1,64})\b", title, re.IGNORECASE)
-                    if d_match:
-                        domain = d_match.group(1).lower()
-                        title = re.sub(r"\bdomain\s*[:=]?\s*[a-zA-Z0-9_-]{1,64}\b", "", title, flags=re.IGNORECASE).strip(" ,;")
+                    # Parse domain via token inspection to eliminate regular expression backtracking
+                    parts = title.split()
+                    new_parts = []
+                    skip_next = False
+                    for idx, part in enumerate(parts):
+                        if skip_next:
+                            skip_next = False
+                            continue
+                        part_clean = part.lower().strip(",;:")
+                        if part_clean.startswith("domain=") or part_clean.startswith("domain:"):
+                            val = part.split("=", 1)[-1].split(":", 1)[-1].strip(",; ")
+                            if val:
+                                domain = val.lower()
+                        elif part_clean == "domain" and idx + 1 < len(parts):
+                            val = parts[idx + 1].strip(",;:= ")
+                            if val:
+                                domain = val.lower()
+                                skip_next = True
+                        else:
+                            new_parts.append(part)
+                    title = " ".join(new_parts).strip(" ,;")
                 return "add_task", {"title": title, "domain": domain}, ""
 
             reply = choice.message.content or "How can I help you today?"
