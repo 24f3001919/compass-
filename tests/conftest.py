@@ -13,6 +13,15 @@ from httpx import AsyncClient, ASGITransport
 _project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_project_root))
 
+# Suppress harmless GC teardown warnings when loops close before unexhausted generators
+def _quiet_unraisablehook(unraisable):
+    if unraisable.exc_value and "Event loop is closed" in str(unraisable.exc_value):
+        return
+    if hasattr(sys, "__unraisablehook__"):
+        sys.__unraisablehook__(unraisable)
+
+sys.unraisablehook = _quiet_unraisablehook
+
 # Match prod by endpoint id from env PROD_DB_ENDPOINT
 prod_endpoint_id = os.environ.get("PROD_DB_ENDPOINT", "ep-sweet-fire-b2y9w95z").strip()
 test_db_url = os.environ.get("TEST_DATABASE_URL") or os.environ.get("DATABASE_URL")
