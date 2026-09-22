@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 import uuid
 import logging
@@ -77,6 +78,17 @@ class AgentStep:
         if self.metadata:
             cast(Dict[str, Any], payload)["metadata"] = cast(Any, self.metadata)
         return f"data: {json.dumps(payload)}\n\n"
+
+
+def _clean_synthesis_text(text: str) -> str:
+    """Filter out raw LLM/search citation markers (e.g. 【{"id":0,...}】 or 【...】)."""
+    if not text:
+        return ""
+    # Strip LLM internal citation artifacts like 【{"id":0,"cursor":0,"loc":0}】 or any 【...】
+    cleaned = re.sub(r'[\u3010][^\u3011]*[\u3011]', '', text)
+    cleaned = re.sub(r'[ \t]+', ' ', cleaned)
+    cleaned = re.sub(r' +([.,;:!?])', r'\1', cleaned)
+    return cleaned.strip()
 
 
 def _build_agent_system_prompt(tool_names: List[str], abstain_first: bool = False) -> str:
@@ -1083,7 +1095,7 @@ async def run_agent(
                 step_num += 1
                 synth_step = AgentStep(
                     type="synthesize",
-                    content=reply,
+                    content=_clean_synthesis_text(reply),
                     step_number=step_num,
                     elapsed_ms=int((time.perf_counter() - step_start) * 1000),
                     run_id=run_id,
@@ -1143,9 +1155,10 @@ async def run_agent(
             forced_cost = compute_step_cost(settings.SYNTHESIS_MODEL, p_tok, c_tok)
             total_run_cost_usd += forced_cost
 
-            final_text = response.choices[0].message.content or "Agent completed analysis."
-            if any(k in final_text.upper() for k in ("[ABSTAIN]", "[ABSTENTION]", "ABSTAIN:")) or final_text.strip().startswith("[ABSTAIN]"):
+            raw_text = response.choices[0].message.content or "Agent completed analysis."
+            if any(k in raw_text.upper() for k in ("[ABSTAIN]", "[ABSTENTION]", "ABSTAIN:")) or raw_text.strip().startswith("[ABSTAIN]"):
                 is_abstained = True
+            final_text = _clean_synthesis_text(raw_text)
 
             forced_synth = AgentStep(
                 type="synthesize",

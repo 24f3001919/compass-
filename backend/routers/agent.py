@@ -238,6 +238,7 @@ async def agent_capabilities():
             "synthesis": settings.SYNTHESIS_MODEL,
             "routing": settings.ROUTER_MODEL,
         },
+        "tavily_abstain_first": getattr(settings, "TAVILY_ABSTAIN_FIRST", False),
     }
 
 
