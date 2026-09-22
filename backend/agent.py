@@ -740,6 +740,7 @@ async def run_agent(
                     tool_choice=current_tool_choice,
                     max_tokens=1024,
                     temperature=0.4,
+                    stream=False,
                 )
 
                 # Record usage
@@ -1025,30 +1026,9 @@ async def run_agent(
             else:
                 reply = choice.message.content or ""
 
-                # Self-critique pass: check proposed plan against gathered data (capped at 2 rounds)
-                if enable_critic and reply:
-                    step_num += 1
-                    critic_step = await _run_critic_pass(
-                        client, settings, reply, messages, step_num, run_id=run_id,
-                    )
-                    total_run_cost_usd += (critic_step.step_cost_usd or 0.0)
-                    yield critic_step
-                    accumulated_steps.append(critic_step)
-
-                    critique_rounds += 1
-                    if "APPROVED" not in critic_step.content.upper():
-                        if critique_rounds < 2:
-                            messages.append({"role": "assistant", "content": reply})
-                            messages.append({
-                                "role": "user",
-                                "content": f"A reviewer checked your plan and found issues:\n\n{critic_step.content}\n\nPlease revise your plan to address these concerns.",
-                            })
-                            continue  # Loop again for revision
-                        else:
-                            logger.info("Critique-revise cycle cap (2 rounds) reached; proceeding to synthesis.")
-
-                # Implicit abstention: if abstain_first is on, no memory tools have been called,
-                # and web hasn't been used yet, treat any text reply as implicit abstention.
+                # --- Abstention detection BEFORE critic ---
+                # Check for abstention first so the critic-revise loop can't eat
+                # the [ABSTAIN] signal and prevent web escalation.
                 _memory_tools_called = bool(set(tools_used) & {"query_tasks", "query_code_context", "query_coursework_notes", "query_coursework_tasks", "get_hackathon_deadlines", "summarize_day", "summarize_across_domains", "list_projects", "detect_deadline_conflicts", "delegate_to_specialist"})
                 _is_implicit_abstention = (
                     abstain_first
@@ -1056,16 +1036,16 @@ async def run_agent(
                     and not _memory_tools_called
                     and "search_web" not in tools_used
                 )
-
-                # Epistemic Humility: Detect explicit or implicit abstention and escalate to Tavily search if enabled
                 _is_explicit_abstention = any(k in reply.upper() for k in ("[ABSTAIN]", "[ABSTENTION]", "ABSTAIN:")) or reply.strip().startswith("[ABSTAIN]")
-                if _is_explicit_abstention or _is_implicit_abstention:
+
+                # Epistemic Humility: Detect explicit or implicit abstention and escalate to Tavily search
+                if (_is_explicit_abstention or _is_implicit_abstention) and not web_escalation_used:
                     try:
                         from backend.services.tavily import tavily_available
                         tavily_ok = tavily_available()
                     except Exception:
                         tavily_ok = False
-                    if tavily_ok and not web_escalation_used:
+                    if tavily_ok:
                         web_escalation_used = True
                         search_web_unlocked = True
                         forced_tool_choice = {"type": "function", "function": {"name": "search_web"}}
@@ -1094,6 +1074,29 @@ async def run_agent(
                         continue
                     else:
                         is_abstained = True
+
+                # Self-critique pass: check proposed plan against gathered data (capped at 2 rounds)
+                # Only run critic if we didn't escalate above.
+                if enable_critic and reply:
+                    step_num += 1
+                    critic_step = await _run_critic_pass(
+                        client, settings, reply, messages, step_num, run_id=run_id,
+                    )
+                    total_run_cost_usd += (critic_step.step_cost_usd or 0.0)
+                    yield critic_step
+                    accumulated_steps.append(critic_step)
+
+                    critique_rounds += 1
+                    if "APPROVED" not in critic_step.content.upper():
+                        if critique_rounds < 2:
+                            messages.append({"role": "assistant", "content": reply})
+                            messages.append({
+                                "role": "user",
+                                "content": f"A reviewer checked your plan and found issues:\n\n{critic_step.content}\n\nPlease revise your plan to address these concerns.",
+                            })
+                            continue  # Loop again for revision
+                        else:
+                            logger.info("Critique-revise cycle cap (2 rounds) reached; proceeding to synthesis.")
 
                 # Determine provenance
                 if is_abstained:
@@ -1159,6 +1162,7 @@ async def run_agent(
                 messages=cast(Any, messages),
                 max_tokens=1024,
                 temperature=0.5,
+                stream=False,
             )
             usage = getattr(response, "usage", None)
             p_tok = usage.prompt_tokens if usage else 500
@@ -1313,6 +1317,7 @@ async def _run_critic_pass(
                 ]),
                 max_tokens=384,
                 temperature=0.3,
+                stream=False,
             )
             usage = getattr(resp, "usage", None)
             p_tok = usage.prompt_tokens if usage else 300
