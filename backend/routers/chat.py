@@ -263,9 +263,11 @@ async def log_memory_entry(req: LogMemoryRequest, _rl: None = Depends(rate_limit
     if not text:
         raise HTTPException(status_code=400, detail="Missing memory content")
 
+    domain_str = (req.domain or "general").strip() or "general"
+
     tags_list: List[str] = []
     if isinstance(req.tags, list):
-        tags_list = [str(t).strip() for t in req.tags if str(t).strip()]
+        tags_list = [t.strip() for t in req.tags if t.strip()]
     elif isinstance(req.tags, str):
         tags_list = [t.strip() for t in req.tags.split(",") if t.strip()]
 
@@ -279,7 +281,7 @@ async def log_memory_entry(req: LogMemoryRequest, _rl: None = Depends(rate_limit
         async with pool.acquire() as conn:
             project_id = None
             if req.project:
-                proj = await structured.get_or_create_project(conn, name=req.project, domain=req.domain)
+                proj = await structured.get_or_create_project(conn, name=req.project, domain=domain_str)
                 project_id = proj.get("id")
 
             row = await conn.fetchrow(
@@ -288,7 +290,7 @@ async def log_memory_entry(req: LogMemoryRequest, _rl: None = Depends(rate_limit
                 VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING id, domain, project_id, content, source, tags, created_at
                 """,
-                req.domain, project_id, text, embedding, "api_log", tags_list
+                domain_str, project_id, text, embedding, "api_log", tags_list
             )
             if row:
                 chunk_id = str(row["id"])
@@ -299,7 +301,7 @@ async def log_memory_entry(req: LogMemoryRequest, _rl: None = Depends(rate_limit
         "status": "logged",
         "id": chunk_id,
         "message": "Memory logged successfully",
-        "domain": req.domain,
+        "domain": domain_str,
         "project": req.project,
     }
 
