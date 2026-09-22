@@ -511,6 +511,7 @@ async def run_agent(
     active_replan_diff: Optional[Dict[str, Any]] = None
     abstain_first: bool = getattr(settings, "TAVILY_ABSTAIN_FIRST", False)
     search_web_unlocked: bool = not abstain_first
+    logger.info("SETTINGS.TAVILY_ABSTAIN_FIRST loaded inside run_agent: %s (run_id=%s)", abstain_first, run_id)
 
     # Check for existing run state in database
     existing_run = await get_agent_run(pool, run_id) if pool else None
@@ -1214,6 +1215,7 @@ async def run_agent(
         "source": run_source,
         "sources": [run_source],
         "web_escalation_used": web_escalation_used,
+        "tavily_abstain_first": abstain_first,
         "replan_diff": active_replan_diff,
         "tier_breakdown": {k: round(v, 6) for k, v in tier_breakdown.items()},
     }
