@@ -97,7 +97,8 @@ def _get_current_user_id(request: Request) -> Optional[str]:
         return user_header.strip().lower()
     cookie_user = request.cookies.get("compass_user_id")
     if cookie_user and cookie_user.strip():
-        return cookie_user.strip().lower()
+        import urllib.parse
+        return urllib.parse.unquote(cookie_user.strip()).lower()
     return None
 
 
