@@ -97,6 +97,7 @@ async def test_agent_endpoint_returns_sse(client: AsyncClient):
     )
     assert resp.status_code == 200
     assert "text/event-stream" in resp.headers.get("content-type", "")
+    _ = resp.text
 
 
 @pytest.mark.asyncio
