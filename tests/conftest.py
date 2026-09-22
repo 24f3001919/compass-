@@ -65,6 +65,8 @@ async def client():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+    import asyncio
+    await asyncio.sleep(0.05)
 
 
 @pytest.fixture
@@ -80,7 +82,10 @@ async def cleanup_db_pool():
     try:
         from backend.memory.db import close_pool
         await close_pool()
+        import asyncio
+        await asyncio.sleep(0.05)
     except Exception:
         pass
+
 
 
