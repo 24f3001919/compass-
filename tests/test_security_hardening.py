@@ -149,7 +149,6 @@ async def test_task_idor_user_cannot_modify_other_user_task(client: AsyncClient,
     from backend.memory import structured
 
     from contextlib import asynccontextmanager
-    from backend.memory import structured
     import backend.routers.tasks as tasks_router
 
     class MockConn:
