@@ -123,7 +123,7 @@ Untrusted Internet (Browser / Client / Web Pages)
 - Added SSRF defense to `handle_ingest_url` in `backend/skills/handlers/web.py`.
 - Enforced IDOR ownership checks on `PATCH` and `DELETE` in `backend/routers/tasks.py` and protected unowned tasks against unauthorized modification.
 - Hardened `backend/routers/agent.py` `/confirm` endpoint with proposal verification and replay protection.
-- Added 27 regression tests in `tests/test_security_hardening.py`.
+- Added 28 regression tests in `tests/test_security_hardening.py`.
 
 ---
 
@@ -131,5 +131,6 @@ Untrusted Internet (Browser / Client / Web Pages)
 
 1. **In-Memory Rate Limiting**: The current rate limiter uses an in-memory sliding window deque. In multi-worker or multi-container horizontal deployments, rate limits apply per worker process rather than globally across the cluster. A distributed Redis/Valkey store can be plugged into `dependencies.py` if scaling horizontally.
 2. **Public Interactive Endpoints by Design**: `/api/chat`, `/api/chat/stream`, `/api/agent/run`, and `POST /api/tasks` remain public by design without mandatory Bearer authentication to support guest demo workspaces. State mutations are protected by deterministic workspace isolation, the confirmation gate, and per-account ownership boundaries.
-3. **DNS Rebinding & TOCTOU**: Pre-fetch validation in `is_safe_url` resolves DNS hostnames to verify that IP addresses do not point to internal subnets. However, because external web extraction is performed via the Tavily SaaS API, Tavily independently re-resolves the domain name. This external SaaS architecture inherently isolates Compass's internal network from direct network connections during web extraction.
-4. **Indirect Prompt Injection**: While web content is fenced with `[UNTRUSTED WEB CONTENT]` tags and screened with regex heuristics, complex adversarial LLM jailbreaks in ingested content remain an active industry-wide research problem. The primary defensive barrier is the hard confirm-gate preventing autonomous execution without human review.
+3. **Client-Scoped Workspace Identifier (`x-user-id`)**: `x-user-id` is an unsigned client-scoped workspace identifier rather than a cryptographic JWT; this is an intentional design trade-off for zero-friction guest evaluation. It provides guest workspace partitioning, not user identity authentication.
+4. **DNS Rebinding & TOCTOU**: Pre-fetch validation in `is_safe_url` resolves DNS hostnames to verify that IP addresses do not point to internal subnets. However, because external web extraction is performed via the Tavily SaaS API, Tavily independently re-resolves the domain name. This external SaaS architecture inherently isolates Compass's internal network from direct network connections during web extraction.
+5. **Indirect Prompt Injection**: While web content is fenced with `[UNTRUSTED WEB CONTENT]` tags and screened with regex heuristics, complex adversarial LLM jailbreaks in ingested content remain an active industry-wide research problem. The primary defensive barrier is the hard confirm-gate preventing autonomous execution without human review.

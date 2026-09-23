@@ -304,6 +304,7 @@ def add(
     domain: str = typer.Option("general", "--domain", "-d", help="Domain: hackathon, coursework, code, general"),
     project: Optional[str] = typer.Option(None, "--project", "-p", help="Project name"),
     due: Optional[str] = typer.Option(None, "--due", help="Due date (YYYY-MM-DD)"),
+    priority: Optional[str] = typer.Option(None, "--priority", help="Priority: urgent, high, medium, low"),
     notes: Optional[str] = typer.Option(None, "--notes", "-n", help="Additional notes"),
 ):
     """➕ Add a new task via the chat endpoint."""
@@ -313,6 +314,8 @@ def add(
         parts.append(f"--project {project}")
     if due:
         parts.append(f"--due {due}")
+    if priority:
+        parts.append(f"--priority {priority}")
     if notes:
         parts.append(f"--notes {notes}")
 
