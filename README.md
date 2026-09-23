@@ -280,7 +280,7 @@ See **[docs/testing.md](docs/testing.md)** for per-file breakdown and test infra
 
 ## Deployment
 
-Compass uses GitHub Actions for continuous integration and provider-native continuous deployment. Merges to the `main` branch are automatically deployed through Vercel (frontend) and Render (backend), with post-deployment health verification performed via `scripts/verify_deployment.py`.
+Compass uses GitHub Actions for continuous integration and provider-native continuous delivery. Merges to the `main` branch target automated deployment via Vercel (frontend) and Render (backend), with post-deployment health verification performed via `scripts/verify_deployment.py`.
 
 See **[docs/deployment.md](docs/deployment.md)** for full architecture, environment variables, verification, and rollback runbooks.
 

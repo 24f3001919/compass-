@@ -71,7 +71,7 @@ Compass decouples continuous integration (validation) from continuous deployment
 | **Verification** | Automation / Operations (`scripts/verify_deployment.py`) | Post-deployment gate | Non-mutating read-only HTTP probes verifying backend `/health`, Neon DB connection, Vercel frontend reachability, and same-origin proxying. | Read-only public endpoints. No credentials required. |
 
 > [!IMPORTANT]
-> **No Fake CD Workflows**: GitHub Actions does not execute deployment scripts or push Docker images to registries. Vercel and Render maintain native Git integrations connected to `Ratnesh-101/compass` tracking branch `main`. Merging PRs to `main` automatically triggers production builds natively without third-party deploy tokens.
+> **No Fake CD Workflows**: GitHub Actions does not execute deployment scripts or push Docker images to registries. Vercel and Render maintain native Git integrations connected to `Ratnesh-101/compass` targeting branch `main`. Merging PRs to `main` targets automated deployment via native provider webhooks (auto-deploy and production branch settings require manual provider dashboard verification).
 
 ---
 
@@ -81,7 +81,8 @@ Compass decouples continuous integration (validation) from continuous deployment
 
 - **Production Domain**: `https://compass-farmlytics.vercel.app`
 - **Connected Repository**: `Ratnesh-101/compass` (Requires manual dashboard verification)
-- **Tracked Branch**: `main` (Requires manual dashboard verification)
+- **Production Branch**: `main` — requires manual dashboard verification.
+- **Auto-deploy**: Not independently verified from the repository. Production currently reflects main commit `30cb1c8`, which is consistent with the intended auto-deploy configuration. Manual Vercel dashboard verification required.
 - **Framework Preset**: Vite
 - **Root Directory**: `frontend` (or project root with `frontend/vercel.json` / `vercel.json`)
 - **Build Command**: `npm run build`
@@ -112,7 +113,8 @@ Compass decouples continuous integration (validation) from continuous deployment
 
 - **Production Domain**: `https://compass-backend-qryu.onrender.com`
 - **Connected Repository**: `Ratnesh-101/compass` (Requires manual dashboard verification)
-- **Tracked Branch**: `main` (Requires manual dashboard verification)
+- **Production Branch**: `main` — requires manual dashboard verification.
+- **Auto-deploy**: Not independently verified from the repository. Production currently reflects main commit `30cb1c8`, which is consistent with the intended auto-deploy configuration. Manual Render dashboard verification required.
 - **Service Type**: Web Service (Docker runtime)
 - **Dockerfile Path**: `backend/Dockerfile`
 - **Docker Context**: Root directory (`.`)
