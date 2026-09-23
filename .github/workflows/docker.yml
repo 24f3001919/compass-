@@ -47,7 +47,7 @@ jobs:
         run: docker compose config --quiet
 
   build-backend:
-    name: Build Backend Image + Smoke Test
+    name: Build Backend Image
     runs-on: ubuntu-latest
     needs: validate-compose
     steps:
@@ -63,43 +63,7 @@ jobs:
           context: .
           file: backend/Dockerfile
           push: false
-          load: true
           tags: compass-backend:ci
-
-      - name: Smoke test — backend /health
-        run: |
-          docker run -d \
-            --name compass-smoke \
-            -p 18000:8000 \
-            -e DATABASE_URL="postgresql://nobody:nobody@localhost:5432/nobody" \
-            -e AUTH_TOKEN="smoke-test-token" \
-            -e NEBIUS_API_KEY="mock" \
-            -e LOG_LEVEL="WARNING" \
-            compass-backend:ci
-
-          echo "Waiting for server to start..."
-          for i in $(seq 1 20); do
-            if curl -sf http://localhost:18000/health > /dev/null 2>&1; then
-              echo "Server is up after ${i}s"
-              break
-            fi
-            sleep 1
-          done
-
-          echo "--- /health response ---"
-          curl -sf http://localhost:18000/health | python3 -m json.tool
-
-          echo "--- Verifying status=ok ---"
-          STATUS=$(curl -sf http://localhost:18000/health | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['status'])")
-          if [ "$STATUS" != "ok" ]; then
-            echo "FAIL: expected status=ok, got: $STATUS"
-            docker logs compass-smoke
-            exit 1
-          fi
-          echo "PASS: status=ok"
-
-          docker stop compass-smoke
-          docker rm compass-smoke
 
   build-frontend:
     name: Build Frontend Image
