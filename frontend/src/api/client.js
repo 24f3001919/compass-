@@ -244,7 +244,7 @@ export async function fetchUsageSummary() {
 export async function sendQueryToAssistant(prompt, conversationId) {
   try {
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 12000)
+    const timeoutId = setTimeout(() => controller.abort(), 45000)
 
     const body = { message: prompt }
     if (conversationId) {
@@ -337,6 +337,8 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
           console.warn('[Compass SSE Parse Error]', e, jsonStr)
         }
       }
+    }
+
     if (!fullResponse.trim()) {
       throw new Error('Empty stream response from assistant')
     }
