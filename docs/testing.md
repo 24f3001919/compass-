@@ -18,7 +18,7 @@ TEST_DATABASE_URL="postgresql://..." python -m pytest tests -v
 **Verified result** (pytest --collect-only, Python 3.12, against Neon test branch):
 
 ```
-165 tests collected
+193 tests collected
 ```
 
 The CI pipeline (`ci.yml`) also runs `--collect-only` before the full run to surface this count in every CI log.
@@ -28,25 +28,26 @@ The CI pipeline (`ci.yml`) also runs `--collect-only` before the full run to sur
 | File | Tests | Coverage |
 |------|------:|---------|
 | `test_agent.py` | 26 | ReAct loop, SSE events, confirm/reject/undo, audit log |
+| `test_security_hardening.py` | 28 | Fail-closed secrets, SSRF defenses, IPv6 filtering, IDOR isolation, proposal integrity, replay protection |
 | `test_tavily.py` | 20 | Web search, ingest, injection defense, deadline drift |
+| `test_api_endpoints.py` | 15 | Health, auth, CORS preflight, error handling, rate limiting |
+| `test_gap_closures.py` | 15 | Rate limits, auth enforcement, cost tracking, domain filtering |
 | `test_scheduling.py` | 13 | Slot allocation, prerequisites, ICS, conflict detection |
 | `test_reactive_scheduling.py` | 11 | Slipped task re-planning, reactive rescheduling |
-| `test_gap_closures.py` | 15 | Rate limits, auth enforcement, cost tracking, domain filtering |
 | `test_feasibility.py` | 10 | Capacity arithmetic, triage, negotiation caps |
-| `test_google_calendar_auth.py` | 6 | OAuth flow, token encryption, account isolation |
-| `test_specialist_agent.py` | 8 | Domain specialists, delegation, read-only enforcement |
-| `test_api_endpoints.py` | 7 | Health, auth, CORS, endpoint behavior |
-| `test_direct_tasks.py` | 7 | Task CRUD, status transitions, demo ID protection |
 | `test_cli.py` | 9 | CLI commands, REPL, config, triage |
+| `test_specialist_agent.py` | 8 | Domain specialists, delegation, read-only enforcement |
+| `test_direct_tasks.py` | 7 | Task CRUD, status transitions, demo ID protection |
+| `test_google_calendar_auth.py` | 6 | OAuth flow, token encryption, account isolation |
+| `test_chat_gate.py` | 5 | Chat confirmation gate behavior and state checks |
 | `test_specialist_confirm_gate.py` | 4 | Mutation gate via specialist path |
 | `test_user_isolation.py` | 4 | Per-user workspace isolation |
+| `test_demo_flow.py` | 4 | End-to-end multi-domain demo flow |
 | `test_conversations_memory.py` | 3 | Pin, archive, rename, multi-turn |
 | `test_structured_memory.py` | 3 | pgvector migration, HNSW indexing |
-| `test_demo_flow.py` | 4 | End-to-end multi-domain demo flow |
-| `test_chat_gate.py` | 2 | Chat confirmation gate behavior |
 | `test_multi_turn.py` | 1 | Multi-turn conversational memory |
 | `test_streaming.py` | 1 | SSE token streaming |
-| **Total** | **154** | |
+| **Total** | **193** | **20 test suites** |
 
 ## Test Infrastructure
 

@@ -20,6 +20,24 @@
 ### Track
 `Best Apps and Agents Track`
 
+### ⚡ 60-Second Elevator Pitch (For Reviewers & Judges)
+
+1. **What problem does Compass solve?**  
+   Engineers and students lose hours to context switching between fragmented tools (chatbots, task trackers, calendar, git repos) that do not share state, forget past conversations, and fail to anticipate schedule and capacity conflicts.
+
+2. **What makes Compass different?**  
+   Compass connects tasks, code architecture decisions, and academic coursework into a single persistent memory layer (PostgreSQL + pgvector). It combines tiered open-source LLM routing with deterministic capacity arithmetic and a human confirmation gate that blocks any database mutation until explicitly approved.
+
+3. **How does the architecture enable it?**  
+   - **Frontend**: Vite + React 18 dashboard and native terminal CLI.
+   - **API & Routing**: FastAPI backend with NVIDIA Nemotron-3 Nano for sub-400ms skill dispatching.
+   - **Reasoning**: ReAct multi-step agent (Nemotron-3 Super) with 4 specialist domain assistants.
+   - **Memory & Grounding**: Neon PostgreSQL + pgvector HNSW cosine search for 768-dim semantic retrieval, paired with Tavily web intelligence for live epistemic verification.
+   - **State Safety**: Mutating actions pause at an authenticated confirmation gate with full audit logging and 1-click undo.
+
+4. **What does the demo prove?**  
+   It proves that an AI assistant can reliably remember cross-session context, refuse to guess when memory is silent by escalating to live web search, realistically assess workload feasibility without hallucinating math, and propose actionable replanning safely under human control.
+
 ### Project Description / Pitch
 
 #### Inspiration
@@ -118,6 +136,7 @@ Tavily search and extract calls are partitioned into `tavily_usage_log`, trackin
 
 ---
 
+<a id="video-script"></a>
 ## 🎬 Part 2: 3-Minute Video Demo Script
 
 > **Target Duration**: 2 minutes 44 seconds (Devpost Hard Ceiling: ≤ 3:00 | Safety Buffer: 16s)  

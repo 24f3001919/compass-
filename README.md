@@ -14,7 +14,7 @@
 
 Compass is a persistent-memory AI copilot that connects your tasks, hackathon deadlines, coursework, code context, and conversations into one agent-driven workspace. It reasons across all of them — and asks before changing anything.
 
-**[🌐 Live Dashboard](https://compass-farmlytics.vercel.app)** · **[🔌 API Health](https://compass-backend-qryu.onrender.com/health)** · **[🎥 Demo Video](./SUBMISSION_KIT.md#video-script)**
+**[🌐 Live Dashboard](https://compass-farmlytics.vercel.app)** · **[🔌 API Health](https://compass-backend-qryu.onrender.com/health)** · **[🎥 Demo Video Script](./SUBMISSION_KIT.md#video-script)**
 
 ---
 
@@ -264,7 +264,7 @@ Open [http://localhost:5173](http://localhost:5173). All visitors receive an iso
 
 ## Testing
 
-Compass has **165 automated tests** (verified by pytest collection) against a live PostgreSQL + pgvector instance.
+Compass has **193 automated tests** (verified by pytest collection across 20 test suites including security hardening) against a live PostgreSQL + pgvector instance.
 
 ```bash
 # Set a test database first
