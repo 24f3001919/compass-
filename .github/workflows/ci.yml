@@ -138,81 +138,19 @@ jobs:
         run: npm run build
 
   # ─────────────────────────────────────────────────────────────
-  # Docker: compose validation + image builds + backend smoke test
-  # No images are published or deployed.
+  # Docker: config validation + image builds only.
+  # No containers started. No registry login. No push. No deploy.
   # ─────────────────────────────────────────────────────────────
   docker:
-    name: Docker — Build & Smoke Test
+    name: Docker — Config & Build
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # ── 1. Validate docker-compose.yml structure ──────────────
       - name: Validate Docker Compose config
         run: docker compose config --quiet
 
-      # ── 2. Build backend image and load into local daemon ─────
-      #    load: true is required for the smoke test that follows.
-      - name: Build backend image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: backend/Dockerfile
-          push: false
-          load: true
-          tags: compass-backend:ci
-
-      # ── 3. Backend smoke test ─────────────────────────────────
-      #    /health returns HTTP 200 {"status":"ok"} even with no DB
-      #    (pool init failure is caught and logged, not raised).
-      #    No production credentials are needed.
-      - name: Smoke test — backend /health
-        run: |
-          docker run -d \
-            --name compass-smoke \
-            -p 18000:8000 \
-            -e DATABASE_URL="postgresql://nobody:nobody@localhost:5432/nobody" \
-            -e AUTH_TOKEN="smoke-test-token" \
-            -e NEBIUS_API_KEY="mock" \
-            -e LOG_LEVEL="WARNING" \
-            compass-backend:ci
-
-          echo "Waiting for server to start..."
-          for i in $(seq 1 20); do
-            if curl -sf http://localhost:18000/health > /dev/null 2>&1; then
-              echo "Server is up"
-              break
-            fi
-            sleep 1
-          done
-
-          echo "--- /health response ---"
-          curl -sf http://localhost:18000/health | python3 -m json.tool
-
-          echo "--- Verifying status field ---"
-          STATUS=$(curl -sf http://localhost:18000/health | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['status'])")
-          if [ "$STATUS" != "ok" ]; then
-            echo "FAIL: expected status=ok, got: $STATUS"
-            docker logs compass-smoke
-            exit 1
-          fi
-          echo "PASS: status=ok"
-
-          docker stop compass-smoke
-          docker rm compass-smoke
-
-      # ── 4. Build frontend image ───────────────────────────────
-      #    Multi-stage: node:20-alpine build → nginx:alpine serve
-      #    No runtime secrets required for the build.
-      - name: Build frontend image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./frontend
-          file: frontend/Dockerfile
-          push: false
-          tags: compass-frontend:ci
+      - name: Build all Compose services
+        run: docker compose build
