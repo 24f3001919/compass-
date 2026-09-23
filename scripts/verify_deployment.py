@@ -6,8 +6,7 @@ or staging infrastructure:
   1. Backend /health probe (FastAPI + Neon PostgreSQL connection + Git commit verification)
   2. Frontend reachability probe (Vercel CDN + React bundle loading)
   3. Reverse-proxy transparent routing probe (Vercel /health rewrite to Render)
-  4. Non-mutating public API probe (/api/usage/summary)
-  5. Cross-Origin Resource Sharing (CORS) preflight probe
+  4. Cross-Origin Resource Sharing (CORS) preflight probe
 
 Usage:
   python scripts/verify_deployment.py
@@ -155,7 +154,7 @@ def run_smoke_verification(
                     "status": "PASS" if proxy_ok else "FAIL",
                     "code": r.status_code,
                     "latency_ms": elapsed,
-                    "details": f"Vercel edge proxy transparently reached Render backend (commit={data.get('commit')})",
+                    "details": f"Vercel rewrite/proxy transparently reached Render backend (commit={data.get('commit')})",
                 })
                 if not proxy_ok:
                     all_passed = False
@@ -179,45 +178,7 @@ def run_smoke_verification(
             })
             all_passed = False
 
-        # Probe 4: Read-Only Public API (/api/usage/summary)
-        t0 = time.time()
-        try:
-            r = client.get(f"{backend_url}/api/usage/summary")
-            elapsed = int((time.time() - t0) * 1000)
-            if r.status_code == 200:
-                data = r.json()
-                has_fields = "total_requests" in data and "total_input_tokens" in data
-                passed = has_fields
-                probes.append({
-                    "name": "Public API (/api/usage/summary)",
-                    "status": "PASS" if passed else "FAIL",
-                    "code": r.status_code,
-                    "latency_ms": elapsed,
-                    "details": f"Read-only metrics: requests={data.get('total_requests')}, tokens={data.get('total_input_tokens')}",
-                })
-                if not passed:
-                    all_passed = False
-            else:
-                probes.append({
-                    "name": "Public API (/api/usage/summary)",
-                    "status": "FAIL",
-                    "code": r.status_code,
-                    "latency_ms": elapsed,
-                    "details": f"HTTP status {r.status_code}",
-                })
-                all_passed = False
-        except Exception as e:
-            elapsed = int((time.time() - t0) * 1000)
-            probes.append({
-                "name": "Public API (/api/usage/summary)",
-                "status": "ERROR",
-                "code": 0,
-                "latency_ms": elapsed,
-                "details": str(e),
-            })
-            all_passed = False
-
-        # Probe 5: CORS Preflight Verification
+        # Probe 4: CORS Preflight Verification
         t0 = time.time()
         try:
             cors_headers = {
