@@ -278,6 +278,14 @@ See **[docs/testing.md](docs/testing.md)** for per-file breakdown and test infra
 
 ---
 
+## Deployment
+
+Compass uses GitHub Actions for continuous integration and provider-native continuous deployment. Merges to the `main` branch are automatically deployed through Vercel (frontend) and Render (backend), with post-deployment health verification performed via `scripts/verify_deployment.py`.
+
+See **[docs/deployment.md](docs/deployment.md)** for full architecture, environment variables, verification, and rollback runbooks.
+
+---
+
 ## Project Structure
 
 ```
@@ -323,6 +331,8 @@ compass/
 ## Documentation
 
 - **[Architecture](docs/architecture.md)** — System diagram, request flow, memory schema, deployment, security notes
+- **[Deployment](docs/deployment.md)** — CI/CD architecture, environment matrix, verification script, and rollback procedures
+- **[Security](docs/security.md)** — Threat model, security controls, SSRF protections, and IDOR isolation
 - **[Testing](docs/testing.md)** — Test coverage breakdown, infrastructure, and how to run
 - **[API Contract](docs/api_contract.md)** — Endpoint reference
 - **[Demo Script](docs/demo_script.md)** — Video walkthrough script and recording checklist

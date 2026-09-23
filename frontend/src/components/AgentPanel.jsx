@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { getAuthHeaders } from '../api/client'
 
 /**
  * AgentPanel — Live execution trace UI for the Compass ReAct agent.
@@ -557,7 +558,9 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
 
   const fetchRunsHistory = async () => {
     try {
-      const res = await fetch(`${getApiBase()}/api/agent/runs?limit=25`)
+      const res = await fetch(`${getApiBase()}/api/agent/runs?limit=25`, {
+        headers: getAuthHeaders(),
+      })
       if (res.ok) {
         const data = await res.json()
         setRunsList(data.runs || [])
@@ -569,7 +572,9 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
 
   const fetchActivity = async () => {
     try {
-      const res = await fetch(`${getApiBase()}/api/agent/activity?limit=15`)
+      const res = await fetch(`${getApiBase()}/api/agent/activity?limit=15`, {
+        headers: getAuthHeaders(),
+      })
       if (res.ok) {
         const data = await res.json()
         setActivityList(data.activity || [])
@@ -581,7 +586,9 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
 
   const fetchCritiqueStats = async () => {
     try {
-      const res = await fetch(`${getApiBase()}/api/agent/critique-stats`)
+      const res = await fetch(`${getApiBase()}/api/agent/critique-stats`, {
+        headers: getAuthHeaders(),
+      })
       if (res.ok) {
         const data = await res.json()
         setCritiqueStats(data)
@@ -593,7 +600,9 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
 
   const fetchProactiveBriefing = async () => {
     try {
-      const res = await fetch(`${getApiBase()}/api/agent/proactive-briefing`)
+      const res = await fetch(`${getApiBase()}/api/agent/proactive-briefing`, {
+        headers: getAuthHeaders(),
+      })
       if (res.ok) {
         const data = await res.json()
         if (data.found) {
@@ -610,10 +619,9 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
     try {
       const res = await fetch(`${getApiBase()}/api/agent/trigger-nightly`, {
         method: 'POST',
-        headers: {
+        headers: getAuthHeaders({
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer dev-token',
-        },
+        }),
       })
       if (res.ok) {
         await fetchProactiveBriefing()
@@ -716,7 +724,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
 
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(reqBody),
         signal: controller.signal,
       })
@@ -821,10 +829,9 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
         const apiBase = getApiBase()
         await fetch(`${apiBase}/api/agent/confirm`, {
           method: 'POST',
-          headers: {
+          headers: getAuthHeaders({
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer dev-token',
-          },
+          }),
           body: JSON.stringify({ actions: actionsToApprove, run_id: currentRunId }),
         })
         setSteps(prev => [...prev, {
@@ -892,10 +899,9 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
       const apiBase = getApiBase()
       const res = await fetch(`${apiBase}/api/agent/undo`, {
         method: 'POST',
-        headers: {
+        headers: getAuthHeaders({
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer dev-token',
-        },
+        }),
         body: JSON.stringify({ run_id: currentRunId }),
       })
       const data = await res.json()
@@ -922,10 +928,9 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
       const apiBase = getApiBase()
       const res = await fetch(`${apiBase}/api/agent/undo`, {
         method: 'POST',
-        headers: {
+        headers: getAuthHeaders({
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer dev-token',
-        },
+        }),
         body: JSON.stringify({ audit_log_id: auditLogId }),
       })
       const data = await res.json()
