@@ -7,6 +7,7 @@ Probed and verified on Nebius Token Factory with nvidia/NVIDIA-Nemotron-3-Nano-3
 
 import json
 import logging
+from datetime import date
 from typing import Any, Optional, Dict, Tuple
 from openai import OpenAI, AsyncOpenAI
 from backend.config import get_settings
@@ -40,19 +41,22 @@ async def route_message(
         - If regular chat: (None, None, 'Assistant text response')
     """
     client = get_openai_client()
+    today_iso = date.today().isoformat()
     system_prompt = (
-        "You are Compass, an intelligent personal assistant with persistent memory across chat sessions. "
-        "You maintain context across conversation history AND prior chats/plans. "
-        "When the user asks follow-up questions about recently created tasks, deadlines, or status, "
-        "either call query_tasks with the relevant domain/project or answer directly from conversation history. "
-        "When the user asks what they asked earlier, recalls past decisions, or asks to plan or schedule without clashing, "
-        "refer to the provided long-term workspace memory and active schedule. "
-        "CRITICAL: When the user requests adding, scheduling, or tracking a task, action item, or deadline, "
-        "you MUST call the add_task tool with properly extracted fields. "
-        "When the user asks whether their open workload is achievable or feasible, what to prioritise, "
-        "what to drop, whether they can finish in time, feels overloaded, or asks for a feasibility review / workload triage, "
-        "call the assess_feasibility tool with extracted days and hours_per_day. "
-        "For general inquiries or conversation, respond directly with helpful text."
+        f"You are Compass, an intelligent personal assistant with persistent memory across chat sessions. "
+        f"Today's date is {today_iso}. When extracting dates without a specified year (e.g. '30th oct' or 'next week'), "
+        f"always resolve them relative to today's date ({today_iso}) into the current or upcoming year ({today_iso[:4]}), NEVER a past year. "
+        f"You maintain context across conversation history AND prior chats/plans. "
+        f"When the user asks follow-up questions about recently created tasks, deadlines, or status, "
+        f"either call query_tasks with the relevant domain/project or answer directly from conversation history. "
+        f"When the user asks what they asked earlier, recalls past decisions, or asks to plan or schedule without clashing, "
+        f"refer to the provided long-term workspace memory and active schedule. "
+        f"CRITICAL: When the user requests adding, scheduling, or tracking a task, action item, or deadline, "
+        f"you MUST call the add_task tool with properly extracted fields. "
+        f"When the user asks whether their open workload is achievable or feasible, what to prioritise, "
+        f"what to drop, whether they can finish in time, feels overloaded, or asks for a feasibility review / workload triage, "
+        f"call the assess_feasibility tool with extracted days and hours_per_day. "
+        f"For general inquiries or conversation, respond directly with helpful text."
     )
     if memory_context:
         system_prompt += f"\n\n[WORKSPACE MEMORY & PAST SESSIONS - USE TO PREVENT SCHEDULE CLASHES & RECALL PAST CONTEXT]:\n{memory_context}"
