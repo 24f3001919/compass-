@@ -109,6 +109,17 @@ async def handle_ingest_url(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
             "error": "URL must start with http:// or https://",
         }
 
+    from backend.services.security import is_safe_url
+    safe, reason = is_safe_url(url)
+    if not safe:
+        return {
+            "success": False,
+            "data": {},
+            "summary": f"SSRF blocked: {reason}",
+            "response": f"URL request rejected for security reasons: {reason}",
+            "error": f"SSRF blocked: {reason}",
+        }
+
     if not tavily_service.tavily_available():
         return {
             "success": False,

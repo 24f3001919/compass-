@@ -2,13 +2,15 @@
 Compass — Task, Project, and Timeline Endpoints.
 """
 
+import hmac
 import logging
 from datetime import datetime, date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from backend.dependencies import verify_token, _get_current_user_id
+from backend.config import get_settings
+from backend.dependencies import verify_token, _get_current_user_id, _get_or_create_user_id, rate_limit
 from backend.memory.db import get_pool
 from backend.memory import structured
 from backend.models import (
@@ -31,6 +33,7 @@ from backend.models import (
 logger = logging.getLogger("compass.routers.tasks")
 
 router = APIRouter(tags=["tasks"])
+settings = get_settings()
 
 
 def _format_countdown(due_date: Optional[date]) -> str:
@@ -322,13 +325,15 @@ async def get_frontend_tasks(request: Request, domain: Optional[str] = Query(Non
 
 
 # ---- POST /api/tasks and POST /tasks ----------------------------------
-@router.post("/api/tasks", response_model=FrontendTaskOut)
-@router.post("/tasks", response_model=FrontendTaskOut)
+@router.post("/api/tasks", response_model=FrontendTaskOut, dependencies=[Depends(rate_limit)])
+@router.post("/tasks", response_model=FrontendTaskOut, dependencies=[Depends(rate_limit)])
 async def create_frontend_task(request: Request, req: CreateTaskRequest):
     """Direct user endpoint to create a task or deadline with per-account isolation."""
     title = req.title.strip()
     if not title:
         raise HTTPException(status_code=400, detail="Task title is required")
+    if len(title) > 500:
+        raise HTTPException(status_code=400, detail="Task title exceeds maximum allowed length of 500 characters")
 
     parsed_date = None
     if req.due_date:
@@ -339,7 +344,7 @@ async def create_frontend_task(request: Request, req: CreateTaskRequest):
 
     dom_clean = structured.normalize_domain(req.domain)
     proj_name = req.project.strip() if req.project else "General"
-    user_id = _get_current_user_id(request)
+    user_id = _get_or_create_user_id(request)
 
     try:
         pool = await get_pool()
@@ -455,6 +460,23 @@ async def update_frontend_task(task_id: str, req: UpdateTaskRequest, request: Re
             if not existing:
                 raise HTTPException(status_code=404, detail="Task not found")
 
+            # Ownership check (IDOR mitigation)
+            user_id = _get_or_create_user_id(request)
+            auth_header = request.headers.get("authorization", "")
+            is_admin = False
+            if auth_header.startswith("Bearer "):
+                token = auth_header[7:].strip()
+                if token and settings.AUTH_TOKEN and hmac.compare_digest(token, settings.AUTH_TOKEN):
+                    is_admin = True
+
+            if not is_admin:
+                task_owner = existing.get("user_id")
+                if task_owner:
+                    if not user_id or user_id.lower() != task_owner.lower():
+                        raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to modify this task.")
+                else:
+                    raise HTTPException(status_code=403, detail="Forbidden: Unowned tasks can only be modified by an administrator.")
+
             update_kwargs: dict = {}
 
             if req.title is not None:
@@ -532,7 +554,7 @@ async def update_frontend_task(task_id: str, req: UpdateTaskRequest, request: Re
 # ---- DELETE /api/tasks/{task_id} and DELETE /tasks/{task_id} ----------
 @router.delete("/api/tasks/{task_id}")
 @router.delete("/tasks/{task_id}")
-async def delete_frontend_task(task_id: str):
+async def delete_frontend_task(task_id: str, request: Request = None):
     """Direct user endpoint to delete a task or deadline without relying on AI chat."""
     try:
         numeric_id = int(task_id)
@@ -545,6 +567,23 @@ async def delete_frontend_task(task_id: str):
             existing = await structured.get_task(conn, numeric_id)
             if not existing:
                 raise HTTPException(status_code=404, detail="Task not found")
+
+            # Ownership check (IDOR mitigation)
+            user_id = _get_or_create_user_id(request) if request else None
+            auth_header = request.headers.get("authorization", "") if request else ""
+            is_admin = False
+            if auth_header.startswith("Bearer "):
+                token = auth_header[7:].strip()
+                if token and settings.AUTH_TOKEN and hmac.compare_digest(token, settings.AUTH_TOKEN):
+                    is_admin = True
+
+            if not is_admin:
+                task_owner = existing.get("user_id")
+                if task_owner:
+                    if not user_id or user_id.lower() != task_owner.lower():
+                        raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to delete this task.")
+                else:
+                    raise HTTPException(status_code=403, detail="Forbidden: Unowned tasks can only be deleted by an administrator.")
 
             try:
                 await conn.execute(

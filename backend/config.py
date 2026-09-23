@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "Qwen/Qwen3-Embedding-8B"
     EMBEDDING_DIMENSION: int = 768
 
+    # --- Environment & Security ---
+    ENVIRONMENT: str = "development"  # development | test | production
+    DEFAULT_DEV_TOKEN: str = "dev-token"
+    DEFAULT_DEV_ENCRYPTION_KEY: str = "compass_secure_local_dev_token_encryption_key_32bytes!"
+
     # --- Auth ---
     AUTH_TOKEN: str = ""  # Required — set in .env
 
@@ -46,6 +51,27 @@ class Settings(BaseSettings):
     # --- App ---
     LOG_LEVEL: str = "INFO"
     PORT: int = 8000
+
+    def is_production(self) -> bool:
+        """Check if running in production mode."""
+        return self.ENVIRONMENT.lower() in ("production", "prod")
+
+    def validate_production_secrets(self) -> None:
+        """Validate that insecure dev-default secrets are not used in production."""
+        if not self.is_production():
+            return
+
+        if not self.AUTH_TOKEN or self.AUTH_TOKEN.strip() in (self.DEFAULT_DEV_TOKEN, "compass-token", "test-token"):
+            raise ValueError(
+                "CRITICAL SECURITY CONFIGURATION ERROR: AUTH_TOKEN must be securely configured in production "
+                "and cannot use default development tokens ('dev-token')."
+            )
+
+        if not self.TOKEN_ENCRYPTION_KEY or self.TOKEN_ENCRYPTION_KEY.strip() == self.DEFAULT_DEV_ENCRYPTION_KEY:
+            raise ValueError(
+                "CRITICAL SECURITY CONFIGURATION ERROR: TOKEN_ENCRYPTION_KEY must be securely configured in production "
+                "and cannot use the default development encryption key."
+            )
 
     CORS_ORIGINS: list[str] = [
         "http://localhost:5173",

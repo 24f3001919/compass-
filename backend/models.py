@@ -233,6 +233,7 @@ class AgentConfirmRequest(BaseModel):
     run_id: str
     confirmed: bool = True
     response_text: Optional[str] = None
+    actions: Optional[List[Dict[str, Any]]] = None
 
 
 class AgentUndoRequest(BaseModel):

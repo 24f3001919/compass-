@@ -1,428 +1,358 @@
 # 🧭 Compass
-> **Your one AI that remembers every hackathon, repo, and deadline.**
 
-[![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+> **Your one AI that remembers every hackathon, repo, and deadline — so you don't have to.**
+
+[![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![React 18](https://img.shields.io/badge/React-18-61DAFB.svg?logo=react&logoColor=black)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-5.0-646CFF.svg?logo=vite&logoColor=white)](https://vitejs.dev/)
-[![Nebius Token Factory](https://img.shields.io/badge/Nebius-Token%20Factory-7A00F9.svg?logo=cloud&logoColor=white)](https://nebius.com/)
+[![CI](https://github.com/Ratnesh-101/compass/actions/workflows/ci.yml/badge.svg)](https://github.com/Ratnesh-101/compass/actions/workflows/ci.yml)
 [![NVIDIA Nemotron-3](https://img.shields.io/badge/NVIDIA-Nemotron--3-76B900.svg?logo=nvidia&logoColor=white)](https://build.nvidia.com/)
-[![PostgreSQL 16](https://img.shields.io/badge/Neon-pgvector%20HNSW-336791.svg?logo=postgresql&logoColor=white)](https://neon.tech/)
-[![Tavily Search](https://img.shields.io/badge/Tavily-Web%20Intelligence-4A90E2.svg)](https://tavily.com/)
-[![Tests](https://img.shields.io/badge/Tests-100%25%20Passing-brightgreen.svg?logo=pytest&logoColor=white)](#testing)
+[![Neon pgvector](https://img.shields.io/badge/Neon-pgvector%20HNSW-336791.svg?logo=postgresql&logoColor=white)](https://neon.tech/)
+[![Tavily](https://img.shields.io/badge/Tavily-Web%20Intelligence-4A90E2.svg)](https://tavily.com/)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-compass--farmlytics.vercel.app-success.svg?logo=vercel&logoColor=white)](https://compass-farmlytics.vercel.app)
-[![API Health](https://img.shields.io/badge/Render-Online%20(24%2F7)-blueviolet.svg?logo=render&logoColor=white)](https://compass-backend-qryu.onrender.com/health)
 
-## What It Does
+Compass is a persistent-memory AI copilot that connects your tasks, hackathon deadlines, coursework, code context, and conversations into one agent-driven workspace. It reasons across all of them — and asks before changing anything.
 
-Compass is a productivity copilot and autonomous agent engineered for intense dual-track academic and competitive engineering workloads (specifically VIT dual-degree coursework and hackathons). It maintains persistent, long-term memory across three partitioned domains: hackathon deadlines, repository code context, and academic coursework. Accessible via both a real-time web dashboard and a terminal CLI, Compass accurately tracks deliverables, recalls technical architecture decisions via dense vector search, and synthesizes unified schedules across domains.
-
----
-
-## Hackathon Submission & Track Information
-
-- **Track**: **Best Apps and Agents Track**
-  - Built specifically around the track's core thesis: utilizing **NVIDIA Nemotron-3 Nano (30B)** for sub-400ms intent routing and function calling, **Nemotron-3 Super (120B)** for deep domain reasoning, and reserving **Nemotron-3 Ultra (550B)** for heavy cross-domain synthesis.
-- **Bonus Award Eligibility**:
-  - **Best Use of Tavily ($3,000)**: Deep, principled integration with Tavily Web Intelligence (`search_web`, `ingest_url` with 768-dim vectorization, `verify_deadline` with epistemic `[ABSTAIN]` escalation, indirect prompt injection fencing, and dedicated `tavily_usage_log` accounting).
-  - **Most Valuable Feedback Award ($100 + NVIDIA Swag)**: Comprehensive developer experience feedback and benchmarks documented in [`SUBMISSION_KIT.md`](./SUBMISSION_KIT.md).
-- **Project Origin**: Compass does **not** pre-date the hackathon submission window. Repository creation, architecture design, and code commenced on **September 4, 2026**, following the August 26, 2026 hackathon launch.
-- **AI Infrastructure**: Powered natively by Nebius Token Factory with a 3-tier NVIDIA Nemotron routing and synthesis architecture (`Nano 30B`, `Super 120B`, `Ultra 550B`) + `Qwen3-Embedding-8B` dense memory.
-- **Compute Hosting**: Hosted on Render (FastAPI) and Vercel (React + Vite) with turnkey deployment manifests for Nebius AI Cloud in `deploy/`.
+**[🌐 Live Dashboard](https://compass-farmlytics.vercel.app)** · **[🔌 API Health](https://compass-backend-qryu.onrender.com/health)** · **[🎥 Demo Video](./SUBMISSION_KIT.md#video-script)**
 
 ---
 
-## Try It
+## Why Compass?
 
-- **Live Web Dashboard**: [https://compass-farmlytics.vercel.app](https://compass-farmlytics.vercel.app)
-- **Live Backend API**: [https://compass-backend-qryu.onrender.com/health](https://compass-backend-qryu.onrender.com/health)
-- **Demo Video**: `[Demo Video Link — 3-min walkthrough included in SUBMISSION_KIT.md]`
+Most tools solve one context well. None of them talk to each other.
+
+| Tool | What it handles | What it misses |
+|------|----------------|----------------|
+| ChatGPT / Claude | Current conversation | Remembers nothing next session |
+| Notion / Linear | Tasks and projects | Can't reason across domains or run autonomously |
+| Google Calendar | Time | No understanding of technical load or code context |
+| GitHub | Code history | Unaware of your deadlines or coursework |
+
+**Compass connects these contexts through persistent memory and an autonomous agent.** When you ask *"What should I work on tonight given my hackathon deadline and unfinished deployment?"*, Compass queries your tasks, recalls relevant code context, checks calendar capacity, and reasons across all of it — without you switching tabs or copying context.
+
+---
+
+## What Compass Does
+
+### Example Workflow
+
+You have a hackathon submission on Friday, a DLD assignment tomorrow, and your backend still needs deployment. You ask:
+
+> *"I have 5 days and 4 hours a day. Go through everything I have open across the hackathon, my coursework, and my code debt, and tell me honestly whether I can finish it."*
+
+Compass:
+1. Queries all open tasks across `hackathon`, `coursework`, and `code` domains
+2. Retrieves relevant code context from vector memory (architecture decisions, deployment notes)
+3. Runs the **feasibility engine** — computes demand vs. effective capacity with a configurable safety margin
+4. Returns: *"Infeasible. Demand: 31.4h, Effective Capacity: 4.0h (80% safety margin on 5.0h nominal). Here's a triage plan: keep 2 critical items, defer 8, drop 2."*
+5. Proposes a replan — and **does not touch the database until you approve**
+
+---
+
+## See It In Action
+
+| Timeline Feed | Northstar AI Workspace |
+|:---:|:---:|
+| ![Timeline](verification/browser_01_initial_timeline.png) | ![Northstar](verification/browser_04_agent_panel.png) |
+
+| Chat Copilot with Memory | Specialist Agents |
+|:---:|:---:|
+| ![Chat](verification/browser_03_chat_and_counter.png) | ![Specialists](verification/browser_05_specialist_agents.png) |
+
+| Agent Confirmation Gate — Pending | Agent Confirmation Gate — After Approval |
+|:---:|:---:|
+| ![Confirm Pending](verification/browser_agent_reject.png) | ![Confirmed](verification/browser_agent_approve.png) |
+
+---
+
+## Key Features
+
+| | Feature | What it does |
+|--|---------|-------------|
+| 🧠 | **Persistent Cross-Domain Memory** | Tasks, conversations, code context, and web research stored in PostgreSQL + pgvector and recalled across sessions |
+| 🤖 | **Autonomous ReAct Agent** | Multi-step planning loop (Northstar) that reasons, calls tools, and synthesizes results — stopping at a confirmation gate before any database write |
+| 🧩 | **Specialist Delegation** | Four domain agents (Coursework, Research, Calendar, Memory) that Northstar delegates to for focused analysis |
+| 🌐 | **Live Web Intelligence** | Three Tavily-powered tools: `search_web` (grounded answers), `ingest_url` (confirm-gated web-to-memory ingestion), `verify_deadline` (staleness detection against live sources) |
+| 📊 | **Feasibility Engine** | Deterministic capacity arithmetic — computes demand vs. available hours and produces a triage plan without trusting the LLM to do the math |
+| 📅 | **Calendar Integration** | Google Calendar OAuth sync, deterministic slot allocation, ICS generation, conflict detection |
+| 💬 | **Chat Session Management** | Auto-named chats, pin/archive/rename, cross-session memory continuity, 1-click public share links |
+| ↩️ | **Audit & Undo** | Every agent mutation logged to `agent_audit_log` with per-action 1-click rollback |
+| 💻 | **Terminal CLI** | Full `compass` CLI built with Typer + Rich — `status`, `ask`, `agent`, `add`, `log`, and more |
+| 🔒 | **Human Confirmation Gates** | State-mutating tools (`add_task`, `edit_task`, `delete_task`, `apply_triage_plan`, `ingest_url`) halt and request explicit approval before execution |
 
 ---
 
 ## Architecture
 
-Compass separates client delivery, application compute, persistent storage, and hosted AI model inference into decoupled cloud layers:
-
-```mermaid
-flowchart TD
-    subgraph Clients["1. Cross-Surface Clients"]
-        CLI["💻 Terminal CLI<br/>(python -m cli)"]
-        Web["🌐 Web Dashboard<br/>(React + Vite on Vercel)"]
-    end
-
-    subgraph Proxy["2. Edge Reverse Proxy (Vercel)"]
-        Rewrites["🛡️ Vercel Same-Origin Rewrites<br/>(/health, /chat, /api/*)<br/>Immune to Ad-Blockers & Brave Shields"]
-    end
-
-    subgraph Compute["3. Application Compute (Render)"]
-        FastAPI["⚙️ FastAPI Backend<br/>(Docker / Python 3.12-slim CPU)<br/>UptimeRobot 24/7 Keep-Alive (5-min pings)"]
-        SSE["📡 SSE Streaming Engine<br/>(/api/chat/stream)"]
-    end
-
-    subgraph AI["4. AI Inference Layer (Nebius Token Factory)"]
-        Nano["⚡ NVIDIA Nemotron-3 Nano (30B)<br/>(Sub-400ms Native Function Calling Router)"]
-        Super["🧠 NVIDIA Nemotron-3 Super (120B)<br/>(Complex Skill Reasoning)"]
-        Ultra["🚀 NVIDIA Nemotron-3 Ultra (550B)<br/>(Cross-Domain Synthesis — Aggregated Context Only)"]
-        Qwen["📐 Qwen3-Embedding-8B<br/>(768-dim Matryoshka Truncated Vectors)"]
-    end
-
-    subgraph Storage["5. Persistent Memory Layer (Neon Cloud)"]
-        HNSW[("pgvector HNSW Cosine Index<br/>(Code & Notes Embeddings, &lt;5ms)")]
-        Relational[("PostgreSQL 16 Engine<br/>(tasks, projects, conversations, messages, usage_log)")]
-    end
-
-    CLI -->|HTTP / Bearer Auth| FastAPI
-    Web -->|Same-Origin /api/*| Rewrites
-    Rewrites -->|Proxy Pass| FastAPI
-    FastAPI -->|Token-by-Token SSE| SSE
-    SSE -->|Stream Event Pipe| Web
-    FastAPI -->|1. Route Intent| Nano
-    FastAPI -->|2. Domain Reasoning| Super
-    FastAPI -->|3. Generate Embedding| Qwen
-    FastAPI -->|4. Store / Query Memory| Relational
-    Qwen -->|768-dim Vector| HNSW
-    FastAPI -->|5. Multi-Domain Context Payload| Ultra
-    Ultra -->|Synthesized Roadmap| FastAPI
+```
+User (Web or CLI)
+        │
+        ▼
+Northstar AI (Chat Copilot / Goal Planner / Specialist Agents)
+        │
+        ▼
+Nemotron-3 Nano 30B — intent routing & tool selection
+        │
+    ┌───┴──────────────────┐
+    │                       │
+    ▼                       ▼
+Skill Handlers        Specialist Team
+(tasks, memory,       (Coursework, Research,
+ web, calendar)        Calendar, Memory)
+    │
+    ▼
+Nemotron-3 Super 120B — complex reasoning
+    │
+    ▼
+Confirmation Gate ← Human approves/rejects
+    │
+    ▼
+Database Write + Audit Log
+    │
+    ▼
+Nemotron-3 Ultra 550B — cross-domain synthesis
+(invoked only for summarize_across_domains)
 ```
 
-### System Hierarchy: Reuse & Coexistence (Northstar & Specialist Team)
-
-Compass is built around **composition and reuse rather than replacement**. Every existing foundational capability—conversational chat, autonomous ReAct planning, timeline feeds, calendar views, confirmation gates, and audit logs—remains 100% intact, active, and fully leveraged:
-
-```text
-                    COMPASS
-                       │
-          ┌────────────┴────────────┐
-          │                         │
-     🧭 NORTHSTAR             🧠 SPECIALIST TEAM
-          │                         │
-    ┌─────┴─────┐          ┌────────┼────────┐
-    │           │          │        │        │
-   Chat     Agent/ReAct  Coursework Research Calendar Memory
-    │           │
-    └─────┬─────┘
-          │
-          │ delegate when needed
-          ▼
-    Specialist Team
-          │
-          ▼
-       Result
-          │
-          ▼
-      Northstar
-          │
-          ▼
- Confirmation → Execution → Audit → Undo
-```
-
-| Subsystem / Layer | Architectural Role | Status & Integration |
-| :--- | :--- | :--- |
-| **Existing Chat** | Fast conversational copilot (Nano-30B) | **Preserved & Reused** inside Northstar shell |
-| **Existing Agent Planner** | Multi-step ReAct autonomous engine (Super-120B) | **Preserved & Reused** inside Northstar shell |
-| **Existing Timeline** | Default task & deadline feed | **Preserved & Unchanged** |
-| **Existing Calendar** | Schedule & Google Calendar sync | **Preserved & Unchanged** |
-| **Confirmation Flow** | Safe state-mutation gate | **Preserved & Reused** across all agents |
-| **Audit & Undo** | `agent_audit_log` with 1-click rollback | **Preserved & Reused** across all mutations |
-| **🧭 Northstar AI** | Unified primary AI workspace | **New Top-Level Workspace** combining Chat + Planner |
-| **🧠 Specialist Team** | Modular domain expert agents | **New First-Class Workspace** (Coursework, Research, Calendar, Memory) |
-
-### Public vs. Protected Endpoint Design Decision
-The four interactive endpoints (`/api/chat`, `/api/chat/stream`, `/api/agent/run`, and `/api/log`) are intentionally **public by design** (protected by per-IP sliding-window rate limiters: 30 req/min on chat/stream/log, 10 req/min on agent runs) rather than requiring authentication. This is an explicit, documented architectural decision: hackathon evaluators and judges can test the live interactive UI and autonomous agent flows without needing pre-configured credentials or bearer tokens. Conversely, mutation execution and approval endpoints (`/api/agent/confirm`, `/api/agent/undo`, and `/api/agent/trigger-nightly`) strictly require the Bearer token (`AUTH_TOKEN`) specifically because they execute or reverse persistent state changes in the database.
-
-Crucially, there is an important architectural distinction between **mutation-adjacent drivers** and **mutation execution**: `/api/chat` and `/api/agent/run` are both public. In `/api/chat`, a user message like `"add a task: Prepare slides"` directly drives task creation unauthenticated via the Nemotron router and orchestrator (`add_task`), meaning actual task insertion into PostgreSQL happens unauthenticated for seamless demo evaluation. In `/api/agent/run`, the autonomous agent loop can reason, plan, and propose changes without authentication; however, when the agent attempts a state-mutating tool (`add_task`, `delete_task`, `edit_task`, `apply_triage_plan`), it halts at a confirm gate (`confirm_request`), and only the *agent confirm-gate approval* (`POST /api/agent/confirm`) requires Bearer token authentication. Direct chat task creation is unauthenticated for evaluation, whereas autonomous multi-step agent approvals are strictly protected.
+For the full system diagram, request flow, memory schema, and deployment details: **[docs/architecture.md](docs/architecture.md)**
 
 ---
 
-## How Nebius & NVIDIA Power Compass
+## AI Model Architecture
 
-Nebius Token Factory is the core AI engine of Compass. Every routing decision, embedding generation, and synthesized roadmap runs through Nebius-hosted models:
+Compass routes every request through a cost-efficient 3-tier model hierarchy on **Nebius Token Factory**:
 
-1. **`nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` — Sub-400ms Intent Routing (Native Function Calling)**:
-   All inbound conversational queries pass to Nemotron-3 Nano using standard OpenAI-compatible tool calling. Nano classifies the user's intent into structured skills (`add_task`, `query_tasks`, `log_code_context`, etc.) or general chat fallback in **< 400 ms**, completely bypassing brittle regex or prompt-based JSON hacking.
+| Model | Role | When invoked |
+|-------|------|-------------|
+| `NVIDIA-Nemotron-3-Nano-30B-A3B` | Intent router | Every message — selects tool or chat |
+| `nemotron-3-super-120b-a12b` | Skill reasoning | Multi-step tasks, agent loops |
+| `Nemotron-3-Ultra-550b-a55b` | Cross-domain synthesis | `summarize_across_domains` only |
+| `Qwen/Qwen3-Embedding-8B` | 768-dim vector embeddings | Code, notes, ingested web docs |
 
-2. **`nvidia/nemotron-3-super-120b-a12b` — Deep Skill Execution**:
-   When a user query involves multi-step domain reasoning (such as resolving overlapping dependencies between hackathon milestones and project tasks), execution is escalated to Nemotron-3 Super for robust extraction and parameter resolution.
+**Token Economics** (measured across 106 internal evaluation turns): total spend was $0.019 on Nebius Token Factory. Over 85% of queries were resolved by Nano and direct PostgreSQL queries without escalating to larger models.
 
-3. **`nvidia/Nemotron-3-Ultra-550b-a55b` — Cross-Domain Roadmap Synthesis (Context-Escalated Only)**:
-   Compass reserves Nemotron-3 Ultra strictly for the `summarize_across_domains` skill. Ultra is **never** invoked per-message or directly on raw user text due to token economics:
-   - **Economic Reality**: On our $29 Token Factory funding, Nemotron Nano costs ~$0.08 / 1M tokens blended, while Nemotron Ultra is estimated at ~$1.20 / 1M tokens blended *(estimated, not independently verified from the dashboard directly; a ~15x cost gap)*.
-   - **Architectural Safeguard**: Compass uses a two-step escalation. Nemotron Nano first fetches, filters, and aggregates structured tasks and notes from Neon PostgreSQL. Only that pre-filtered context payload is handed to Nemotron Ultra to synthesize cross-domain conflict analysis, deliverable timelines, and unified weekly roadmaps.
-
-4. **`Qwen/Qwen3-Embedding-8B` — 768-Dim Dense Semantic Memory**:
-   Code context snippets and academic coursework notes are vectorized via `Qwen/Qwen3-Embedding-8B`, hosted natively on Nebius Token Factory *(note: Qwen3 is a Token Factory-hosted foundation model, not an NVIDIA model)*. Vectors are **Matryoshka-truncated from native 4,096 dimensions to 768 dimensions**, perfectly fitting within `pgvector`'s 2,000-dimension HNSW indexing ceiling while preserving 100% Top-1 recall in retrieval benchmarks.
-
-5. **Nebius Serverless Endpoint & Job Manifests (`deploy/`)**:
-   Deployment manifests for Nebius AI Cloud are prepared in [`deploy/serverless_endpoint.yaml`](./deploy/serverless_endpoint.yaml) (container endpoint) and [`deploy/serverless_job.yaml`](./deploy/serverless_job.yaml) (nightly memory consolidation cron).
-   - *Current Real Deployment State*: Manifests exist in the repository, but compute is currently hosted on Render and Vercel with local/cron execution for the consolidation job, while the team's Nebius Cloud tenant (`tenant-e00bqrxevpggympk55`) is pending billing verification. Live AI model inference, routing, and embeddings run 100% on Nebius Token Factory. The manifests provide turnkey deployment whenever tenant compute is enabled.
-
-6. **Nightly Memory Consolidation Job**:
-   An automated worker that performs:
-   - **Vector Deduplication**: Identifies and merges memory chunks with cosine similarity > 0.95.
-   - **Conversation Compaction**: Condenses conversations inactive for > 7 days into summarized long-term memory entries.
-   - **Overdue Flagging**: Scans and tags overdue deliverables across hackathons and coursework.
-   *(Currently run via script runner and Render cron using the exact logic specified in `deploy/serverless_job.yaml`).*
+> Note: Model cost rates are from Nebius Token Factory pricing. The $0.019 measurement reflects internal testing volume, not a production-scale benchmark.
 
 ---
 
-## Web Intelligence & Real-Time Research (Tavily Integration)
+## Web Intelligence (Tavily)
 
-Compass integrates Tavily to bridge the gap between static LLM training cutoffs and live hackathon/coursework realities (e.g. surprise deadline extensions, updated contest rules, emerging library documentation).
+Three specialized Tavily tools, each with distinct behavior:
 
-### 1. Architecture & Design Principles
-- **Async Client Only**: Uses `AsyncTavilyClient` exclusively across all endpoints and background workers, preventing synchronous blocking of the FastAPI event loop (preventing DEFECT-04 latency degradation).
-- **Single Import Site**: The external `tavily` package is imported exclusively in [`backend/services/tavily.py`](./backend/services/tavily.py). All other modules consume web intelligence through dependency-injected interfaces or dynamic skill dispatch.
-- **Graceful Degradation**: When `TAVILY_ENABLED=false` or `TAVILY_API_KEY` is omitted, web tools are cleanly pruned from the agent's schema at startup without runtime crashes.
+**`search_web`** — Real-time grounded answers. When Compass has no memory coverage, the model emits `[ABSTAIN]` instead of hallucinating. The agent loop intercepts this, forces a Tavily search, and fences the web content in `<untrusted_web_content>` tags before passing it to the model — preventing indirect prompt injection.
 
-### 2. Three Web Skills
-1. **`search_web` (Read-Only)**: Real-time search with domain filtering, query length normalization (<390 chars), citation tracking, and structured response fencing.
-2. **`ingest_url` (Mutating & Human-Gated)**: Fetches and cleans external documentation via Tavily Extract, chunks content into ~1,200 character segments, computes 768-dim embeddings via `Qwen/Qwen3-Embedding-8B` on Nebius Token Factory, and persists them to Neon PostgreSQL with `pgvector` HNSW cosine indexing.
-   - **Safety Gate**: Registered in `MUTATING_TOOLS` — requires explicit confirmation before execution.
-   - **Audit & Reversibility**: Logged to `agent_audit_log` and fully reversible via `/api/agent/undo` (removes all inserted chunks).
-3. **`verify_deadline` (Read-Only)**: Proactively cross-references stored hackathon task deadlines against live contest websites (Devpost, official rules) to detect deadline drift or date extensions without modifying database state.
+**`ingest_url`** — Confirm-gated web-to-memory pipeline. Tavily Extract fetches and cleans the page, content is chunked (~1,200 chars), embedded via Qwen3-Embedding-8B into 768-dim vectors, and stored in Neon pgvector. Requires explicit user confirmation before any write. Fully reversible via `/api/agent/undo`.
 
-### 3. Epistemic Humility & Escalation (`[ABSTAIN]`)
-When asked about real-time events or documentation not present in local vector memory, Nemotron models are instructed to output `[ABSTAIN]`. The Compass agent ReAct loop intercepts this token, pauses hallucination, and emits an `escalate` step (`model_tier="Tavily Web Intelligence"`), querying Tavily to answer from verified web evidence. Escalation is bounded to at most once per run to avoid infinite search loops.
-
-### 4. Defense Against Indirect Prompt Injection
-Web content is inherently untrusted. All raw content retrieved from Tavily passes through `fence_web_content()` and `scan_for_injection()` before entering any model prompt:
-- Content is strictly wrapped in `<untrusted_web_content>` XML fences with instructions warning the model that enclosed text is unverified reference data.
-- Common adversarial patterns (`"ignore previous instructions"`, `"system prompt:"`, `"you are now an unrestricted"`) are flagged, sanitized, or rejected.
-- Web content cannot trigger state mutations without passing through the human confirmation gate.
-
-### 5. Dedicated Credit Accounting (`tavily_usage_log`)
-Tavily credit consumption is recorded in a dedicated PostgreSQL table (`tavily_usage_log`), partitioned by operation (`search` = 1-2 credits, `extract` = 1 credit per 5 URLs). Web credits are tracked separately from Nebius GPU token costs and reported in admin usage breakdowns (`python -m cli admin usage`). No credits are fabricated or pre-seeded.
+**`verify_deadline`** — Proactive staleness detection. Cross-references stored task deadlines against live contest/course websites to detect drift. Does not modify the database.
 
 ---
 
-## Quick Start
+## Interfaces
 
-### 1. Prerequisites
-- Python 3.12+
-- Node.js 18+ and npm
-- A PostgreSQL 16 instance with `pgvector` enabled (or a free [Neon](https://neon.tech) connection string)
-- Nebius Token Factory API key
+### Web Dashboard
 
-### 2. Environment Configuration (`.env`)
-Create a `.env` file in the project root:
+Live at [compass-farmlytics.vercel.app](https://compass-farmlytics.vercel.app) — anonymous demo access, no login required.
+
+- **Timeline** — task and deadline feed across all domains, filterable by Hackathon / Coursework / Code / General
+- **Northstar AI** — primary workspace with Chat Copilot, Goal Planner, and Specialist Agents tabs
+- **Schedule** — calendar view with Google Calendar sync
+- Real-time SSE streaming for agent execution traces
+- Color-coded step cards: `THINK`, `TOOL CALL`, `RESULT`, `CONFIRMATION REQUIRED`, `SYNTHESIS`
+- One-click Approve / Reject on mutation proposals
+- Public share links for any conversation (`/?share=<id>`)
+
+### Terminal CLI
 
 ```bash
-# === Nebius Token Factory ===
-NEBIUS_API_KEY="your_nebius_token_factory_key"
-NEBIUS_BASE_URL="https://api.tokenfactory.nebius.com/v1/"
-ROUTER_MODEL="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
-SKILL_MODEL="nvidia/nemotron-3-super-120b-a12b"
-SYNTHESIS_MODEL="nvidia/Nemotron-3-Ultra-550b-a55b"
-EMBEDDING_MODEL="Qwen/Qwen3-Embedding-8B"
-EMBEDDING_DIMENSION=768
-
-# === Database (Neon Serverless PostgreSQL) ===
-DATABASE_URL="postgresql://username:password@ep-your-neon-pooler.region.neon.tech/neondb?sslmode=require"
-
-# === Security & App ===
-AUTH_TOKEN="your-secret-token-here"
-LOG_LEVEL="INFO"
-PORT=8000
-```
-
-### 3. One-Command Launch (Zero Friction)
-
-You can launch the complete stack (Backend + Frontend) in a single step:
-
-- **Windows**: Double-click `run_local.bat` or run `.\run_local.bat` in PowerShell / CMD.
-- **Linux / macOS**: Run `chmod +x run_local.sh && ./run_local.sh`.
-- **Docker Compose (Full Stack with PostgreSQL + pgvector)**:
-  ```bash
-  docker compose up
-  ```
-  *(Automatically boots pgvector PostgreSQL 16 on port 5432, FastAPI on 8000, and Nginx frontend on 5173).*
-
----
-
-### 4. Manual Step-by-Step Setup
-If you prefer running components manually in separate terminals:
-
-```powershell
-# Step 1: Install backend dependencies
-pip install -r backend/requirements.txt
-
-# Step 2: Install CLI in editable mode
 pip install -e ./cli
 
-# Step 3: Seed initial projects and benchmark data (optional)
-python scripts/seed_data.py
-
-# Step 4: Terminal 1 — Start FastAPI Server
-python -m uvicorn backend.main:app --port 8000 --reload
-
-# Step 5: Terminal 2 — Start Frontend Dashboard
-cd frontend
-npm install
-npm run dev
-```
-Open `http://localhost:5173` in your browser. All visitors automatically receive an isolated anonymous workspace (`anon_...`) with instant persistence and zero cross-talk with other evaluators.
-
-### 5. CLI Operations
-```powershell
-# Check multi-domain status overview
+# Dashboard overview
 compass status
 
-# Add a high-priority hackathon deliverable
-compass add "Submit Nebius Token Factory benchmark" --domain hackathon --project "Compass" --due 2026-09-08 --priority urgent
+# Ask a question
+compass ask "What are my open hackathon tasks due this week?"
 
-# Log code architecture context with 768-dim vector embedding
-compass log "Integrated Matryoshka 768-dim embeddings with Nebius Token Factory" --domain code --project "Compass" --tags nebius,vector,hnsw
+# Add a task
+compass add "Finalize backend deployment" --domain hackathon --due 2026-10-30 --priority urgent
 
-# Ask questions with conversational multi-turn recall
-compass ask "What are my upcoming deliverables before Friday?"
+# Log code context (gets embedded into vector memory)
+compass log "Switched to 768-dim Matryoshka truncation for pgvector HNSW" --domain code
 
-# Launch the autonomous ReAct agent (plans, queries tools, proposes replan with confirmation gate)
-compass agent "Plan my week considering all hackathon deadlines and coursework"
+# Launch the autonomous planning agent
+compass agent "Plan my week given all deadlines and coursework"
 
-# Inspect model token consumption and estimated API costs
+# View token usage and estimated API costs
 compass admin usage
 ```
-
-### 6. Running the Test Suite
-```powershell
-python -m pytest tests -v
-# 150 passed, 0 skipped, 0 failed (Python 3.12+)
-```
-
----
-
-## Autonomous ReAct Agent Engine
-
-Compass features an autonomous **ReAct (Reason + Act)** agent loop (`backend/agent.py`) built specifically for complex task planning and deadline resolution:
-
-- **Multi-Step Reasoning Loop**: Nemotron-3 Super (120B) autonomously formulates thoughts, decides on tools to invoke, and observes results in a loop capped at a configurable step limit (default 8).
-- **Human-in-the-Loop Confirmation Gate**: Read-only tools (`query_tasks`, `query_coursework_tasks`, `get_hackathon_deadlines`, `query_code_context`, `summarize_day`) execute immediately. State-mutating tools (`add_task`, `edit_task`, `update_task_status`, `delete_task`) generate a `confirm_request` SSE event and are held in staging until the user explicitly reviews and approves them via the Web UI or CLI.
-- **Self-Critique Reflection Pass**: Before final synthesis, a critic evaluation reviews the proposed plan against constraints, flags potential oversights, and refines the recommendation.
-- **Final Cross-Domain Synthesis**: Nemotron-3 Ultra (550B) synthesizes the final comprehensive execution roadmap from the aggregated tool outputs.
-- **Interactive Traces Across Surfaces**:
-  - **Web Dashboard**: The **🧠 Agent Planner** tab streams the real-time reasoning trace with color-coded step cards (`THINK`, `TOOL CALL`, `RESULT`, `CONFIRMATION REQUIRED`, `SELF-CRITIQUE`, `SYNTHESIS`) and one-click **Approve & Execute** / **Reject** buttons.
-  - **Terminal CLI**: `compass agent "<goal>"` renders styled Rich step panels with interactive y/N confirmation prompts for staged modifications.
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology | Provider / Host | Details |
-| :--- | :--- | :--- | :--- |
-| **Frontend** | React 18, Vite, Vanilla CSS | **Vercel** (`compass-farmlytics.vercel.app`) | Responsive UI, real-time context stream, typewriter chat |
-| **Reverse Proxy** | Vercel Edge Rewrites | **Vercel** (`vercel.json`) | Proxies `/health`, `/chat`, `/api/*` same-origin (ad-block immune) |
-| **Backend API** | FastAPI, Uvicorn, Python 3.12-slim | **Render** (`compass-backend-qryu.onrender.com`) | Containerized CPU web service, auto-deploy on commit |
-| **Database** | PostgreSQL 16 + `pgvector` | **Neon Cloud** | Serverless pooled connection, HNSW cosine index (<5ms query) |
-| **Intent Routing** | `NVIDIA-Nemotron-3-Nano-30B-A3B` | **Nebius Token Factory** | Native OpenAI-compatible tool calling, sub-400ms latency |
-| **Skill Reasoning**| `nemotron-3-super-120b-a12b` | **Nebius Token Factory** | Domain parameter extraction and reasoning |
-| **Cross-Domain AI**| `Nemotron-3-Ultra-550b-a55b` | **Nebius Token Factory** | Escalated synthesis over aggregated payloads |
-| **Vector Engine** | `Qwen3-Embedding-8B` | **Nebius Token Factory** | 768-dim Matryoshka-truncated embeddings |
-| **Web Search** | `AsyncTavilyClient` | **Tavily API** | Live search, doc ingestion, and deadline verification |
-| **Streaming** | Server-Sent Events (SSE) | FastAPI `StreamingResponse` | Real-time token streaming via `/api/chat/stream` |
-| **Keep-Alive** | HTTP Monitor | **UptimeRobot** | Pings `/health` every 5 min (eliminates cold starts) |
-| **Cloud Manifests**| Serverless Endpoint & Cron | **Nebius AI Cloud** | Verified manifests in `deploy/` ready for turnkey deployment |
+| Layer | Technology | Host |
+|-------|-----------|------|
+| Frontend | React 18 + Vite + Vanilla CSS | Vercel |
+| Reverse Proxy | Vercel edge rewrites | Vercel |
+| Backend API | FastAPI + Uvicorn, Python 3.12 | Render |
+| Database | PostgreSQL 16 + pgvector (HNSW) | Neon Cloud |
+| Intent Routing | Nemotron-3 Nano 30B | Nebius Token Factory |
+| Skill Reasoning | Nemotron-3 Super 120B | Nebius Token Factory |
+| Cross-Domain Synthesis | Nemotron-3 Ultra 550B | Nebius Token Factory |
+| Vector Embeddings | Qwen3-Embedding-8B (768-dim) | Nebius Token Factory |
+| Web Intelligence | Tavily Async API | Tavily |
+| Streaming | Server-Sent Events (SSE) | FastAPI StreamingResponse |
+| Cloud Manifests | Serverless Endpoint + Cron Job | Nebius AI Cloud (deploy-ready) |
 
 ---
 
-## 💬 ChatGPT-Style Chat Management & Public Share Links
+## Quick Start
 
-Compass provides full session management and viral sharing inspired directly by ChatGPT and Claude:
+### Prerequisites
 
-- **Full Session Lifecycle**:
-  - **Auto-Naming**: Intelligently summarizes the first conversation turn into a concise title (e.g. `"RISC-V Pipeline Hazards Discussion"`).
-  - **Pin Important Chats**: Keep critical hackathon syncs pinned to the top of the sidebar.
-  - **Rename & Organize**: Double-click or use the context menu to customize chat titles.
-  - **Archive**: Move completed project threads to the archive without losing context.
-  - **Delete with Confirmation**: Safeguard against accidental data loss with an interactive delete confirmation modal.
-- **1-Click Public Share Links**:
-  - Click **Share** on any conversation to generate an instant, unauthenticated public link:  
-    `https://compass-farmlytics.vercel.app/?share=<conversation_id>`
-  - Copy to clipboard with visual toast confirmation.
-  - **Shared View Experience**: External collaborators and judges can view the conversation read-only, complete with Markdown rendering, timestamps, and model attribution, with an **"Open in Compass"** CTA to fork the prompt.
-- **Cross-Conversation Memory Continuity**:
-  - While conversations maintain isolated threads, Compass's dense vector index (`memory_chunks`) retains cross-conversation knowledge. A task or code decision made in Chat A can be queried and recalled in Chat B seamlessly.
+- Python 3.12+
+- Node.js 18+ and npm
+- PostgreSQL 16 with `pgvector` (or a free [Neon](https://neon.tech) connection string)
+- [Nebius Token Factory](https://nebius.com/) API key
+- [Tavily](https://tavily.com/) API key (optional — disables web tools if omitted)
 
----
+### Setup
 
-## 📊 3-Tier Nemotron Model Economics & Routing Efficiency
+```bash
+git clone https://github.com/Ratnesh-101/compass.git
+cd compass
 
-Compass delivers enterprise-grade reasoning without credit exhaustion through its tiered routing architecture:
+# Copy and fill in your environment variables
+cp .env.example .env
+# Edit .env: set NEBIUS_API_KEY, AUTH_TOKEN, DATABASE_URL
 
-| Tier / Model | Role | Invocation Trigger | Blended Cost / 1M Tokens | Benchmark Speed |
-| :--- | :--- | :--- | :--- | :--- |
-| **`NVIDIA-Nemotron-3-Nano-30B-A3B`** | Fast Intent Router | 100% of incoming chat & CLI messages | **~$0.08** | **< 380 ms** |
-| **`nemotron-3-super-120b-a12b`** | Skill Specialist | Multi-step reasoning, code recall, agent loops | **~$0.40** | **~1.1 s** |
-| **`Nemotron-3-Ultra-550b-a55b`** | Executive Synthesizer | Cross-domain roadmaps, daily conflict analysis | **~$1.20** | **~2.8 s** |
-| **`Qwen/Qwen3-Embedding-8B`** | Dense Memory (768-dim) | Code snippets, web documents, lecture notes | **~$0.02** | **< 150 ms** |
+# Install backend dependencies
+pip install -r backend/requirements.txt
 
-> **Cost Optimization**: Across 106 live end-to-end evaluation turns, Compass consumed **$0.019 total** on Nebius Token Factory. Over 85% of queries were resolved by Nano and Neon PostgreSQL directly, proving extreme credit sustainability for high-throughput production deployment.
+# Install CLI
+pip install -e ./cli
+```
 
----
+### Run
 
-## Skills
+**One-command launch:**
 
-Compass provides 8 core memory skills, a conversational fallback, and a cross-domain synthesis escalation:
+```bash
+# Windows
+run_local.bat
 
-| Skill | Description | Example Message |
-| :--- | :--- | :--- |
-| `add_task` | Creates a new task with title, domain, project, due date, and priority | *"Add task: Submit Nebius Token Factory benchmark by Friday, priority urgent"* |
-| `query_tasks` | Queries tasks with domain, status, or project filters and countdowns | *"What open tasks do I have in coursework?"* |
-| `update_task_status` | Updates the status of an existing task (`open`, `in_progress`, `completed`) | *"Mark task 4 as completed"* |
-| `edit_task` | Edits title, due date, priority, or metadata of an existing task | *"Change deadline of task 2 to tomorrow 5pm"* |
-| `delete_task` | Permanently deletes a task by ID or matched title | *"Delete task: test pyright fix"* |
-| `list_projects` | Lists all tracked projects partitioned across domains | *"What projects am I currently tracking?"* |
-| `log_code_context` | Stores code snippets, architecture decisions, and generates 768-dim embeddings | *"Log code context: Switched vector dimension to 768 for pgvector HNSW compliance in Compass"* |
-| `query_code_context` | Performs HNSW cosine similarity search over stored code contexts | *"How did we configure the Matryoshka embeddings in the backend?"* |
-| `query_coursework_notes` | Searches and retrieves academic coursework notes and syllabus items | *"Find my notes on RISC-V pipeline hazard forwarding"* |
-| `chat` | General conversational fallback for greetings and non-actionable queries | *"Hey! What can you help me with?"* |
-| `summarize_across_domains` | Escalates to Nemotron-3 Ultra (550B) over pre-aggregated context for roadmap synthesis | *"Give me a unified roadmap and conflict analysis across hackathon and coursework for this week"* |
+# Linux / macOS
+chmod +x run_local.sh && ./run_local.sh
+
+# Docker Compose (full stack with local PostgreSQL + pgvector)
+docker compose up
+```
+
+**Manual (two terminals):**
+
+```bash
+# Terminal 1 — Backend
+python -m uvicorn backend.main:app --port 8000 --reload
+
+# Terminal 2 — Frontend
+cd frontend && npm install && npm run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173). All visitors receive an isolated anonymous workspace.
 
 ---
 
 ## Testing
 
-Compass includes an automated regression test suite (**150 tests**, 100% passing, 0 skipped) covering all critical application surfaces, run against a live Postgres instance:
+Compass has **165 automated tests** (verified by pytest collection) against a live PostgreSQL + pgvector instance.
 
-```text
-====================== 150 passed in 100% ======================
+```bash
+# Set a test database first
+export TEST_DATABASE_URL="postgresql://..."
+python -m pytest tests -v
 ```
 
-- **Autonomous Agent Engine (`tests/test_agent.py`)**: 26 tests validating the ReAct loop, SSE event stream protocol, step production (`think`, `tool_call`, `observe`, `critic`, `synthesize`), safe state-mutation gating (`add_task`, `edit_task`, `delete_task`, `update_task_status`), reject path re-planning, confirmation timeouts, self-critique pass capping (2 rounds), reconnect persistence in `agent_runs`, audit logging in `agent_audit_log`, undo endpoint (`POST /api/agent/undo`), live per-step costs, model tier attribution, deadline conflict detection, and report card generation.
-- **Specialist Team & Confirm-Gate Audit (`tests/test_specialist_agent.py`, `tests/test_specialist_confirm_gate.py`)**: 12 tests verifying domain specialists (Coursework, Research, Calendar, Memory), safe fallback execution, strict read-only tool registration (`delegate_to_specialist`), zero DB writes on adversarial injection, advisory proposed actions, and Northstar confirm-gate enforcement before any state mutation.
-- **Feasibility Engine & The Realist (`tests/test_feasibility.py`)**: 10 tests verifying capacity-vs-demand arithmetic, model JSON parse fallbacks, 2-round negotiation caps, confirm-gated `apply_triage_plan`, and zero database mutations during evaluation.
-- **Calendar & Reactive Scheduling (`tests/test_scheduling.py`, `tests/test_reactive_scheduling.py`, `tests/test_google_calendar_auth.py`)**: 29 tests verifying deterministic slot allocation, topological prerequisite sorting, working hours, ICS generation, conflict detection, slipped task re-planning, Google OAuth flow, AES token encryption, and calendar sync.
-- **Web Research & Grounding (`tests/test_tavily.py`)**: 12 tests validating Tavily web search, citation extraction, 768-dim vector embeddings, confirm-gated `ingest_url`, 1-click undo chunk rollback, prompt injection scanning, credit tracking, and deadline drift verification.
-- **Gap Closure & Subsystem Hardening (`tests/test_gap_closures.py`)**: 15 tests verifying server-side task domain filtering, public `/api/usage/summary` endpoint, per-IP sliding window rate limiting, gated `search_web` skill, CLI streaming fallback, usage-summary cost deltas, Bearer auth enforcement on confirm/undo/nightly endpoints, deadline conflict scanning, agent run list/conversation_id filtering, and CLI agent commands.
-- **API & Authentication (`tests/test_api_endpoints.py`, `tests/test_user_isolation.py`)**: 18 tests verifying root redirect, health checks, Bearer token authentication enforcement on protected routes, valid credentials handling, CORS headers, multi-user Google OAuth isolation, and account switcher.
-- **Direct Tasks & Conversations Memory (`tests/test_direct_tasks.py`, `tests/test_conversations_memory.py`)**: 10 tests validating REST task CRUD lifecycle, demo ID protection, status transitions, conversation pin/archive/rename, and multi-turn persistence.
-- **CLI Operations (`tests/test_cli.py`)**: 9 tests validating terminal commands, argument parsing, config viewing/updating, status tables, project grouping, domain filtering, memory logging, triage interactive CLI, and interactive REPL chat.
-- **End-to-End Demo Flow & Streaming (`tests/test_demo_flow.py`, `tests/test_structured_memory.py`, `tests/test_multi_turn.py`, `tests/test_streaming.py`)**: 9 tests validating end-to-end multi-domain demo workflows, database migrations, pgvector HNSW indexing, multi-turn conversational memory, and SSE token streaming.
+Tests cover: agent execution, API endpoints, authentication, memory, scheduling, calendar OAuth, Tavily/web research, CLI, SSE streaming, user isolation, specialist agents, feasibility engine, and end-to-end flows.
+
+See **[docs/testing.md](docs/testing.md)** for per-file breakdown and test infrastructure notes.
 
 ---
 
-## Repository Structure & Tooling
+## Project Structure
 
-- `backend/`: FastAPI application, database pool lifecycle, routers, orchestrator, and skill definitions.
-- `cli/`: Terminal interface built with Typer and Rich (`compass` / `python -m cli`).
-- `frontend/`: React + Vite single-page application with responsive dark dashboard and typewriter chat.
-- `deploy/`: Production manifests for Nebius Serverless Endpoints and nightly consolidation jobs.
-- `scripts/`: Data seeding and pgvector HNSW index verification utilities.
-- `.agents/skills/` & `skills-lock.json`: Official Neon Database Agent Skills registry for AI pair-programming and automated database operations.
-- `pyrefly.toml`: IDE language server / static type checker configuration for local Python runtime.
+```
+compass/
+├── backend/
+│   ├── agent.py          # ReAct agent loop
+│   ├── orchestrator.py   # Skill dispatch and execution
+│   ├── router.py         # Nemotron-3 Nano intent routing
+│   ├── agents/
+│   │   ├── specialist.py # Specialist multi-agent system
+│   │   └── feasibility.py# Deterministic capacity engine
+│   ├── memory/
+│   │   ├── db.py         # Pool lifecycle + auto-migration
+│   │   ├── structured.py # SQL task/conversation queries
+│   │   ├── vector.py     # pgvector HNSW search
+│   │   └── schema.sql    # Full database schema
+│   ├── services/
+│   │   ├── tavily.py     # Tavily integration
+│   │   ├── calendar.py   # Google Calendar service
+│   │   ├── embeddings.py # Qwen embedding calls
+│   │   └── scheduler.py  # Slot allocation engine
+│   └── skills/           # Tool definitions and handlers
+├── frontend/src/
+│   ├── components/
+│   │   ├── ChatPanel.jsx      # Chat Copilot UI
+│   │   ├── AgentPanel.jsx     # Goal Planner / agent trace
+│   │   ├── SpecialistPanel.jsx# Specialist Agents UI
+│   │   ├── Timeline.jsx       # Task/deadline feed
+│   │   └── CalendarView.jsx   # Schedule + Google sync
+│   └── App.jsx
+├── cli/
+│   └── assistant_cli.py  # Typer + Rich terminal interface
+├── tests/                # 154 automated tests (pytest-asyncio)
+├── deploy/               # Nebius AI Cloud manifests
+├── docs/                 # Architecture and testing docs
+├── docker-compose.yml
+├── vercel.json           # Same-origin proxy rewrites
+└── .env.example
+```
+
+---
+
+## Documentation
+
+- **[Architecture](docs/architecture.md)** — System diagram, request flow, memory schema, deployment, security notes
+- **[Testing](docs/testing.md)** — Test coverage breakdown, infrastructure, and how to run
+- **[API Contract](docs/api_contract.md)** — Endpoint reference
+- **[Demo Script](docs/demo_script.md)** — Video walkthrough script and recording checklist
+- **[Submission Kit](SUBMISSION_KIT.md)** — Hackathon submission details, Tavily justification, benchmarks
+
+---
+
+## Hackathon Submission
+
+**Track**: Best Apps and Agents — Nebius × NVIDIA Global AI Hackathon 2026
+
+**Bonus categories**:
+- *Best Use of Tavily ($3,000)* — three specialized tools with principled epistemic abstention, injection fencing, and confirm-gated persistent memory
+- *Most Valuable Feedback Award* — developer experience feedback in `SUBMISSION_KIT.md`
+
+**Timeline**: Repository created September 4, 2026 (after August 26, 2026 launch). Full submission details: [SUBMISSION_KIT.md](SUBMISSION_KIT.md)
 
 ---
 
 ## Team
 
-- **Rhythm**: Backend Architecture, Database Schema, and Nebius Token Factory Tool Registration
-- **Nandani**: Frontend Web Dashboard, Real-Time Context Stream UI, and Chat Interface
-- **Kunal**: Frontend UI Contributor (Timeline Modernizations, UI Components & Refinements per PR #8 & #11)
-- **Ratnesh Singh** (VIT+IIT): System Integration, Deployment Engineering (Render, Vercel, Nebius Manifests), and Terminal CLI
+| Member | Role |
+|--------|------|
+| **Rhythm** | Backend architecture, database schema, Nebius Token Factory tool registration |
+| **Nandani** | Frontend web dashboard, real-time context stream UI, chat interface |
+| **Kunal** | Frontend UI contributions (timeline modernization, UI components) |
+| **Ratnesh Singh** | System integration, deployment engineering (Render, Vercel, Nebius manifests), terminal CLI |
 
 ---
 
 ## License
 
-MIT
+[MIT](LICENSE)

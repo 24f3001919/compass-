@@ -48,7 +48,13 @@ CALENDAR_READONLY_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
 
 def _get_encryption_key() -> bytes:
     settings = get_settings()
-    secret = getattr(settings, "AUTH_TOKEN", None) or "compass-secret-encryption-key-salt"
+    if settings.is_production():
+        settings.validate_production_secrets()
+    secret = (
+        getattr(settings, "TOKEN_ENCRYPTION_KEY", None)
+        or getattr(settings, "AUTH_TOKEN", None)
+        or "compass-secret-encryption-key-salt"
+    )
     return hashlib.sha256(secret.encode("utf-8")).digest()
 
 
