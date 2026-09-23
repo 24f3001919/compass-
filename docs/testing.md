@@ -15,11 +15,13 @@ python -m pytest tests/test_agent.py -v
 TEST_DATABASE_URL="postgresql://..." python -m pytest tests -v
 ```
 
-**Verified result** (against isolated Neon test branch, Python 3.12):
+**Verified result** (pytest --collect-only, Python 3.12, against Neon test branch):
 
 ```
-154 passed, 0 skipped, 0 failed
+165 tests collected
 ```
+
+The CI pipeline (`ci.yml`) also runs `--collect-only` before the full run to surface this count in every CI log.
 
 ## Test Coverage by Area
 

@@ -6,7 +6,7 @@
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![React 18](https://img.shields.io/badge/React-18-61DAFB.svg?logo=react&logoColor=black)](https://react.dev/)
-[![Nebius Token Factory](https://img.shields.io/badge/Nebius-Token%20Factory-7A00F9.svg)](https://nebius.com/)
+[![CI](https://github.com/Ratnesh-101/compass/actions/workflows/ci.yml/badge.svg)](https://github.com/Ratnesh-101/compass/actions/workflows/ci.yml)
 [![NVIDIA Nemotron-3](https://img.shields.io/badge/NVIDIA-Nemotron--3-76B900.svg?logo=nvidia&logoColor=white)](https://build.nvidia.com/)
 [![Neon pgvector](https://img.shields.io/badge/Neon-pgvector%20HNSW-336791.svg?logo=postgresql&logoColor=white)](https://neon.tech/)
 [![Tavily](https://img.shields.io/badge/Tavily-Web%20Intelligence-4A90E2.svg)](https://tavily.com/)
@@ -264,7 +264,7 @@ Open [http://localhost:5173](http://localhost:5173). All visitors receive an iso
 
 ## Testing
 
-Compass has 154 automated tests against a live PostgreSQL instance.
+Compass has **165 automated tests** (verified by pytest collection) against a live PostgreSQL + pgvector instance.
 
 ```bash
 # Set a test database first
