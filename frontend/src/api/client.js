@@ -149,7 +149,7 @@ export function getAuthHeaders(extraHeaders = {}) {
   if (uid) {
     headers['x-user-id'] = uid
   }
-  const token = localStorage.getItem('compass_auth_token')
+  const token = localStorage.getItem('compass_auth_token') || (import.meta.env.DEV ? 'dev-token' : '')
   if (token && !headers['Authorization']) {
     headers['Authorization'] = `Bearer ${token}`
   }

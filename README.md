@@ -14,7 +14,7 @@
 
 Compass is a persistent-memory AI copilot that connects your tasks, hackathon deadlines, coursework, code context, and conversations into one agent-driven workspace. It reasons across all of them — and asks before changing anything.
 
-**[🌐 Live Dashboard](https://compass-farmlytics.vercel.app)** · **[🔌 API Health](https://compass-backend-qryu.onrender.com/health)** · **[🎥 Demo Video](./SUBMISSION_KIT.md#video-script)**
+**[🌐 Live Dashboard](https://compass-farmlytics.vercel.app)** · **[🔌 API Health](https://compass-backend-qryu.onrender.com/health)** · **[🎥 Demo Video Script](./SUBMISSION_KIT.md#video-script)**
 
 ---
 
@@ -264,7 +264,7 @@ Open [http://localhost:5173](http://localhost:5173). All visitors receive an iso
 
 ## Testing
 
-Compass has **165 automated tests** (verified by pytest collection) against a live PostgreSQL + pgvector instance.
+Compass has **193 automated tests** (verified by pytest collection across 20 test suites including security hardening) against a live PostgreSQL + pgvector instance.
 
 ```bash
 # Set a test database first
@@ -275,6 +275,14 @@ python -m pytest tests -v
 Tests cover: agent execution, API endpoints, authentication, memory, scheduling, calendar OAuth, Tavily/web research, CLI, SSE streaming, user isolation, specialist agents, feasibility engine, and end-to-end flows.
 
 See **[docs/testing.md](docs/testing.md)** for per-file breakdown and test infrastructure notes.
+
+---
+
+## Deployment
+
+Compass uses GitHub Actions for continuous integration and provider-native continuous delivery. Merges to the `main` branch target automated deployment via Vercel (frontend) and Render (backend), with post-deployment health verification performed via `scripts/verify_deployment.py`.
+
+See **[docs/deployment.md](docs/deployment.md)** for full architecture, environment variables, verification, and rollback runbooks.
 
 ---
 
@@ -323,6 +331,8 @@ compass/
 ## Documentation
 
 - **[Architecture](docs/architecture.md)** — System diagram, request flow, memory schema, deployment, security notes
+- **[Deployment](docs/deployment.md)** — CI/CD architecture, environment matrix, verification script, and rollback procedures
+- **[Security](docs/security.md)** — Threat model, security controls, SSRF protections, and IDOR isolation
 - **[Testing](docs/testing.md)** — Test coverage breakdown, infrastructure, and how to run
 - **[API Contract](docs/api_contract.md)** — Endpoint reference
 - **[Demo Script](docs/demo_script.md)** — Video walkthrough script and recording checklist
