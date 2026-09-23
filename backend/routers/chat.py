@@ -5,6 +5,7 @@ Compass — Chat, Conversations, and Streaming Endpoints.
 import json
 import logging
 import uuid
+from datetime import date
 from typing import Any, List, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -324,6 +325,7 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
     async def event_generator():
         conv_id = req.conversation_id or str(uuid.uuid4())
         message = req.message.strip()
+        yield ": ping\n\n"
 
         if not _settings.NEBIUS_API_KEY:
             result = await orchestrator.handle_message(conversation_id=req.conversation_id, message=message, user_id=user_id)
@@ -384,11 +386,13 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
             except Exception:
                 pass
 
+            today_iso = date.today().isoformat()
             sys_prompt = (
-                "You are Compass, an intelligent personal assistant with long-term memory across sessions. "
-                "You maintain context across conversation history AND prior chats/plans. "
-                "When the user asks follow-up questions, recalls earlier conversations, or asks to plan or schedule without clashing, "
-                "use the provided memory and active schedule context. Be concise, friendly, and helpful."
+                f"You are Compass, an intelligent personal assistant with long-term memory across sessions. "
+                f"Today's date is {today_iso}. When resolving dates without years (e.g. '30th oct'), use {today_iso[:4]}. "
+                f"You maintain context across conversation history AND prior chats/plans. "
+                f"When the user asks follow-up questions, recalls earlier conversations, or asks to plan or schedule without clashing, "
+                f"use the provided memory and active schedule context. Be concise, friendly, and helpful."
             )
             if memory_context:
                 sys_prompt += f"\n\n[WORKSPACE MEMORY & PAST CONTEXT]:\n{memory_context}"
@@ -409,7 +413,7 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
                     messages=messages,
                     tools=tools,
                     tool_choice="auto",
-                    max_tokens=2048,
+                    max_tokens=10000,
                     temperature=0.7,
                     stream=True,
                 ),
