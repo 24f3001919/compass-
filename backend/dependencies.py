@@ -12,6 +12,9 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from backend.config import get_settings
 
+import hmac
+from backend.services.security import get_client_ip
+
 # ---------------------------------------------------------------------------
 # Rate Limiter — Sliding-window per client IP (30 requests/minute on chat)
 # ---------------------------------------------------------------------------
@@ -28,8 +31,7 @@ async def rate_limit(request: Request) -> None:
     """Sliding-window rate limiter: 30 requests/min per client IP on chat endpoints.
     Returns HTTP 429 Too Many Requests with Retry-After header when exceeded.
     """
-    client_ip = request.headers.get("X-Forwarded-For", request.client.host if request.client else "unknown")
-    client_ip = client_ip.split(",")[0].strip()
+    client_ip = get_client_ip(request)
     now = time.monotonic()
     window_start = now - _RATE_LIMIT_WINDOW_SECONDS
 
@@ -52,8 +54,7 @@ async def agent_rate_limit(request: Request) -> None:
     """Separate sliding-window rate limiter for agent runs: 10 requests/min per client IP.
     Returns HTTP 429 Too Many Requests with Retry-After header when exceeded.
     """
-    client_ip = request.headers.get("X-Forwarded-For", request.client.host if request.client else "unknown")
-    client_ip = client_ip.split(",")[0].strip()
+    client_ip = get_client_ip(request)
     now = time.monotonic()
     window_start = now - _AGENT_RATE_LIMIT_WINDOW_SECONDS
 
@@ -81,9 +82,31 @@ _bearer_scheme = HTTPBearer()
 async def verify_token(
     credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme),
 ) -> str:
-    """Validate the Authorization: Bearer <token> header against AUTH_TOKEN."""
-    if credentials.credentials != get_settings().AUTH_TOKEN:
+    """Validate the Authorization: Bearer <token> header against AUTH_TOKEN.
+
+    Fails closed in production if AUTH_TOKEN is missing or set to insecure default.
+    Uses constant-time comparison to prevent timing attacks.
+    """
+    settings = get_settings()
+
+    # Fail closed in production if token is insecure
+    if settings.is_production():
+        if not settings.AUTH_TOKEN or settings.AUTH_TOKEN.strip() in (
+            settings.DEFAULT_DEV_TOKEN,
+            "compass-token",
+            "test-token",
+        ):
+            raise HTTPException(
+                status_code=500,
+                detail="Server configuration error: production authentication token is not securely configured.",
+            )
+
+    if not settings.AUTH_TOKEN:
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+    if not hmac.compare_digest(credentials.credentials, settings.AUTH_TOKEN):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
     return credentials.credentials
 
 
