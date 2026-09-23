@@ -355,6 +355,59 @@ async def test_agent_confirm_proposal_integrity_and_replay_protection(client: As
     assert replay_resp.status_code == 400
     assert "replay rejected" in replay_resp.json()["detail"]
 
+    # 3. Client attempts to confirm an unproposed action (tampering attempt) -> must be rejected
+    async def mock_get_pending_run(pool, run_id):
+        return {
+            "id": run_id,
+            "goal": "Test goal",
+            "pending_actions": [{"tool": "add_task", "args": {"title": "Legit Task"}}],
+            "steps": [],
+            "messages": [],
+        }
+
+    monkeypatch.setattr("backend.agent.get_agent_run", mock_get_pending_run)
+
+    tamper_resp = await client.post(
+        "/api/agent/confirm",
+        headers=auth_header,
+        json={"run_id": "run_123", "actions": [{"tool": "delete_task", "args": {"task_id": 99}}]},
+    )
+    assert tamper_resp.status_code == 400
+    assert "does not match any pending proposal" in tamper_resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_agent_undo_replay_protection(client: AsyncClient, monkeypatch):
+    """Undo rejects unauthenticated callers and blocks replaying already-reverted actions."""
+    from backend.config import get_settings
+    settings = get_settings()
+    auth_header = {"Authorization": f"Bearer {settings.AUTH_TOKEN or 'dev-token'}"}
+
+    # 1. Unauthenticated undo is rejected with 401
+    unauth_resp = await client.post("/api/agent/undo", json={"run_id": "test_run"})
+    assert unauth_resp.status_code == 401
+
+    # 2. Mock undo_last_agent_action returning already reverted
+    async def mock_undo_already_reverted(pool, run_id=None, audit_log_id=None):
+        return {"status": "error", "message": f"Action #{audit_log_id or 1} has already been reverted."}
+
+    import backend.routers.agent as agent_router
+    class MockPool:
+        pass
+    async def mock_get_pool():
+        return MockPool()
+    monkeypatch.setattr(agent_router, "get_pool", mock_get_pool)
+    monkeypatch.setattr("backend.agent.undo_last_agent_action", mock_undo_already_reverted)
+
+    revert_resp = await client.post(
+        "/api/agent/undo",
+        headers=auth_header,
+        json={"audit_log_id": 42},
+    )
+    assert revert_resp.status_code == 200
+    assert revert_resp.json()["status"] == "error"
+    assert "already been reverted" in revert_resp.json()["message"]
+
 
 # ===========================================================================
 # 8. SSRF IPv6 & Safe Redirect Validation Tests
