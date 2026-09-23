@@ -35,7 +35,19 @@ def _parse_iso_date(val: Optional[str]) -> Optional[date]:
     if not val:
         return None
     try:
-        return datetime.strptime(val.strip(), "%Y-%m-%d").date()
+        parsed = datetime.strptime(val.strip(), "%Y-%m-%d").date()
+        today = date.today()
+        # If the date was parsed with a past year (e.g. LLM defaulted to 2024/2025 instead of current year),
+        # roll it forward to the current year or next occurrence.
+        if parsed < today and parsed.year < today.year:
+            try:
+                candidate = date(today.year, parsed.month, parsed.day)
+                if candidate >= today:
+                    return candidate
+                return date(today.year + 1, parsed.month, parsed.day)
+            except ValueError:
+                pass
+        return parsed
     except Exception:
         return None
 
