@@ -10,7 +10,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from backend.config import get_settings
-from backend.dependencies import verify_token, _get_current_user_id, rate_limit
+from backend.dependencies import verify_token, _get_current_user_id, _get_or_create_user_id, rate_limit
 from backend.memory.db import get_pool
 from backend.memory import structured
 from backend.models import (
@@ -344,7 +344,7 @@ async def create_frontend_task(request: Request, req: CreateTaskRequest):
 
     dom_clean = structured.normalize_domain(req.domain)
     proj_name = req.project.strip() if req.project else "General"
-    user_id = _get_current_user_id(request)
+    user_id = _get_or_create_user_id(request)
 
     try:
         pool = await get_pool()
@@ -461,7 +461,7 @@ async def update_frontend_task(task_id: str, req: UpdateTaskRequest, request: Re
                 raise HTTPException(status_code=404, detail="Task not found")
 
             # Ownership check (IDOR mitigation)
-            user_id = _get_current_user_id(request)
+            user_id = _get_or_create_user_id(request)
             auth_header = request.headers.get("authorization", "")
             is_admin = False
             if auth_header.startswith("Bearer "):
@@ -469,9 +469,13 @@ async def update_frontend_task(task_id: str, req: UpdateTaskRequest, request: Re
                 if token and settings.AUTH_TOKEN and hmac.compare_digest(token, settings.AUTH_TOKEN):
                     is_admin = True
 
-            if not is_admin and existing.get("user_id"):
-                if not user_id or user_id.lower() != existing["user_id"].lower():
-                    raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to modify this task.")
+            if not is_admin:
+                task_owner = existing.get("user_id")
+                if task_owner:
+                    if not user_id or user_id.lower() != task_owner.lower():
+                        raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to modify this task.")
+                else:
+                    raise HTTPException(status_code=403, detail="Forbidden: Unowned tasks can only be modified by an administrator.")
 
             update_kwargs: dict = {}
 
@@ -565,7 +569,7 @@ async def delete_frontend_task(task_id: str, request: Request = None):
                 raise HTTPException(status_code=404, detail="Task not found")
 
             # Ownership check (IDOR mitigation)
-            user_id = _get_current_user_id(request) if request else None
+            user_id = _get_or_create_user_id(request) if request else None
             auth_header = request.headers.get("authorization", "") if request else ""
             is_admin = False
             if auth_header.startswith("Bearer "):
@@ -573,9 +577,13 @@ async def delete_frontend_task(task_id: str, request: Request = None):
                 if token and settings.AUTH_TOKEN and hmac.compare_digest(token, settings.AUTH_TOKEN):
                     is_admin = True
 
-            if not is_admin and existing.get("user_id"):
-                if not user_id or user_id.lower() != existing["user_id"].lower():
-                    raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to delete this task.")
+            if not is_admin:
+                task_owner = existing.get("user_id")
+                if task_owner:
+                    if not user_id or user_id.lower() != task_owner.lower():
+                        raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to delete this task.")
+                else:
+                    raise HTTPException(status_code=403, detail="Forbidden: Unowned tasks can only be deleted by an administrator.")
 
             try:
                 await conn.execute(

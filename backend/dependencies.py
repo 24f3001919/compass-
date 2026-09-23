@@ -136,6 +136,21 @@ def _get_current_user_id(request: Request) -> Optional[str]:
     return None
 
 
+def _get_or_create_user_id(request: Request) -> str:
+    """Resolve current user identity, falling back to a deterministic guest identity.
+
+    Guarantees every task or memory mutation is bound to an isolated user or guest
+    workspace identity rather than leaving ownership unassigned (NULL).
+    """
+    uid = _get_current_user_id(request)
+    if uid:
+        return uid
+    client_ip = get_client_ip(request)
+    import hashlib
+    h = hashlib.sha256(client_ip.encode("utf-8")).hexdigest()[:12]
+    return f"guest_{h}"
+
+
 def _now_iso() -> str:
     """Current UTC timestamp as ISO 8601 string."""
     return datetime.now(timezone.utc).isoformat()

@@ -42,6 +42,19 @@ BLOCKED_HOSTNAMES = {
 }
 
 
+def _is_ip_blocked(ip: ipaddress._BaseAddress) -> bool:
+    """Check if an IP address belongs to any blocked private/reserved networks, unwrapping IPv4-mapped IPv6."""
+    if getattr(ip, "ipv4_mapped", None):
+        ip = ip.ipv4_mapped
+    for net in BLOCKED_IP_NETWORKS:
+        try:
+            if ip in net:
+                return True
+        except TypeError:
+            continue
+    return False
+
+
 def is_safe_url(url: str) -> Tuple[bool, str]:
     """Validate that a URL is safe to fetch and not pointing to private/internal infrastructure (SSRF defense).
 
@@ -60,6 +73,10 @@ def is_safe_url(url: str) -> Tuple[bool, str]:
     if not hostname:
         return False, "Invalid URL: missing hostname"
 
+    # Strip bracket notation from IPv6 if present
+    if hostname.startswith("[") and hostname.endswith("]"):
+        hostname = hostname[1:-1].strip()
+
     if hostname in BLOCKED_HOSTNAMES:
         return False, f"Access to blocked internal hostname '{hostname}' is forbidden."
 
@@ -67,9 +84,8 @@ def is_safe_url(url: str) -> Tuple[bool, str]:
     try:
         # Check if hostname is directly an IP literal
         ip = ipaddress.ip_address(hostname)
-        for net in BLOCKED_IP_NETWORKS:
-            if ip in net:
-                return False, f"Access to private/reserved IP address '{ip}' is forbidden."
+        if _is_ip_blocked(ip):
+            return False, f"Access to private/reserved IP address '{ip}' is forbidden."
     except ValueError:
         # Hostname is a domain name, resolve via DNS
         try:
@@ -77,9 +93,8 @@ def is_safe_url(url: str) -> Tuple[bool, str]:
             for item in addr_info:
                 ip_str = item[4][0]
                 ip = ipaddress.ip_address(ip_str)
-                for net in BLOCKED_IP_NETWORKS:
-                    if ip in net:
-                        return False, f"Hostname '{hostname}' resolves to private/reserved IP '{ip_str}'."
+                if _is_ip_blocked(ip):
+                    return False, f"Hostname '{hostname}' resolves to private/reserved IP '{ip_str}'."
         except socket.gaierror:
             # Domain could not be resolved
             return False, f"Could not resolve hostname '{hostname}'."
@@ -92,6 +107,23 @@ def is_safe_url(url: str) -> Tuple[bool, str]:
         return False, f"Access to port {port} is not permitted for web ingestion."
 
     return True, ""
+
+
+def is_safe_redirect(source_url: str, location: str) -> Tuple[bool, str, str]:
+    """Validate a redirect target from a given source URL.
+
+    Resolves relative redirects against source_url and ensures the destination
+    is not targeting internal/private addresses (SSRF defense).
+    Returns (is_safe, resolved_url, error_reason).
+    """
+    if not location or not isinstance(location, str):
+        return False, "", "Redirect location must be a non-empty string"
+    resolved_url = urllib.parse.urljoin(source_url.strip(), location.strip())
+    safe, reason = is_safe_url(resolved_url)
+    if not safe:
+        return False, resolved_url, f"Redirect destination rejected: {reason}"
+    return True, resolved_url, ""
+
 
 
 def get_client_ip(request: Request) -> str:

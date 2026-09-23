@@ -237,3 +237,156 @@ async def test_cors_disallows_arbitrary_untrusted_origin(client: AsyncClient):
     allow_origin = resp.headers.get("access-control-allow-origin")
     assert allow_origin != "https://malicious-attacker-site.com"
     assert allow_origin != "*"
+
+
+# ===========================================================================
+# 6. Unowned Task & Cross-Guest Isolation Tests
+# ===========================================================================
+
+@pytest.mark.asyncio
+async def test_unowned_task_modification_rejected_for_non_admin(client: AsyncClient, monkeypatch):
+    """Legacy or unowned system tasks (user_id=None) cannot be modified or deleted by non-admin callers."""
+    from contextlib import asynccontextmanager
+    from backend.memory import structured
+    import backend.routers.tasks as tasks_router
+
+    class MockConn:
+        pass
+
+    class MockPool:
+        @asynccontextmanager
+        async def acquire(self):
+            yield MockConn()
+
+    async def mock_get_pool():
+        return MockPool()
+
+    monkeypatch.setattr(tasks_router, "get_pool", mock_get_pool)
+
+    mock_unowned_task = {
+        "id": 1001,
+        "title": "Unowned System Milestone",
+        "domain": "general",
+        "priority": "medium",
+        "status": "open",
+        "notes": None,
+        "due_date": None,
+        "user_id": None,  # Unowned
+        "project": None,
+        "duration_minutes": 60,
+        "scheduled_start": None,
+        "scheduled_end": None,
+        "is_fixed": False,
+        "created_at": None,
+        "updated_at": None,
+    }
+
+    async def mock_get_task(conn, task_id):
+        if task_id == 1001:
+            return mock_unowned_task
+        return None
+
+    monkeypatch.setattr(structured, "get_task", mock_get_task)
+
+    # 1. Non-admin user attempts to patch unowned task -> 403 Forbidden
+    patch_resp = await client.patch(
+        "/api/tasks/1001",
+        headers={"x-user-id": "guest_attacker"},
+        json={"title": "Hijacked Task"},
+    )
+    assert patch_resp.status_code == 403
+    assert "Unowned tasks can only be modified by an administrator" in patch_resp.json()["detail"]
+
+    # 2. Non-admin user attempts to delete unowned task -> 403 Forbidden
+    delete_resp = await client.delete(
+        "/api/tasks/1001",
+        headers={"x-user-id": "guest_attacker"},
+    )
+    assert delete_resp.status_code == 403
+    assert "Unowned tasks can only be deleted by an administrator" in delete_resp.json()["detail"]
+
+
+# ===========================================================================
+# 7. Confirmation Gate Replay & Action Integrity Tests
+# ===========================================================================
+
+@pytest.mark.asyncio
+async def test_agent_confirm_proposal_integrity_and_replay_protection(client: AsyncClient, monkeypatch):
+    """Confirmation requires Bearer auth, validates proposal matching, and rejects replay."""
+    from backend.config import get_settings
+    settings = get_settings()
+    auth_header = {"Authorization": f"Bearer {settings.AUTH_TOKEN or 'dev-token'}"}
+
+    # 1. Unauthenticated confirmation is rejected with 401
+    unauth_resp = await client.post(
+        "/api/agent/confirm",
+        json={"run_id": "run_123", "actions": [{"tool": "delete_task", "args": {"task_id": 42}}]},
+    )
+    assert unauth_resp.status_code == 401
+
+    # Mock get_agent_run to simulate a run that already completed (empty pending_actions)
+    import backend.routers.agent as agent_router
+
+    class MockPool:
+        pass
+
+    async def mock_get_pool():
+        return MockPool()
+
+    monkeypatch.setattr(agent_router, "get_pool", mock_get_pool)
+
+    async def mock_get_completed_run(pool, run_id):
+        return {
+            "id": run_id,
+            "goal": "Test goal",
+            "pending_actions": [],  # No pending actions (already executed or none proposed)
+            "steps": [],
+            "messages": [],
+        }
+
+    monkeypatch.setattr("backend.agent.get_agent_run", mock_get_completed_run)
+
+    # 2. Attempting to confirm a run with no pending proposals must be rejected (replay blocked)
+    replay_resp = await client.post(
+        "/api/agent/confirm",
+        headers=auth_header,
+        json={"run_id": "run_123", "actions": [{"tool": "delete_task", "args": {"task_id": 42}}]},
+    )
+    assert replay_resp.status_code == 400
+    assert "replay rejected" in replay_resp.json()["detail"]
+
+
+# ===========================================================================
+# 8. SSRF IPv6 & Safe Redirect Validation Tests
+# ===========================================================================
+
+@pytest.mark.parametrize(
+    "ipv6_url",
+    [
+        "http://[::1]:8080/secret",
+        "http://[fc00::1]/admin",
+        "http://[fe80::1]/metadata",
+        "http://[::ffff:127.0.0.1]:8000/internal",
+    ],
+)
+def test_ssrf_validator_blocks_internal_ipv6(ipv6_url):
+    """Validate that internal, loopback, and IPv4-mapped IPv6 targets are blocked."""
+    safe, reason = is_safe_url(ipv6_url)
+    assert not safe
+    assert "forbidden" in reason.lower() or "blocked" in reason.lower() or "private" in reason.lower()
+
+
+def test_ssrf_safe_redirect_blocks_internal_destinations():
+    """Redirect validator must resolve relative and absolute redirects and reject internal targets."""
+    from backend.services.security import is_safe_redirect
+
+    # Valid external redirect passes
+    safe, target, reason = is_safe_redirect("https://example.com/start", "/docs/api")
+    assert safe
+    assert target == "https://example.com/docs/api"
+
+    # Malicious redirect to loopback fails
+    safe, target, reason = is_safe_redirect("https://example.com/start", "http://127.0.0.1:8000/api/admin")
+    assert not safe
+    assert "Redirect destination rejected" in reason
+

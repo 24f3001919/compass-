@@ -82,12 +82,53 @@ async def agent_run(req: AgentRequest, request: Request):
 
 @router.post("/confirm")
 async def agent_confirm(req: AgentConfirmRequest, _token: str = Depends(verify_token)):
-    """Execute previously confirmed state-mutating actions from an agent run."""
-    from backend.agent import execute_confirmed_actions
+    """Execute previously confirmed state-mutating actions from an agent run with proposal verification and replay protection."""
+    from backend.agent import execute_confirmed_actions, get_agent_run, save_agent_run
 
     pool = await get_pool()
     actions = getattr(req, "actions", [])
-    results = await execute_confirmed_actions(actions, pool, run_id=req.run_id)
+    run_id = getattr(req, "run_id", None)
+
+    if run_id:
+        existing_run = await get_agent_run(pool, run_id)
+        if not existing_run:
+            if actions:
+                raise HTTPException(status_code=404, detail=f"Agent run '{run_id}' not found.")
+        else:
+            pending = existing_run.get("pending_actions") or []
+            if not pending:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No pending unconfirmed actions found for this agent run (replay rejected).",
+                )
+            if pending:
+                if actions:
+                    pending_tools = {p.get("tool"): p.get("args") for p in pending if isinstance(p, dict)}
+                    for a in actions:
+                        tool_name = a.get("tool")
+                        if tool_name not in pending_tools:
+                            raise HTTPException(
+                                status_code=400,
+                                detail=f"Action '{tool_name}' does not match any pending proposal for run '{run_id}'.",
+                            )
+                else:
+                    actions = pending
+
+            try:
+                await save_agent_run(
+                    pool,
+                    run_id,
+                    existing_run.get("goal", ""),
+                    "completed",
+                    existing_run.get("steps", []),
+                    existing_run.get("messages", []),
+                    pending_actions=[],
+                    conversation_id=existing_run.get("conversation_id"),
+                )
+            except Exception as e:
+                logger.warning(f"Could not clear pending actions on run {run_id}: {e}")
+
+    results = await execute_confirmed_actions(actions, pool, run_id=run_id)
     return {"status": "ok", "results": results}
 
 
