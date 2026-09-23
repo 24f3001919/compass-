@@ -22,6 +22,12 @@ Standard LLM chats lose context between sessions, while rigid task trackers lack
 * **Instant Conversational Task Dispatch**: Users say natural instructions like *"Schedule Compass submission video on Oct 30 under Hackathon"*, and Compass parses, fuzzy-resolves the project, and persists it into PostgreSQL.
 * **Cross-Session Vector Retrieval**: Semantically recalls snippets, architecture decisions, and coursework notes using pgvector cosine search.
 * **Autonomous Memory Consolidation**: A nightly worker flags overdue deadlines, merges near-duplicate vector chunks, and rolls up stale conversations into dense long-term summaries.
+* **Real-Time Tavily Web Intelligence Suite**:
+  - `search_web`: Live grounded web search when memory abstains.
+  - `ingest_url`: Human-gated Tavily Extract pipeline with injection quarantine, embedding 768-dim chunks into persistent memory.
+  - `verify_deadline`: Proactively checks stored deadlines against live contest sources to catch schedule drift.
+* **Strict Human Confirmation Gates**: ReAct planner pauses with amber approval requests for all state-mutating actions with 0 writes before approval.
+* **The Realist Feasibility Engine**: Disagrees when workloads exceed actual capacity (nominal - 20% margin) and proposes deterministic triage plans.
 
 ---
 
