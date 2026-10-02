@@ -773,5 +773,46 @@ export async function seedJudgeDemoPersona() {
   }
 }
 
+/**
+ * Verify a single task's deadline against live web sources via Tavily.
+ */
+export async function verifyTaskDeadline(taskId) {
+  try {
+    const res = await fetch(`${API_BASE}/api/tasks/${taskId}/verify`, {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || `Failed to verify deadline (HTTP ${res.status})`)
+    }
+    return await res.json()
+  } catch (err) {
+    console.warn('Deadline verification error:', err)
+    throw err
+  }
+}
+
+/**
+ * Batch verify open deadlines across active tasks via Tavily web search.
+ */
+export async function verifyAllDeadlines() {
+  try {
+    const res = await fetch(`${API_BASE}/api/tasks/verify-deadlines`, {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || `Failed to verify deadlines (HTTP ${res.status})`)
+    }
+    return await res.json()
+  } catch (err) {
+    console.warn('Batch verification error:', err)
+    throw err
+  }
+}
+
+
 
 
