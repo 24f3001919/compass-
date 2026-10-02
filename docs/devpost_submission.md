@@ -3,7 +3,7 @@
 ## 1. Project Overview
 * **Tagline**: Productivity copilot and agent with persistent memory across hackathons, coursework, and code repositories.
 * **Track / Category**: Best Apps and Agents Track (powered by Nebius Token Factory & NVIDIA Nemotron Models).
-* **Team**: Ratnesh Singh (VIT+IIT, Infra / Deployment / Backend), Nandani (Frontend / UI), Rhythm (Memory / Skills).
+* **Team**: Ratnesh Singh (VIT+IIT, Infra / Deployment / Backend), Nandani (Frontend / UI), Rhythm (Memory / Skills), Kunal (Frontend UI Contributions).
 
 ---
 

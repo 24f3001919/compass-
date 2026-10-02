@@ -318,7 +318,7 @@ compass/
 │   └── App.jsx
 ├── cli/
 │   └── assistant_cli.py  # Typer + Rich terminal interface
-├── tests/                # 154 automated tests (pytest-asyncio)
+├── tests/                # 195 automated tests (pytest-asyncio)
 ├── deploy/               # Nebius AI Cloud manifests
 ├── docs/                 # Architecture and testing docs
 ├── docker-compose.yml
