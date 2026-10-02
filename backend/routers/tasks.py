@@ -802,6 +802,33 @@ async def seed_demo_persona_endpoint(request: Request):
                 "duration_minutes": 90,
                 "notes": "Qwen3-Embedding-8B truncated to 768 dims to fit pgvector HNSW limit (<2,000 dims).",
             },
+            {
+                "title": "Record 3-minute Devpost demo video",
+                "domain": "hackathon",
+                "project_id": p_hack["id"],
+                "due_date": today + timedelta(days=3),
+                "priority": "urgent",
+                "duration_minutes": 180,
+                "notes": "Record, edit, and upload demo video to YouTube. Cover epistemic abstention, confirm gates, and feasibility engine.",
+            },
+            {
+                "title": "CS 61C Midterm Review: Cache Hierarchies & Virtual Memory",
+                "domain": "coursework",
+                "project_id": p_course["id"],
+                "due_date": today + timedelta(days=6),
+                "priority": "high",
+                "duration_minutes": 300,
+                "notes": "Review L1/L2 cache design, TLB mechanics, page table walks, and AMAT calculations.",
+            },
+            {
+                "title": "Deploy Compass backend to Nebius Serverless Endpoints",
+                "domain": "code",
+                "project_id": p_code["id"],
+                "due_date": today + timedelta(days=4),
+                "priority": "high",
+                "duration_minutes": 240,
+                "notes": "Activate deploy/serverless_endpoint.yaml manifest on Nebius AI Cloud. Verify health probes and autoscaling.",
+            },
         ]
 
         seeded_task_ids = []

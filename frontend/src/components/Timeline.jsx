@@ -1362,35 +1362,49 @@ export default function Timeline({ tasks, activeDomain, onSelectDomain, onTasksU
             width: '100%',
             boxSizing: 'border-box'
           }}>
-            <div style={{ fontSize: '32px', marginBottom: '12px' }}>📭</div>
-            <div style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>
-              No deadlines found
-            </div>
-            <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '18px' }}>
-              {activeDomain === 'all'
-                ? "Your memory stream is clear. You can add deadlines directly below without needing AI chat."
-                : `No active deadlines found under ${activeDomain.toUpperCase()} domain.`}
-            </div>
-            <button
-              id="btn-empty-add-deadline"
-              onClick={() => setShowAddModal(true)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-                border: 'none',
-                color: '#ffffff',
-                padding: '9px 18px',
-                borderRadius: '8px',
-                fontSize: '13px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)'
-              }}
-            >
-              + Add Your First Deadline
-            </button>
+            {!localStorage.getItem('compass_demo_seeded') ? (
+              <>
+                <div style={{ fontSize: '32px', marginBottom: '12px' }}>🧭</div>
+                <div style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>
+                  Setting up your workspace...
+                </div>
+                <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
+                  Loading demo data with cross-domain tasks, code context, and hackathon deadlines.
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: '32px', marginBottom: '12px' }}>📭</div>
+                <div style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>
+                  No deadlines found
+                </div>
+                <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '18px' }}>
+                  {activeDomain === 'all'
+                    ? "Your memory stream is clear. You can add deadlines directly below without needing AI chat."
+                    : `No active deadlines found under ${activeDomain.toUpperCase()} domain.`}
+                </div>
+                <button
+                  id="btn-empty-add-deadline"
+                  onClick={() => setShowAddModal(true)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                    border: 'none',
+                    color: '#ffffff',
+                    padding: '9px 18px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)'
+                  }}
+                >
+                  + Add Your First Deadline
+                </button>
+              </>
+            )}
           </div>
         ) : filtered.map(task => {
           const isOverdue = (task.countdown || '').toLowerCase().includes('overdue')
