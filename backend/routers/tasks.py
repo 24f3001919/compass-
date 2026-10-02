@@ -5,7 +5,7 @@ Compass — Task, Project, and Timeline Endpoints.
 import hmac
 import logging
 from datetime import datetime, date
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
@@ -764,7 +764,7 @@ async def seed_demo_persona_endpoint(request: Request):
         p_course = await structured.get_or_create_project(conn, name="CS 61C - Computer Architecture", domain="coursework")
         p_code = await structured.get_or_create_project(conn, name="Nebius Integration & Infrastructure", domain="code")
 
-        demo_tasks = [
+        demo_tasks: list[dict[str, Any]] = [
             {
                 "title": "36-hour Hackathon Sprint: Final Demo Build",
                 "domain": "hackathon",
@@ -816,20 +816,20 @@ async def seed_demo_persona_endpoint(request: Request):
 
             row = await structured.create_task(
                 conn,
-                domain=t["domain"],
-                title=t["title"],
+                domain=str(t["domain"]),
+                title=str(t["title"]),
                 project_id=t.get("project_id"),
                 due_date=t.get("due_date"),
-                priority=t.get("priority", "medium"),
-                status=t.get("status", "open"),
+                priority=str(t.get("priority", "medium")),
+                status=str(t.get("status", "open")),
                 notes=t.get("notes"),
                 user_id=user_id,
             )
             if t.get("duration_minutes"):
-                await structured.update_task(conn, row["id"], duration_minutes=t["duration_minutes"])
+                await structured.update_task(conn, row["id"], duration_minutes=int(t["duration_minutes"]))
             seeded_task_ids.append(row["id"])
 
-        memories = [
+        memories: list[dict[str, Any]] = [
             {
                 "domain": "code",
                 "project_id": p_code["id"],
