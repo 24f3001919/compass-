@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from 'react'
-import { createTask, deleteTask, updateTask, seedJudgeDemoPersona } from '../api/client'
+import {
+  createTask,
+  deleteTask,
+  updateTask,
+  seedJudgeDemoPersona,
+  verifyTaskDeadline,
+  verifyAllDeadlines,
+} from '../api/client'
+import OnboardingTour from './OnboardingTour'
 
 const KNOWN_FIELDS = new Set([
   'id', 'domain', 'project', 'timestamp', 'title', 'tags',
@@ -724,6 +732,24 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
   const [editStatus, setEditStatus] = useState('open')
   const [editNotes, setEditNotes] = useState('')
 
+  // Tavily schedule drift detection state
+  const [verifying, setVerifying] = useState(false)
+  const [driftResult, setDriftResult] = useState(null)
+  const [driftError, setDriftError] = useState(null)
+
+  const handleVerifyWithTavily = async () => {
+    setVerifying(true)
+    setDriftError(null)
+    try {
+      const res = await verifyTaskDeadline(task.id)
+      setDriftResult(res)
+    } catch (err) {
+      setDriftError(err.message || 'Verification failed')
+    } finally {
+      setVerifying(false)
+    }
+  }
+
   useEffect(() => {
     if (task) {
       setEditTitle(task.title || '')
@@ -734,6 +760,9 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
       setEditPriority(task.priority || 'medium')
       setEditStatus(task.status || 'open')
       setEditNotes(task.description || task.notes || '')
+      setDriftResult(null)
+      setDriftError(null)
+      setVerifying(false)
     }
     setIsEditing(false)
     setSaveError(null)
@@ -958,7 +987,35 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
         {/* ── Due Date + Priority Row ──────────────────────────────────────── */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
           <div>
-            <label style={labelStyle}>Deadline Date</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={labelStyle}>Deadline Date</label>
+              {!isEditing && (
+                <button
+                  id={`btn-verify-task-${task.id}`}
+                  onClick={handleVerifyWithTavily}
+                  disabled={verifying}
+                  style={{
+                    background: 'rgba(56, 189, 248, 0.1)',
+                    border: '1px solid rgba(56, 189, 248, 0.3)',
+                    color: '#38bdf8',
+                    padding: '2px 8px',
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontWeight: '700',
+                    cursor: verifying ? 'wait' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    marginBottom: '4px',
+                    transition: 'all 0.15s ease',
+                  }}
+                  title="Search live official web sources via Tavily to detect schedule postponements or drift"
+                >
+                  <span>{verifying ? '⏳' : '🔍'}</span>
+                  <span>{verifying ? 'Checking Tavily...' : 'Verify with Tavily'}</span>
+                </button>
+              )}
+            </div>
             {isEditing ? (
               <input
                 id="edit-task-due-date"
@@ -968,7 +1025,7 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
                 style={inputStyle}
               />
             ) : (
-              <div style={{ fontSize: '13px', color: 'var(--text-primary)', padding: '8px 0' }}>
+              <div style={{ fontSize: '13px', color: 'var(--text-primary)', padding: '6px 0' }}>
                 {task.due_date || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>No date set</span>}
               </div>
             )}
@@ -1003,6 +1060,78 @@ function TaskDetailModal({ task, onClose, onDelete, onUpdated }) {
             )}
           </div>
         </div>
+
+        {/* ── Tavily Schedule Drift Analysis Card ───────────────────────────── */}
+        {driftResult && (
+          <div style={{
+            background: driftResult.data?.drift_analysis?.has_drift
+              ? 'rgba(245, 158, 11, 0.12)'
+              : driftResult.data?.drift_analysis?.drift_verdict === 'CONFIRMED_ACCURATE'
+              ? 'rgba(16, 185, 129, 0.12)'
+              : 'rgba(56, 189, 248, 0.08)',
+            border: `1px solid ${
+              driftResult.data?.drift_analysis?.has_drift
+                ? 'rgba(245, 158, 11, 0.4)'
+                : driftResult.data?.drift_analysis?.drift_verdict === 'CONFIRMED_ACCURATE'
+                ? 'rgba(16, 185, 129, 0.4)'
+                : 'rgba(56, 189, 248, 0.3)'
+            }`,
+            borderRadius: '10px',
+            padding: '12px 14px',
+            marginBottom: '16px',
+            fontSize: '12.5px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700', marginBottom: '6px' }}>
+              <span>{driftResult.data?.drift_analysis?.has_drift ? '⚠️' : driftResult.data?.drift_analysis?.drift_verdict === 'CONFIRMED_ACCURATE' ? '✅' : 'ℹ️'}</span>
+              <span style={{
+                color: driftResult.data?.drift_analysis?.has_drift
+                  ? '#fbbf24'
+                  : driftResult.data?.drift_analysis?.drift_verdict === 'CONFIRMED_ACCURATE'
+                  ? '#34d399'
+                  : '#38bdf8'
+              }}>
+                {driftResult.data?.drift_analysis?.has_drift
+                  ? `Schedule Drift Detected: Official source indicates deadline is ${driftResult.data.drift_analysis.live_date} (${driftResult.data.drift_analysis.direction} by ${Math.abs(driftResult.data.drift_analysis.drift_days)} days)`
+                  : driftResult.data?.drift_analysis?.drift_verdict === 'CONFIRMED_ACCURATE'
+                  ? `Confirmed Accurate: Stored deadline matches live official web source`
+                  : `Tavily Search: ${driftResult.summary || 'Checked against live web'}`
+                }
+              </span>
+            </div>
+            {driftResult.data?.drift_analysis?.evidence && (
+              <div style={{ color: '#cbd5e1', fontSize: '11.5px', lineHeight: '1.45', fontStyle: 'italic', marginBottom: '6px' }}>
+                "{driftResult.data.drift_analysis.evidence}"
+              </div>
+            )}
+            {driftResult.data?.drift_analysis?.source_url && (
+              <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                Official Web Source:{' '}
+                <a
+                  href={driftResult.data.drift_analysis.source_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: '#60a5fa', textDecoration: 'underline' }}
+                >
+                  {driftResult.data.drift_analysis.source_url}
+                </a>
+              </div>
+            )}
+          </div>
+        )}
+        {driftError && (
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            color: '#f87171',
+            padding: '8px 12px',
+            borderRadius: '8px',
+            fontSize: '12px',
+            marginBottom: '14px',
+          }}>
+            ⚠️ Tavily verification check failed: {driftError}
+          </div>
+        )}
+
 
         {/* ── Status ──────────────────────────────────────────────────────── */}
         <div style={{ marginBottom: '18px' }}>
@@ -1157,6 +1286,32 @@ export default function Timeline({ tasks, activeDomain, onSelectDomain, onTasksU
   const [seedingPersona, setSeedingPersona] = useState(false)
   const [seedSuccess, setSeedSuccess] = useState(false)
 
+  const [verifyingDeadlines, setVerifyingDeadlines] = useState(false)
+  const [verificationSummary, setVerificationSummary] = useState(null)
+
+  const handleVerifyAll = async () => {
+    setVerifyingDeadlines(true)
+    setVerificationSummary(null)
+    try {
+      const res = await verifyAllDeadlines()
+      if (res && res.verifications) {
+        const driftCount = res.verifications.filter(v => v.result?.data?.drift_analysis?.has_drift).length
+        const accurateCount = res.verifications.filter(v => v.result?.data?.drift_analysis?.drift_verdict === 'CONFIRMED_ACCURATE').length
+        setVerificationSummary({
+          total: res.verifications.length,
+          drift: driftCount,
+          accurate: accurateCount,
+          details: res.verifications,
+        })
+      }
+      if (onTasksUpdated) onTasksUpdated()
+    } catch (err) {
+      setVerificationSummary({ error: err.message || 'Verification failed' })
+    } finally {
+      setVerifyingDeadlines(false)
+    }
+  }
+
   const handleSeedJudgePersona = async () => {
     setSeedingPersona(true)
     try {
@@ -1258,6 +1413,39 @@ export default function Timeline({ tasks, activeDomain, onSelectDomain, onTasksU
           )}
 
           <button
+            id="btn-verify-all-deadlines"
+            type="button"
+            onClick={handleVerifyAll}
+            disabled={verifyingDeadlines}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'rgba(56, 189, 248, 0.12)',
+              color: '#38bdf8',
+              border: '1px solid rgba(56, 189, 248, 0.35)',
+              padding: '9px 14px',
+              borderRadius: '10px',
+              fontSize: '13px',
+              fontWeight: '700',
+              cursor: verifyingDeadlines ? 'wait' : 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(56, 189, 248, 0.22)'
+              e.currentTarget.style.transform = 'translateY(-1px)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(56, 189, 248, 0.12)'
+              e.currentTarget.style.transform = 'translateY(0)'
+            }}
+            title="Proactively verify open deadlines across the live web using Tavily search"
+          >
+            <span>{verifyingDeadlines ? '⏳' : '🔍'}</span>
+            <span>{verifyingDeadlines ? 'Verifying with Tavily...' : 'Verify with Tavily'}</span>
+          </button>
+
+          <button
             id="btn-seed-judge-persona"
             type="button"
             onClick={handleSeedJudgePersona}
@@ -1322,6 +1510,66 @@ export default function Timeline({ tasks, activeDomain, onSelectDomain, onTasksU
           </button>
         </div>
       </div>
+
+      {/* Verification Feedback Banner */}
+      {verificationSummary && (
+        <div style={{
+          background: verificationSummary.error ? 'rgba(239, 68, 68, 0.12)' : 'rgba(56, 189, 248, 0.12)',
+          border: `1px solid ${verificationSummary.error ? 'rgba(239, 68, 68, 0.35)' : 'rgba(56, 189, 248, 0.35)'}`,
+          color: verificationSummary.error ? '#fca5a5' : '#bae6fd',
+          padding: '12px 18px',
+          borderRadius: '12px',
+          marginBottom: '20px',
+          fontSize: '13px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '12px',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '16px' }}>{verificationSummary.error ? '⚠️' : '🔍'}</span>
+            <div>
+              <span style={{ fontWeight: '700' }}>
+                {verificationSummary.error
+                  ? 'Tavily Verification Failed: '
+                  : 'Tavily Web Verification Complete: '
+                }
+              </span>
+              <span>
+                {verificationSummary.error
+                  ? verificationSummary.error
+                  : `Checked ${verificationSummary.total} active deadline(s). ${
+                      verificationSummary.drift > 0
+                        ? `⚠️ ${verificationSummary.drift} schedule drift(s) detected via live web search!`
+                        : 'Stored deadlines confirmed matching official sources.'
+                    }`
+                }
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => setVerificationSummary(null)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#94a3b8',
+              cursor: 'pointer',
+              fontSize: '14px',
+              padding: '4px',
+            }}
+          >✕</button>
+        </div>
+      )}
+
+      {/* Judge Onboarding & Architectural Tour */}
+      <OnboardingTour
+        onVerifyDeadlines={handleVerifyAll}
+        onOpenTelemetry={onOpenTelemetry}
+        onOpenNorthstar={onOpenNorthstar}
+        onOpenSeed={handleSeedJudgePersona}
+      />
+
 
       {/* Filter pills */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '22px', flexWrap: 'wrap' }}>
