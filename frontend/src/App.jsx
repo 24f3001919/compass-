@@ -4,6 +4,7 @@ import Timeline from './components/Timeline'
 import CalendarView from './components/CalendarView'
 import NorthstarPanel from './components/NorthstarPanel'
 import AuthModal from './components/AuthModal'
+import MigrationModal from './components/MigrationModal'
 import SharedChatView from './components/SharedChatView'
 import NebiusTelemetryModal from './components/NebiusTelemetryModal'
 import {
@@ -15,6 +16,8 @@ import {
   getGoogleOAuthConnectUrl,
   disconnectCalendar,
   seedJudgeDemoPersona,
+  initGuestSession,
+  fetchMigrationStatus,
 } from './api/client'
 
 export default function App() {
@@ -25,6 +28,8 @@ export default function App() {
   const [conversationId, setConversationId] = useState(null)
   const [usageStats, setUsageStats] = useState(null)
   const [showTelemetryModal, setShowTelemetryModal] = useState(false)
+  const [showMigrationModal, setShowMigrationModal] = useState(false)
+  const [guestConversationsCount, setGuestConversationsCount] = useState(0)
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const savedEmail = localStorage.getItem('compass_user_email') || localStorage.getItem('compass_user_id')
@@ -42,6 +47,7 @@ export default function App() {
     return null
   })
   const [showAuthModal, setShowAuthModal] = useState(false)
+
   const [shareId, setShareId] = useState(() => {
     const params = new URLSearchParams(window.location.search)
     return params.get('share') || (window.location.pathname.startsWith('/share/') ? window.location.pathname.replace('/share/', '') : null)
@@ -125,19 +131,35 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const checkMigration = useCallback(async () => {
+    try {
+      const status = await fetchMigrationStatus()
+      if (status.has_guest_data && status.guest_conversations_count > 0) {
+        setGuestConversationsCount(status.guest_conversations_count)
+        setShowMigrationModal(true)
+      }
+    } catch (e) {
+      console.warn('Migration status check skipped:', e)
+    }
+  }, [])
+
   const handleUserChanged = useCallback(async (newEmail) => {
     if (newEmail) {
       const u = await fetchCurrentUser()
       setCurrentUser(u)
+      checkMigration()
     } else {
       setCurrentUser({ authenticated: false, email: '' })
     }
     loadTasks(selectedDomain)
     refreshUsage()
-  }, [loadTasks, selectedDomain, refreshUsage])
+  }, [loadTasks, selectedDomain, refreshUsage, checkMigration])
 
   useEffect(() => {
     let isMounted = true
+
+    // Initialize anonymous guest session immediately so unauthenticated users can chat & persist context
+    initGuestSession()
 
     // Health Polling (Every 10 seconds)
     const pollHealth = async () => {
@@ -160,6 +182,7 @@ export default function App() {
     fetchCurrentUser().then(u => {
       if (isMounted && u && (u.authenticated || (u.email && u.email.includes('@')))) {
         setCurrentUser(u)
+        checkMigration()
       }
     })
 
@@ -295,6 +318,7 @@ export default function App() {
             onSelectTab={setActiveTab}
             pendingPrompt={pendingPrompt}
             onClearPendingPrompt={() => setPendingPrompt(null)}
+            onOpenMigration={() => setShowMigrationModal(true)}
           />
         )}
       </main>
@@ -306,6 +330,17 @@ export default function App() {
         onUserChanged={handleUserChanged}
       />
 
+      <MigrationModal
+        isOpen={showMigrationModal}
+        onClose={() => setShowMigrationModal(false)}
+        guestConversationsCount={guestConversationsCount}
+        onMigrationComplete={() => {
+          setShowMigrationModal(false)
+          loadTasks(selectedDomain)
+          refreshUsage()
+        }}
+      />
+
       <NebiusTelemetryModal
         isOpen={showTelemetryModal}
         onClose={() => setShowTelemetryModal(false)}
@@ -314,4 +349,4 @@ export default function App() {
       />
     </div>
   )
-}
+}

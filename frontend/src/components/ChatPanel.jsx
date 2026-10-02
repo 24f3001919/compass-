@@ -6,6 +6,8 @@ import {
   updateConversation,
   deleteConversation,
   fetchMemoryOverview,
+  fetchMigrationStatus,
+  getCurrentUserId,
 } from '../api/client'
 import ShareModal from './ShareModal'
 
@@ -18,7 +20,8 @@ function getTimeGreeting() {
 
 export default function ChatPanel({
   messages, setMessages, conversationId, setConversationId, onSendMessage, isTyping, onChatComplete,
-  tasks = [], backendStatus = '', initialPrompt = null, onClearInitialPrompt = null
+  tasks = [], backendStatus = '', initialPrompt = null, onClearInitialPrompt = null,
+  onOpenMigration = null,
 }) {
   const [input, setInput] = useState('')
   const [streamingText, setStreamingText] = useState('')
@@ -30,6 +33,7 @@ export default function ChatPanel({
   const [pastPlans, setPastPlans] = useState([])
   const [memoryOverview, setMemoryOverview] = useState(null)
   const [loadingHistory, setLoadingHistory] = useState(false)
+  const [guestMigrationCount, setGuestMigrationCount] = useState(0)
 
   // Options menu, renaming, archiving, and delete modal state
   const [openMenuConvId, setOpenMenuConvId] = useState(null)
@@ -63,6 +67,15 @@ export default function ChatPanel({
       if (mem) {
         setMemoryOverview(mem)
         if (mem.recent_plans) setPastPlans(mem.recent_plans)
+      }
+      const uid = getCurrentUserId()
+      if (uid && uid.includes('@')) {
+        const mig = await fetchMigrationStatus()
+        if (mig && mig.has_guest_data && mig.guest_conversations_count > 0) {
+          setGuestMigrationCount(mig.guest_conversations_count)
+        } else {
+          setGuestMigrationCount(0)
+        }
       }
     } catch (e) {
       console.warn('Error loading history data:', e)
@@ -618,6 +631,40 @@ export default function ChatPanel({
                 <span>+</span> Start New Chat
               </button>
             </div>
+
+            {guestMigrationCount > 0 && onOpenMigration && (
+              <div style={{
+                margin: '8px 12px',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.15))',
+                border: '1px solid rgba(139, 92, 246, 0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '8px',
+              }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-primary)' }}>
+                  📦 <strong>{guestMigrationCount} guest chat{guestMigrationCount === 1 ? '' : 's'}</strong> available
+                </div>
+                <button
+                  onClick={onOpenMigration}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: '5px',
+                    border: 'none',
+                    background: '#6366f1',
+                    color: '#fff',
+                    fontSize: '10px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Import
+                </button>
+              </div>
+            )}
 
             {/* Drawer Sub-tab selector */}
             <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '6px 12px', gap: '6px', background: 'var(--bg-app)' }}>

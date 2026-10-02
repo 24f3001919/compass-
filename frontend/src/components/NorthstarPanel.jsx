@@ -18,6 +18,7 @@ export default function NorthstarPanel({
   onSelectTab,
   pendingPrompt,
   onClearPendingPrompt,
+  onOpenMigration,
 }) {
   const [activeSubTab, setActiveSubTab] = useState(initialSubTab)
 
@@ -136,6 +137,7 @@ export default function NorthstarPanel({
             backendStatus={backendStatus}
             initialPrompt={pendingPrompt}
             onClearInitialPrompt={onClearPendingPrompt}
+            onOpenMigration={onOpenMigration}
           />
         ) : activeSubTab === 'planner' ? (
           <AgentPanel

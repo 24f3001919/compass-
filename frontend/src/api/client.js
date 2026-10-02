@@ -81,44 +81,92 @@ export function addKnownAccount(email) {
   } catch {}
 }
 
+export function getGuestToken() {
+  try {
+    return localStorage.getItem('compass_guest_token') || null
+  } catch {
+    return null
+  }
+}
+
+export function getGuestId() {
+  try {
+    return localStorage.getItem('compass_guest_id') || null
+  } catch {
+    return null
+  }
+}
+
+export function setGuestSession(guestId, guestToken) {
+  try {
+    if (guestId && guestToken) {
+      localStorage.setItem('compass_guest_id', guestId)
+      localStorage.setItem('compass_guest_token', guestToken)
+    } else {
+      localStorage.removeItem('compass_guest_id')
+      localStorage.removeItem('compass_guest_token')
+    }
+  } catch {}
+}
+
+export async function initGuestSession() {
+  try {
+    const existingToken = getGuestToken()
+    // Verify existing token or create a fresh guest session
+    const res = await fetch(`${API_BASE}/api/guest/session`, {
+      method: existingToken ? 'GET' : 'POST',
+      headers: existingToken ? { 'x-guest-token': existingToken } : {},
+      credentials: 'include',
+    })
+    if (res.ok) {
+      const data = await res.json()
+      if (data.guest_id && data.guest_token) {
+        setGuestSession(data.guest_id, data.guest_token)
+        return data
+      }
+    }
+    // If verification of old token failed, request a fresh guest session
+    if (existingToken) {
+      const freshRes = await fetch(`${API_BASE}/api/guest/session`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+      if (freshRes.ok) {
+        const data = await freshRes.json()
+        if (data.guest_id && data.guest_token) {
+          setGuestSession(data.guest_id, data.guest_token)
+          return data
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Compass] Guest session init failed:', err)
+  }
+  return null
+}
+
 export function getCurrentUserId() {
-  // 1. Check explicit saved email or user id
+  // 1. Check explicit saved email or authenticated user id
   let uid = localStorage.getItem('compass_user_email') || localStorage.getItem('compass_user_id')
-  if (uid && uid.trim()) {
-    return uid.trim()
+  if (uid && uid.trim() && uid.includes('@')) {
+    return uid.trim().toLowerCase()
   }
 
   // 2. Check persistent cookie
   if (typeof document !== 'undefined') {
     const cookieMatch = document.cookie.match(/(?:^|;\s*)compass_user_id=([^;]+)/)
     if (cookieMatch && cookieMatch[1]) {
-      uid = decodeURIComponent(cookieMatch[1]).trim()
-      if (uid) {
+      uid = decodeURIComponent(cookieMatch[1]).trim().toLowerCase()
+      if (uid && uid.includes('@')) {
         localStorage.setItem('compass_user_id', uid)
-        if (uid.includes('@')) {
-          localStorage.setItem('compass_user_email', uid)
-          addKnownAccount(uid)
-        }
+        localStorage.setItem('compass_user_email', uid)
+        addKnownAccount(uid)
         return uid
       }
     }
   }
 
-  // 3. Fallback: generate anonymous guest workspace ID
-  const randomPart = typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID().replace(/-/g, '').slice(0, 12)
-    : Math.random().toString(36).slice(2, 14)
-  uid = `anon_${randomPart}`
-  localStorage.setItem('compass_user_id', uid)
-  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:'
-  if (isHttps) {
-    try {
-      document.cookie = `compass_user_id=${encodeURIComponent(uid)}; path=/; max-age=31536000; SameSite=Lax; Secure`
-    } catch {
-      // Cookie storage fallback
-    }
-  }
-  return uid
+  return null
 }
 
 export function setCurrentUserId(userId) {
@@ -156,12 +204,21 @@ export function getAuthHeaders(extraHeaders = {}) {
   if (uid) {
     headers['x-user-id'] = uid
   }
+  const guestToken = getGuestToken()
+  if (guestToken) {
+    headers['x-guest-token'] = guestToken
+  }
+  const guestId = getGuestId()
+  if (guestId) {
+    headers['x-guest-id'] = guestId
+  }
   const token = localStorage.getItem('compass_auth_token') || (import.meta.env.DEV ? 'dev-token' : '')
   if (token && !headers['Authorization']) {
     headers['Authorization'] = `Bearer ${token}`
   }
   return headers
 }
+
 
 /**
  * Health check ping — dynamically reports Neon connection or fallback status.
@@ -813,6 +870,108 @@ export async function verifyAllDeadlines() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Anonymous Guest Migration & Data Privacy
+// ---------------------------------------------------------------------------
 
+/**
+ * Fetch migration status to check if unauthenticated guest data exists.
+ */
+export async function fetchMigrationStatus() {
+  try {
+    const res = await fetch(`${API_BASE}/api/migration/status`, {
+      headers: getAuthHeaders(),
+      credentials: 'include',
+    })
+    if (!res.ok) return { has_guest_data: false, guest_conversations_count: 0 }
+    return await res.json()
+  } catch {
+    return { has_guest_data: false, guest_conversations_count: 0 }
+  }
+}
 
+/**
+ * List all guest conversations for selective migration.
+ */
+export async function fetchMigrationConversations() {
+  try {
+    const res = await fetch(`${API_BASE}/api/migration/conversations`, {
+      headers: getAuthHeaders(),
+      credentials: 'include',
+    })
+    if (!res.ok) return { guest_id: null, conversations: [], total: 0 }
+    return await res.json()
+  } catch {
+    return { guest_id: null, conversations: [], total: 0 }
+  }
+}
 
+/**
+ * Import all eligible guest conversations & memory into the authenticated account.
+ */
+export async function importAllGuestData() {
+  const res = await fetch(`${API_BASE}/api/migration/import-all`, {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    credentials: 'include',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Failed to import guest data (HTTP ${res.status})`)
+  }
+  return await res.json()
+}
+
+/**
+ * Import selected guest conversations into the authenticated account.
+ */
+export async function importSelectedGuestConversations(conversationIds, importMemory = true) {
+  const res = await fetch(`${API_BASE}/api/migration/import-selected`, {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    credentials: 'include',
+    body: JSON.stringify({
+      conversation_ids: conversationIds,
+      import_memory: importMemory,
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Failed to import selected conversations (HTTP ${res.status})`)
+  }
+  return await res.json()
+}
+
+/**
+ * Skip migration for now, recording user preference while preserving guest data.
+ */
+export async function skipMigration() {
+  try {
+    const res = await fetch(`${API_BASE}/api/migration/skip`, {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      credentials: 'include',
+    })
+    if (!res.ok) return false
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Delete all data associated with current guest session (GDPR / privacy control).
+ */
+export async function deleteGuestData() {
+  const res = await fetch(`${API_BASE}/api/guest/data`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+    credentials: 'include',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Failed to delete guest data (HTTP ${res.status})`)
+  }
+  setGuestSession(null, null)
+  return await res.json()
+}
