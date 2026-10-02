@@ -111,20 +111,98 @@ async def verify_token(
 
 
 # ---------------------------------------------------------------------------
-# User Identity Helper
+# Guest Security & Token Helpers
+# ---------------------------------------------------------------------------
+_guest_rate_store: dict = defaultdict(deque)  # guest_id -> deque of timestamps
+
+
+def _get_guest_signing_secret() -> bytes:
+    """Derive secret for HMAC signing of guest session tokens."""
+    settings = get_settings()
+    raw = settings.AUTH_TOKEN or settings.DEFAULT_DEV_TOKEN or "compass-guest-signing-secret"
+    return raw.encode("utf-8")
+
+
+def generate_guest_token(guest_id: Optional[str] = None) -> tuple[str, str]:
+    """Generate a cryptographically random UUID guest identity and HMAC-signed token.
+
+    Format: <uuid>.<hmac_sha256_hex>
+    Ensures guest sessions are tamper-proof and cannot be spoofed by guessing IDs.
+    """
+    import hashlib
+    import uuid as _uuid
+    gid = guest_id or str(_uuid.uuid4())
+    secret = _get_guest_signing_secret()
+    sig = hmac.new(secret, gid.encode("utf-8"), hashlib.sha256).hexdigest()
+    token = f"{gid}.{sig}"
+    return gid, token
+
+
+def verify_guest_token(token: Optional[str]) -> Optional[str]:
+    """Verify an HMAC-signed guest token. Returns the guest UUID if valid, None if invalid or forged."""
+    if not token or not isinstance(token, str) or "." not in token:
+        return None
+    parts = token.strip().split(".", 1)
+    if len(parts) != 2:
+        return None
+    gid, sig = parts
+    import uuid as _uuid
+    try:
+        # Strict validation: must be a valid UUID
+        _uuid.UUID(gid)
+    except (ValueError, TypeError):
+        return None
+
+    import hashlib
+    secret = _get_guest_signing_secret()
+    expected_sig = hmac.new(secret, gid.encode("utf-8"), hashlib.sha256).hexdigest()
+    if hmac.compare_digest(sig, expected_sig):
+        return gid
+    return None
+
+
+async def guest_rate_limit(request: Request) -> None:
+    """Sliding-window rate limiter per guest identity to prevent anonymous endpoint abuse."""
+    guest_id = _get_current_guest_id(request)
+    if not guest_id:
+        return
+    settings = get_settings()
+    max_reqs = getattr(settings, "GUEST_RATE_LIMIT", 30)
+    window = 60
+    now = time.monotonic()
+    window_start = now - window
+
+    q = _guest_rate_store[guest_id]
+    while q and q[0] < window_start:
+        q.popleft()
+
+    if len(q) >= max_reqs:
+        retry_after = int(window - (now - q[0])) + 1
+        raise HTTPException(
+            status_code=429,
+            detail=f"Guest rate limit exceeded. Max {max_reqs} requests per minute.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    q.append(now)
+
+
+# ---------------------------------------------------------------------------
+# User & Guest Identity Helpers
 # ---------------------------------------------------------------------------
 def _get_current_user_id(request: Request) -> Optional[str]:
-    """Resolve current user identity strictly from headers or cookies."""
+    """Resolve authenticated user identity strictly from headers or cookies."""
     user_header = request.headers.get("x-user-id")
     if user_header and user_header.strip():
-        return user_header.strip().lower()
+        val = user_header.strip().lower()
+        if "@" in val:
+            return val
 
     session_token = request.cookies.get("compass_session")
     if session_token:
         try:
             from backend.routers.auth import get_user_from_session
             user = get_user_from_session(session_token)
-            if user:
+            if user and "@" in user:
                 return user.lower()
         except Exception:
             pass
@@ -132,25 +210,69 @@ def _get_current_user_id(request: Request) -> Optional[str]:
     cookie_user = request.cookies.get("compass_user_id")
     if cookie_user and cookie_user.strip():
         import urllib.parse
-        return urllib.parse.unquote(cookie_user.strip()).lower()
+        val = urllib.parse.unquote(cookie_user.strip()).lower()
+        if "@" in val:
+            return val
     return None
 
 
-def _get_or_create_user_id(request: Request) -> str:
-    """Resolve current user identity, falling back to a deterministic guest identity.
+def _get_current_guest_id(request: Request) -> Optional[str]:
+    """Extract and cryptographically verify guest identity from token header or cookie."""
+    # 1. Check signed X-Guest-Token header
+    token_header = request.headers.get("x-guest-token")
+    if token_header:
+        verified = verify_guest_token(token_header)
+        if verified:
+            return verified
 
-    Guarantees every task or memory mutation is bound to an isolated user or guest
-    workspace identity rather than leaving ownership unassigned (NULL).
+    # 2. Check signed compass_guest_token cookie
+    cookie_token = request.cookies.get("compass_guest_token")
+    if cookie_token:
+        verified = verify_guest_token(cookie_token)
+        if verified:
+            return verified
+
+    # 3. Check X-Guest-Id header if formatted as signed token or UUID with cookie verification
+    guest_id_header = request.headers.get("x-guest-id")
+    if guest_id_header:
+        # Check if header itself contains signed token
+        if "." in guest_id_header:
+            verified = verify_guest_token(guest_id_header)
+            if verified:
+                return verified
+        # Or if matching the verified cookie token
+        if cookie_token:
+            verified = verify_guest_token(cookie_token)
+            if verified and verified == guest_id_header.strip():
+                return verified
+
+    return None
+
+
+def _resolve_identities(request: Request) -> tuple[Optional[str], Optional[str]]:
+    """Resolve both authenticated user_id and guest_id if present."""
+    user_id = _get_current_user_id(request)
+    guest_id = _get_current_guest_id(request)
+    return user_id, guest_id
+
+
+def _get_or_create_user_id(request: Request) -> str:
+    """Resolve current user identity, falling back to verified guest identity or fresh UUID.
+
+    Guarantees every mutation is bound to an isolated user or guest workspace identity.
+    Does NOT use IP address or browser fingerprinting.
     """
     uid = _get_current_user_id(request)
     if uid:
         return uid
-    client_ip = get_client_ip(request)
-    import hashlib
-    h = hashlib.sha256(client_ip.encode("utf-8")).hexdigest()[:12]
-    return f"guest_{h}"
+    gid = _get_current_guest_id(request)
+    if gid:
+        return f"guest_{gid}"
+    import uuid as _uuid
+    return f"guest_{_uuid.uuid4()}"
 
 
 def _now_iso() -> str:
     """Current UTC timestamp as ISO 8601 string."""
     return datetime.now(timezone.utc).isoformat()
+

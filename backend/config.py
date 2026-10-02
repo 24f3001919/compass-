@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     # --- Auth ---
     AUTH_TOKEN: str = ""  # Required — set in .env
 
+    # --- Guest / Anonymous Mode ---
+    GUEST_MAX_CONVERSATIONS: int = 50
+    GUEST_MAX_MESSAGES_PER_CONVERSATION: int = 200
+    GUEST_MAX_MEMORIES: int = 100
+    GUEST_RETENTION_DAYS: int = 30
+    GUEST_RATE_LIMIT: int = 30
+
     # --- Tavily Search API ---
     TAVILY_API_KEY: str = ""
     TAVILY_ENABLED: bool = True  # MUST be True in the submitted build

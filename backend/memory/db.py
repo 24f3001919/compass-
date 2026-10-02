@@ -41,9 +41,26 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
 
         ALTER TABLE conversations ADD COLUMN IF NOT EXISTS title TEXT;
         ALTER TABLE conversations ADD COLUMN IF NOT EXISTS user_id TEXT;
+        ALTER TABLE conversations ADD COLUMN IF NOT EXISTS guest_id TEXT;
+        ALTER TABLE conversations ADD COLUMN IF NOT EXISTS imported_from_id UUID;
         ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE;
         ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE;
         CREATE INDEX IF NOT EXISTS idx_conversations_last_active ON conversations(last_active_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_conversations_guest_id ON conversations(guest_id);
+        CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id);
+        CREATE INDEX IF NOT EXISTS idx_conversations_imported_from ON conversations(imported_from_id);
+
+        CREATE TABLE IF NOT EXISTS guest_migration_log (
+            id                      SERIAL        PRIMARY KEY,
+            guest_id                TEXT          NOT NULL,
+            user_id                 TEXT          NOT NULL,
+            guest_conversation_id   UUID          NOT NULL,
+            user_conversation_id    UUID          NOT NULL,
+            imported_at             TIMESTAMPTZ   NOT NULL DEFAULT now(),
+            UNIQUE(guest_conversation_id, user_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_guest_mig_guest ON guest_migration_log(guest_id);
+        CREATE INDEX IF NOT EXISTS idx_guest_mig_user ON guest_migration_log(user_id);
 
         CREATE TABLE IF NOT EXISTS agent_audit_log (
             id                 SERIAL        PRIMARY KEY,
