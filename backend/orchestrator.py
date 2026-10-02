@@ -56,6 +56,7 @@ async def handle_message(
     conversation_id: Optional[str],
     message: str,
     user_id: Optional[str] = None,
+    guest_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Process an incoming user message through router and skill handlers."""
     start_time = time.perf_counter()
@@ -83,7 +84,7 @@ async def handle_message(
         pool = await get_pool()
         async with pool.acquire() as conn:
             prior_messages = await conversations.get_cross_conversation_memory(
-                conn, exclude_conversation_id=conversation_id, limit=6, user_id=user_id
+                conn, exclude_conversation_id=conversation_id, limit=6, user_id=user_id, guest_id=guest_id
             )
             if user_id:
                 active_tasks = await conn.fetch(
@@ -388,7 +389,9 @@ async def handle_message(
 
             try:
                 async with pool.acquire() as conn:
-                    real_cid = await conversations.get_or_create_conversation(conn, conv_id)
+                    real_cid = await conversations.get_or_create_conversation(
+                        conn, conv_id, user_id=user_id, guest_id=guest_id
+                    )
                     await conversations.add_message(conn, real_cid, role="user", content=message)
                     await conversations.add_message(
                         conn, real_cid, role="assistant",
@@ -420,7 +423,9 @@ async def handle_message(
     try:
         pool = await get_pool()
         async with pool.acquire() as conn:
-            real_cid = await conversations.get_or_create_conversation(conn, conv_id)
+            real_cid = await conversations.get_or_create_conversation(
+                conn, conv_id, user_id=user_id, guest_id=guest_id
+            )
             await conversations.add_message(conn, real_cid, role="user", content=message)
             await conversations.add_message(conn, real_cid, role="assistant", content=text_reply, skill_called="chat")
             conv_id = real_cid

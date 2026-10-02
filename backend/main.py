@@ -76,6 +76,7 @@ from backend.routers import (
     calendar_router,
     auth_router,
     specialist_router,
+    migration_router,
 )
 
 # ---------------------------------------------------------------------------
@@ -153,7 +154,16 @@ app.add_middleware(
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "x-user-id", "Accept", "Origin", "X-Requested-With"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "x-user-id",
+        "x-guest-token",
+        "x-guest-id",
+        "Accept",
+        "Origin",
+        "X-Requested-With",
+    ],
 )
 
 # ---------------------------------------------------------------------------
@@ -166,3 +176,5 @@ app.include_router(agent_router)
 app.include_router(calendar_router)
 app.include_router(auth_router)
 app.include_router(specialist_router)
+app.include_router(migration_router)
+

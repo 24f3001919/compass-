@@ -17,7 +17,13 @@ except (ImportError, ModuleNotFoundError):
     ChatCompletionMessageParam = Any  # type: ignore[misc,assignment]
     ChatCompletionToolParam = Any  # type: ignore[misc,assignment]
 
-from backend.dependencies import rate_limit, verify_token, _get_current_user_id
+from backend.dependencies import (
+    rate_limit,
+    verify_token,
+    _get_current_user_id,
+    _resolve_identities,
+    guest_rate_limit,
+)
 from backend.memory.db import get_pool
 from backend.memory import conversations
 import backend.orchestrator as orchestrator
@@ -94,11 +100,11 @@ async def list_past_conversations(
     pool = await get_pool()
     if not pool:
         return {"conversations": [], "total": 0}
-    user_id = request.headers.get("x-user-id") if request else None
+    user_id, guest_id = _resolve_identities(request)
     try:
         async with pool.acquire() as conn:
             convs = await conversations.list_conversations(
-                conn, limit=limit, user_id=user_id, include_archived=include_archived
+                conn, limit=limit, user_id=user_id, guest_id=guest_id, include_archived=include_archived
             )
             return {"conversations": convs, "total": len(convs)}
     except Exception as e:
@@ -128,25 +134,38 @@ async def update_past_conversation(
             has_user_col = await conn.fetchval(
                 "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversations' AND column_name = 'user_id')"
             )
+            has_guest_col = await conn.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversations' AND column_name = 'guest_id')"
+            )
+            cols = ["id"]
             if has_user_col:
-                conv_row = await conn.fetchrow("SELECT user_id FROM conversations WHERE id = $1", cid)
-                if not conv_row:
-                    raise HTTPException(status_code=404, detail="Conversation not found")
+                cols.append("user_id")
+            if has_guest_col:
+                cols.append("guest_id")
 
-                user_id = _get_current_user_id(request)
-                auth_header = request.headers.get("authorization", "")
-                is_admin = False
-                if auth_header.startswith("Bearer "):
-                    token = auth_header[7:].strip()
-                    from backend.config import get_settings
-                    import hmac
-                    s = get_settings()
-                    if token and s.AUTH_TOKEN and hmac.compare_digest(token, s.AUTH_TOKEN):
-                        is_admin = True
+            conv_row = await conn.fetchrow(f"SELECT {', '.join(cols)} FROM conversations WHERE id = $1", cid)
+            if not conv_row:
+                raise HTTPException(status_code=404, detail="Conversation not found")
 
-                conv_owner = conv_row.get("user_id")
-                if not is_admin and conv_owner:
+            user_id, guest_id = _resolve_identities(request)
+            auth_header = request.headers.get("authorization", "")
+            is_admin = False
+            if auth_header.startswith("Bearer "):
+                token = auth_header[7:].strip()
+                from backend.config import get_settings
+                import hmac
+                s = get_settings()
+                if token and s.AUTH_TOKEN and hmac.compare_digest(token, s.AUTH_TOKEN):
+                    is_admin = True
+
+            conv_owner = conv_row.get("user_id") if has_user_col else None
+            conv_guest = conv_row.get("guest_id") if has_guest_col else None
+            if not is_admin:
+                if conv_owner:
                     if not user_id or user_id.lower() != conv_owner.lower():
+                        raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to modify this conversation.")
+                elif conv_guest:
+                    if not guest_id or guest_id != conv_guest:
                         raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to modify this conversation.")
 
             ok = await conversations.update_conversation(
@@ -183,25 +202,38 @@ async def delete_past_conversation(conversation_id: str, request: Request):
             has_user_col = await conn.fetchval(
                 "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversations' AND column_name = 'user_id')"
             )
+            has_guest_col = await conn.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversations' AND column_name = 'guest_id')"
+            )
+            cols = ["id"]
             if has_user_col:
-                conv_row = await conn.fetchrow("SELECT user_id FROM conversations WHERE id = $1", cid)
-                if not conv_row:
-                    raise HTTPException(status_code=404, detail="Conversation not found")
+                cols.append("user_id")
+            if has_guest_col:
+                cols.append("guest_id")
 
-                user_id = _get_current_user_id(request)
-                auth_header = request.headers.get("authorization", "")
-                is_admin = False
-                if auth_header.startswith("Bearer "):
-                    token = auth_header[7:].strip()
-                    from backend.config import get_settings
-                    import hmac
-                    s = get_settings()
-                    if token and s.AUTH_TOKEN and hmac.compare_digest(token, s.AUTH_TOKEN):
-                        is_admin = True
+            conv_row = await conn.fetchrow(f"SELECT {', '.join(cols)} FROM conversations WHERE id = $1", cid)
+            if not conv_row:
+                raise HTTPException(status_code=404, detail="Conversation not found")
 
-                conv_owner = conv_row.get("user_id")
-                if not is_admin and conv_owner:
+            user_id, guest_id = _resolve_identities(request)
+            auth_header = request.headers.get("authorization", "")
+            is_admin = False
+            if auth_header.startswith("Bearer "):
+                token = auth_header[7:].strip()
+                from backend.config import get_settings
+                import hmac
+                s = get_settings()
+                if token and s.AUTH_TOKEN and hmac.compare_digest(token, s.AUTH_TOKEN):
+                    is_admin = True
+
+            conv_owner = conv_row.get("user_id") if has_user_col else None
+            conv_guest = conv_row.get("guest_id") if has_guest_col else None
+            if not is_admin:
+                if conv_owner:
                     if not user_id or user_id.lower() != conv_owner.lower():
+                        raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to delete this conversation.")
+                elif conv_guest:
+                    if not guest_id or guest_id != conv_guest:
                         raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to delete this conversation.")
 
             ok = await conversations.delete_conversation(conn, conversation_id)
@@ -334,9 +366,11 @@ async def get_memory_overview(request: Request):
 @router.post("/api/chat", response_model=PublicChatResponse)
 async def public_chat(req: PublicChatRequest, request: Request, _rl: None = Depends(rate_limit)):
     """Executes orchestrator.handle_message(), records usage, and returns response and latency."""
-    user_id = _get_current_user_id(request)
+    user_id, guest_id = _resolve_identities(request)
     msg = req.message.strip()
-    result = await orchestrator.handle_message(conversation_id=req.conversation_id, message=msg, user_id=user_id)
+    result = await orchestrator.handle_message(
+        conversation_id=req.conversation_id, message=msg, user_id=user_id, guest_id=guest_id
+    )
 
     return PublicChatResponse(
         response=result.get("response", ""),
@@ -413,7 +447,7 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
     from backend.services.usage import record_usage
 
     _settings = _gs()
-    user_id = _get_current_user_id(request)
+    user_id, guest_id = _resolve_identities(request)
 
     async def event_generator():
         conv_id = req.conversation_id or str(uuid.uuid4())
@@ -421,7 +455,9 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
         yield ": ping\n\n"
 
         if not _settings.NEBIUS_API_KEY:
-            result = await orchestrator.handle_message(conversation_id=req.conversation_id, message=message, user_id=user_id)
+            result = await orchestrator.handle_message(
+                conversation_id=req.conversation_id, message=message, user_id=user_id, guest_id=guest_id
+            )
             response_text = result.get("response", "")
             prompt_est = max(len(message.split()) * 3, 30)
             completion_est = max(len(response_text.split()), 15)
@@ -457,7 +493,9 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
                 pool = await get_pool()
                 if pool:
                     async with pool.acquire() as conn:
-                        prior = await conversations.get_cross_conversation_memory(conn, exclude_conversation_id=req.conversation_id, user_id=user_id, limit=6)
+                        prior = await conversations.get_cross_conversation_memory(
+                            conn, exclude_conversation_id=req.conversation_id, user_id=user_id, guest_id=guest_id, limit=6
+                        )
                         if user_id:
                             tasks_rows = await conn.fetch(
                                 "SELECT title, domain, due_date, status, priority FROM tasks WHERE status != 'completed' AND (user_id IS NULL OR user_id = $1) ORDER BY due_date ASC NULLS LAST LIMIT 8",
@@ -538,7 +576,9 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
                     yield f"data: {json.dumps({'type': 'token', 'value': token})}\n\n"
 
             if tool_call_detected or not full_text.strip():
-                result = await orchestrator.handle_message(conversation_id=req.conversation_id, message=message, user_id=user_id)
+                result = await orchestrator.handle_message(
+                    conversation_id=req.conversation_id, message=message, user_id=user_id, guest_id=guest_id
+                )
                 response_text = result.get("response", "")
                 prompt_est = max(len(message.split()) * 3, 30)
                 completion_est = max(len(response_text.split()), 15)
@@ -551,7 +591,9 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
                 pool = await get_pool()
                 if pool and full_text:
                     async with pool.acquire() as conn:
-                        real_cid = await conversations.get_or_create_conversation(conn, conv_id, user_id=user_id)
+                        real_cid = await conversations.get_or_create_conversation(
+                            conn, conv_id, user_id=user_id, guest_id=guest_id
+                        )
                         await conversations.add_message(conn, real_cid, role="user", content=message)
                         await conversations.add_message(conn, real_cid, role="assistant", content=full_text, skill_called="chat")
             except Exception as save_err:
@@ -566,7 +608,9 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
         except Exception as e:
             logger.warning(f"SSE stream error ({e}); falling back to non-streaming orchestrator")
             try:
-                result = await orchestrator.handle_message(conversation_id=req.conversation_id, message=message, user_id=user_id)
+                result = await orchestrator.handle_message(
+                    conversation_id=req.conversation_id, message=message, user_id=user_id, guest_id=guest_id
+                )
                 response_text = result.get("response", "")
                 prompt_est = max(len(message.split()) * 3, 30)
                 completion_est = max(len(response_text.split()), 15)
