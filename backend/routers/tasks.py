@@ -916,3 +916,66 @@ async def seed_demo_persona_endpoint(request: Request):
         "memories_seeded": seeded_mem_count,
     }
 
+
+# ---- Tavily Live Deadline Verification -------------------------------------
+@router.post("/tasks/{task_id}/verify")
+@router.post("/api/tasks/{task_id}/verify")
+async def verify_task_deadline_endpoint(task_id: int, request: Request):
+    """Verify a task deadline against live official web sources using Tavily."""
+    pool = await get_pool()
+    if not pool:
+        raise HTTPException(status_code=500, detail="Database unavailable")
+    try:
+        from backend.skills.handlers.web import handle_verify_deadline
+        result = await handle_verify_deadline({"task_id": task_id}, pool)
+        return result
+    except Exception as e:
+        logger.error(f"Failed to verify task {task_id}: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+            "summary": f"Verification error: {e}",
+            "data": {},
+        }
+
+
+@router.post("/tasks/verify-deadlines")
+@router.post("/api/tasks/verify-deadlines")
+async def verify_all_deadlines_endpoint(request: Request):
+    """Proactively verify open deadlines across tasks using Tavily web search."""
+    pool = await get_pool()
+    if not pool:
+        raise HTTPException(status_code=500, detail="Database unavailable")
+    user_id = _get_current_user_id(request)
+    try:
+        from backend.skills.handlers.web import handle_verify_deadline
+        async with pool.acquire() as conn:
+            open_tasks = await structured.list_tasks(conn, status="open", user_id=user_id, limit=5)
+
+        verifications = []
+        for t in open_tasks:
+            if not t.get("title"):
+                continue
+            res = await handle_verify_deadline({"task_id": t["id"]}, pool)
+            verifications.append({
+                "task_id": t["id"],
+                "title": t["title"],
+                "domain": t.get("domain", "general"),
+                "due_date": str(t.get("due_date") or ""),
+                "result": res,
+            })
+
+        return {
+            "status": "ok",
+            "checked_count": len(verifications),
+            "verifications": verifications,
+        }
+    except Exception as e:
+        logger.error(f"Failed to batch verify deadlines: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "error": str(e),
+            "verifications": [],
+        }
+
+
