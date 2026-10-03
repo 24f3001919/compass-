@@ -43,30 +43,31 @@ class ImportSelectedBody(BaseModel):
 async def guest_session_endpoint(request: Request, response: Response):
     """Obtain or restore an anonymous guest session.
 
-    Returns a cryptographically random UUID guest identity and an HMAC-signed token.
-    Persists the signed token in a secure cookie to support page reloads and multi-tab usage.
+    - POST: Generates a fresh, cryptographically random UUID guest identity and an HMAC-signed token,
+            persisting it in a secure cookie.
+    - GET: Validates and recovers an existing active guest session without constructing cookies from user input.
     """
-    existing_gid = _get_current_guest_id(request)
-    is_new = False
+    if request.method == "GET":
+        hdr_token = request.headers.get("x-guest-token")
+        cookie_token = request.cookies.get("compass_guest_token")
+        raw_token = hdr_token or cookie_token
 
-    hdr_token = request.headers.get("x-guest-token")
-    if hdr_token and not verify_guest_token(hdr_token):
-        raise HTTPException(status_code=401, detail="Invalid or expired guest session token.")
+        if not raw_token:
+            raise HTTPException(status_code=401, detail="No active guest session found.")
 
-    raw_token = hdr_token or request.cookies.get("compass_guest_token")
-    if raw_token and not existing_gid:
-        raise HTTPException(status_code=401, detail="Invalid or expired guest session token.")
+        verified_gid = verify_guest_token(raw_token)
+        if not verified_gid:
+            raise HTTPException(status_code=401, detail="Invalid or expired guest session token.")
 
-    if request.method == "GET" and not existing_gid:
-        raise HTTPException(status_code=401, detail="No active guest session found.")
+        return {
+            "status": "ok",
+            "guest_id": verified_gid,
+            "guest_token": raw_token,
+            "is_new": False,
+        }
 
-    if existing_gid:
-        gid = existing_gid
-        # Re-sign to ensure fresh token
-        _, token = generate_guest_token(gid)
-    else:
-        gid, token = generate_guest_token()
-        is_new = True
+    # POST: Always generate a brand new cryptographically random guest identity (zero user input)
+    gid, token = generate_guest_token()
 
     is_https = (
         request.url.scheme == "https"
@@ -88,7 +89,7 @@ async def guest_session_endpoint(request: Request, response: Response):
         "status": "ok",
         "guest_id": gid,
         "guest_token": token,
-        "is_new": is_new,
+        "is_new": True,
     }
 
 
