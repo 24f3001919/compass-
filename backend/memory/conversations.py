@@ -432,6 +432,65 @@ async def get_cross_conversation_memory(
 
 
 # ---------------------------------------------------------------------------
+# Access Control & Ownership Verification
+# ---------------------------------------------------------------------------
+async def check_conversation_access(
+    conn: DbConn,
+    conversation_id: str,
+    user_id: Optional[str] = None,
+    guest_id: Optional[str] = None,
+    is_admin: bool = False,
+    allow_shared: bool = False,
+) -> tuple[bool, Optional[str]]:
+    """Verify caller has permission to view/modify a conversation.
+    Returns (has_access, error_detail).
+    """
+    try:
+        cid = uuid.UUID(conversation_id)
+    except (ValueError, TypeError):
+        return False, "Invalid conversation ID"
+
+    has_user_col = await conn.fetchval(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversations' AND column_name = 'user_id')"
+    )
+    has_guest_col = await conn.fetchval(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversations' AND column_name = 'guest_id')"
+    )
+    has_shared_col = await conn.fetchval(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversations' AND column_name = 'is_shared')"
+    )
+    cols = ["id"]
+    if has_user_col:
+        cols.append("user_id")
+    if has_guest_col:
+        cols.append("guest_id")
+    if has_shared_col:
+        cols.append("is_shared")
+
+    conv_row = await conn.fetchrow(f"SELECT {', '.join(cols)} FROM conversations WHERE id = $1", cid)
+    if not conv_row:
+        return False, "Conversation not found"
+
+    if allow_shared and has_shared_col and conv_row.get("is_shared"):
+        return True, None
+
+    if is_admin:
+        return True, None
+
+    conv_owner = conv_row.get("user_id") if has_user_col else None
+    conv_guest = conv_row.get("guest_id") if has_guest_col else None
+
+    if conv_owner:
+        if not user_id or user_id.lower() != conv_owner.lower():
+            return False, "Forbidden: You do not have permission to access this conversation."
+    elif conv_guest:
+        if not guest_id or guest_id != conv_guest:
+            return False, "Forbidden: You do not have permission to access this conversation."
+
+    return True, None
+
+
+# ---------------------------------------------------------------------------
 # Guest Migration & Preservation Operations (Delegated to conversation_migration)
 # ---------------------------------------------------------------------------
 from backend.memory.conversation_migration import (
@@ -442,6 +501,7 @@ from backend.memory.conversation_migration import (
     migrate_guest_memories,
     delete_guest_data,
 )
+
 
 
 

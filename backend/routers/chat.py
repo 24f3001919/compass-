@@ -21,6 +21,7 @@ from backend.dependencies import (
     rate_limit,
     verify_token,
     _get_current_user_id,
+    _get_or_create_user_id,
     _resolve_identities,
     guest_rate_limit,
 )
@@ -46,11 +47,14 @@ router = APIRouter(tags=["chat"])
 
 # ---- POST /chat -----------------------------------------------------------
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest, _token: str = Depends(verify_token)):
+async def chat(request: ChatRequest, req: Request, _token: str = Depends(verify_token)):
     """Main conversational endpoint — wired to Nemotron router and orchestrator."""
+    user_id, guest_id = _resolve_identities(req)
     result = await orchestrator.handle_message(
         conversation_id=request.conversation_id,
         message=request.message,
+        user_id=user_id,
+        guest_id=guest_id,
     )
     return ChatResponse(**result)
 
@@ -66,12 +70,31 @@ async def chat(request: ChatRequest, _token: str = Depends(verify_token)):
 )
 async def get_messages(
     conversation_id: str,
+    request: Request,
     limit: int = Query(50, ge=1, le=200),
 ):
-    """Get message history for a conversation from PostgreSQL."""
+    """Get message history for a conversation from PostgreSQL with ownership verification."""
     try:
         pool = await get_pool()
         async with pool.acquire() as conn:
+            user_id, guest_id = _resolve_identities(request)
+            auth_header = request.headers.get("authorization", "")
+            is_admin = False
+            if auth_header.startswith("Bearer "):
+                token = auth_header[7:].strip()
+                from backend.config import get_settings
+                import hmac
+                s = get_settings()
+                if token and s.AUTH_TOKEN and hmac.compare_digest(token, s.AUTH_TOKEN):
+                    is_admin = True
+
+            has_access, err = await conversations.check_conversation_access(
+                conn, conversation_id, user_id=user_id, guest_id=guest_id, is_admin=is_admin, allow_shared=True
+            )
+            if not has_access:
+                status_code = 404 if err == "Conversation not found" else (400 if err == "Invalid conversation ID" else 403)
+                raise HTTPException(status_code=status_code, detail=err)
+
             rows = await conversations.get_recent_messages(conn, conversation_id, limit=limit)
             messages = [
                 MessageOut(
@@ -84,6 +107,8 @@ async def get_messages(
                 for r in rows
             ]
             return MessagesResponse(conversation_id=conversation_id, messages=messages)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.warning(f"Database query failed for get_messages, returning empty list: {e}")
         return MessagesResponse(conversation_id=conversation_id, messages=[])
@@ -123,30 +148,9 @@ async def update_past_conversation(
     pool = await get_pool()
     if not pool:
         return {"ok": False, "error": "Database unavailable"}
-    try:
-        cid = uuid.UUID(conversation_id)
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="Invalid conversation ID")
 
     try:
         async with pool.acquire() as conn:
-            # Check ownership (IDOR prevention)
-            has_user_col = await conn.fetchval(
-                "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversations' AND column_name = 'user_id')"
-            )
-            has_guest_col = await conn.fetchval(
-                "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversations' AND column_name = 'guest_id')"
-            )
-            cols = ["id"]
-            if has_user_col:
-                cols.append("user_id")
-            if has_guest_col:
-                cols.append("guest_id")
-
-            conv_row = await conn.fetchrow(f"SELECT {', '.join(cols)} FROM conversations WHERE id = $1", cid)
-            if not conv_row:
-                raise HTTPException(status_code=404, detail="Conversation not found")
-
             user_id, guest_id = _resolve_identities(request)
             auth_header = request.headers.get("authorization", "")
             is_admin = False
@@ -158,15 +162,12 @@ async def update_past_conversation(
                 if token and s.AUTH_TOKEN and hmac.compare_digest(token, s.AUTH_TOKEN):
                     is_admin = True
 
-            conv_owner = conv_row.get("user_id") if has_user_col else None
-            conv_guest = conv_row.get("guest_id") if has_guest_col else None
-            if not is_admin:
-                if conv_owner:
-                    if not user_id or user_id.lower() != conv_owner.lower():
-                        raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to modify this conversation.")
-                elif conv_guest:
-                    if not guest_id or guest_id != conv_guest:
-                        raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to modify this conversation.")
+            has_access, err = await conversations.check_conversation_access(
+                conn, conversation_id, user_id=user_id, guest_id=guest_id, is_admin=is_admin, allow_shared=False
+            )
+            if not has_access:
+                status_code = 404 if err == "Conversation not found" else (400 if err == "Invalid conversation ID" else 403)
+                raise HTTPException(status_code=status_code, detail=err)
 
             ok = await conversations.update_conversation(
                 conn,
@@ -191,30 +192,9 @@ async def delete_past_conversation(conversation_id: str, request: Request):
     pool = await get_pool()
     if not pool:
         return {"ok": False, "error": "Database unavailable"}
-    try:
-        cid = uuid.UUID(conversation_id)
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="Invalid conversation ID")
 
     try:
         async with pool.acquire() as conn:
-            # Check ownership (IDOR prevention)
-            has_user_col = await conn.fetchval(
-                "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversations' AND column_name = 'user_id')"
-            )
-            has_guest_col = await conn.fetchval(
-                "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversations' AND column_name = 'guest_id')"
-            )
-            cols = ["id"]
-            if has_user_col:
-                cols.append("user_id")
-            if has_guest_col:
-                cols.append("guest_id")
-
-            conv_row = await conn.fetchrow(f"SELECT {', '.join(cols)} FROM conversations WHERE id = $1", cid)
-            if not conv_row:
-                raise HTTPException(status_code=404, detail="Conversation not found")
-
             user_id, guest_id = _resolve_identities(request)
             auth_header = request.headers.get("authorization", "")
             is_admin = False
@@ -226,15 +206,12 @@ async def delete_past_conversation(conversation_id: str, request: Request):
                 if token and s.AUTH_TOKEN and hmac.compare_digest(token, s.AUTH_TOKEN):
                     is_admin = True
 
-            conv_owner = conv_row.get("user_id") if has_user_col else None
-            conv_guest = conv_row.get("guest_id") if has_guest_col else None
-            if not is_admin:
-                if conv_owner:
-                    if not user_id or user_id.lower() != conv_owner.lower():
-                        raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to delete this conversation.")
-                elif conv_guest:
-                    if not guest_id or guest_id != conv_guest:
-                        raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to delete this conversation.")
+            has_access, err = await conversations.check_conversation_access(
+                conn, conversation_id, user_id=user_id, guest_id=guest_id, is_admin=is_admin, allow_shared=False
+            )
+            if not has_access:
+                status_code = 404 if err == "Conversation not found" else (400 if err == "Invalid conversation ID" else 403)
+                raise HTTPException(status_code=status_code, detail=err)
 
             ok = await conversations.delete_conversation(conn, conversation_id)
             return {"ok": ok}
@@ -326,10 +303,10 @@ async def get_memory_overview(request: Request):
             "total_tasks": 0,
             "total_memories": 0,
         }
-    user_id = request.headers.get("x-user-id") if request else None
+    user_id, guest_id = _resolve_identities(request) if request else (None, None)
     try:
         async with pool.acquire() as conn:
-            convs = await conversations.list_conversations(conn, limit=10, user_id=user_id)
+            convs = await conversations.list_conversations(conn, limit=10, user_id=user_id, guest_id=guest_id)
             runs_rows = await conn.fetch(
                 "SELECT id, goal, status, created_at FROM agent_runs ORDER BY created_at DESC LIMIT 10"
             )
@@ -383,7 +360,7 @@ async def public_chat(req: PublicChatRequest, request: Request, _rl: None = Depe
 
 # ---- POST /api/log -------------------------------------------------------
 @router.post("/api/log")
-async def log_memory_entry(req: LogMemoryRequest, _rl: None = Depends(rate_limit)):
+async def log_memory_entry(req: LogMemoryRequest, request: Request, _rl: None = Depends(rate_limit)):
     """Accepts memory content, generates 768-dim embedding, inserts into Neon."""
     from backend.services.embeddings import get_embedding
     from backend.services.usage import record_usage
@@ -394,6 +371,7 @@ async def log_memory_entry(req: LogMemoryRequest, _rl: None = Depends(rate_limit
         raise HTTPException(status_code=400, detail="Missing memory content")
 
     domain_str = (req.domain or "general").strip() or "general"
+    user_id = _get_or_create_user_id(request)
 
     tags_list: List[str] = []
     if isinstance(req.tags, list):
@@ -414,14 +392,27 @@ async def log_memory_entry(req: LogMemoryRequest, _rl: None = Depends(rate_limit
                 proj = await structured.get_or_create_project(conn, name=req.project, domain=domain_str)
                 project_id = proj.get("id")
 
-            row = await conn.fetchrow(
-                """
-                INSERT INTO memory_chunks (domain, project_id, content, embedding, source, tags)
-                VALUES ($1, $2, $3, $4, $5, $6)
-                RETURNING id, domain, project_id, content, source, tags, created_at
-                """,
-                domain_str, project_id, text, embedding, "api_log", tags_list
+            has_user_col = await conn.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'memory_chunks' AND column_name = 'user_id')"
             )
+            if has_user_col:
+                row = await conn.fetchrow(
+                    """
+                    INSERT INTO memory_chunks (domain, project_id, content, embedding, source, tags, user_id)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    RETURNING id, domain, project_id, content, source, tags, created_at
+                    """,
+                    domain_str, project_id, text, embedding, "api_log", tags_list, user_id
+                )
+            else:
+                row = await conn.fetchrow(
+                    """
+                    INSERT INTO memory_chunks (domain, project_id, content, embedding, source, tags)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    RETURNING id, domain, project_id, content, source, tags, created_at
+                    """,
+                    domain_str, project_id, text, embedding, "api_log", tags_list
+                )
             if row:
                 chunk_id = str(row["id"])
     except Exception as e:

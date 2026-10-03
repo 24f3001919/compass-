@@ -207,8 +207,9 @@ async def seed_demo_persona_endpoint(request: Request):
         seeded_mem_count = 0
         for m in memories:
             ex_mem = await conn.fetchval(
-                "SELECT id FROM memory_chunks WHERE LEFT(content, 40) = LEFT($1, 40) LIMIT 1",
+                "SELECT id FROM memory_chunks WHERE content = $1 AND (user_id = $2 OR ($2 IS NULL AND user_id IS NULL)) LIMIT 1",
                 m["content"],
+                user_id,
             )
             if ex_mem:
                 continue

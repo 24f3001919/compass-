@@ -254,7 +254,7 @@ async def migrate_guest_memories(
         exists = await conn.fetchval(
             """
             SELECT id FROM memory_chunks
-            WHERE user_id = $1 AND domain = $2 AND LEFT(content, 60) = LEFT($3, 60)
+            WHERE user_id = $1 AND domain = $2 AND content = $3
             LIMIT 1
             """,
             user_id, ch["domain"], ch["content"]

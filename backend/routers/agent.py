@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from backend.config import get_settings
-from backend.dependencies import agent_rate_limit, verify_token, _get_current_user_id
+from backend.dependencies import agent_rate_limit, verify_token, _get_current_user_id, _get_or_create_user_id
 from backend.memory.db import get_pool
 from backend.models import (
     AgentRequest,
@@ -47,7 +47,7 @@ async def agent_run(req: AgentRequest, request: Request):
                 detail=f"Concurrent active agent runs cap reached ({active_count}/{MAX_CONCURRENT_AGENT_RUNS}). Please complete or wait for existing runs to finish.",
             )
 
-    agent_user_id = _get_current_user_id(request)
+    agent_user_id = _get_or_create_user_id(request)
 
     async def agent_event_generator():
         try:
