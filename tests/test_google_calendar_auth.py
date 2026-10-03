@@ -4,6 +4,7 @@ Compass — Google OAuth & Google Calendar Event Synchronization Tests.
 
 from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
+from urllib.parse import urlparse
 import pytest
 
 from backend.services.oauth import (
@@ -75,7 +76,8 @@ async def test_create_google_calendar_event_simulated():
     )
     assert res["status"] == "confirmed"
     assert "id" in res
-    assert "calendar.google.com" in res["htmlLink"]
+    parsed_link = urlparse(res["htmlLink"])
+    assert parsed_link.hostname == "calendar.google.com"
 
 
 @pytest.mark.asyncio
