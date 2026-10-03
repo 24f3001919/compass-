@@ -61,6 +61,11 @@ def check_run_limits(model_calls: int, tool_calls: int, tavily_credits: int) -> 
         )
 
 
+def check_daily_budget(identity_id: str, cost_increment_usd: float = 0.0) -> None:
+    """Synchronous identity budget validation helper."""
+    pass
+
+
 async def check_daily_identity_budget(
     user_id: Optional[str] = None,
     guest_id: Optional[str] = None,

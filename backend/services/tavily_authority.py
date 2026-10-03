@@ -167,28 +167,36 @@ def classify_domain_authority(
                 "reason": "Platform user-submitted project page (/software/...) cannot be Tier 1 official",
             }
 
-        # Check pinned origin + path prefix in config or user input
+        # Strict Event-Page Rule: Official status for platform hosts requires exact match
+        # against a pinned list (host + path prefix) from config or user input.
+        # Substring/subdomain matching is completely removed.
         configured_prefixes = set(getattr(settings, "PINNED_EVENT_PREFIXES", []))
         if pinned_event_prefixes:
             configured_prefixes.update(p.strip().lower() for p in pinned_event_prefixes if p)
 
         url_clean = url.strip().lower()
-        matches_pinned_prefix = any(
-            url_clean.startswith(pref.rstrip("/") + "/") or url_clean == pref.rstrip("/")
-            for pref in configured_prefixes
-        )
+        # Normalizes both https://host/path and host/path
+        matches_pinned_prefix = False
+        for pref in configured_prefixes:
+            p_clean = pref.strip().lower()
+            if not p_clean.startswith("http://") and not p_clean.startswith("https://"):
+                # Host/prefix match against parsed URL without scheme
+                no_scheme_url = parsed_url.netloc.lower() + (parsed_url.path or "").lower()
+                if no_scheme_url.startswith(p_clean.rstrip("/")):
+                    matches_pinned_prefix = True
+                    break
+            else:
+                if url_clean.startswith(p_clean.rstrip("/") + "/") or url_clean == p_clean.rstrip("/"):
+                    matches_pinned_prefix = True
+                    break
 
-        clean_target = (target_entity or "").strip().lower()
-        subdomain_matches_entity = bool(clean_target and domain.startswith(clean_target.replace(" ", "") + "."))
-
-        # Official status requires pinned prefix OR verified explicit entity binding with subdomain match
-        if matches_pinned_prefix or (is_entity_bound and subdomain_matches_entity):
+        if matches_pinned_prefix:
             return {
                 "tier": AuthorityTier.TIER_1_OFFICIAL.value,
-                "badge": "Official Event Page (Platform)",
+                "badge": "Official Event Page (Pinned Platform)",
                 "weight": 0.95,
                 "domain": domain,
-                "reason": f"Platform-hosted official event page with pinned prefix / entity binding ('{clean_target or domain}')",
+                "reason": f"Platform-hosted event exactly matches pinned official prefix ({domain})",
             }
         else:
             return {
@@ -196,7 +204,7 @@ def classify_domain_authority(
                 "badge": "Platform / Community Host",
                 "weight": 0.75,
                 "domain": domain,
-                "reason": f"Platform host ({domain}) without pinned event prefix or official entity binding (Tier 2)",
+                "reason": f"Platform host ({domain}) without exact match in pinned event list stays Tier 2",
             }
 
     # Check Tier 1 primary official domains

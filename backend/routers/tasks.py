@@ -404,10 +404,11 @@ async def update_frontend_task(task_id: str, req: UpdateTaskRequest, request: Re
 @router.delete("/api/tasks/{task_id}")
 async def delete_frontend_task(task_id: str, request: Request):
     """Direct user endpoint to delete a task or deadline without relying on AI chat."""
-    try:
-        numeric_id = int(task_id)
-    except ValueError:
+    if not task_id.isdigit():
+        if task_id.startswith(("demo-", "mock-", "sim-")):
+            return {"status": "ok", "deleted": True, "task_id": task_id}
         raise HTTPException(status_code=400, detail="Invalid task ID format")
+    numeric_id = int(task_id)
 
     try:
         pool = await get_pool()

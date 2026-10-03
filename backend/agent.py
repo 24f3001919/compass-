@@ -261,26 +261,17 @@ async def run_agent(
         forced_tool_choice = None
 
         try:
-            is_mocked = (
-                hasattr(client, "mock_calls")
-                or hasattr(getattr(client, "chat", None), "mock_calls")
-                or hasattr(getattr(getattr(client, "chat", None), "completions", None), "mock_calls")
-                or hasattr(getattr(getattr(getattr(client, "chat", None), "completions", None), "create", None), "mock_calls")
-            )
             reasoning_model = str(getattr(settings, "REASONING_MODEL", getattr(settings, "SKILL_MODEL", "nvidia/nemotron-3-super-120b-a12b")))
-            if not is_mocked and settings.NEBIUS_API_KEY.startswith("your_nebius_"):
-                response = None
-            else:
-                completions: Any = client.chat.completions
-                response = await completions.create(
-                    model=reasoning_model,
-                    messages=cast(Any, messages),
-                    tools=filtered_tools or None,
-                    tool_choice=tool_choice_param,
-                    temperature=0.2,
-                    max_tokens=1024,
-                    stream=False,
-                )
+            completions: Any = client.chat.completions
+            response = await completions.create(
+                model=reasoning_model,
+                messages=cast(Any, messages),
+                tools=filtered_tools or None,
+                tool_choice=tool_choice_param,
+                temperature=0.2,
+                max_tokens=1024,
+                stream=False,
+            )
 
             if response is None:
                 step_num += 1

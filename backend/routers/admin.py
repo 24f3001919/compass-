@@ -17,10 +17,8 @@ router = APIRouter(tags=["admin"])
 
 
 @router.get("/api/admin/proxy-hops")
-async def get_proxy_hops_inspection(request: Request):
-    """Diagnostic route for measuring proxy hops and raw XFF chain.
-    Used for verifying trusted proxy count across Vercel rewrite and direct paths.
-    """
+async def get_proxy_hops_inspection(request: Request, _token: str = Depends(verify_token)):
+    """Admin-gated diagnostic route for inspecting proxy hops and raw XFF chain."""
     xff = request.headers.get("x-forwarded-for")
     parts = [p.strip() for p in xff.split(",") if p.strip()] if xff else []
     return {

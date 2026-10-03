@@ -104,20 +104,33 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
         ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurrence_rule TEXT;
         CREATE INDEX IF NOT EXISTS idx_tasks_scheduled_start ON tasks(scheduled_start);
 
-        CREATE TABLE IF NOT EXISTS calendar_connections (
-            id                 SERIAL        PRIMARY KEY,
-            user_id            TEXT          NOT NULL DEFAULT 'default_user',
-            provider           TEXT          NOT NULL DEFAULT 'google',
-            account_email      TEXT,
-            refresh_token      TEXT,
-            access_token       TEXT,
-            token_expiry       TIMESTAMPTZ,
-            scopes             TEXT[]        DEFAULT '{}',
-            connected_at       TIMESTAMPTZ   NOT NULL DEFAULT now(),
-            last_synced_at     TIMESTAMPTZ,
-            sync_token         TEXT
-        );
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_calendar_conn_user_provider ON calendar_connections(user_id, provider);
+            CREATE TABLE IF NOT EXISTS sessions (
+                token_hash        TEXT          PRIMARY KEY,
+                user_id           TEXT          NOT NULL,
+                oauth_verified    BOOLEAN       NOT NULL DEFAULT FALSE,
+                created_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),
+                last_accessed_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
+                expires_at        TIMESTAMPTZ   NOT NULL,
+                revoked_at        TIMESTAMPTZ   DEFAULT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+            CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+            CREATE INDEX IF NOT EXISTS idx_sessions_revoked_at ON sessions(revoked_at);
+
+            CREATE TABLE IF NOT EXISTS calendar_connections (
+                id                 SERIAL        PRIMARY KEY,
+                user_id            TEXT          NOT NULL DEFAULT 'default_user',
+                provider           TEXT          NOT NULL DEFAULT 'google',
+                account_email      TEXT,
+                refresh_token      TEXT,
+                access_token       TEXT,
+                token_expiry       TIMESTAMPTZ,
+                scopes             TEXT[]        DEFAULT '{}',
+                connected_at       TIMESTAMPTZ   NOT NULL DEFAULT now(),
+                last_synced_at     TIMESTAMPTZ,
+                sync_token         TEXT
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_calendar_conn_user_provider ON calendar_connections(user_id, provider);
 
         CREATE TABLE IF NOT EXISTS calendar_event_links (
             id                 SERIAL        PRIMARY KEY,

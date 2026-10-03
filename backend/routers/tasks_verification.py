@@ -61,8 +61,15 @@ async def remove_task_dependency_endpoint(task_id: int, depends_on_task_id: int)
 # ---- 1-Click Judge Demo Persona Seeding ------------------------------------
 @router.post("/api/demo/seed", dependencies=[Depends(rate_limit)])
 async def seed_demo_persona_endpoint(request: Request):
-    """Seed or refresh the Dual-Degree Hackathon Competitor demo persona for judges."""
-    user_id = _get_or_create_user_id(request)
+    """Seed or refresh the Dual-Degree Hackathon Competitor demo persona for judges.
+    Requires an authenticated user session or verified guest identity.
+    Writes seeded tasks and memories strictly bound to the caller's identity.
+    """
+    ident = _get_current_identity(request)
+    if not ident:
+        raise HTTPException(status_code=401, detail="Authentication required: active session or guest token required to seed demo data.")
+
+    user_id = ident.id
     pool = await get_pool()
     if not pool:
         raise HTTPException(status_code=500, detail="Database unavailable")

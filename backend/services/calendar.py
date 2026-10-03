@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Sequence
 import uuid
 import logging
 
+from backend.config import get_settings
 from backend.services.scheduler import _ensure_utc, TimeWindow
 
 logger = logging.getLogger("compass.calendar")
@@ -28,6 +29,9 @@ async def get_calendar_connection_status(
     user_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Retrieve the current calendar connection status strictly for the specified user."""
+    settings = get_settings()
+    is_dev = settings.is_development()
+
     if not user_id:
         return {
             "connected": False,
@@ -35,10 +39,10 @@ async def get_calendar_connection_status(
             "account_email": None,
             "connected_at": None,
             "last_synced_at": None,
-            "mode": "demo",
-            "is_simulated": True,
-            "label": "Google Calendar: Not signed in (Demo Mode)",
-            "note": "Sign in to connect your Google Calendar",
+            "mode": "demo" if is_dev else "live",
+            "is_simulated": is_dev,
+            "label": "Google Calendar: Not signed in (Demo Mode)" if is_dev else "Google Calendar: Not signed in",
+            "note": "Sign in to connect your Google Calendar" if is_dev else "Sign in to connect your live Google Calendar via OAuth",
         }
 
     if pool is not None:
@@ -58,6 +62,18 @@ async def get_calendar_connection_status(
                     from backend.services.oauth import decrypt_token
                     decrypted = decrypt_token(row["access_token"])
                     is_mock = not decrypted or decrypted.startswith("mock_")
+                    if is_mock and not is_dev:
+                        return {
+                            "connected": False,
+                            "provider": "google",
+                            "account_email": None,
+                            "connected_at": None,
+                            "last_synced_at": None,
+                            "mode": "live",
+                            "is_simulated": False,
+                            "label": "Google Calendar: Not connected",
+                            "note": "Live Google Calendar OAuth connection required in production.",
+                        }
                     email = row["account_email"] or user_id or "user@gmail.com"
                     return {
                         "connected": True,
@@ -66,7 +82,7 @@ async def get_calendar_connection_status(
                         "connected_at": row["connected_at"].isoformat() if row["connected_at"] else None,
                         "last_synced_at": row["last_synced_at"].isoformat() if row["last_synced_at"] else None,
                         "mode": "live" if not is_mock else "demo",
-                        "is_simulated": is_mock,
+                        "is_simulated": is_mock and is_dev,
                         "label": f"Google Calendar: {email} (Live OAuth Connected)" if not is_mock else f"Google Calendar: {email} (Quick Demo Mode — Live OAuth not connected)",
                         "note": "Live Google Calendar connected via OAuth" if not is_mock else "Simulated demo mode via Quick-Connect",
                     }
@@ -79,9 +95,9 @@ async def get_calendar_connection_status(
         "account_email": user_id,
         "connected_at": None,
         "last_synced_at": None,
-        "mode": "demo",
-        "is_simulated": True,
-        "label": f"Google Calendar: {user_id} (Demo Mode — not linked)",
+        "mode": "demo" if is_dev else "live",
+        "is_simulated": is_dev,
+        "label": f"Google Calendar: {user_id} (Demo Mode — not linked)" if is_dev else f"Google Calendar: {user_id} (Not linked)",
         "note": "Calendar not yet linked via Google OAuth",
     }
 
@@ -232,7 +248,9 @@ async def get_calendar_freebusy(
             logger.warning(f"Live Google Calendar freebusy query failed, falling back to simulated: {e}")
 
     # 3. Simulated Google Calendar events (honest fallback for hackathon demo & offline testing)
-    if include_simulated and (not has_live_connection or len(busy_blocks) <= 1):
+    # Strictly forbidden and disabled when ENVIRONMENT is unset or 'production' (requires development mode)
+    settings = get_settings()
+    if include_simulated and settings.is_development() and (not has_live_connection or len(busy_blocks) <= 1):
         curr = start_utc.date()
         end_d = end_utc.date()
         while curr <= end_d:

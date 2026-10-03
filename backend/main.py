@@ -113,6 +113,8 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Database pool initialized")
         from backend.services.usage import hydrate_usage_from_db
         await hydrate_usage_from_db(pool)
+        from backend.routers.auth import load_sessions_from_db
+        await load_sessions_from_db(pool)
         cleanup_task = asyncio.create_task(_periodic_cleanup_worker())
     except Exception as e:
         logger.warning(f"⚠️  Database pool init failed (stubs will still work): {e}")
