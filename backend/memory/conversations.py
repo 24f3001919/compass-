@@ -281,10 +281,16 @@ async def update_conversation(
             SET title = CASE WHEN $2::boolean THEN $3::text ELSE title END,
                 is_pinned = CASE WHEN $4::boolean THEN $5::boolean ELSE is_pinned END,
                 is_archived = CASE WHEN $6::boolean THEN $7::boolean ELSE is_archived END,
-                is_shared = CASE WHEN $8::boolean THEN $9::boolean ELSE is_shared END
+                is_shared = CASE WHEN $8::boolean THEN $9::boolean ELSE is_shared END,
+                share_token = CASE
+                    WHEN $8::boolean AND $9::boolean THEN COALESCE(share_token, gen_random_uuid())
+                    WHEN $8::boolean AND NOT $9::boolean THEN NULL
+                    ELSE share_token
+                END
             WHERE id = $1
+            RETURNING share_token
         """
-        await conn.execute(
+        row = await conn.fetchrow(
             query,
             cid,
             title is not None,
@@ -296,10 +302,11 @@ async def update_conversation(
             is_shared is not None,
             bool(is_shared) if is_shared is not None else False,
         )
-        return True
+        st = str(row["share_token"]) if row and row.get("share_token") else None
+        return True, st
     except Exception as e:
         logger.error(f"update_conversation failed: {e}", exc_info=True)
-        return False
+        return False, None
 
 
 async def delete_conversation(

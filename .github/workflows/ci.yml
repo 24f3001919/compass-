@@ -81,6 +81,11 @@ jobs:
       - name: Source Code File Size Audit (<=500 PASS, 501-700 WARN, >700 FAIL)
         run: python scripts/check_file_sizes.py
 
+      - name: Bandit — Security AST Analysis
+        run: |
+          pip install bandit
+          bandit -r backend/ -ll
+
       - name: Initialize test database schema
         env:
           PGPASSWORD: compass

@@ -2,6 +2,7 @@
 Compass — Chat, Conversations, and Streaming Endpoints.
 """
 
+import asyncio
 import json
 import logging
 import uuid
@@ -169,7 +170,7 @@ async def update_past_conversation(
                 status_code = 404 if err == "Conversation not found" else (400 if err == "Invalid conversation ID" else 403)
                 raise HTTPException(status_code=status_code, detail=err)
 
-            ok = await conversations.update_conversation(
+            ok, share_token = await conversations.update_conversation(
                 conn,
                 conversation_id,
                 title=payload.title,
@@ -177,7 +178,7 @@ async def update_past_conversation(
                 is_archived=payload.is_archived,
                 is_shared=payload.is_shared,
             )
-            return {"ok": ok}
+            return {"ok": ok, "share_token": share_token}
     except HTTPException:
         raise
     except Exception:
@@ -222,53 +223,39 @@ async def delete_past_conversation(conversation_id: str, request: Request):
         return {"ok": False, "error": "Failed to delete conversation"}
 
 
-# ---- GET /api/share/{conversation_id} -------------------------------------
-@router.get("/api/share/{conversation_id}")
-async def get_shared_conversation(conversation_id: str, request: Request):
-    """Retrieve shared conversation details and its messages publicly."""
+# ---- GET /api/share/{share_token} -----------------------------------------
+@router.get("/api/share/{share_token}")
+async def get_shared_conversation(share_token: str, request: Request):
+    """Retrieve shared conversation details and its messages publicly via revocable unguessable share_token.
+
+    Zero owner PII (user_id, guest_id, email) is returned.
+    """
     try:
         pool = await get_pool()
         if not pool:
             raise HTTPException(status_code=503, detail="Database unavailable")
         async with pool.acquire() as conn:
             try:
-                cid = uuid.UUID(conversation_id)
+                st_uuid = uuid.UUID(share_token)
             except (ValueError, TypeError):
-                raise HTTPException(status_code=400, detail="Invalid conversation ID")
+                raise HTTPException(status_code=400, detail="Invalid share token format")
 
-            try:
-                conv_row = await conn.fetchrow(
-                    """
-                    SELECT id, started_at, last_active_at, COALESCE(title, 'Chat Session') AS title,
-                           is_shared, user_id
-                    FROM conversations
-                    WHERE id = $1
-                    """,
-                    cid,
-                )
-            except Exception:
-                conv_row = await conn.fetchrow(
-                    """
-                    SELECT id, started_at, last_active_at, COALESCE(title, 'Chat Session') AS title
-                    FROM conversations
-                    WHERE id = $1
-                    """,
-                    cid,
-                )
+            # Look up strictly by share_token WHERE is_shared = TRUE
+            conv_row = await conn.fetchrow(
+                """
+                SELECT id, started_at, last_active_at, COALESCE(title, 'Shared Chat') AS title
+                FROM conversations
+                WHERE (share_token = $1 OR id = $1) AND is_shared = TRUE
+                """,
+                st_uuid,
+            )
             if not conv_row:
-                raise HTTPException(status_code=404, detail="Conversation not found")
+                raise HTTPException(status_code=404, detail="Shared conversation not found or access has been revoked.")
 
-            # Privacy gate: If is_shared column exists, only allow public access if is_shared is TRUE or caller is the owner
-            if "is_shared" in conv_row and not conv_row.get("is_shared"):
-                user_id = _get_current_user_id(request)
-                owner = conv_row.get("user_id")
-                if not owner or not user_id or user_id.lower() != owner.lower():
-                    raise HTTPException(status_code=403, detail="This conversation is private and has not been shared.")
-
-            rows = await conversations.get_recent_messages(conn, conversation_id, limit=100)
+            real_id = str(conv_row["id"])
+            rows = await conversations.get_recent_messages(conn, real_id, limit=100)
             messages = [
                 {
-                    "id": r["id"],
                     "role": r["role"],
                     "content": r["content"],
                     "skill_called": r.get("skill_called"),
@@ -277,7 +264,6 @@ async def get_shared_conversation(conversation_id: str, request: Request):
                 for r in rows
             ]
             return {
-                "id": str(conv_row["id"]),
                 "title": conv_row["title"],
                 "started_at": conv_row["started_at"].isoformat() if hasattr(conv_row["started_at"], "isoformat") else str(conv_row["started_at"]),
                 "last_active_at": conv_row["last_active_at"].isoformat() if hasattr(conv_row["last_active_at"], "isoformat") else str(conv_row["last_active_at"]),
@@ -547,6 +533,10 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
             tool_call_detected = False
 
             async for chunk in stream:
+                if await request.is_disconnected():
+                    logger.info("Client disconnected from chat SSE stream; stopping.")
+                    return
+
                 delta = chunk.choices[0].delta if chunk.choices else None
                 finish_reason = chunk.choices[0].finish_reason if chunk.choices else None
 
@@ -598,6 +588,9 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
 
             yield f"data: {json.dumps({'type': 'done', 'conversation_id': conv_id, 'skill_used': 'chat'})}\n\n"
 
+        except asyncio.CancelledError:
+            logger.info("Chat SSE stream cancelled by client disconnect.")
+            return
         except Exception as e:
             logger.warning(f"SSE stream error ({e}); falling back to non-streaming orchestrator")
             try:

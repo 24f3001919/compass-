@@ -44,7 +44,7 @@ async def guest_session_endpoint(request: Request, response: Response):
     """Obtain or restore an anonymous guest session.
 
     - POST: Generates a fresh, cryptographically random UUID guest identity and an HMAC-signed token,
-            persisting it in a secure cookie.
+            persisting it in a secure cookie. Throttled by mint_rate_limit.
     - GET: Validates and recovers an existing active guest session without constructing cookies from user input.
     """
     if request.method == "GET":
@@ -66,7 +66,11 @@ async def guest_session_endpoint(request: Request, response: Response):
             "is_new": False,
         }
 
-    # POST: Always generate a brand new cryptographically random guest identity (zero user input)
+    # POST: Enforce strict guest-mint rate limit per IP
+    from backend.dependencies import mint_rate_limit
+    await mint_rate_limit(request)
+
+    # Always generate a brand new cryptographically random guest identity (zero user input)
     gid, token = generate_guest_token()
 
     is_https = (

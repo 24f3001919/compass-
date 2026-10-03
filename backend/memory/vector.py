@@ -16,6 +16,13 @@ settings = get_settings()
 DbConn = Union[asyncpg.Connection, PoolConnectionProxy]
 
 
+def compute_content_hash(content: str) -> str:
+    """Normalize text content (trim, lower, collapse whitespace) and compute SHA-256 hash."""
+    import hashlib
+    normalized = " ".join(content.strip().lower().split())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
 async def store_chunk(
     conn: DbConn,
     content: str,
@@ -25,16 +32,20 @@ async def store_chunk(
     tags: Optional[List[str]] = None,
     user_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Store text content along with its 768-dim vector in memory_chunks with optional user identity."""
+    """Store text content along with its 768-dim vector in memory_chunks with strict deduplication via content_hash."""
+    content_hash = compute_content_hash(content)
     embedding = await get_embedding(content)
 
     row = await conn.fetchrow(
         """
-        INSERT INTO memory_chunks (domain, project_id, content, embedding, source, tags, user_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO memory_chunks (domain, project_id, content, embedding, source, tags, user_id, content_hash)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT (user_id, content_hash) DO UPDATE
+        SET source = COALESCE(EXCLUDED.source, memory_chunks.source),
+            tags = EXCLUDED.tags
         RETURNING id, domain, project_id, content, source, tags, user_id, created_at
         """,
-        domain, project_id, content, embedding, source, tags or [], user_id
+        domain, project_id, content, embedding, source, tags or [], user_id, content_hash
     )
     return dict(row) if row else {}
 

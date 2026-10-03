@@ -27,60 +27,48 @@ _AGENT_RATE_LIMIT_MAX_REQUESTS = 10
 _agent_rate_store: dict = defaultdict(deque)  # ip -> deque of timestamps
 
 
+# ---------------------------------------------------------------------------
+# Rate Limiter Dependencies (Shared Store backed by DB with in-memory fallback)
+# ---------------------------------------------------------------------------
 async def rate_limit(request: Request) -> None:
-    """Sliding-window rate limiter: 30 requests/min per client IP on chat endpoints.
+    """Shared rate limiter: 30 requests/min per client IP and per identity on chat/log endpoints.
     Returns HTTP 429 Too Many Requests with Retry-After header when exceeded.
     """
-    client_ip = get_client_ip(request)
-    now = time.monotonic()
-    window_start = now - _RATE_LIMIT_WINDOW_SECONDS
-
-    q = _rate_store[client_ip]
-    while q and q[0] < window_start:
-        q.popleft()
-
-    if len(q) >= _RATE_LIMIT_MAX_REQUESTS:
-        retry_after = int(_RATE_LIMIT_WINDOW_SECONDS - (now - q[0])) + 1
-        raise HTTPException(
-            status_code=429,
-            detail=f"Rate limit exceeded. Max {_RATE_LIMIT_MAX_REQUESTS} requests per minute per IP.",
-            headers={"Retry-After": str(retry_after)},
-        )
-
-    q.append(now)
+    from backend.services.rate_limiter import enforce_rate_limit
+    await enforce_rate_limit(request, action="chat", ip_capacity=30.0, ip_refill_per_sec=0.5)
 
 
 async def agent_rate_limit(request: Request) -> None:
-    """Separate sliding-window rate limiter for agent runs: 10 requests/min per client IP.
+    """Shared rate limiter for agent runs: 10 requests/min per client IP and per identity.
     Returns HTTP 429 Too Many Requests with Retry-After header when exceeded.
     """
-    client_ip = get_client_ip(request)
-    now = time.monotonic()
-    window_start = now - _AGENT_RATE_LIMIT_WINDOW_SECONDS
+    from backend.services.rate_limiter import enforce_rate_limit
+    await enforce_rate_limit(
+        request,
+        action="agent",
+        ip_capacity=10.0,
+        ip_refill_per_sec=10.0 / 60.0,
+        identity_capacity=10.0,
+        identity_refill_per_sec=10.0 / 60.0,
+    )
 
-    q = _agent_rate_store[client_ip]
-    while q and q[0] < window_start:
-        q.popleft()
 
-    if len(q) >= _AGENT_RATE_LIMIT_MAX_REQUESTS:
-        retry_after = int(_AGENT_RATE_LIMIT_WINDOW_SECONDS - (now - q[0])) + 1
-        raise HTTPException(
-            status_code=429,
-            detail=f"Agent rate limit exceeded. Max {_AGENT_RATE_LIMIT_MAX_REQUESTS} runs per minute per IP.",
-            headers={"Retry-After": str(retry_after)},
-        )
-
-    q.append(now)
+async def mint_rate_limit(request: Request) -> None:
+    """Strict shared rate limiter for guest token minting: max 10 mints per minute per IP.
+    Returns HTTP 429 when mass guest creation is attempted.
+    """
+    from backend.services.rate_limiter import enforce_mint_rate_limit
+    await enforce_mint_rate_limit(request)
 
 
 # ---------------------------------------------------------------------------
 # Auth Dependency — Bearer Token
 # ---------------------------------------------------------------------------
-_bearer_scheme = HTTPBearer()
+_bearer_scheme = HTTPBearer(auto_error=False)
 
 
 async def verify_token(
-    credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
 ) -> str:
     """Validate the Authorization: Bearer <token> header against AUTH_TOKEN.
 
@@ -101,6 +89,9 @@ async def verify_token(
                 detail="Server configuration error: production authentication token is not securely configured.",
             )
 
+    if not credentials or not credentials.credentials:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
     if not settings.AUTH_TOKEN:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
@@ -117,102 +108,131 @@ _guest_rate_store: dict = defaultdict(deque)  # guest_id -> deque of timestamps
 
 
 def _get_guest_signing_secret() -> bytes:
-    """Derive secret for HMAC signing of guest session tokens."""
+    """Derive secret for HMAC signing of guest session tokens.
+    
+    Refuses fallback secrets in production mode.
+    """
     settings = get_settings()
-    raw = settings.AUTH_TOKEN or settings.DEFAULT_DEV_TOKEN or "compass-guest-signing-secret"
+    if settings.is_production():
+        if not settings.AUTH_TOKEN or settings.AUTH_TOKEN.strip() in (
+            settings.DEFAULT_DEV_TOKEN,
+            "compass-token",
+            "test-token",
+        ):
+            raise RuntimeError("Production configuration error: secure AUTH_TOKEN secret is required.")
+        return settings.AUTH_TOKEN.encode("utf-8")
+
+    raw = settings.AUTH_TOKEN or settings.DEFAULT_DEV_TOKEN or "compass-dev-guest-secret-2025"
     return raw.encode("utf-8")
 
 
 def generate_guest_token(guest_id: Optional[str] = None) -> tuple[str, str]:
-    """Generate a cryptographically random UUID guest identity and HMAC-signed token.
+    """Generate a cryptographically random UUID guest identity and HMAC-signed token with timestamp.
 
-    Format: <uuid>.<hmac_sha256_hex>
-    Ensures guest sessions are tamper-proof and cannot be spoofed by guessing IDs.
+    Format: <uuid>.<timestamp>.<hmac_sha256_hex>
+    Ensures guest sessions are tamper-proof, cannot be spoofed, and cleanly expire.
     """
     import hashlib
     import uuid as _uuid
     gid = guest_id or str(_uuid.uuid4())
+    ts = int(time.time())
     secret = _get_guest_signing_secret()
-    sig = hmac.new(secret, gid.encode("utf-8"), hashlib.sha256).hexdigest()
-    token = f"{gid}.{sig}"
+    payload = f"{gid}:{ts}".encode("utf-8")
+    sig = hmac.new(secret, payload, hashlib.sha256).hexdigest()
+    token = f"{gid}.{ts}.{sig}"
     return gid, token
 
 
 def verify_guest_token(token: Optional[str]) -> Optional[str]:
-    """Verify an HMAC-signed guest token. Returns the guest UUID if valid, None if invalid or forged."""
+    """Verify an HMAC-signed guest token with timestamp expiry.
+    
+    Returns the guest UUID if valid and unexpired, None if invalid, forged, or expired.
+    """
     if not token or not isinstance(token, str) or "." not in token:
         return None
-    parts = token.strip().split(".", 1)
-    if len(parts) != 2:
-        return None
-    gid, sig = parts
+    parts = token.strip().split(".")
+    import hashlib
     import uuid as _uuid
-    try:
-        # Strict validation: must be a valid UUID
-        _uuid.UUID(gid)
-    except (ValueError, TypeError):
+
+    secret = _get_guest_signing_secret()
+    retention_days = int(getattr(get_settings(), "GUEST_RETENTION_DAYS", 30))
+    now = int(time.time())
+
+    # Format 1: <uuid>.<timestamp>.<sig>
+    if len(parts) == 3:
+        gid, ts_str, sig = parts
+        try:
+            _uuid.UUID(gid)
+            ts = int(ts_str)
+        except (ValueError, TypeError):
+            return None
+
+        # Expiry check: reject tokens older than retention_days or far in the future (>300s skew)
+        if (now - ts) > (86400 * retention_days) or ts > (now + 300):
+            return None
+
+        payload = f"{gid}:{ts}".encode("utf-8")
+        expected_sig = hmac.new(secret, payload, hashlib.sha256).hexdigest()
+        if hmac.compare_digest(sig, expected_sig):
+            return gid
         return None
 
-    import hashlib
-    secret = _get_guest_signing_secret()
-    expected_sig = hmac.new(secret, gid.encode("utf-8"), hashlib.sha256).hexdigest()
-    if hmac.compare_digest(sig, expected_sig):
-        return gid
+    # Format 2 (Legacy fallback): <uuid>.<sig>
+    elif len(parts) == 2:
+        gid, sig = parts
+        try:
+            _uuid.UUID(gid)
+        except (ValueError, TypeError):
+            return None
+        expected_sig = hmac.new(secret, gid.encode("utf-8"), hashlib.sha256).hexdigest()
+        if hmac.compare_digest(sig, expected_sig):
+            return gid
+        return None
+
     return None
 
 
 async def guest_rate_limit(request: Request) -> None:
-    """Sliding-window rate limiter per guest identity to prevent anonymous endpoint abuse."""
-    guest_id = _get_current_guest_id(request)
-    if not guest_id:
-        return
-    settings = get_settings()
-    max_reqs = getattr(settings, "GUEST_RATE_LIMIT", 30)
-    window = 60
-    now = time.monotonic()
-    window_start = now - window
-
-    q = _guest_rate_store[guest_id]
-    while q and q[0] < window_start:
-        q.popleft()
-
-    if len(q) >= max_reqs:
-        retry_after = int(window - (now - q[0])) + 1
-        raise HTTPException(
-            status_code=429,
-            detail=f"Guest rate limit exceeded. Max {max_reqs} requests per minute.",
-            headers={"Retry-After": str(retry_after)},
-        )
-    q.append(now)
+    """Shared rate limiter per guest identity to prevent anonymous endpoint abuse."""
+    from backend.services.rate_limiter import enforce_rate_limit
+    await enforce_rate_limit(request, action="chat", ip_capacity=30.0, ip_refill_per_sec=0.5)
 
 
 # ---------------------------------------------------------------------------
-# User & Guest Identity Helpers
+# User & Guest Identity Helpers (Strictly Verified)
 # ---------------------------------------------------------------------------
 def _get_current_user_id(request: Request) -> Optional[str]:
-    """Resolve authenticated user identity strictly from headers or cookies."""
-    user_header = request.headers.get("x-user-id")
-    if user_header and user_header.strip():
-        val = user_header.strip().lower()
-        if val:
-            return val
+    """Resolve authenticated user identity strictly from verified credentials.
 
+    Never trusts unauthenticated x-user-id headers or cookies.
+    Requires either a valid server session token or a verified AUTH_TOKEN.
+    """
+    # 1. Check verified session from cookie or Authorization header
     session_token = request.cookies.get("compass_session")
-    if session_token:
+    auth_header = request.headers.get("authorization")
+    bearer_token = None
+    if auth_header and auth_header.lower().startswith("bearer "):
+        bearer_token = auth_header[7:].strip()
+
+    token_to_check = session_token or bearer_token
+    if token_to_check:
         try:
             from backend.routers.auth import get_user_from_session
-            user = get_user_from_session(session_token)
+            user = get_user_from_session(token_to_check)
             if user:
                 return user.lower()
         except Exception:
             pass
 
-    cookie_user = request.cookies.get("compass_user_id")
-    if cookie_user and cookie_user.strip():
-        import urllib.parse
-        val = urllib.parse.unquote(cookie_user.strip()).lower()
-        if val:
-            return val
+    # 2. Check server-to-server AUTH_TOKEN
+    settings = get_settings()
+    if bearer_token and settings.AUTH_TOKEN and hmac.compare_digest(bearer_token, settings.AUTH_TOKEN):
+        # Admin / test callers supplying AUTH_TOKEN may optionally specify target user via x-user-id
+        user_header = request.headers.get("x-user-id")
+        if user_header and user_header.strip():
+            return user_header.strip().lower()
+        return "admin"
+
     return None
 
 
@@ -232,19 +252,12 @@ def _get_current_guest_id(request: Request) -> Optional[str]:
         if verified:
             return verified
 
-    # 3. Check X-Guest-Id header if formatted as signed token or UUID with cookie verification
+    # 3. Check X-Guest-Id header only if it contains a verified signed token
     guest_id_header = request.headers.get("x-guest-id")
-    if guest_id_header:
-        # Check if header itself contains signed token
-        if "." in guest_id_header:
-            verified = verify_guest_token(guest_id_header)
-            if verified:
-                return verified
-        # Or if matching the verified cookie token
-        if cookie_token:
-            verified = verify_guest_token(cookie_token)
-            if verified and verified == guest_id_header.strip():
-                return verified
+    if guest_id_header and "." in guest_id_header:
+        verified = verify_guest_token(guest_id_header)
+        if verified:
+            return verified
 
     return None
 
@@ -267,7 +280,6 @@ def _get_or_create_user_id(request: Request) -> str:
     gid = _get_current_guest_id(request)
     if gid:
         return f"guest_{gid}"
-    from backend.services.security import get_client_ip
     import hashlib
     client_ip = get_client_ip(request)
     h = hashlib.sha256(client_ip.encode("utf-8")).hexdigest()[:12]

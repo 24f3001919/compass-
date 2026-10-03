@@ -160,55 +160,62 @@ async def migrate_single_conversation(
     except (ValueError, TypeError):
         return None
 
-    # 1. Idempotency check: if already migrated, return existing user_conversation_id
-    existing = await conn.fetchrow(
-        "SELECT user_conversation_id FROM guest_migration_log WHERE guest_conversation_id = $1 AND user_id = $2",
-        cid, user_id
-    )
-    if existing:
-        return str(existing["user_conversation_id"])
+    # Execute entire migration inside an atomic transaction with row-level locking
+    async with conn.transaction():
+        # 1. Lock source guest conversation row exclusively to serialize concurrent migration attempts
+        guest_conv = await conn.fetchrow(
+            """
+            SELECT id, title, started_at, last_active_at 
+            FROM conversations 
+            WHERE id = $1 AND guest_id = $2 AND user_id IS NULL
+            FOR UPDATE
+            """,
+            cid, guest_id
+        )
+        if not guest_conv:
+            return None
 
-    # 2. Check ownership
-    guest_conv = await conn.fetchrow(
-        "SELECT id, title, started_at, last_active_at FROM conversations WHERE id = $1 AND guest_id = $2 AND user_id IS NULL",
-        cid, guest_id
-    )
-    if not guest_conv:
-        return None
+        # 2. Idempotency check: if already migrated by a prior or concurrent transaction
+        existing = await conn.fetchrow(
+            "SELECT user_conversation_id FROM guest_migration_log WHERE guest_conversation_id = $1 AND user_id = $2",
+            cid, user_id
+        )
+        if existing:
+            return str(existing["user_conversation_id"])
 
-    # 3. Create clone for authenticated user with imported_from_id reference
-    new_cid = uuid.uuid4()
-    await conn.execute(
-        """
-        INSERT INTO conversations (id, title, user_id, guest_id, imported_from_id, started_at, last_active_at)
-        VALUES ($1, $2, $3, NULL, $4, $5, $6)
-        """,
-        new_cid, guest_conv["title"], user_id, cid, guest_conv["started_at"], guest_conv["last_active_at"]
-    )
+        # 3. Create clone for authenticated user with imported_from_id reference
+        new_cid = uuid.uuid4()
+        await conn.execute(
+            """
+            INSERT INTO conversations (id, title, user_id, guest_id, imported_from_id, started_at, last_active_at)
+            VALUES ($1, $2, $3, NULL, $4, $5, $6)
+            """,
+            new_cid, guest_conv["title"], user_id, cid, guest_conv["started_at"], guest_conv["last_active_at"]
+        )
 
-    # 4. Copy all messages
-    await conn.execute(
-        """
-        INSERT INTO messages (conversation_id, role, content, skill_called, created_at)
-        SELECT $1, role, content, skill_called, created_at
-        FROM messages
-        WHERE conversation_id = $2
-        ORDER BY created_at ASC, id ASC
-        """,
-        new_cid, cid
-    )
+        # 4. Copy all messages
+        await conn.execute(
+            """
+            INSERT INTO messages (conversation_id, role, content, skill_called, created_at)
+            SELECT $1, role, content, skill_called, created_at
+            FROM messages
+            WHERE conversation_id = $2
+            ORDER BY created_at ASC, id ASC
+            """,
+            new_cid, cid
+        )
 
-    # 5. Record migration mapping
-    await conn.execute(
-        """
-        INSERT INTO guest_migration_log (guest_id, user_id, guest_conversation_id, user_conversation_id)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (guest_conversation_id, user_id) DO NOTHING
-        """,
-        guest_id, user_id, cid, new_cid
-    )
+        # 5. Record migration mapping
+        await conn.execute(
+            """
+            INSERT INTO guest_migration_log (guest_id, user_id, guest_conversation_id, user_conversation_id)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (guest_conversation_id, user_id) DO NOTHING
+            """,
+            guest_id, user_id, cid, new_cid
+        )
 
-    return str(new_cid)
+        return str(new_cid)
 
 
 async def migrate_all_guest_conversations(

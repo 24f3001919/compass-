@@ -46,6 +46,10 @@ def _is_ip_blocked(ip: ipaddress._BaseAddress) -> bool:
     """Check if an IP address belongs to any blocked private/reserved networks, unwrapping IPv4-mapped IPv6."""
     if getattr(ip, "ipv4_mapped", None):
         ip = ip.ipv4_mapped
+    if ip.is_loopback or ip.is_private or ip.is_reserved or ip.is_link_local or ip.is_multicast or ip.is_unspecified:
+        return True
+    if str(ip) in ("0.0.0.0", "::", "::1"):  # nosec B104 - SSRF filter, not a socket bind
+        return True
     for net in BLOCKED_IP_NETWORKS:
         try:
             if ip in net:
@@ -57,6 +61,15 @@ def _is_ip_blocked(ip: ipaddress._BaseAddress) -> bool:
 
 def is_safe_url(url: str) -> Tuple[bool, str]:
     """Validate that a URL is safe to fetch and not pointing to private/internal infrastructure (SSRF defense).
+
+    Detects:
+      - Raw IP literals (IPv4 & IPv6)
+      - IPv6-mapped IPv4 addresses (::ffff:127.0.0.1)
+      - Decimal and Hex encoded IPs (e.g. 2130706433 or 0x7f000001)
+      - Octal dotted IPs (e.g. 0177.0.0.1)
+      - Loopback, Link-Local, RFC1918 Private, Carrier-Grade NAT, Multicast
+      - 0.0.0.0 and unspecified IPs
+      - Cloud metadata hosts (169.254.169.254, metadata.google.internal)
 
     Returns (is_safe, error_reason).
     """
@@ -80,7 +93,28 @@ def is_safe_url(url: str) -> Tuple[bool, str]:
     if hostname in BLOCKED_HOSTNAMES:
         return False, f"Access to blocked internal hostname '{hostname}' is forbidden."
 
-    # Prevent loopback/cloud metadata disguised as raw IP or hex/octal
+    # Prevent loopback/cloud metadata disguised as decimal or hex integer
+    if hostname.isdigit() or hostname.startswith("0x"):
+        try:
+            val = int(hostname, 0)
+            if 0 <= val <= 0xFFFFFFFF:
+                ip = ipaddress.IPv4Address(val)
+                if _is_ip_blocked(ip):
+                    return False, f"Access to private/reserved IP address '{ip}' is forbidden."
+        except Exception:
+            pass
+
+    # Prevent octal dotted notation (e.g. 0177.0.0.1)
+    if any(part.startswith("0") and len(part) > 1 and part.isdigit() for part in hostname.split(".")):
+        try:
+            oct_parts = [int(p, 8) if p.startswith("0") and p.isdigit() else int(p) for p in hostname.split(".")]
+            if len(oct_parts) == 4 and all(0 <= p <= 255 for p in oct_parts):
+                ip = ipaddress.IPv4Address(".".join(str(p) for p in oct_parts))
+                if _is_ip_blocked(ip):
+                    return False, f"Access to private/reserved IP address '{ip}' is forbidden."
+        except Exception:
+            pass
+
     try:
         # Check if hostname is directly an IP literal
         ip = ipaddress.ip_address(hostname)
@@ -123,6 +157,40 @@ def is_safe_redirect(source_url: str, location: str) -> Tuple[bool, str, str]:
     if not safe:
         return False, resolved_url, f"Redirect destination rejected: {reason}"
     return True, resolved_url, ""
+
+
+async def safe_http_get(
+    url: str,
+    max_redirects: int = 3,
+    timeout: float = 10.0,
+    headers: Optional[dict] = None,
+) -> Tuple[int, str, dict]:
+    """Execute an outbound HTTP GET through strict SSRF validation on every redirect hop.
+    
+    Returns (status_code, text, response_headers).
+    """
+    import httpx
+
+    current_url = url
+    for hop in range(max_redirects + 1):
+        safe, reason = is_safe_url(current_url)
+        if not safe:
+            raise ValueError(f"SSRF blocked on hop {hop}: {reason}")
+
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
+            resp = await client.get(current_url, headers=headers)
+            if resp.status_code in (301, 302, 303, 307, 308):
+                loc = resp.headers.get("location")
+                if not loc:
+                    return resp.status_code, resp.text, dict(resp.headers)
+                redir_safe, next_url, redir_err = is_safe_redirect(current_url, loc)
+                if not redir_safe:
+                    raise ValueError(f"SSRF redirect blocked: {redir_err}")
+                current_url = next_url
+                continue
+            return resp.status_code, resp.text, dict(resp.headers)
+
+    raise ValueError(f"Too many redirects ({max_redirects})")
 
 
 

@@ -149,6 +149,53 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_task_dep_task_id ON task_dependencies(task_id);
         CREATE INDEX IF NOT EXISTS idx_task_dep_depends_on ON task_dependencies(depends_on_task_id);
+
+        -- Shared DB Rate Limiter Table
+        CREATE TABLE IF NOT EXISTS rate_limit_buckets (
+            key          TEXT PRIMARY KEY,
+            tokens       DOUBLE PRECISION NOT NULL,
+            last_updated TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_rate_limit_updated ON rate_limit_buckets(last_updated);
+
+        -- DB-Backed Single-Use Pending Actions for Agent Confirm & Undo
+        CREATE TABLE IF NOT EXISTS pending_actions (
+            action_id      TEXT PRIMARY KEY,
+            run_id         TEXT NOT NULL,
+            owner_identity TEXT NOT NULL,
+            tool           TEXT NOT NULL,
+            args_hash      TEXT NOT NULL,
+            original_args  JSONB NOT NULL DEFAULT '{}'::jsonb,
+            status         TEXT NOT NULL DEFAULT 'pending',
+            created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+            expires_at     TIMESTAMPTZ NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_pending_actions_run ON pending_actions(run_id);
+        CREATE INDEX IF NOT EXISTS idx_pending_actions_owner ON pending_actions(owner_identity);
+        CREATE INDEX IF NOT EXISTS idx_pending_actions_status ON pending_actions(status);
+
+        -- Research Evidence Ledger per Run
+        CREATE TABLE IF NOT EXISTS evidence_ledger (
+            id             SERIAL PRIMARY KEY,
+            run_id         TEXT NOT NULL,
+            claim          TEXT NOT NULL,
+            source_url     TEXT NOT NULL,
+            verbatim_quote TEXT NOT NULL,
+            retrieved_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+            published_date TEXT,
+            authority_tier TEXT NOT NULL,
+            verdict        TEXT NOT NULL,
+            created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_evidence_ledger_run ON evidence_ledger(run_id);
+
+        -- Unguessable Revocable Share Tokens
+        ALTER TABLE conversations ADD COLUMN IF NOT EXISTS share_token UUID UNIQUE;
+        CREATE INDEX IF NOT EXISTS idx_conversations_share_token ON conversations(share_token);
+
+        -- Memory Unique Content Hash per User
+        ALTER TABLE memory_chunks ADD COLUMN IF NOT EXISTS content_hash TEXT;
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_chunks_user_hash ON memory_chunks(user_id, content_hash);
         """)
 
 

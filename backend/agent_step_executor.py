@@ -56,6 +56,28 @@ async def execute_agent_tool_step(
     updated_search_web_unlocked = search_web_unlocked
 
     if func_name in SKILL_REGISTRY:
+        from backend.skills.registry import GUEST_DISALLOWED_TOOLS
+        is_guest = bool(user_id and str(user_id).startswith("guest_"))
+        if is_guest and func_name in GUEST_DISALLOWED_TOOLS:
+            denied_msg = f"Permission denied: Guest sessions are forbidden from executing high-risk or external side-effect tool '{func_name}'. Please sign in."
+            logger.warning("Blocked guest execution of tool '%s' for identity %s", func_name, user_id)
+            return (
+                AgentStep(
+                    type="observe",
+                    content=denied_msg,
+                    step_number=step_num,
+                    elapsed_ms=int((time.perf_counter() - step_start) * 1000),
+                    tool_name=func_name,
+                    run_id=run_id,
+                    model_tier="Compass Permission Gate",
+                    step_cost_usd=0.0,
+                ),
+                denied_msg,
+                updated_search_web_unlocked,
+                {},
+                {},
+            )
+
         if user_id and isinstance(tool_args, dict) and "user_id" not in tool_args:
             tool_args["user_id"] = user_id
         try:

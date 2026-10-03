@@ -109,7 +109,7 @@ def classify_domain_authority(url: str) -> Dict[str, Any]:
             "reason": "Accredited academic institution",
         }
 
-    # Check Tier 1 exact or subdomain matches
+    # Check Tier 1 exact or subdomain matches with strict dot boundary
     for t1 in _TIER_1_DOMAINS:
         if domain == t1 or domain.endswith("." + t1):
             return {
@@ -120,18 +120,7 @@ def classify_domain_authority(url: str) -> Dict[str, Any]:
                 "reason": f"Recognized primary authority ({t1})",
             }
 
-    # Check documentation subdomain prefixes (e.g., docs.python.org, developer.mozilla.org)
-    for prefix in _OFFICIAL_PREFIXES:
-        if domain.startswith(prefix):
-            return {
-                "tier": AuthorityTier.TIER_1_OFFICIAL.value,
-                "badge": "Official Docs",
-                "weight": 0.92,
-                "domain": domain,
-                "reason": f"Documentation subdomain prefix '{prefix}'",
-            }
-
-    # Check Tier 2 exact or subdomain matches
+    # Check Tier 2 exact or subdomain matches with strict dot boundary
     for t2 in _TIER_2_DOMAINS:
         if domain == t2 or domain.endswith("." + t2):
             return {

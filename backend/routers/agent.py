@@ -50,6 +50,7 @@ async def agent_run(req: AgentRequest, request: Request):
     agent_user_id = _get_or_create_user_id(request)
 
     async def agent_event_generator():
+        import asyncio
         try:
             async for step in run_agent(
                 goal=req.goal,
@@ -65,7 +66,13 @@ async def agent_run(req: AgentRequest, request: Request):
                 conversation_id=req.conversation_id,
                 user_id=agent_user_id,
             ):
+                if await request.is_disconnected():
+                    logger.info("Client disconnected from agent SSE stream; terminating run %s", req.run_id)
+                    return
                 yield step.to_sse()
+        except asyncio.CancelledError:
+            logger.info("Agent SSE stream cancelled by client disconnect.")
+            return
         except Exception:
             logger.exception("Agent stream error")
             yield f"data: {json.dumps({'type': 'error', 'content': 'An internal error occurred.'})}\n\n"
@@ -81,60 +88,57 @@ async def agent_run(req: AgentRequest, request: Request):
 
 
 @router.post("/confirm")
-async def agent_confirm(req: AgentConfirmRequest, _token: str = Depends(verify_token)):
-    """Execute previously confirmed state-mutating actions from an agent run with proposal verification and replay protection."""
+async def agent_confirm(req: AgentConfirmRequest, request: Request):
+    """Execute previously confirmed state-mutating actions from an agent run with DB-backed verification, single-use, args integrity, and ownership checks."""
     from backend.agent import execute_confirmed_actions, get_agent_run, save_agent_run
+    from backend.agent_pending import verify_and_claim_action
 
     pool = await get_pool()
     actions = getattr(req, "actions", [])
     run_id = getattr(req, "run_id", None)
+    caller = _get_or_create_user_id(request)
+
+    # Allow admin callers with verified AUTH_TOKEN
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+        import hmac
+        if settings.AUTH_TOKEN and hmac.compare_digest(token, settings.AUTH_TOKEN):
+            caller = "admin"
 
     if run_id:
         existing_run = await get_agent_run(pool, run_id)
-        if not existing_run:
-            if actions:
-                raise HTTPException(status_code=404, detail=f"Agent run '{run_id}' not found.")
-        else:
-            pending = existing_run.get("pending_actions") or []
-            if not pending:
-                raise HTTPException(
-                    status_code=400,
-                    detail="No pending unconfirmed actions found for this agent run (replay rejected).",
-                )
-            if pending:
-                if actions:
-                    pending_tools = {p.get("tool"): p.get("args") for p in pending if isinstance(p, dict)}
-                    for a in actions:
-                        tool_name = a.get("tool")
-                        if tool_name not in pending_tools:
-                            raise HTTPException(
-                                status_code=400,
-                                detail=f"Action '{tool_name}' does not match any pending proposal for run '{run_id}'.",
-                            )
-                else:
-                    actions = pending
+        if not existing_run and actions:
+            raise HTTPException(status_code=404, detail=f"Agent run '{run_id}' not found.")
 
-            try:
-                await save_agent_run(
-                    pool,
-                    run_id,
-                    existing_run.get("goal", ""),
-                    "completed",
-                    existing_run.get("steps", []),
-                    existing_run.get("messages", []),
-                    pending_actions=[],
-                    conversation_id=existing_run.get("conversation_id"),
-                )
-            except Exception as e:
-                logger.warning(f"Could not clear pending actions on run {run_id}: {e}")
+        # Verify each action against pending_actions table
+        for a in actions:
+            action_id = a.get("action_id")
+            confirmed_args = a.get("args")
+            ok, msg, orig_args = await verify_and_claim_action(
+                pool,
+                action_id=action_id,
+                run_id=run_id,
+                caller_identity=caller,
+                confirmed_args=confirmed_args,
+            )
+            if not ok:
+                if "Permission denied" in msg:
+                    raise HTTPException(status_code=403, detail=msg)
+                elif "expired" in msg.lower():
+                    raise HTTPException(status_code=410, detail=msg)
+                elif "replay" in msg.lower() or "tampered" in msg.lower():
+                    raise HTTPException(status_code=400, detail=msg)
+                else:
+                    raise HTTPException(status_code=404, detail=msg)
 
     results = await execute_confirmed_actions(actions, pool, run_id=run_id)
     return {"status": "ok", "results": results}
 
 
 @router.post("/undo")
-async def agent_undo(req: AgentUndoRequest, _token: str = Depends(verify_token)):
-    """Revert an agent-executed mutation using agent_audit_log."""
+async def agent_undo(req: AgentUndoRequest, request: Request):
+    """Revert an agent-executed mutation using agent_audit_log with identity ownership verification."""
     from backend.agent import undo_last_agent_action
 
     pool = await get_pool()

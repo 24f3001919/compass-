@@ -408,7 +408,13 @@ async def run_agent(
                         )
                         yield confirm_step
                         accumulated_steps.append(confirm_step)
-                        pending_confirmations.append({"tool": func_name, "args": tool_args})
+                        act_id = None
+                        if pool:
+                            from backend.agent_pending import register_pending_action
+                            act_id = await register_pending_action(
+                                pool, run_id, user_id or "default_user", func_name, tool_args, confirm_timeout_seconds
+                            )
+                        pending_confirmations.append({"action_id": act_id, "tool": func_name, "args": tool_args})
 
                         asst_payload: Dict[str, Any] = {
                             "role": "assistant",
@@ -432,9 +438,10 @@ async def run_agent(
                             _PENDING_CONFIRMATION_EVENTS[run_id] = (evt, outcome)
 
                             try:
-                                await asyncio.wait_for(evt.wait(), timeout=confirm_timeout_seconds)
-                                res_action = outcome.get("action", "reject")
-                                res_feedback = outcome.get("feedback", "")
+                                from backend.agent_pending import wait_for_pending_action
+                                res_action, res_feedback = await wait_for_pending_action(
+                                    pool, run_id, evt, outcome, timeout_seconds=confirm_timeout_seconds
+                                )
                             except asyncio.TimeoutError:
                                 if pool:
                                     await save_agent_run(
