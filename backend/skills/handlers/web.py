@@ -55,23 +55,36 @@ async def handle_search_web(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
         }
 
     results = resp.get("results", [])
+    from backend.services.tavily_authority import sort_and_enrich_sources
+    ranked_results = sort_and_enrich_sources(results) if results else results
+
     citations = [
-        {"title": r.get("title"), "url": r.get("url"), "score": r.get("score")}
-        for r in results
+        {
+            "title": r.get("title"),
+            "url": r.get("url"),
+            "score": r.get("score"),
+            "domain": r.get("domain", ""),
+            "authority_tier": r.get("authority_tier", "tier_3_general"),
+            "authority_badge": r.get("authority_badge", "Web"),
+            "composite_score": r.get("composite_score", r.get("score")),
+        }
+        for r in ranked_results
     ]
-    fenced = tavily_service.fence_web_content(results)
+    fenced = tavily_service.fence_web_content(ranked_results)
     top_url = citations[0]["url"] if citations else "none"
-    summary = f"Found {len(results)} web result(s) for '{query}'. Top source: {top_url}"
+    top_badge = citations[0].get("authority_badge", "Web") if citations else ""
+    summary = f"Found {len(ranked_results)} web result(s) for '{query}'. Top source: {top_url} [{top_badge}]"
 
     # Build markdown response for chat interface
     parts = [f"**Web Search Results for:** *{query}*"]
-    for r in results[:3]:
-        parts.append(f"• [{r.get('title', 'Untitled')}]({r.get('url', '')})\n  {r.get('content', '')[:500].strip()}...")
-    formatted_response = "\n".join(parts) if results else summary
+    for r in ranked_results[:3]:
+        badge = r.get("authority_badge", "Web")
+        parts.append(f"• [{r.get('title', 'Untitled')}]({r.get('url', '')}) `{badge}`\n  {r.get('content', '')[:500].strip()}...")
+    formatted_response = "\n".join(parts) if ranked_results else summary
 
     return {
         "success": True,
-        "data": {"results": results, "citations": citations, "source": "web"},
+        "data": {"results": ranked_results, "citations": citations, "source": "web"},
         "fenced_context": fenced,
         "summary": summary,
         "response": formatted_response,
@@ -201,93 +214,11 @@ async def handle_ingest_url(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
     }
 
 
-def _parse_date_candidate(text: str) -> Optional[date]:
-    """Attempt parsing standard date string formats."""
-    clean = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', text.strip())
-    clean = clean.replace(",", " ")
-    clean = " ".join(clean.split())
-    for fmt in ("%B %d %Y", "%b %d %Y", "%Y-%m-%d"):
-        try:
-            return datetime.strptime(clean, fmt).date()
-        except ValueError:
-            continue
-    return None
-
-
-def _detect_deadline_drift_from_snippets(stored_due_str: str, results: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Parse dates from live search snippets and compare with stored due date."""
-    stored_d: Optional[date] = None
-    if stored_due_str and stored_due_str != "none":
-        try:
-            stored_d = date.fromisoformat(stored_due_str[:10])
-        except Exception:
-            pass
-
-    months = r"(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)"
-    date_pattern = re.compile(
-        rf"\b({months}\s+\d{{1,2}}(?:st|nd|rd|th)?(?:,?\s+\d{{4}})?|\d{{4}}-\d{{2}}-\d{{2}})\b",
-        re.IGNORECASE,
-    )
-
-    detected_date: Optional[date] = None
-    source_url: Optional[str] = None
-    snippet_evidence: Optional[str] = None
-
-    for r in results:
-        content = (r.get("content") or "") + " " + (r.get("title") or "")
-        matches = date_pattern.findall(content)
-        for m in matches:
-            raw_match = m
-            if not re.search(r'\d{4}', raw_match):
-                year_to_use = stored_d.year if stored_d else 2026
-                raw_match = f"{raw_match}, {year_to_use}"
-            parsed = _parse_date_candidate(raw_match)
-            if parsed:
-                detected_date = parsed
-                source_url = r.get("url")
-                snippet_evidence = (r.get("content") or "")[:300].strip()
-                break
-        if detected_date:
-            break
-
-    if not stored_d or not detected_date:
-        return {
-            "has_drift": False,
-            "drift_verdict": "UNVERIFIED_AMBIGUOUS",
-            "stored_date": stored_due_str,
-            "live_date": detected_date.isoformat() if detected_date else None,
-            "drift_days": 0,
-            "direction": "unverified",
-            "source_url": source_url,
-            "evidence": snippet_evidence,
-        }
-
-    drift_days = (detected_date - stored_d).days
-    has_drift = drift_days != 0
-
-    if has_drift:
-        direction = "extended / postponed" if drift_days > 0 else "moved earlier"
-        verdict = "SCHEDULE_DRIFT"
-    else:
-        direction = "confirmed matching"
-        verdict = "CONFIRMED_ACCURATE"
-
-    return {
-        "has_drift": has_drift,
-        "drift_verdict": verdict,
-        "stored_date": stored_d.isoformat(),
-        "live_date": detected_date.isoformat(),
-        "drift_days": drift_days,
-        "direction": direction,
-        "source_url": source_url,
-        "evidence": snippet_evidence,
-    }
-
-
 @register_skill("verify_deadline")
 async def handle_verify_deadline(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
     """Compare a stored task's due date against live web sources to detect drift."""
     from backend.services import tavily as tavily_service
+    from backend.services.tavily_deadline import analyze_deadline_drift
     from backend.memory import structured
 
     task_id = args.get("task_id")
@@ -337,7 +268,7 @@ async def handle_verify_deadline(args: Dict[str, Any], pool: Any) -> Dict[str, A
 
     results = resp.get("results", [])
     fenced = tavily_service.fence_web_content(results)
-    drift_info = _detect_deadline_drift_from_snippets(stored_due, results)
+    drift_info = analyze_deadline_drift(stored_due, results)
 
     base_summary = f"Checked '{task_title}' (stored due: {stored_due}) against {len(results)} live source(s)."
 
@@ -365,5 +296,113 @@ async def handle_verify_deadline(args: Dict[str, Any], pool: Any) -> Dict[str, A
         "fenced_context": fenced,
         "summary": full_summary,
         "response": full_summary,
+        "error": None,
+    }
+
+
+@register_skill("deep_research")
+async def handle_deep_research(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
+    """Execute end-to-end deep research on a topic using query decomposition and domain authority ranking.
+
+    Returns structured evidence, formatted report with numbered citations, and untrusted fenced context.
+    """
+    from backend.services.tavily_research import execute_deep_research
+
+    topic = (args.get("topic") or args.get("query") or "").strip()
+    if not topic:
+        return {
+            "success": False,
+            "data": {},
+            "summary": "Research topic cannot be empty",
+            "response": "Please provide a research topic.",
+            "error": "Topic cannot be empty",
+        }
+
+    max_subqueries = int(args.get("max_subqueries") or 3)
+    search_depth = args.get("search_depth") or "basic"
+
+    try:
+        report_data = await execute_deep_research(
+            topic=topic,
+            max_subqueries=max_subqueries,
+            search_depth=search_depth,
+        )
+    except Exception as e:
+        logger.error(f"Deep research failed for '{topic}': {e}")
+        return {
+            "success": False,
+            "data": {},
+            "summary": f"Deep research failed: {e}",
+            "response": f"Deep research failed: {e}",
+            "error": str(e),
+        }
+
+    return {
+        "success": True,
+        "data": {
+            "topic": report_data["topic"],
+            "subqueries": report_data["subqueries"],
+            "citations": report_data["citations"],
+            "results_count": report_data["results_count"],
+            "elapsed_ms": report_data["elapsed_ms"],
+        },
+        "fenced_context": report_data["fenced_context"],
+        "summary": f"Completed deep research on '{topic}' ({len(report_data['citations'])} authoritative sources).",
+        "response": report_data["formatted_report"],
+        "error": None,
+    }
+
+
+@register_skill("save_verified_finding")
+async def handle_save_verified_finding(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
+    """Save a verified research finding or fact into long-term vector memory.
+
+    Stores structured knowledge chunks with citation provenance instead of noisy raw page dumps.
+    """
+    from backend.memory import vector, structured
+
+    fact = (args.get("fact") or args.get("finding") or "").strip()
+    if not fact:
+        return {
+            "success": False,
+            "data": {},
+            "summary": "Finding text cannot be empty",
+            "response": "Please provide the finding or fact text to save.",
+            "error": "Finding cannot be empty",
+        }
+
+    domain = (args.get("domain") or "general").lower()
+    source_url = (args.get("source_url") or "tavily-research").strip()
+    citation = args.get("citation") or ""
+
+    stored_text = f"{fact}\n\nEvidence Source: {source_url}"
+    if citation:
+        stored_text += f" ({citation})"
+
+    async with pool.acquire() as conn:
+        project_id = None
+        if args.get("project"):
+            proj = await structured.get_or_create_project(conn, args["project"], domain)
+            project_id = proj["id"]
+
+        await vector.store_chunk(
+            conn,
+            domain=domain,
+            content=stored_text,
+            project_id=project_id,
+            source=source_url,
+            tags=["web", "tavily-verified", "research-finding"],
+        )
+
+    summary = f"Saved verified finding to {domain.upper()} memory with citation provenance."
+    return {
+        "success": True,
+        "data": {
+            "fact": fact,
+            "source_url": source_url,
+            "domain": domain,
+        },
+        "summary": summary,
+        "response": summary,
         "error": None,
     }
