@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { createTask, updateTask } from '../../api/client'
 import { DOMAIN_META } from './domainMeta'
 
-export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain, tasks = [], onOpenNorthstar }) {
+export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain, tasks = [], onOpenCompass }) {
+  const handleOpenCompass = onOpenCompass
   const [title, setTitle] = useState('')
   const [domain, setDomain] = useState('general')
   const [customDomain, setCustomDomain] = useState('')
@@ -47,15 +48,15 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
     (t.status || 'open') !== 'done'
   ) : null
 
-  const handleAskNorthstar = (customPrompt) => {
+  const handleAskCompass = (customPrompt) => {
     const trimmedTitle = title.trim()
     const defaultPrompt = trimmedTitle
       ? `Look into my schedules and check if adding deadline "${trimmedTitle}"${dueDate ? ` due ${dueDate}` : ''} conflicts with existing commitments or if schedules need adjusting.`
       : `Look into my schedules and upcoming deadlines, check for any conflicts or overloaded days, and suggest optimizations.`
     const promptToSend = customPrompt || defaultPrompt
     onClose()
-    if (onOpenNorthstar) {
-      onOpenNorthstar(promptToSend)
+    if (handleOpenCompass) {
+      handleOpenCompass(promptToSend)
     }
   }
 
@@ -474,8 +475,8 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '2px' }}>
                 <button
                   type="button"
-                  id="btn-northstar-fix-exact"
-                  onClick={() => handleAskNorthstar(`I have an existing deadline titled "${exactMatch.title}" scheduled for ${exactMatch.due_date || 'unscheduled'}. Can you look into my schedules, check for duplicate commitments or conflicts, and tell me how to resolve this?`)}
+                  id="btn-compass-fix-exact"
+                  onClick={() => handleAskCompass(`I have an existing deadline titled "${exactMatch.title}" scheduled for ${exactMatch.due_date || 'unscheduled'}. Can you look into my schedules, check for duplicate commitments or conflicts, and tell me how to resolve this?`)}
                   style={{
                     padding: '7px 13px',
                     borderRadius: '8px',
@@ -564,8 +565,8 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
 
                 <button
                   type="button"
-                  id="btn-northstar-fix-samename"
-                  onClick={() => handleAskNorthstar(`I have an existing deadline titled "${sameNameMatch.title}" scheduled for ${sameNameMatch.due_date || 'unscheduled'}, and I want to add another deadline with the same name for ${dueDate || 'upcoming'}. Can you look into my schedules, check for conflicts, and help me decide whether to shift it or schedule it as a separate deliverable?`)}
+                  id="btn-compass-fix-samename"
+                  onClick={() => handleAskCompass(`I have an existing deadline titled "${sameNameMatch.title}" scheduled for ${sameNameMatch.due_date || 'unscheduled'}, and I want to add another deadline with the same name for ${dueDate || 'upcoming'}. Can you look into my schedules, check for conflicts, and help me decide whether to shift it or schedule it as a separate deliverable?`)}
                   style={{
                     padding: '7px 13px',
                     borderRadius: '8px',
@@ -589,8 +590,8 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginTop: '12px', flexWrap: 'wrap' }}>
             <button
               type="button"
-              id="btn-ask-northstar-schedule"
-              onClick={() => handleAskNorthstar()}
+              id="btn-ask-compass-schedule"
+              onClick={() => handleAskCompass()}
               style={{
                 padding: '9px 14px',
                 borderRadius: '8px',

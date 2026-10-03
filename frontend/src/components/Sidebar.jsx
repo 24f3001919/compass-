@@ -20,7 +20,7 @@ import {
 
 const NAV_ITEMS = [
   { key: 'timeline', icon: CheckSquare, label: 'Timeline & Tasks', sub: 'Executive Task Feed' },
-  { key: 'northstar', icon: Compass, label: 'Compass', sub: 'Assistant & Agents' },
+  { key: 'compass', icon: Compass, label: 'Compass', sub: 'Assistant & Agents' },
   { key: 'calendar', icon: Calendar, label: 'Smart Schedule', sub: 'Calendar & Conflict Engine' },
 ]
 
@@ -163,7 +163,7 @@ export default function Sidebar({
 
         {NAV_ITEMS.map(item => {
           const Icon = item.icon
-          const isActive = activeTab === item.key
+          const isActive = activeTab === item.key || (item.key === 'compass' && (activeTab === 'agent' || activeTab === 'planner' || activeTab === 'specialist'))
           return (
             <button
               key={item.key}

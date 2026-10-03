@@ -37,11 +37,11 @@ async def main():
         await page.wait_for_timeout(1000)
 
         print("Clicking Compass nav tab in sidebar...")
-        await page.click("#sidebar-tab-northstar")
+        await page.click("#sidebar-tab-compass")
         await page.wait_for_timeout(1200)
 
         print("Clicking Specialists subtab...")
-        await page.click("#northstar-subtab-specialist")
+        await page.click("#compass-subtab-specialist")
         await page.wait_for_timeout(1500)
 
         p3 = ARTIFACT_DIR / "compass_specialists_live.png"

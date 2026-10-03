@@ -3,7 +3,7 @@ import ChatPanel from './ChatPanel'
 import AgentPanel from './AgentPanel'
 import SpecialistPanel from './SpecialistPanel'
 
-export default function NorthstarPanel({
+export default function CompassPanel({
   initialSubTab = 'assistant',
   messages,
   setMessages,
@@ -36,7 +36,7 @@ export default function NorthstarPanel({
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', minWidth: 0, overflow: 'hidden', background: 'var(--bg-app)' }}>
-      {/* Northstar Header Sub-bar */}
+      {/* Header Sub-bar */}
       <div style={{
         height: '52px',
         borderBottom: '1px solid var(--border)',
@@ -69,7 +69,7 @@ export default function NorthstarPanel({
         {/* View Toggle */}
         <div style={{ display: 'flex', background: 'var(--bg-card-soft)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border)', flexShrink: 0 }}>
           <button
-            id="northstar-subtab-chat"
+            id="compass-subtab-chat"
             onClick={() => setActiveSubTab('assistant')}
             style={{
               padding: '5px 14px',
@@ -86,7 +86,7 @@ export default function NorthstarPanel({
             💬 Chat
           </button>
           <button
-            id="northstar-subtab-planner"
+            id="compass-subtab-planner"
             onClick={() => setActiveSubTab('planner')}
             style={{
               padding: '5px 14px',
@@ -103,7 +103,7 @@ export default function NorthstarPanel({
             📋 Planner
           </button>
           <button
-            id="northstar-subtab-specialist"
+            id="compass-subtab-specialist"
             onClick={() => setActiveSubTab('specialist')}
             style={{
               padding: '5px 14px',

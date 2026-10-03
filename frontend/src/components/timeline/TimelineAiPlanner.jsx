@@ -8,8 +8,9 @@ export default function TimelineAiPlanner({
   quickAiPrompt,
   setQuickAiPrompt,
   onQuickAiSubmit,
-  onOpenNorthstar,
+  onOpenCompass,
 }) {
+  const handleOpenCompass = onOpenCompass
   return (
     <div
       style={{
@@ -29,7 +30,7 @@ export default function TimelineAiPlanner({
           </div>
           <div>
             <div style={{ fontSize: '15px', fontWeight: '700', letterSpacing: '-0.2px' }}>
-              Compass Copilot
+              Compass
             </div>
             <div style={{ fontSize: '12px', color: '#94a3b8' }}>
               Powered by NVIDIA Nemotron MoE on Nebius Token Factory
@@ -40,7 +41,7 @@ export default function TimelineAiPlanner({
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
             type="button"
-            onClick={() => onOpenNorthstar && onOpenNorthstar('Propose an optimized conflict-free schedule for today')}
+            onClick={() => handleOpenCompass && handleOpenCompass('Propose an optimized conflict-free schedule for today')}
             style={{
               fontSize: '12px',
               fontWeight: '600',
@@ -59,7 +60,7 @@ export default function TimelineAiPlanner({
           </button>
           <button
             type="button"
-            onClick={() => onOpenNorthstar && onOpenNorthstar('Detect any cognitive overload or overlapping deadlines')}
+            onClick={() => handleOpenCompass && handleOpenCompass('Detect any cognitive overload or overlapping deadlines')}
             style={{
               fontSize: '12px',
               fontWeight: '600',

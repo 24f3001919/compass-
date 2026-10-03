@@ -23,9 +23,10 @@ export default function Timeline({
   activeDomain,
   onSelectDomain,
   onTasksUpdated,
-  onOpenNorthstar,
+  onOpenCompass,
   onOpenTelemetry,
 }) {
+  const handleOpenCompass = onOpenCompass
   const [selectedTask, setSelectedTask] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [seedingPersona, setSeedingPersona] = useState(false)
@@ -156,8 +157,8 @@ export default function Timeline({
   const handleQuickAiSubmit = (e) => {
     e.preventDefault()
     if (!quickAiPrompt.trim()) return
-    if (onOpenNorthstar) {
-      onOpenNorthstar(quickAiPrompt)
+    if (handleOpenCompass) {
+      handleOpenCompass(quickAiPrompt)
       setQuickAiPrompt('')
     }
   }
@@ -222,14 +223,14 @@ export default function Timeline({
         quickAiPrompt={quickAiPrompt}
         setQuickAiPrompt={setQuickAiPrompt}
         onQuickAiSubmit={handleQuickAiSubmit}
-        onOpenNorthstar={onOpenNorthstar}
+        onOpenCompass={handleOpenCompass}
       />
 
       {/* Onboarding Tour */}
       <OnboardingTour
         onVerifyDeadlines={handleVerifyAll}
         onOpenTelemetry={onOpenTelemetry}
-        onOpenNorthstar={onOpenNorthstar}
+        onOpenCompass={handleOpenCompass}
         onOpenSeed={handleSeedJudgePersona}
       />
 
@@ -322,7 +323,7 @@ export default function Timeline({
         onCreated={onTasksUpdated}
         defaultDomain={activeDomain}
         tasks={tasks}
-        onOpenNorthstar={onOpenNorthstar}
+        onOpenCompass={handleOpenCompass}
       />
     </div>
   )

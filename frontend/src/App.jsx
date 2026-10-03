@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import Sidebar from './components/Sidebar'
 import Timeline from './components/Timeline'
 import CalendarView from './components/CalendarView'
-import NorthstarPanel from './components/NorthstarPanel'
+import CompassPanel from './components/CompassPanel'
 import AuthModal from './components/AuthModal'
 import MigrationModal from './components/MigrationModal'
 import NebiusTelemetryModal from './components/NebiusTelemetryModal'
@@ -254,8 +254,8 @@ export default function App() {
               loadTasks(selectedDomain)
               refreshUsage()
             }}
-            onOpenNorthstar={(prompt) => {
-              setActiveTab('northstar')
+            onOpenCompass={(prompt) => {
+              setActiveTab('compass')
               setPendingPrompt(prompt)
             }}
             onOpenTelemetry={() => setShowTelemetryModal(true)}
@@ -271,7 +271,7 @@ export default function App() {
             onOpenAuthModal={() => setShowAuthModal(true)}
           />
         ) : (
-          <NorthstarPanel
+          <CompassPanel
             initialSubTab={
               activeTab === 'agent' || activeTab === 'planner'
                 ? 'planner'
