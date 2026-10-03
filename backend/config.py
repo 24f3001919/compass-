@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     GLOBAL_DAILY_MODEL_CALL_CAP: int = 1000
     GLOBAL_DAILY_MINT_CAP: int = 200
     COMPASS_KILL_SWITCH_ACTIVE: bool = False
+    TRUST_CF_CONNECTING_IP: bool = True
+    TRUSTED_PROXY_HOPS: int = 1
 
     # --- Pinned Authority Domains & Event Prefixes ---
     PINNED_TIER_1_DOMAINS: list[str] = [
