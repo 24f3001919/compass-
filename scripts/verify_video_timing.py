@@ -24,7 +24,7 @@ def verify_script(filepath: str):
         sys.exit(1)
 
     table_text = table_match.group(1).strip()
-    rows = [r.strip() for r in table_text.split("\n") if r.strip().startswith("|") and not "---" in r]
+    rows = [r.strip() for r in table_text.split("\n") if r.strip().startswith("|") and "---" not in r]
 
     total_words = 0
     pillar4_words = 0
