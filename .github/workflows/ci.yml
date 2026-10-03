@@ -81,6 +81,9 @@ jobs:
       - name: Source Code File Size Audit (<=500 PASS, 501-700 WARN, >700 FAIL)
         run: python scripts/check_file_sizes.py
 
+      - name: Route Table & Test Coverage Verification
+        run: python scripts/verify_route_table.py
+
       - name: Bandit — Security AST Analysis
         run: |
           pip install bandit

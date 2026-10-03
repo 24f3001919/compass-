@@ -6,6 +6,7 @@ Provides database access for chat conversations and message history in PostgreSQ
 
 from typing import Optional, Union, List, Dict, Any
 import logging
+import secrets
 import uuid
 import asyncpg
 from asyncpg.pool import PoolConnectionProxy
@@ -26,6 +27,8 @@ async def ensure_conversation_columns(conn: DbConn) -> None:
             ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE;
             ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE;
             ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_shared BOOLEAN NOT NULL DEFAULT FALSE;
+            ALTER TABLE conversations ADD COLUMN IF NOT EXISTS share_token TEXT UNIQUE;
+            ALTER TABLE conversations ALTER COLUMN share_token TYPE TEXT;
             """
         )
     except Exception:
@@ -265,17 +268,20 @@ async def update_conversation(
     is_pinned: Optional[bool] = None,
     is_archived: Optional[bool] = None,
     is_shared: Optional[bool] = None,
-) -> bool:
-    """Update title, pinned status, archive status, or shared status of a conversation."""
+) -> tuple[bool, Optional[str]]:
+    """Update title, pinned status, archive status, or shared status of a conversation.
+    When is_shared is enabled, generates a cryptographically unguessable token (secrets.token_urlsafe(32)).
+    When is_shared is disabled, revokes the token by setting share_token to NULL.
+    """
     try:
         cid = uuid.UUID(conversation_id)
-        updates: List[str] = []
-        params: List[Any] = [cid]
 
         if title is None and is_pinned is None and is_archived is None and is_shared is None:
-            return True
+            return True, None
 
         await ensure_conversation_columns(conn)
+        cand_token = secrets.token_urlsafe(32) if is_shared is True else None
+
         query = """
             UPDATE conversations
             SET title = CASE WHEN $2::boolean THEN $3::text ELSE title END,
@@ -283,7 +289,7 @@ async def update_conversation(
                 is_archived = CASE WHEN $6::boolean THEN $7::boolean ELSE is_archived END,
                 is_shared = CASE WHEN $8::boolean THEN $9::boolean ELSE is_shared END,
                 share_token = CASE
-                    WHEN $8::boolean AND $9::boolean THEN COALESCE(share_token, gen_random_uuid())
+                    WHEN $8::boolean AND $9::boolean THEN COALESCE(share_token, $10::text)
                     WHEN $8::boolean AND NOT $9::boolean THEN NULL
                     ELSE share_token
                 END
@@ -301,6 +307,7 @@ async def update_conversation(
             bool(is_archived) if is_archived is not None else False,
             is_shared is not None,
             bool(is_shared) if is_shared is not None else False,
+            cand_token,
         )
         st = str(row["share_token"]) if row and row.get("share_token") else None
         return True, st

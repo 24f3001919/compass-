@@ -190,7 +190,7 @@ CREATE INDEX idx_usage_log_created_at ON usage_log(created_at);
 ### Real Hosting Split
 - **Frontend**: Hosted on **Vercel** (`https://compass-farmlytics.vercel.app`). Built with Vite + Vanilla CSS/TS. Configured with a same-origin reverse proxy in `vercel.json` routing `/api/:path*`, `/chat`, and `/health` directly to Render.
 - **Backend**: Hosted on **Render** (`https://compass-backend-qryu.onrender.com`). Docker container running FastAPI with Python 3.12, Uvicorn, and asyncpg.
-- **Database**: Hosted on **Neon Serverless PostgreSQL** (Frankfurt `eu-central-1`). PostgreSQL 16 with `pgvector` extension and connection pooling (`ep-sweet-fire-b2y9w95z-pooler`).
+- **Database**: Hosted on **Neon Serverless PostgreSQL** (Frankfurt `eu-central-1`). PostgreSQL 16 with `pgvector` extension and connection pooling (`neon-pooler`).
 - **Inference & Embeddings**: Hosted on **Nebius Token Factory** (`https://api.tokenfactory.nebius.com/v1/`). Handles 100% of LLM inference (Nano, Super, Ultra) and vector embeddings (Qwen3).
 - **Nebius Serverless Compute**: Deployment manifests for Nebius Serverless Compute are provided in [`deploy/serverless_endpoint.yaml`](./deploy/serverless_endpoint.yaml) and [`deploy/serverless_job.yaml`](./deploy/serverless_job.yaml). For hackathon evaluation and zero-downtime reliability, the demo is currently served on Render (backend) and Vercel (frontend), with 100% of LLM inference powered by Nebius Token Factory.
 

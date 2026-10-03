@@ -12,9 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from backend.config import get_settings
 from backend.dependencies import (
-    _get_current_user_id,
-    _get_current_guest_id,
-    _resolve_identities,
+    _get_current_identity,
     generate_guest_token,
     verify_guest_token,
     guest_rate_limit,
@@ -111,7 +109,9 @@ async def get_migration_status(request: Request):
 
     Must be called by an authenticated user who has an active guest session.
     """
-    user_id, guest_id = _resolve_identities(request)
+    ident = _get_current_identity(request)
+    user_id = ident.user_id if ident else None
+    guest_id = ident.guest_id if ident else None
 
     if not user_id:
         return {
@@ -148,7 +148,9 @@ async def get_migration_status(request: Request):
 @router.get("/api/migration/conversations")
 async def list_migration_conversations(request: Request):
     """List all conversations owned by the current guest identity, along with import status."""
-    user_id, guest_id = _resolve_identities(request)
+    ident = _get_current_identity(request)
+    user_id = ident.user_id if ident else None
+    guest_id = ident.guest_id if ident else None
 
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required to view migration candidates.")
@@ -179,7 +181,9 @@ async def import_all_guest_data(request: Request, _rl: None = Depends(guest_rate
 
     Strictly preserves the original guest data and avoids duplicates.
     """
-    user_id, guest_id = _resolve_identities(request)
+    ident = _get_current_identity(request)
+    user_id = ident.user_id if ident else None
+    guest_id = ident.guest_id if ident else None
 
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required to import guest data.")
@@ -218,7 +222,9 @@ async def import_selected_guest_data(body: ImportSelectedBody, request: Request,
     Idempotent: conversations already imported will not be duplicated.
     Original guest records remain intact.
     """
-    user_id, guest_id = _resolve_identities(request)
+    ident = _get_current_identity(request)
+    user_id = ident.user_id if ident else None
+    guest_id = ident.guest_id if ident else None
 
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required to import guest data.")
@@ -294,7 +300,8 @@ async def skip_migration(response: Response):
 @router.delete("/api/guest/data")
 async def delete_guest_data_endpoint(request: Request, response: Response):
     """Permanently delete all guest conversations and memories associated with the verified guest token."""
-    guest_id = _get_current_guest_id(request)
+    ident = _get_current_identity(request)
+    guest_id = ident.guest_id if ident else None
     if not guest_id:
         raise HTTPException(status_code=400, detail="No valid guest identity token provided.")
 

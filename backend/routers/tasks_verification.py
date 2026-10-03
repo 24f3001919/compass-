@@ -6,9 +6,9 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
-from backend.dependencies import _get_current_user_id, _get_or_create_user_id
+from backend.dependencies import _get_current_identity, _get_or_create_user_id, rate_limit
 from backend.memory import structured
 from backend.memory.db import get_pool
 from backend.models import AddDependencyBody
@@ -59,7 +59,7 @@ async def remove_task_dependency_endpoint(task_id: int, depends_on_task_id: int)
 
 
 # ---- 1-Click Judge Demo Persona Seeding ------------------------------------
-@router.post("/api/demo/seed")
+@router.post("/api/demo/seed", dependencies=[Depends(rate_limit)])
 async def seed_demo_persona_endpoint(request: Request):
     """Seed or refresh the Dual-Degree Hackathon Competitor demo persona for judges."""
     user_id = _get_or_create_user_id(request)
@@ -233,7 +233,6 @@ async def seed_demo_persona_endpoint(request: Request):
 
 
 # ---- Tavily Live Deadline Verification -------------------------------------
-@router.post("/tasks/{task_id}/verify")
 @router.post("/api/tasks/{task_id}/verify")
 async def verify_task_deadline_endpoint(task_id: int, request: Request):
     """Verify a task deadline against live official web sources using Tavily."""
@@ -254,14 +253,14 @@ async def verify_task_deadline_endpoint(task_id: int, request: Request):
         }
 
 
-@router.post("/tasks/verify-deadlines")
 @router.post("/api/tasks/verify-deadlines")
 async def verify_all_deadlines_endpoint(request: Request):
     """Proactively verify open deadlines across tasks using Tavily web search."""
     pool = await get_pool()
     if not pool:
         raise HTTPException(status_code=500, detail="Database unavailable")
-    user_id = _get_current_user_id(request)
+    ident = _get_current_identity(request)
+    user_id = ident.id if ident else None
     try:
         from backend.skills.handlers.web import handle_verify_deadline
         async with pool.acquire() as conn:

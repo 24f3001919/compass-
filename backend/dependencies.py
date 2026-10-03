@@ -111,6 +111,9 @@ async def verify_token(
     Fails closed in production if AUTH_TOKEN is missing or set to insecure default.
     Uses constant-time comparison to prevent timing attacks.
     """
+    if not credentials or not credentials.credentials:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
     settings = get_settings()
 
     # Fail closed in production if token is insecure
@@ -124,9 +127,6 @@ async def verify_token(
                 status_code=500,
                 detail="Server configuration error: production authentication token is not securely configured.",
             )
-
-    if not credentials or not credentials.credentials:
-        raise HTTPException(status_code=401, detail="Unauthorized")
 
     if not settings.AUTH_TOKEN:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -252,72 +252,20 @@ class Identity:
         return self.id
 
 
-def _get_current_identity(request: Request) -> Optional[Identity]:
-    """Resolve strongly typed authenticated identity from verified credentials.
-    
-    Returns Identity with explicit is_admin and is_guest flags.
-    Restricts x-user-id impersonation with AUTH_TOKEN to cron and admin routes in production.
-    """
-    settings = get_settings()
-    session_token = request.cookies.get("compass_session")
-    auth_header = request.headers.get("authorization")
-    bearer_token = None
-    if auth_header and auth_header.lower().startswith("bearer "):
-        bearer_token = auth_header[7:].strip()
-
-    # 1. Verified user session
-    token_to_check = session_token or bearer_token
-    if token_to_check:
-        try:
-            from backend.routers.auth import get_user_from_session
-            user = get_user_from_session(token_to_check)
-            if user:
-                return Identity(id=user.lower(), is_admin=False, is_guest=False, user_id=user.lower())
-        except Exception as e:
-            logger.debug("Session token lookup failed: %s", e)
-
-    # 2. Server-to-server AUTH_TOKEN
-    if bearer_token and settings.AUTH_TOKEN and hmac.compare_digest(bearer_token, settings.AUTH_TOKEN):
-        user_header = request.headers.get("x-user-id")
-        if user_header and user_header.strip():
-            path = request.url.path
-            is_cron_or_admin = path.startswith("/api/cron") or path.startswith("/api/admin")
-            if settings.is_production() and not is_cron_or_admin:
-                logger.warning("x-user-id impersonation rejected on non-admin/cron route in production: %s", path)
-                raise HTTPException(
-                    status_code=403,
-                    detail="x-user-id impersonation is restricted to admin and cron routes in production.",
-                )
-            target = user_header.strip().lower()
-            return Identity(id=target, is_admin=True, is_guest=False, user_id=target)
-        return Identity(id="admin", is_admin=True, is_guest=False, user_id="admin")
-
-    return None
-
-
-def _get_current_user_id(request: Request) -> Optional[str]:
-    """Resolve authenticated user identity strictly from verified credentials."""
-    ident = _get_current_identity(request)
-    return ident.id if ident else None
-
-
-def _get_current_guest_id(request: Request) -> Optional[str]:
-    """Extract and cryptographically verify guest identity from token header or cookie."""
-    # 1. Check signed X-Guest-Token header
+def _extract_verified_guest_id(request: Request) -> Optional[str]:
+    """Helper to extract and cryptographically verify guest identity from headers or cookies."""
     token_header = request.headers.get("x-guest-token")
     if token_header:
         verified = verify_guest_token(token_header)
         if verified:
             return verified
 
-    # 2. Check signed compass_guest_token cookie
     cookie_token = request.cookies.get("compass_guest_token")
     if cookie_token:
         verified = verify_guest_token(cookie_token)
         if verified:
             return verified
 
-    # 3. Check X-Guest-Id header only if it contains a verified signed token
     guest_id_header = request.headers.get("x-guest-id")
     if guest_id_header and "." in guest_id_header:
         verified = verify_guest_token(guest_id_header)
@@ -327,11 +275,91 @@ def _get_current_guest_id(request: Request) -> Optional[str]:
     return None
 
 
+def _get_current_identity(request: Request) -> Optional[Identity]:
+    """Resolve strongly typed authenticated identity from verified credentials.
+
+    Returns Identity with explicit is_admin and is_guest flags.
+    x-user-id impersonation is allowed ONLY when ENVIRONMENT is explicitly set to an allowed value ('development' or 'test'). Unset or production = forbidden.
+    """
+    settings = get_settings()
+    session_token = request.cookies.get("compass_session")
+    auth_header = request.headers.get("authorization")
+    bearer_token = None
+    if auth_header and auth_header.lower().startswith("bearer "):
+        bearer_token = auth_header[7:].strip()
+
+    verified_guest = _extract_verified_guest_id(request)
+
+    # 1. Verified user session
+    token_to_check = session_token or bearer_token
+    if token_to_check:
+        try:
+            from backend.routers.auth import get_user_from_session
+            user = get_user_from_session(token_to_check)
+            if user:
+                return Identity(
+                    id=user.lower(),
+                    is_admin=False,
+                    is_guest=False,
+                    user_id=user.lower(),
+                    guest_id=verified_guest,
+                )
+        except Exception as e:
+            logger.debug("Session token lookup failed: %s", e)
+
+    # 2. Server-to-server AUTH_TOKEN
+    if bearer_token and settings.AUTH_TOKEN and isinstance(settings.AUTH_TOKEN, str) and hmac.compare_digest(str(bearer_token), str(settings.AUTH_TOKEN)):
+        user_header = request.headers.get("x-user-id")
+        if user_header and user_header.strip():
+            allowed_envs = {"development", "test"}
+            current_env = (getattr(settings, "ENVIRONMENT", None) or "").strip().lower()
+            if current_env not in allowed_envs:
+                logger.warning(
+                    "x-user-id impersonation rejected: ENVIRONMENT='%s' is not in allowed %s",
+                    current_env,
+                    allowed_envs,
+                )
+                raise HTTPException(
+                    status_code=403,
+                    detail="x-user-id impersonation is forbidden in this environment.",
+                )
+            target = user_header.strip().lower()
+            return Identity(id=target, is_admin=True, is_guest=False, user_id=target, guest_id=None)
+        return Identity(id="admin", is_admin=True, is_guest=False, user_id="admin", guest_id=None)
+
+    # 3. Verified guest token
+    if verified_guest:
+        return Identity(
+            id=f"guest_{verified_guest}",
+            is_admin=False,
+            is_guest=True,
+            user_id=None,
+            guest_id=verified_guest,
+        )
+
+    return None
+
+
+def _get_current_user_id(request: Request) -> Optional[str]:
+    """Deprecated: resolve authenticated user identity strictly via Identity resolver."""
+    ident = _get_current_identity(request)
+    return ident.user_id if (ident and not ident.is_guest) else None
+
+
+def _get_current_guest_id(request: Request) -> Optional[str]:
+    """Deprecated: extract guest identity strictly via Identity resolver."""
+    ident = _get_current_identity(request)
+    return ident.guest_id if (ident and ident.is_guest) else None
+
+
 def _resolve_identities(request: Request) -> tuple[Optional[str], Optional[str]]:
-    """Resolve both authenticated user_id and guest_id if present."""
-    user_id = _get_current_user_id(request)
-    guest_id = _get_current_guest_id(request)
-    return user_id, guest_id
+    """Deprecated: resolve user_id and guest_id via single Identity resolver."""
+    ident = _get_current_identity(request)
+    if not ident:
+        return None, None
+    if ident.is_guest:
+        return None, ident.guest_id
+    return ident.user_id, ident.guest_id
 
 
 def _get_or_create_user_id(request: Request) -> str:
@@ -339,12 +367,9 @@ def _get_or_create_user_id(request: Request) -> str:
 
     Guarantees every mutation is bound to an isolated user or guest workspace identity.
     """
-    uid = _get_current_user_id(request)
-    if uid:
-        return uid
-    gid = _get_current_guest_id(request)
-    if gid:
-        return f"guest_{gid}"
+    ident = _get_current_identity(request)
+    if ident:
+        return ident.id
     import hashlib
     client_ip = get_client_ip(request)
     h = hashlib.sha256(client_ip.encode("utf-8")).hexdigest()[:12]

@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from backend.config import get_settings
-from backend.dependencies import _get_current_user_id
+from backend.dependencies import _get_current_identity
 from backend.memory.db import get_pool
 from backend.models import SelectAccountBody, QuickConnectBody
 from backend.services.oauth import (
@@ -85,7 +85,8 @@ def _resolve_oauth_redirect_uri(request: Request) -> str:
 async def auth_me(request: Request):
     """Retrieve logged-in user profile and calendar connection status."""
     from backend.services.calendar import get_calendar_connection_status
-    user_id = _get_current_user_id(request)
+    ident = _get_current_identity(request)
+    user_id = ident.user_id if ident and not ident.is_guest else None
 
     if not user_id or "@" not in user_id:
         return {
@@ -188,7 +189,8 @@ async def calendar_connect(
         }
 
     redirect_uri = _resolve_oauth_redirect_uri(request)
-    current_user = _get_current_user_id(request)
+    ident = _get_current_identity(request)
+    current_user = ident.user_id if ident and not ident.is_guest else None
     effective_hint = login_hint or (current_user if current_user and "@" in current_user else None)
     state = generate_oauth_state(current_user or "guest")
     url = generate_google_oauth_url(redirect_uri=redirect_uri, login_hint=effective_hint, state=state)
@@ -209,7 +211,8 @@ async def calendar_callback(
     """Handle OAuth redirect: exchange authorization code for tokens and save connection."""
     if state:
         from backend.services.oauth import verify_oauth_state
-        current_user = _get_current_user_id(request)
+        ident = _get_current_identity(request)
+        current_user = ident.user_id if ident and not ident.is_guest else None
         expected_user = current_user or "guest"
         if not verify_oauth_state(state, expected_user):
             return HTMLResponse(
@@ -334,7 +337,8 @@ async def calendar_sync_now(request: Request):
     if not is_session_oauth_verified(session_token):
         raise HTTPException(status_code=403, detail="Sync requires a genuine Google OAuth-verified session")
 
-    user_id = _get_current_user_id(request)
+    ident = _get_current_identity(request)
+    user_id = ident.user_id if ident and not ident.is_guest else None
     if not user_id:
         return {"status": "error", "message": "Sign in to sync tasks with Google Calendar"}
     pool = await get_pool()
@@ -356,7 +360,8 @@ async def calendar_disconnect(request: Request, response: Response):
     if not is_session_oauth_verified(session_token):
         raise HTTPException(status_code=403, detail="Disconnect requires a genuine Google OAuth-verified session")
 
-    user_id = _get_current_user_id(request)
+    ident = _get_current_identity(request)
+    user_id = ident.user_id if ident and not ident.is_guest else None
     pool = await get_pool()
     if pool and user_id:
         from backend.services.calendar import disconnect_calendar_connection

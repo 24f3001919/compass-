@@ -4,7 +4,7 @@ Compass — Admin, Health, and Usage Endpoints.
 
 import os
 import logging
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from backend.dependencies import verify_token
@@ -14,6 +14,24 @@ from backend.models import HealthResponse, ConsolidateRequest, ConsolidateRespon
 logger = logging.getLogger("compass.routers.admin")
 
 router = APIRouter(tags=["admin"])
+
+
+@router.get("/api/admin/proxy-hops")
+async def get_proxy_hops_inspection(request: Request):
+    """Diagnostic route for measuring proxy hops and raw XFF chain.
+    Used for verifying trusted proxy count across Vercel rewrite and direct paths.
+    """
+    xff = request.headers.get("x-forwarded-for")
+    parts = [p.strip() for p in xff.split(",") if p.strip()] if xff else []
+    return {
+        "x_forwarded_for_raw": xff,
+        "x_forwarded_for_parts": parts,
+        "hops_count": len(parts),
+        "x_real_ip": request.headers.get("x-real-ip"),
+        "client_host": request.client.host if request.client else None,
+        "cf_connecting_ip": request.headers.get("cf-connecting-ip"),
+        "user_agent": request.headers.get("user-agent"),
+    }
 
 
 @router.get("/", include_in_schema=False)
@@ -42,18 +60,34 @@ async def get_usage(_token: str = Depends(verify_token)):
 
 @router.get("/api/usage/summary")
 @router.get("/api/telemetry")
-async def get_public_usage_summary():
+async def get_public_usage_summary(request: Request):
     """Public usage summary and Nebius/NVIDIA architectural telemetry.
-    No authentication required — returns aggregate tokens, model breakdown, and cost savings.
+    Returns token breakdown and model metrics. Strips internal cost data unless caller has admin authentication.
     """
     from backend.services.usage import get_usage_summary, hydrate_usage_from_db, _USAGE_STATE
+    from backend.dependencies import _get_current_identity
+
     if not _USAGE_STATE:
         try:
             pool = await get_pool()
             await hydrate_usage_from_db(pool)
         except Exception:
             pass
-    return get_usage_summary()
+
+    summary = dict(get_usage_summary())
+    ident = _get_current_identity(request)
+    if not (ident and ident.is_admin):
+        # Strip internal cost details for public callers
+        for cost_key in (
+            "estimated_cost_usd",
+            "cost_savings_usd",
+            "cost_breakdown",
+            "savings_vs_gpt4o",
+            "savings_vs_gemini_flash",
+            "budget_used_usd",
+        ):
+            summary.pop(cost_key, None)
+    return summary
 
 
 @router.get("/health", response_model=HealthResponse)

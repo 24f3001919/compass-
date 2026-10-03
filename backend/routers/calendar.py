@@ -8,7 +8,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
-from backend.dependencies import _get_current_user_id
+from backend.dependencies import _get_current_identity
 from backend.memory.db import get_pool
 from backend.memory import structured
 from backend.models import (
@@ -27,7 +27,8 @@ router = APIRouter(tags=["calendar"])
 async def get_calendar_status_endpoint(request: Request):
     """Check connection status for Google Calendar integration."""
     from backend.services.calendar import get_calendar_connection_status
-    uid = _get_current_user_id(request)
+    ident = _get_current_identity(request)
+    uid = ident.user_id if ident and not ident.is_guest else None
     pool = await get_pool()
     status = await get_calendar_connection_status(pool=pool, user_id=uid)
     return {"status": "ok", "calendar": status}
@@ -79,7 +80,8 @@ async def export_calendar_ics_endpoint(
 ):
     """Export standard RFC 5545 iCalendar feed for calendar apps."""
     from backend.services.calendar import generate_ics_feed
-    target_user_id = _get_current_user_id(request)
+    ident = _get_current_identity(request)
+    target_user_id = ident.user_id if ident and not ident.is_guest else (ident.id if ident else None)
     pool = await get_pool()
     tasks = []
     if pool is not None:

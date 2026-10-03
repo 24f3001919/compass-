@@ -123,7 +123,7 @@ async def enforce_rate_limit(
     identity_refill_per_sec: float = 0.5, # 30/minute
 ) -> None:
     """Enforce shared multi-tier rate limits: per-IP AND per-Identity (user or guest)."""
-    from backend.dependencies import _get_current_user_id, _get_current_guest_id
+    from backend.dependencies import _get_current_identity
 
     client_ip = get_client_ip(request)
     ip_key = f"ip:{client_ip}:{action}"
@@ -137,13 +137,13 @@ async def enforce_rate_limit(
         )
 
     # Check identity if authenticated or guest
-    user_id = _get_current_user_id(request)
-    guest_id = _get_current_guest_id(request)
+    ident = _get_current_identity(request)
     identity_key = None
-    if user_id:
-        identity_key = f"user:{user_id}:{action}"
-    elif guest_id:
-        identity_key = f"guest:{guest_id}:{action}"
+    if ident:
+        if ident.is_guest and ident.guest_id:
+            identity_key = f"guest:{ident.guest_id}:{action}"
+        elif ident.user_id:
+            identity_key = f"user:{ident.user_id}:{action}"
 
     if identity_key:
         id_allowed, id_retry = await _consume_token(

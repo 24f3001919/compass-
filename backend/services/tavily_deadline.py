@@ -56,8 +56,10 @@ def extract_dates_from_results(
 
         for raw_match in matches:
             match_str = raw_match
+            year_provenance = "explicit_in_quote"
             if not re.search(r"\d{4}", match_str):
                 match_str = f"{match_str}, {default_year}"
+                year_provenance = "inferred"
 
             parsed = parse_date_candidate(match_str)
             if parsed:
@@ -70,6 +72,7 @@ def extract_dates_from_results(
                         "date": parsed,
                         "date_str": parsed.isoformat(),
                         "raw_match": raw_match,
+                        "year_provenance": year_provenance,
                         "url": url,
                         "domain": auth.get("domain", ""),
                         "authority_tier": auth.get("tier", "tier_3_general"),
@@ -154,6 +157,24 @@ def analyze_deadline_drift(
 
     top_candidate = primary_pool[0]
     detected_date = top_candidate["date"]
+    year_provenance = top_candidate.get("year_provenance", "explicit_in_quote")
+
+    if year_provenance == "inferred":
+        return {
+            "verdict": "UNVERIFIED",
+            "drift_verdict": "UNVERIFIED_AMBIGUOUS",
+            "has_drift": False,
+            "stored_date": stored_date.isoformat() if stored_date else None,
+            "live_date": detected_date.isoformat(),
+            "year_provenance": year_provenance,
+            "drift_days": 0,
+            "direction": "inferred_year_unverified",
+            "source_url": top_candidate["url"],
+            "source_authority": top_candidate["authority_badge"],
+            "evidence": top_candidate["snippet"],
+            "candidates_found": len(candidates),
+            "recommendation": "Year was inferred rather than present in official quote/metadata; requires manual verification.",
+        }
 
     if not stored_date:
         return {
@@ -162,6 +183,7 @@ def analyze_deadline_drift(
             "has_drift": False,
             "stored_date": None,
             "live_date": detected_date.isoformat(),
+            "year_provenance": year_provenance,
             "drift_days": 0,
             "direction": "new_date_discovered",
             "source_url": top_candidate["url"],
@@ -194,6 +216,7 @@ def analyze_deadline_drift(
         "has_drift": has_drift,
         "stored_date": stored_date.isoformat(),
         "live_date": detected_date.isoformat(),
+        "year_provenance": year_provenance,
         "drift_days": drift_days,
         "direction": direction,
         "source_url": top_candidate["url"],

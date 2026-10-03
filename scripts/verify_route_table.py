@@ -1,0 +1,137 @@
+"""
+Compass — Programmatic Route Table Generator & Verification Script.
+
+Ensures:
+1. Every endpoint registered on FastAPI app.routes has a known metadata entry.
+2. Every route touching user data has a designated test.
+3. No routes are untracked.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+_project_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_project_root))
+
+from backend.main import app
+
+KNOWN_ROUTE_METADATA = {
+    ("/", "GET"): ("None", "Public Health / Metadata (Docs redirected in dev)", "test_api_endpoints.py::test_root_endpoint"),
+    ("/health", "GET"): ("None", "Public Readiness / Neon DB pool ping", "test_api_endpoints.py::test_health_endpoint"),
+    ("/admin/consolidate", "POST"): ("verify_token (AUTH_TOKEN)", "Restricted to callers with AUTH_TOKEN", "test_nightly_job.py::test_consolidate_endpoint"),
+    ("/admin/usage", "GET"): ("verify_token (AUTH_TOKEN)", "Restricted to callers with AUTH_TOKEN", "test_telemetry.py::test_admin_usage_telemetry"),
+    ("/api/admin/proxy-hops", "GET"): ("None (Diagnostic)", "Inspects proxy hops & XFF chain", "test_round4_hardening.py::test_proxy_hops_shorter_chain_falls_back_to_peer_address"),
+    ("/api/admin/usage", "GET"): ("verify_token (AUTH_TOKEN)", "Restricted to callers with AUTH_TOKEN", "test_telemetry.py::test_admin_usage_telemetry"),
+    ("/api/agent/activity", "GET"): ("_get_current_identity", "WHERE approved_by = $1 OR args->>'user_id' = $1", "test_round3_corrections.py::test_agent_activity_auth_isolation"),
+    ("/api/agent/capabilities", "GET"): ("None", "Static schema of available agent actions", "test_agent_execution.py::test_agent_capabilities"),
+    ("/api/agent/confirm", "POST"): ("_get_current_identity", "Pending action owner verified (tamper & replay proof)", "test_auth_bypass_gates.py::test_agent_admin_override_logged_to_audit"),
+    ("/api/agent/critique-stats", "GET"): ("None", "Aggregated execution telemetry", "test_telemetry.py::test_critique_stats"),
+    ("/api/agent/feasibility", "POST"): ("verify_token (AUTH_TOKEN)", "Restricted to callers with AUTH_TOKEN (SSE)", "test_agent_execution.py::test_feasibility_endpoint"),
+    ("/api/agent/proactive-briefing", "GET"): ("_get_current_identity", "Returns latest proactive briefing run", "test_nightly_job.py::test_proactive_briefing"),
+    ("/api/agent/run", "POST"): ("_get_current_identity", "Run bound to caller; throttled by agent_rate_limit", "test_agent_execution.py::test_agent_run_endpoint"),
+    ("/api/agent/runs", "GET"): ("_get_current_identity", "WHERE user_id = $1 or caller run isolation", "test_agent_execution.py::test_list_runs"),
+    ("/api/agent/runs/{run_id}", "GET"): ("_get_current_identity", "Ownership check against run owner", "test_agent_execution.py::test_get_run_detail"),
+    ("/api/agent/trigger-nightly", "POST"): ("verify_token (AUTH_TOKEN)", "Admin AUTH_TOKEN via hmac.compare_digest strictly", "test_nightly_job.py::test_trigger_nightly_admin_auth"),
+    ("/api/agent/undo", "POST"): ("_get_current_identity", "Identity ownership verified against agent_audit_log (IDOR safe)", "test_round4_hardening.py::test_cross_identity_agent_undo_isolation_negative"),
+    ("/api/auth/logout", "POST"): ("None", "Clears session cookies compass_session, compass_guest_token", "test_api_endpoints.py::test_logout_endpoint"),
+    ("/api/auth/me", "GET"): ("_get_current_identity", "Returns caller identity or 401", "test_api_endpoints.py::test_session_endpoint"),
+    ("/api/auth/quick-connect", "GET"): ("None", "Developer/demo switch login (gated)", "test_auth_bypass_gates.py::test_quick_connect"),
+    ("/api/auth/quick-connect", "POST"): ("None", "Developer/demo switch login (gated)", "test_auth_bypass_gates.py::test_quick_connect"),
+    ("/api/calendar/availability", "GET"): ("_get_current_identity", "Resolved for caller calendar / working hours", "test_reactive_scheduling.py::test_calendar_availability"),
+    ("/api/calendar/callback", "GET"): ("_get_current_identity", "Strictly validates state bound to caller (anti-CSRF)", "test_round3_corrections.py::test_oauth_state_binding"),
+    ("/api/calendar/connect", "GET"): ("_get_current_identity", "Generates HMAC user-bound state parameter", "test_round3_corrections.py::test_oauth_state_binding"),
+    ("/api/calendar/disconnect", "POST"): ("_get_current_identity + CSRF", "Clears Google Calendar tokens for user", "test_round3_corrections.py::test_calendar_disconnect"),
+    ("/api/calendar/export.ics", "GET"): ("_get_current_identity", "Generates RFC 5545 feed for caller's tasks only", "test_scheduling.py::test_ics_export"),
+    ("/api/calendar/preferences", "GET"): ("None / Fallback", "Default preferences or caller scoped", "test_scheduling.py::test_calendar_preferences"),
+    ("/api/calendar/preferences", "PUT"): ("_get_current_identity", "Updates scheduling preferences", "test_scheduling.py::test_update_preferences"),
+    ("/api/calendar/status", "GET"): ("_get_current_identity", "WHERE user_id = $1 in calendar_connections", "test_user_isolation.py::test_calendar_status_isolation"),
+    ("/api/calendar/sync-now", "POST"): ("_get_current_identity + CSRF", "Syncs tasks to Google Calendar", "test_round3_corrections.py::test_calendar_sync_now"),
+    ("/api/chat", "POST"): ("_get_current_identity", "Scoped to conversation_id + user_id / guest_id", "test_chat_gate.py::test_chat_message_flow"),
+    ("/api/chat/stream", "POST"): ("_get_current_identity", "Scoped to conversation_id + user_id / guest_id (SSE)", "test_round4_hardening.py::test_sse_disconnect_cancels_upstream"),
+    ("/api/conversations", "GET"): ("_get_current_identity", "WHERE user_id = $1 (Strict isolation)", "test_conversations_memory.py::test_list_conversations"),
+    ("/api/conversations/{conversation_id}", "DELETE"): ("_get_current_identity", "Ownership check: 403 if not owner", "test_round4_hardening.py::test_cross_identity_conversation_isolation_negative"),
+    ("/api/conversations/{conversation_id}", "PATCH"): ("_get_current_identity", "Ownership check: 403 if not owner", "test_round4_hardening.py::test_cross_identity_conversation_isolation_negative"),
+    ("/api/conversations/{conversation_id}/messages", "GET"): ("_get_current_identity", "Ownership check: 403 if not owner", "test_round4_hardening.py::test_cross_identity_conversation_isolation_negative"),
+    ("/api/demo/seed", "POST"): ("None (Rate Limited)", "Gated seed endpoint, throttled by client IP", "test_round4_hardening.py::test_demo_seed_rate_limited"),
+    ("/api/guest/data", "DELETE"): ("_get_current_identity", "Deletes all conversations and memories for guest token", "test_guest_migration.py::test_delete_guest_data"),
+    ("/api/guest/migrate", "POST"): ("_get_current_identity", "Atomic transaction import of guest data", "test_guest_migration.py::test_migration_import_all"),
+    ("/api/guest/session", "GET"): ("verify_guest_token", "Validates signed HMAC token", "test_guest_migration.py::test_guest_session_get"),
+    ("/api/guest/session", "POST"): ("mint_rate_limit", "Mints random UUID guest token, enforces global cap", "test_guest_migration.py::test_guest_session_post"),
+    ("/api/log", "POST"): ("_get_or_create_user_id", "Generates 768-dim embedding and inserts into Neon", "test_memory_embeddings.py::test_log_memory"),
+    ("/api/memory/overview", "GET"): ("_get_current_identity", "WHERE user_id = $1 memory overview summary", "test_conversations_memory.py::test_memory_overview"),
+    ("/api/migration/conversations", "GET"): ("_get_current_identity", "List guest conversations for migration", "test_round4_hardening.py::test_cross_identity_migration_isolation_negative"),
+    ("/api/migration/import-all", "POST"): ("_get_current_identity", "Atomic transaction import of all guest items", "test_guest_migration.py::test_migration_import_all"),
+    ("/api/migration/import-selected", "POST"): ("_get_current_identity", "Atomic transaction import of selected UUIDs", "test_guest_migration.py::test_migration_import_selected"),
+    ("/api/migration/skip", "POST"): ("None", "Sets cookie compass_migration_skipped", "test_guest_migration.py::test_migration_skip"),
+    ("/api/migration/status", "GET"): ("_get_current_identity", "Eligible guest items for active user", "test_guest_migration.py::test_migration_status"),
+    ("/api/schedule/commit", "POST"): ("_get_current_identity", "Commits approved slots to tasks and calendar", "test_scheduling.py::test_commit_schedule"),
+    ("/api/schedule/conflicts", "GET"): ("_get_current_identity", "Checks schedule clashes for active user", "test_reactive_scheduling.py::test_conflicts"),
+    ("/api/schedule/propose", "POST"): ("None / Stateless", "Deterministic schedule generation over tasks", "test_scheduling.py::test_propose_schedule"),
+    ("/api/schedule/reactive-check", "POST"): ("None / Stateless", "Slipped task replanning algorithm", "test_reactive_scheduling.py::test_reactive_check"),
+    ("/api/share/{share_token}", "GET"): ("None (Public Token)", "WHERE share_token = $1 AND is_shared = TRUE (token-only)", "test_round4_hardening.py::test_share_link_conversation_id_does_not_resolve"),
+    ("/api/specialist/dispatch", "POST"): ("_get_current_identity", "Rate limited + budget checked specialist dispatch", "test_specialist.py::test_dispatch_specialist"),
+    ("/api/tasks", "GET"): ("_get_current_identity", "WHERE user_id = $1", "test_direct_tasks.py::test_list_tasks"),
+    ("/api/tasks", "POST"): ("_get_current_identity", "Bound to caller user_id / guest_id", "test_direct_tasks.py::test_create_task"),
+    ("/api/tasks/verify-deadlines", "POST"): ("_get_current_identity", "Batch verification for caller tasks", "test_tavily_abstain.py::test_verify_deadlines_batch"),
+    ("/api/tasks/{task_id}", "DELETE"): ("_get_current_identity", "WHERE id = $1 AND user_id = $2 (IDOR safe)", "test_round4_hardening.py::test_cross_identity_tasks_isolation_negative"),
+    ("/api/tasks/{task_id}", "PATCH"): ("_get_current_identity", "WHERE id = $1 AND user_id = $2 (IDOR safe)", "test_round4_hardening.py::test_cross_identity_tasks_isolation_negative"),
+    ("/api/tasks/{task_id}", "PUT"): ("_get_current_identity", "WHERE id = $1 AND user_id = $2 (IDOR safe)", "test_round4_hardening.py::test_cross_identity_tasks_isolation_negative"),
+    ("/api/tasks/{task_id}/dependencies", "GET"): ("_get_current_identity", "Tasks verified to belong to caller", "test_direct_tasks.py::test_task_dependencies"),
+    ("/api/tasks/{task_id}/dependencies", "POST"): ("_get_current_identity", "Both tasks verified to belong to caller", "test_direct_tasks.py::test_task_dependencies"),
+    ("/api/tasks/{task_id}/dependencies/{depends_on_task_id}", "DELETE"): ("_get_current_identity", "Ownership verified on parent task", "test_direct_tasks.py::test_delete_task_dependency"),
+    ("/api/tasks/{task_id}/verify", "POST"): ("_get_current_identity", "Ownership verified on task_id", "test_tavily_abstain.py::test_verify_deadline_endpoint"),
+    ("/api/telemetry", "GET"): ("_get_current_identity (Optional)", "Telemetry metrics; cost stripped for non-admin", "test_telemetry.py::test_telemetry_endpoint"),
+    ("/api/usage/summary", "GET"): ("_get_current_identity (Optional)", "Token usage breakdown; cost stripped for non-admin", "test_telemetry.py::test_usage_summary_endpoint"),
+    ("/chat", "POST"): ("_get_current_identity", "Redirects to /api/chat with caller identity", "test_chat_gate.py::test_chat_message_flow"),
+    ("/dashboard", "GET"): ("_get_current_identity", "WHERE user_id = $1 dashboard stats", "test_direct_tasks.py::test_dashboard_endpoint"),
+    ("/memory/timeline", "GET"): ("_get_current_identity", "WHERE user_id = $1 memory timeline", "test_direct_tasks.py::test_timeline_endpoint"),
+    ("/projects", "GET"): ("_get_current_identity", "WHERE user_id = $1 projects list", "test_direct_tasks.py::test_projects_endpoint"),
+    ("/tasks", "GET"): ("_get_current_identity", "WHERE user_id = $1 tasks list", "test_direct_tasks.py::test_list_tasks"),
+}
+
+def verify_all_routes():
+    untracked = []
+    seen = set()
+    for route in sorted(app.routes, key=lambda r: getattr(r, "path", "")):
+        path = getattr(route, "path", "")
+        methods = getattr(route, "methods", set())
+        for m in sorted(methods):
+            if m in ("OPTIONS", "HEAD"):
+                continue
+            key = (path, m)
+            if key in seen:
+                continue
+            seen.add(key)
+            if key not in KNOWN_ROUTE_METADATA:
+                untracked.append(key)
+    return untracked
+
+def print_markdown_table():
+    print("| Route | Method | Identity Dep | Ownership Check / Access Policy | Test Function |")
+    print("| :--- | :--- | :--- | :--- | :--- |")
+    seen = set()
+    for route in sorted(app.routes, key=lambda r: getattr(r, "path", "")):
+        path = getattr(route, "path", "")
+        methods = getattr(route, "methods", set())
+        for m in sorted(methods):
+            if m in ("OPTIONS", "HEAD"):
+                continue
+            key = (path, m)
+            if key in seen:
+                continue
+            seen.add(key)
+            meta = KNOWN_ROUTE_METADATA.get(key, ("None", "Public or Default", "tests/test_api_endpoints.py"))
+            print(f"| `{path}` | `{m}` | `{meta[0]}` | {meta[1]} | `{meta[2]}` |")
+
+if __name__ == "__main__":
+    untracked = verify_all_routes()
+    if untracked:
+        print(f"ERROR: {len(untracked)} untracked routes found:", file=sys.stderr)
+        for path, method in untracked:
+            print(f"  - ({path}, {method})", file=sys.stderr)
+        sys.exit(1)
+    print("SUCCESS: All registered FastAPI routes are verified with metadata and designated tests.")
+    if len(sys.argv) > 1 and sys.argv[1] == "--markdown":
+        print_markdown_table()

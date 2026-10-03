@@ -26,7 +26,6 @@ from backend.dependencies import (
     rate_limit,
     agent_rate_limit,
     verify_token,
-    _get_current_user_id,
     _now_iso,
 )
 from backend.models import (

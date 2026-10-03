@@ -123,9 +123,11 @@ async def verify_and_claim_action(
                     orig_args = json.loads(orig_args)
 
                 # 2. Strict ownership verification
-                clean_caller = (caller_identity or "").strip().lower()
+                is_admin = getattr(caller_identity, "is_admin", False)
+                caller_id_str = getattr(caller_identity, "id", None) or str(caller_identity or "")
+                clean_caller = caller_id_str.strip().lower()
                 clean_owner = (owner or "").strip().lower()
-                if clean_caller != clean_owner and clean_caller != "admin":
+                if clean_caller != clean_owner and not is_admin:
                     logger.warning("Ownership mismatch: caller %s attempted to confirm action owned by %s", clean_caller, clean_owner)
                     return False, "Permission denied: Action belongs to another identity.", None
 

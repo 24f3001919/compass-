@@ -10,11 +10,12 @@ Provides:
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import logging
 import socket
 import urllib.parse
-from typing import Tuple, Optional
+from typing import Any, Dict, Optional, Tuple
 from fastapi import Request
 import httpx
 
@@ -151,9 +152,12 @@ async def safe_http_get(
     """Execute an outbound HTTP GET with strict SSRF validation and DNS rebinding protection.
 
     Pins the connection to the pre-validated IP so DNS cannot change between check and fetch.
+    Uses non-blocking loop.getaddrinfo, keeps TLS verification ON, and passes sni_hostname.
     Returns (status_code, text, response_headers).
     """
     current_url = url
+    loop = asyncio.get_running_loop()
+
     for hop in range(max_redirects + 1):
         safe, reason = is_safe_url(current_url)
         if not safe:
@@ -161,10 +165,13 @@ async def safe_http_get(
 
         parsed = urllib.parse.urlsplit(current_url)
         hostname = (parsed.hostname or "").strip()
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
 
-        # Resolve hostname to validated IP to defend against DNS rebinding
+        # Non-blocking async DNS resolution to pre-validated IP
         try:
-            addr_info = socket.getaddrinfo(hostname, parsed.port or (443 if parsed.scheme == "https" else 80))
+            addr_info = await loop.getaddrinfo(hostname, port, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM)
+            if not addr_info:
+                raise ValueError(f"Could not resolve hostname '{hostname}'")
             resolved_ip = addr_info[0][4][0]
             ip_obj = ipaddress.ip_address(resolved_ip)
             if _is_ip_blocked(ip_obj):
@@ -173,11 +180,22 @@ async def safe_http_get(
             raise ValueError(f"Could not resolve hostname '{hostname}': {e}")
 
         req_headers = dict(headers or {})
-        if "Host" not in req_headers:
-            req_headers["Host"] = hostname
+        req_headers["Host"] = hostname
 
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
-            resp = await client.get(current_url, headers=req_headers)
+        path_query = (parsed.path or "/") + (f"?{parsed.query}" if parsed.query else "")
+
+        # Pinned-IP transport: connect directly to resolved_ip with TLS SNI verification
+        target_ip = f"[{resolved_ip}]" if ":" in resolved_ip else resolved_ip
+        pinned_target = f"{parsed.scheme}://{target_ip}:{port}{path_query}"
+
+        async with httpx.AsyncClient(timeout=timeout, verify=True, follow_redirects=False) as client:
+            extensions: Dict[str, Any] = {}
+            if parsed.scheme == "https":
+                extensions["sni_hostname"] = hostname.encode("ascii")
+
+            req = client.build_request("GET", pinned_target, headers=req_headers, extensions=extensions)
+            resp = await client.send(req)
+
             if resp.status_code in (301, 302, 303, 307, 308):
                 loc = resp.headers.get("location")
                 if not loc:
@@ -198,6 +216,7 @@ def get_client_ip(request: Request) -> str:
     Prevents header spoofing attacks where an attacker prepends arbitrary fake IPs into X-Forwarded-For.
     By default ignores cf-connecting-ip and true-client-ip unless explicitly enabled by configuration.
     Extracts the Nth-from-right IP from X-Forwarded-For based on TRUSTED_PROXY_HOPS.
+    If the proxy chain is shorter than TRUSTED_PROXY_HOPS, falls back to TCP peer address (never attacker-controlled element).
     """
     from backend.config import get_settings
     settings = get_settings()
@@ -220,8 +239,11 @@ def get_client_ip(request: Request) -> str:
         parts = [p.strip() for p in xff.split(",") if p.strip()]
         if parts:
             hops = int(getattr(settings, "TRUSTED_PROXY_HOPS", 1))
-            idx = max(0, len(parts) - hops)
-            return parts[idx]
+            if len(parts) >= hops:
+                return parts[-hops]
+            # Chain is shorter than expected proxy hops: fallback strictly to TCP peer address
+            if request.client and request.client.host:
+                return request.client.host
 
     # 4. X-Real-IP (if present and no X-Forwarded-For)
     real_ip = request.headers.get("x-real-ip")

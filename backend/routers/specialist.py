@@ -1,6 +1,6 @@
 import hmac
 from fastapi import APIRouter, Depends, Request, HTTPException
-from backend.dependencies import rate_limit, _get_current_user_id
+from backend.dependencies import rate_limit, _get_current_identity
 from backend.memory.db import get_pool
 from backend.config import get_settings
 
@@ -12,17 +12,17 @@ async def dispatch_specialist_endpoint(request_data: dict, request: Request):
     """Direct thin API endpoint for the Specialist Multi-Agent System UI.
     Validates request -> verifies user/auth -> delegates to SpecialistDispatcher -> returns structured SpecialistResult.
     """
-    settings = get_settings()
+    from backend.services.budgets import check_daily_budget
 
-    # Verify authorization (bearer token or session/user identity)
-    auth_header = request.headers.get("authorization", "")
-    token = auth_header[7:].strip() if auth_header.startswith("Bearer ") else ""
-    user_id = _get_current_user_id(request)
+    ident = _get_current_identity(request)
+    if not ident:
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized: valid bearer token or authenticated user session required.",
+        )
 
-    if settings.is_production():
-        is_token_valid = bool(token and settings.AUTH_TOKEN and hmac.compare_digest(token, settings.AUTH_TOKEN))
-        if not is_token_valid and not user_id:
-            raise HTTPException(status_code=401, detail="Unauthorized: valid bearer token or authenticated user session required.")
+    # Enforce user/guest daily budget
+    check_daily_budget(ident.id, cost_increment_usd=0.0)
 
     from backend.agents.specialist import SpecialistRequest, SpecialistDispatcher
     pool = await get_pool()

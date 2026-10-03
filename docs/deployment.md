@@ -124,7 +124,7 @@ Compass decouples continuous integration (validation) from continuous deployment
 
 ### C. Persistent Storage (Neon PostgreSQL)
 
-- **Host**: `ep-sweet-fire-b2y9w95z.c-6.eu-central-1.aws.neon.tech`
+- **Host**: Hosted Neon Serverless PostgreSQL (`eu-central-1`)
 - **Engine**: PostgreSQL 16 + `pgvector`
 - **Features**: Serverless autoscaling, scale-to-zero compute, automatic connection pooling, instant branching.
 - **Migration Strategy**: Schema initialized and validated dynamically during application startup lifespan (`backend/memory/db.py`).
