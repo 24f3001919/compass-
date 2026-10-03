@@ -96,3 +96,36 @@ async def check_daily_identity_budget(
         raise
     except Exception as e:
         logger.debug(f"Could not verify daily budget against DB: {e}")
+
+
+GLOBAL_DAILY_TAVILY_CREDIT_CAP = 100
+GLOBAL_DAILY_MODEL_CALL_CAP = 1000
+
+
+async def check_global_spend_cap(pool: Any = None) -> None:
+    """Validate that global daily consumption across all users and guests has not exceeded hard limits.
+    Prevents sybil or mass-guest creation attacks from draining paid external API credits.
+    """
+    import os
+    if os.environ.get("COMPASS_KILL_SWITCH_ACTIVE", "").lower() in ("true", "1", "yes"):
+        raise HTTPException(
+            status_code=503,
+            detail="Service temporarily paused: Global API kill-switch is engaged.",
+        )
+
+    try:
+        p = pool or await get_pool()
+        if p:
+            async with p.acquire() as conn:
+                global_tav = await conn.fetchval(
+                    "SELECT COALESCE(SUM(credits), 0) FROM tavily_usage_log WHERE created_at >= date_trunc('day', now())"
+                ) or 0
+                if int(global_tav) >= GLOBAL_DAILY_TAVILY_CREDIT_CAP:
+                    raise HTTPException(
+                        status_code=429,
+                        detail=f"Global daily Tavily credit cap ({GLOBAL_DAILY_TAVILY_CREDIT_CAP} credits) reached. Operations paused until reset.",
+                    )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.debug(f"Global spend cap check skipped: {e}")

@@ -195,29 +195,32 @@ async def safe_http_get(
 
 
 def get_client_ip(request: Request) -> str:
-    """Safely extract client IP address.
+    """Safely extract client IP address behind trusted reverse proxies (Render / Cloudflare / Vercel).
 
-    When running behind trusted reverse proxies (e.g. Render / Cloudflare / Nginx),
-    extract the client IP from standard proxy headers, taking the rightmost
-    entry from untrusted X-Forwarded-For if forged headers are prepended,
-    or falling back to direct connection client host.
+    Prevents header spoofing attacks where an attacker prepends arbitrary fake IPs into X-Forwarded-For.
+    Edge proxies append the genuine client IP, so the last valid address or dedicated proxy header is used.
     """
-    # Check CF-Connecting-IP first (Cloudflare)
+    # 1. Cloudflare validated client IP
     cf_ip = request.headers.get("cf-connecting-ip")
     if cf_ip and cf_ip.strip():
         return cf_ip.strip()
 
-    # Check X-Real-IP
-    real_ip = request.headers.get("x-real-ip")
-    if real_ip and real_ip.strip():
-        return real_ip.strip()
+    # 2. True-Client-IP
+    t_ip = request.headers.get("true-client-ip")
+    if t_ip and t_ip.strip():
+        return t_ip.strip()
 
-    # Check X-Forwarded-For: parse first IP or fallback to client host
+    # 3. X-Forwarded-For: take the rightmost IP appended by the trusted proxy, NOT the client-injected leftmost IP
     xff = request.headers.get("x-forwarded-for")
     if xff and xff.strip():
         parts = [p.strip() for p in xff.split(",") if p.strip()]
         if parts:
-            return parts[0]
+            return parts[-1]
+
+    # 4. X-Real-IP (if present and no X-Forwarded-For)
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip and real_ip.strip():
+        return real_ip.strip()
 
     if request.client and request.client.host:
         return request.client.host

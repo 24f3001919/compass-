@@ -22,19 +22,10 @@ def _quiet_unraisablehook(unraisable):
 
 sys.unraisablehook = _quiet_unraisablehook
 
-# Match prod by endpoint id from env PROD_DB_ENDPOINT
-prod_endpoint_id = os.environ.get("PROD_DB_ENDPOINT", "ep-sweet-fire-b2y9w95z").strip()
+# Production database endpoint marker that must never be targeted by tests
+_PROD_ENDPOINT_MARKER = "ep-sweet-fire-b2y9w95z"
 
-if not (os.environ.get("TEST_DATABASE_URL") or os.environ.get("DATABASE_URL")):
-    env_file = _project_root / ".env"
-    if env_file.exists():
-        try:
-            from dotenv import load_dotenv
-            load_dotenv(env_file)
-        except ImportError:
-            pass
-
-test_db_url = os.environ.get("TEST_DATABASE_URL") or os.environ.get("DATABASE_URL")
+test_db_url = os.environ.get("TEST_DATABASE_URL", "").strip()
 
 # Set DATABASE_URL from test_db_url before importing backend
 if test_db_url:
@@ -44,27 +35,35 @@ from backend.main import app
 from backend.config import get_settings
 
 settings = get_settings()
+if test_db_url:
+    settings.DATABASE_URL = test_db_url
 
 
 def pytest_configure(config):
-    """Guard against executing test runs against production database."""
+    """Guard against executing test runs against production database.
+    FAILS CLOSED: Tests REFUSE to run unless TEST_DATABASE_URL is explicitly set
+    and points to an isolated non-production database.
+    """
     if not test_db_url:
         pytest.exit(
-            "ABORTED: Neither TEST_DATABASE_URL nor DATABASE_URL environment variable is set. Refusing to run tests.",
+            "ABORTED: TEST_DATABASE_URL environment variable is not set. Refusing to run tests against default or production database.",
             returncode=1,
         )
 
     parsed_test = urlparse(test_db_url)
-    if prod_endpoint_id and prod_endpoint_id in (parsed_test.hostname or ""):
+    hostname = (parsed_test.hostname or "").lower()
+
+    if _PROD_ENDPOINT_MARKER in hostname:
         pytest.exit(
-            f"ABORTED: Database matches production endpoint '{prod_endpoint_id}': {parsed_test.hostname}",
+            "ABORTED: Refusing to run tests. TEST_DATABASE_URL points to the production database endpoint.",
             returncode=1,
         )
 
     parsed_settings = urlparse(settings.DATABASE_URL)
-    if prod_endpoint_id and prod_endpoint_id in (parsed_settings.hostname or ""):
+    settings_host = (parsed_settings.hostname or "").lower()
+    if _PROD_ENDPOINT_MARKER in settings_host:
         pytest.exit(
-            f"ABORTED: settings.DATABASE_URL matches production endpoint '{prod_endpoint_id}': {parsed_settings.hostname}",
+            "ABORTED: Refusing to run tests. settings.DATABASE_URL points to the production database endpoint.",
             returncode=1,
         )
 

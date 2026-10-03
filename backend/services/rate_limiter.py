@@ -155,3 +155,19 @@ async def enforce_mint_rate_limit(request: Request) -> None:
             detail="Guest token minting rate limit exceeded. Max 10 guest tokens per minute per IP.",
             headers={"Retry-After": str(retry_after)},
         )
+
+
+async def cleanup_stale_rate_limit_buckets(older_than_hours: int = 24) -> int:
+    """Purge expired rate limit buckets to prevent table bloat."""
+    try:
+        pool = await get_pool()
+        if pool:
+            async with pool.acquire() as conn:
+                res = await conn.execute(
+                    "DELETE FROM rate_limit_buckets WHERE last_updated < now() - ($1 || ' hours')::interval",
+                    str(older_than_hours),
+                )
+                return int(res.split()[-1]) if res and "DELETE" in res else 0
+    except Exception as e:
+        logger.warning("Failed to clean up stale rate limit buckets: %s", e)
+    return 0

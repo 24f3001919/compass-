@@ -31,22 +31,6 @@ export async function fetchCurrentUser() {
   }
 }
 
-export async function selectAccount(email) {
-  const clean = email.trim().toLowerCase()
-  const res = await fetch(`${API_BASE}/api/auth/select-account`, {
-    method: 'POST',
-    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ email: clean }),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.detail || `Failed to switch account (HTTP ${res.status})`)
-  }
-  const data = await res.json()
-  setCurrentUserId(data.user_id || clean)
-  return data
-}
-
 export async function logoutUser() {
   setCurrentUserId('')
   try {

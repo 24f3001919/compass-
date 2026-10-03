@@ -50,15 +50,11 @@ async def test_account_selection_and_task_isolation(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_select_account_endpoint(client: AsyncClient):
-    """Test switching active account via POST /api/auth/select-account."""
+async def test_select_account_endpoint_deleted(client: AsyncClient):
+    """Verify that insecure uncredentialed POST /api/auth/select-account is deleted and returns 404."""
     target = "alice@example.com"
     res = await client.post("/api/auth/select-account", json={"email": target})
-    assert res.status_code == 200
-    data = res.json()
-    assert data["status"] == "ok"
-    assert data["user_id"] == target
-    assert data["email"] == target
+    assert res.status_code == 404
 
 
 @pytest.mark.asyncio

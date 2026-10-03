@@ -110,32 +110,6 @@ async def auth_me(request: Request):
     }
 
 
-@router.post("/api/auth/select-account")
-async def auth_select_account(body: SelectAccountBody, response: Response):
-    """Select or switch active user account for memory and calendar isolation."""
-    raw_email = (body.email or body.user_id or "").strip().lower()
-    email = re.sub(r"[^\w@.-]", "", raw_email)
-    if not email or "@" not in email:
-        raise HTTPException(status_code=400, detail="A valid email address is required")
-
-    session_token = create_session(email)
-    response.set_cookie(
-        key="compass_session",
-        value=session_token,
-        max_age=86400 * 365,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-    )
-    return {
-        "status": "ok",
-        "user_id": email,
-        "email": email,
-        "name": email.split("@")[0].replace(".", " ").title(),
-        "message": f"Switched account to {email}",
-    }
-
-
 @router.post("/api/auth/logout")
 async def auth_logout(request: Request, response: Response):
     """Log out of current account and clear session cookies."""
@@ -149,7 +123,16 @@ async def auth_logout(request: Request, response: Response):
 
 @router.post("/api/auth/quick-connect")
 async def auth_quick_connect(body: QuickConnectBody, response: Response):
-    """Quick-login with user account for instant access and testing."""
+    """Dev-only quick-connect helper for local offline UI debugging.
+    Strictly forbidden and disabled in production, test, and default environments.
+    """
+    env = getattr(settings, "ENVIRONMENT", "").lower()
+    if env != "development":
+        raise HTTPException(
+            status_code=404,
+            detail="Endpoint disabled: Quick-connect is restricted to local development environments.",
+        )
+
     from backend.services.calendar import save_calendar_connection
     raw_val = re.sub(r"[^\w@.-]", "", (body.email or body.auth_code or "").strip().lower())
     if "@" in raw_val:

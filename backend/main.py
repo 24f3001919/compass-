@@ -138,11 +138,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 # ---------------------------------------------------------------------------
 # App Instance
 # ---------------------------------------------------------------------------
+_is_prod = settings.is_production() or getattr(settings, "ENVIRONMENT", "").lower() == "production"
+
 app = FastAPI(
     title="Compass API",
     description="Personal AI assistant with persistent memory",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url=None if _is_prod else "/docs",
+    redoc_url=None if _is_prod else "/redoc",
+    openapi_url=None if _is_prod else "/openapi.json",
 )
 
 # ---------------------------------------------------------------------------

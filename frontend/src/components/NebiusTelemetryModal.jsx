@@ -7,7 +7,7 @@ export default function NebiusTelemetryModal({ isOpen, onClose, usageStats, onRe
 
   const stats = usageStats || {}
   const totalCalls = stats.total_requests ?? 0
-  const totalTokens = stats.total_tokens ?? (stats.total_input_tokens + stats.total_output_tokens) ?? 0
+  const totalTokens = stats.total_tokens ?? ((stats.total_input_tokens || 0) + (stats.total_output_tokens || 0))
   const inputTokens = stats.total_input_tokens ?? 0
   const outputTokens = stats.total_output_tokens ?? 0
   const totalCost = stats.total_estimated_cost_usd ?? 0.0

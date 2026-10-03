@@ -1,4 +1,5 @@
 import React from 'react'
+import EvidenceCard from './EvidenceCard'
 
 function getTimeGreeting() {
   const hour = new Date().getHours()
@@ -68,7 +69,7 @@ function renderFormattedMessage(text) {
           return (
             <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', margin: '3px 0 3px 6px', color: 'var(--text-primary)', fontSize: '13.5px' }}>
               <span style={{ color: 'var(--coursework)', fontWeight: '700', lineHeight: '1.4' }}>•</span>
-              <span style={{ lineHeight: '1.5' }}>{trimmed.replace(/^[•\-]\s*/, '')}</span>
+              <span style={{ lineHeight: '1.5' }}>{trimmed.replace(/^[•-]\s*/, '')}</span>
             </div>
           )
         }
@@ -125,6 +126,9 @@ export default function ChatMessageList({
               boxShadow: 'var(--shadow-sm)'
             }}>
               {msg.role === 'user' ? msg.text : renderFormattedMessage(msg.text)}
+              {msg.role === 'assistant' && msg.evidence && (
+                <EvidenceCard evidence={msg.evidence} />
+              )}
             </div>
           </div>
         ))}

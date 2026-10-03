@@ -132,6 +132,23 @@ async def agent_confirm(req: AgentConfirmRequest, request: Request):
                 else:
                     raise HTTPException(status_code=404, detail=msg)
 
+            # Audit record admin overrides
+            if caller == "admin" and pool:
+                try:
+                    logger.warning("SECURITY AUDIT: Admin override invoked for action %s (run %s)", action_id, run_id)
+                    async with pool.acquire() as conn:
+                        await conn.execute(
+                            """
+                            INSERT INTO agent_audit_log (run_id, tool, args, approved_by)
+                            VALUES ($1, $2, $3::jsonb, 'admin_override')
+                            """,
+                            run_id or "admin",
+                            a.get("tool", "unknown"),
+                            json.dumps(confirmed_args or {}),
+                        )
+                except Exception as log_err:
+                    logger.error("Failed to record admin override in agent_audit_log: %s", log_err)
+
     results = await execute_confirmed_actions(actions, pool, run_id=run_id)
     return {"status": "ok", "results": results}
 

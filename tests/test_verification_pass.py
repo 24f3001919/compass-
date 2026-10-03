@@ -239,13 +239,17 @@ async def test_pending_action_expiry():
 # --- 5. DOMAIN AUTHORITY & SPOOFING RESISTANCE ---
 
 def test_tavily_domain_authority_spoofing():
-    # Devpost official
-    res_official = classify_domain_authority("https://devpost.com/hackathons")
-    assert res_official["tier"] == AuthorityTier.TIER_1_OFFICIAL.value
+    # Devpost platform host is capped at Tier 2
+    res_platform = classify_domain_authority("https://devpost.com/hackathons")
+    assert res_platform["tier"] == AuthorityTier.TIER_2_TECHNICAL.value
 
-    # Subdomain of official
+    # Platform host (*.devpost.com) is strictly capped at Tier 2
     res_subdomain = classify_domain_authority("https://chromaawards.devpost.com/rules")
-    assert res_subdomain["tier"] == AuthorityTier.TIER_1_OFFICIAL.value
+    assert res_subdomain["tier"] == AuthorityTier.TIER_2_TECHNICAL.value
+
+    # Official organizer domain is Tier 1
+    res_official = classify_domain_authority("https://docs.nebius.com/rules")
+    assert res_official["tier"] == AuthorityTier.TIER_1_OFFICIAL.value
 
     # Attacker attempting domain suffix spoofing: devpost.com.evil.io
     res_spoof = classify_domain_authority("https://devpost.com.evil.io/phish")
