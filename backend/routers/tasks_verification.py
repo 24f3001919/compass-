@@ -248,8 +248,8 @@ async def verify_task_deadline_endpoint(task_id: int, request: Request):
         logger.error(f"Failed to verify task {task_id}: {e}", exc_info=True)
         return {
             "success": False,
-            "error": str(e),
-            "summary": f"Verification error: {e}",
+            "error": "Internal verification error",
+            "summary": "Verification could not be completed at this time.",
             "data": {},
         }
 
@@ -289,6 +289,6 @@ async def verify_all_deadlines_endpoint(request: Request):
         logger.error(f"Failed to batch verify deadlines: {e}", exc_info=True)
         return {
             "status": "error",
-            "error": str(e),
+            "error": "Internal verification error",
             "verifications": [],
         }
