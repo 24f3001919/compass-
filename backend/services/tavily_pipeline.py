@@ -186,7 +186,32 @@ def evaluate_deterministic_verdict(
         raw_date = c.get("extracted_date")
 
         # 1. Non-sentence / table fragment filter
-        if claim_text.startswith("|") or len(claim_text.split()) < 4:
+        if claim_text.startswith("|") or len(claim_text.split()) < 4 or "|" in claim_text[:5]:
+            continue
+
+        # Marketing buzzword and boilerplate filter
+        marketing_keywords = (
+            "join us", "sign up", "empowering", "pioneering", "revolutionize",
+            "sponsored by", "all rights reserved", "subscribe", "terms of use",
+            "cookie policy", "privacy policy", "exclusive rewards"
+        )
+        if any(mk in claim_text.lower() for mk in marketing_keywords):
+            continue
+
+        # Semantic gate: claim must contain deadline, schedule, date, or rule semantics
+        has_semantics = bool(
+            re.search(
+                r"\b(deadline|due|ends|closes|starts|opens|submission|submit|by|before|until|rule|requirement|eligibility|guideline|schedule|timeline|date|time|deliverable|format)\b",
+                claim_text,
+                re.IGNORECASE,
+            )
+            or raw_date
+        )
+        if not has_semantics:
+            continue
+
+        # Quote truncation check: quote must not be truncated mid-word
+        if quote and len(quote.split()) < 2:
             continue
 
         # 2. Entity binding check: verify quote, claim, or URL matches entity
@@ -195,23 +220,6 @@ def evaluate_deterministic_verdict(
             text_to_check = f"{claim_text.lower()} {quote.lower()} {source_url.lower()}"
             if not any(kw in text_to_check for kw in entity_keywords):
                 entity_matched = False
-
-        if not entity_matched:
-            # Source belongs to a different/unrelated event or company
-            verdict = "NOT_FOUND"
-            verdicts.append(verdict)
-            evidence_items.append({
-                "claim": claim_text,
-                "source_url": source_url,
-                "verbatim_quote": quote,
-                "published_date": raw_date,
-                "authority_tier": url_tier_map.get(source_url, AuthorityTier.TIER_3_GENERAL.value),
-                "verdict": verdict,
-                "verbatim_verified": False,
-                "entity_matched": False,
-                "retrieved_at": datetime.now(timezone.utc).isoformat(),
-            })
-            continue
 
         # 3. Verbatim quote check
         normalized_quote = " ".join(quote.lower().split())
@@ -224,7 +232,10 @@ def evaluate_deterministic_verdict(
         is_verified_quote = bool(verbatim_match and entity_matched and (parsed_dt is not None if raw_date else True))
 
         # 4. Deterministic per-claim verdict derivation
-        if not verbatim_match or not quote:
+        if not entity_matched:
+            # Source belongs to a different/unrelated event or company -> NOT_FOUND, never UNVERIFIED
+            verdict = "NOT_FOUND"
+        elif not verbatim_match or not quote:
             verdict = "UNVERIFIED"
         elif raw_date and not parsed_dt:
             verdict = "UNVERIFIED"  # Missing explicit 4-digit year
@@ -247,7 +258,7 @@ def evaluate_deterministic_verdict(
             "authority_tier": tier,
             "verdict": verdict,
             "verbatim_verified": is_verified_quote,
-            "entity_matched": True,
+            "entity_matched": entity_matched,
             "retrieved_at": datetime.now(timezone.utc).isoformat(),
         })
 
@@ -268,7 +279,9 @@ def evaluate_deterministic_verdict(
                 verdicts[idx] = "CONFLICTING"
 
     # Overall pipeline verdict rule
-    if not evidence_items or all(v == "NOT_FOUND" for v in verdicts):
+    if not evidence_items:
+        overall = "NOT_FOUND"
+    elif all(v == "NOT_FOUND" for v in verdicts):
         overall = "NOT_FOUND"
     elif any(v == "CONFLICTING" for v in verdicts):
         overall = "CONFLICTING"
@@ -278,7 +291,6 @@ def evaluate_deterministic_verdict(
         overall = "STALE"
     else:
         overall = "UNVERIFIED"
-        # Consistency rule: Under an UNVERIFIED overall verdict, demote any individual VERIFIED rows
         for item in evidence_items:
             if item["verdict"] == "VERIFIED":
                 item["verdict"] = "UNVERIFIED"

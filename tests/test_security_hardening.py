@@ -130,7 +130,7 @@ def test_safe_client_ip_prefers_direct_host_when_no_proxy():
     assert ip == "203.0.113.42"
 
 
-def test_safe_client_ip_handles_forwarded_for():
+def test_safe_client_ip_handles_forwarded_for(monkeypatch):
     """get_client_ip extracts the trusted rightmost client IP from proxy headers to prevent spoofing."""
     mock_request = MagicMock()
     mock_request.headers = {"x-forwarded-for": "spoofed-ip, 198.51.100.15"}
@@ -138,8 +138,13 @@ def test_safe_client_ip_handles_forwarded_for():
     ip = get_client_ip(mock_request)
     assert ip == "198.51.100.15"
 
-    # Cloudflare connecting IP takes precedence
-    mock_request.headers = {"cf-connecting-ip": "203.0.113.88", "x-forwarded-for": "spoofed-ip"}
+    # Cloudflare connecting IP is ignored by default unless explicitly enabled
+    mock_request.headers = {"cf-connecting-ip": "203.0.113.88", "x-forwarded-for": "spoofed-ip, 198.51.100.15"}
+    assert get_client_ip(mock_request) == "198.51.100.15"
+
+    # Cloudflare connecting IP is honored when TRUST_CF_CONNECTING_IP is True
+    from backend.config import get_settings
+    monkeypatch.setattr(get_settings(), "TRUST_CF_CONNECTING_IP", True)
     assert get_client_ip(mock_request) == "203.0.113.88"
 
 

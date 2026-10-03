@@ -21,7 +21,7 @@ async def root():
     """Redirect root path to API documentation in dev, or return status in production."""
     from backend.config import get_settings
     settings = get_settings()
-    if settings.is_production() or getattr(settings, "ENVIRONMENT", "").lower() == "production":
+    if not settings.is_development():
         return {"status": "ok", "app": "Compass API"}
     return RedirectResponse(url="/docs")
 

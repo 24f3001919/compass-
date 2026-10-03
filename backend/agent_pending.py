@@ -39,7 +39,10 @@ async def register_pending_action(
     timeout_seconds: float = 300.0,
 ) -> str:
     """Register a mutating tool call in pending_actions table. Returns action_id."""
-    action_id = f"act_{uuid.uuid4().hex[:12]}"
+    if not pool:
+        raise RuntimeError("Database pool unavailable; cannot register pending action.")
+
+    action_id = f"act_{uuid.uuid4()}"
     args_hash = compute_args_hash(args)
     args_json = json.dumps(args, default=str)
 
@@ -61,10 +64,10 @@ async def register_pending_action(
                 str(int(timeout_seconds)),
             )
             logger.info("Registered pending action %s for run %s (tool=%s)", action_id, run_id, tool)
+            return action_id
     except Exception as e:
-        logger.error("Failed to register pending action: %s", e)
-
-    return action_id
+        logger.error("Failed to register pending action %s: %s", action_id, e)
+        raise RuntimeError(f"Database insertion failed for pending action: {e}") from e
 
 
 async def verify_and_claim_action(
@@ -100,14 +103,14 @@ async def verify_and_claim_action(
                     return False, "Neither action_id nor run_id provided", None
 
                 if not row:
-                    # Check if action was already executed or does not exist
+                    # Check if action was already claimed or executed
                     if run_id:
                         prev = await conn.fetchrow(
                             "SELECT status FROM pending_actions WHERE run_id = $1 ORDER BY id DESC LIMIT 1",
                             run_id,
                         )
-                        if prev and prev["status"] == "executed":
-                            return False, "Action has already been executed (replay rejected).", None
+                        if prev and prev["status"] in ("claimed", "executed"):
+                            return False, "Action has already been claimed or executed (replay rejected).", None
                     return False, "Pending action not found.", None
 
                 target_action_id = row["action_id"]
@@ -120,7 +123,6 @@ async def verify_and_claim_action(
                     orig_args = json.loads(orig_args)
 
                 # 2. Strict ownership verification
-                # Normalize identities
                 clean_caller = (caller_identity or "").strip().lower()
                 clean_owner = (owner or "").strip().lower()
                 if clean_caller != clean_owner and clean_caller != "admin":
@@ -137,8 +139,10 @@ async def verify_and_claim_action(
                     return False, "Action expired: confirmation window timed out.", None
 
                 # 4. Replay check
-                if stored_status == "executed":
-                    return False, "Action has already been executed (replay rejected).", None
+                if stored_status in ("claimed", "executed"):
+                    return False, "Action has already been claimed or executed (replay rejected).", None
+                elif stored_status == "failed":
+                    return False, "Action previously failed and cannot be re-executed.", None
                 elif stored_status != "pending":
                     return False, f"Action is in '{stored_status}' status and cannot be executed.", None
 
@@ -149,11 +153,11 @@ async def verify_and_claim_action(
                         logger.warning("Args tampering detected! Expected %s, got %s", stored_args_hash, check_hash)
                         return False, "Tampered action arguments rejected: confirmed args do not match proposed action.", None
 
-                # 6. Single-use atomic update
+                # 6. Single-use atomic update: pending -> claimed
                 updated = await conn.fetchval(
                     """
                     UPDATE pending_actions 
-                    SET status = 'executed' 
+                    SET status = 'claimed' 
                     WHERE action_id = $1 AND status = 'pending'
                     RETURNING action_id
                     """,
@@ -168,6 +172,30 @@ async def verify_and_claim_action(
     except Exception as e:
         logger.exception("Error verifying pending action: %s", e)
         return False, f"Internal error during action verification: {e}", None
+
+
+async def mark_action_executed(pool: Any, action_id: str) -> bool:
+    """Transition a claimed action to executed upon successful completion."""
+    if not pool:
+        return False
+    async with pool.acquire() as conn:
+        res = await conn.execute(
+            "UPDATE pending_actions SET status = 'executed' WHERE action_id = $1 AND status = 'claimed'",
+            action_id,
+        )
+        return "UPDATE 1" in str(res)
+
+
+async def mark_action_failed(pool: Any, action_id: str, error_message: Optional[str] = None) -> bool:
+    """Transition a claimed action to failed so failures aren't dead rows."""
+    if not pool:
+        return False
+    async with pool.acquire() as conn:
+        res = await conn.execute(
+            "UPDATE pending_actions SET status = 'failed' WHERE action_id = $1 AND status = 'claimed'",
+            action_id,
+        )
+        return "UPDATE 1" in str(res)
 
 
 async def reject_pending_action(
@@ -235,8 +263,8 @@ async def wait_for_pending_action(
                         status = row["status"]
                         action = "approve" if status == "executed" else "reject"
                         return action, ""
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Polling pending_actions encountered error: %s", e)
 
         await asyncio.sleep(0.5)
 

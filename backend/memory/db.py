@@ -196,6 +196,15 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
         -- Memory Unique Content Hash per User
         ALTER TABLE memory_chunks ADD COLUMN IF NOT EXISTS content_hash TEXT;
         CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_chunks_user_hash ON memory_chunks(user_id, content_hash);
+
+        -- Guest Mint Log for Abuse & Global Cap Enforcement
+        CREATE TABLE IF NOT EXISTS guest_mint_log (
+            id SERIAL PRIMARY KEY,
+            guest_id TEXT NOT NULL,
+            client_ip TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_guest_mint_created ON guest_mint_log(created_at);
         """)
 
 

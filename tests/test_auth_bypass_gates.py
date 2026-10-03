@@ -60,45 +60,63 @@ async def test_docs_and_openapi_disabled_in_production():
 
 @pytest.mark.asyncio
 async def test_agent_admin_override_logged_to_audit():
-    """Verify that when AUTH_TOKEN is used as admin override, it records to agent_audit_log."""
+    """Verify that when AUTH_TOKEN is used as admin override, it records to agent_audit_log asserting against a real DB row."""
     from backend.routers.agent import agent_confirm
     from backend.models import AgentConfirmRequest
+    from backend.agent import save_agent_run
+    from backend.memory.db import get_pool
     from starlette.requests import Request
     import uuid
+    import json
 
-    user_id = f"user_{uuid.uuid4().hex[:8]}@example.com"
-    action_id = "act_test_123"
+    pool = await get_pool()
+    assert pool is not None, "Isolated test database pool must be available"
+
+    run_id = f"run_admin_audit_{uuid.uuid4().hex[:8]}"
+    tool_name = "add_task"
+    tool_args = {"title": "Admin Created Task", "user_id": "test_user@example.com"}
+
+    # Save real agent run into database
+    await save_agent_run(
+        pool=pool,
+        run_id=run_id,
+        goal="Test Admin Audit Logging",
+        status="running",
+        accumulated_steps=[],
+        messages=[],
+        pending_actions=[{"tool": tool_name, "args": tool_args}],
+    )
 
     settings = get_settings()
-    admin_token = getattr(settings, "AUTH_TOKEN", "admin-secret-token")
+    admin_token = settings.AUTH_TOKEN or "ci-test-token"
 
     req = AgentConfirmRequest(
-        run_id="run_test_admin",
-        actions=[{"action_id": action_id, "tool": "calendar_create_event", "args": {"title": "Test"}}]
+        run_id=run_id,
+        actions=[{"tool": tool_name, "args": tool_args}],
     )
 
     scope = {
         "type": "http",
+        "method": "POST",
+        "path": "/api/agent/confirm",
         "headers": [(b"authorization", f"Bearer {admin_token}".encode("utf-8"))],
         "client": ("127.0.0.1", 1234),
     }
     request = Request(scope)
 
-    with patch("backend.routers.agent.get_pool") as mock_get_pool, \
-         patch("backend.agent_pending.verify_and_claim_action", return_value=(True, "OK", {})) as mock_verify, \
-         patch("backend.agent.execute_confirmed_actions", return_value=[{"status": "executed"}]) as mock_exec, \
-         patch("backend.agent.get_agent_run", return_value={"id": "run_test_admin", "pending_actions": [{"action_id": action_id, "tool": "calendar_create_event", "args": {"title": "Test"}}]}):
+    resp = await agent_confirm(req=req, request=request)
+    assert resp["status"] == "ok"
 
-        mock_conn = AsyncMock()
-        mock_pool = MagicMock()
-        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
-        mock_pool.acquire.return_value.__aexit__.return_value = False
-        mock_get_pool.return_value = mock_pool
+    # Query REAL DB row in agent_audit_log table
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM agent_audit_log WHERE run_id = $1 AND approved_by = 'admin_override' ORDER BY id DESC LIMIT 1",
+            run_id,
+        )
+        assert row is not None, "Real DB row in agent_audit_log must exist"
+        assert row["run_id"] == run_id
+        assert row["tool"] == tool_name
+        assert row["approved_by"] == "admin_override"
+        args_data = json.loads(row["args"]) if isinstance(row["args"], str) else row["args"]
+        assert args_data["title"] == "Admin Created Task"
 
-        resp = await agent_confirm(req=req, request=request)
-        assert resp["status"] == "ok"
-
-        # Assert an audit record was written with approved_by='admin_override'
-        mock_conn.execute.assert_called()
-        calls = [str(c) for c in mock_conn.execute.mock_calls]
-        assert any("agent_audit_log" in c and "admin_override" in c for c in calls)

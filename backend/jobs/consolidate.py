@@ -416,11 +416,19 @@ async def run_consolidation(
         proactive_res = await trigger_proactive_nightly_run(conn, client, dry_run=dry_run, pool=pool)
         slipped_res = await check_slipped_schedules(conn, pool=pool, dry_run=dry_run)
 
+        # Cleanup stale rate limit buckets and expired guest sessions
+        from backend.services.rate_limiter import cleanup_stale_rate_limit_buckets
+        from backend.services.budgets import prune_expired_guests
+        stale_buckets = await cleanup_stale_rate_limit_buckets(older_than_hours=24)
+        pruned_guests = await prune_expired_guests(retention_days=int(getattr(settings, "GUEST_RETENTION_DAYS", 30)), pool=pool)
+
         logger.info("=" * 60)
         logger.info("SUMMARY OF CONSOLIDATION:")
         logger.info(f"  • Overdue tasks flagged  : {overdue_count}")
         logger.info(f"  • Duplicate chunks pruned: {pruned_count}")
         logger.info(f"  • Stale threads archived : {archived_count}")
+        logger.info(f"  • Rate limit buckets pruned: {stale_buckets}")
+        logger.info(f"  • Expired guests pruned  : {pruned_guests}")
         if proactive_res:
             logger.info(f"  • Proactive agent run    : {proactive_res.get('status')} ({proactive_res.get('run_id')})")
         logger.info(f"  • Slipped tasks detected : {slipped_res.get('slipped_count')}")

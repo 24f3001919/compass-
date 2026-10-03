@@ -35,6 +35,7 @@ from backend.main import app
 from backend.config import get_settings
 
 settings = get_settings()
+settings.ENVIRONMENT = "test"
 if test_db_url:
     settings.DATABASE_URL = test_db_url
 

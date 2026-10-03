@@ -530,44 +530,69 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
             )
 
             full_text = ""
+            buffered_tokens: List[str] = []
             tool_call_detected = False
+            usage_data = None
 
-            async for chunk in stream:
-                if await request.is_disconnected():
-                    logger.info("Client disconnected from chat SSE stream; stopping.")
-                    return
+            try:
+                async for chunk in stream:
+                    if await request.is_disconnected():
+                        logger.info("Client disconnected from chat SSE stream; closing upstream stream.")
+                        if hasattr(stream, "aclose"):
+                            await stream.aclose()
+                        return
 
-                delta = chunk.choices[0].delta if chunk.choices else None
-                finish_reason = chunk.choices[0].finish_reason if chunk.choices else None
+                    if hasattr(chunk, "usage") and chunk.usage:
+                        usage_data = chunk.usage
 
-                if finish_reason in ("tool_calls", "function_call"):
-                    tool_call_detected = True
-                    break
+                    choices = chunk.choices or []
+                    if choices:
+                        delta = choices[0].delta
+                        finish_reason = choices[0].finish_reason
 
-                if delta is None:
-                    continue
+                        if finish_reason in ("tool_calls", "function_call") or (delta and delta.tool_calls):
+                            tool_call_detected = True
+                            if hasattr(stream, "aclose"):
+                                await stream.aclose()
+                            break
 
-                if delta.tool_calls:
-                    tool_call_detected = True
-                    break
+                        token = (delta.content if delta else None) or ""
+                        if token:
+                            buffered_tokens.append(token)
+                            full_text += token
+                            yield f"data: {json.dumps({'type': 'token', 'value': token})}\n\n"
 
-                token = delta.content or ""
-                if not full_text and not token.strip():
-                    continue
-                if token:
-                    full_text += token
-                    yield f"data: {json.dumps({'type': 'token', 'value': token})}\n\n"
+            except asyncio.CancelledError:
+                logger.info("Chat SSE stream cancelled; closing upstream model stream.")
+                if hasattr(stream, "aclose"):
+                    await stream.aclose()
+                raise
 
-            if tool_call_detected or not full_text.strip():
+            if tool_call_detected:
+                # Discard any buffered partial tokens and execute via orchestrator (never emit duplicate text)
                 result = await orchestrator.handle_message(
                     conversation_id=req.conversation_id, message=message, user_id=user_id, guest_id=guest_id
                 )
                 response_text = result.get("response", "")
+                skill_used = result.get("skill_used") or "agent"
                 prompt_est = max(len(message.split()) * 3, 30)
                 completion_est = max(len(response_text.split()), 15)
                 record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
                 yield f"data: {json.dumps({'type': 'token', 'value': response_text})}\n\n"
-                yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': result.get('skill_used', 'add_task' if 'task' in message.lower() else 'chat')})}\n\n"
+                yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used})}\n\n"
+                return
+
+            if not full_text.strip():
+                result = await orchestrator.handle_message(
+                    conversation_id=req.conversation_id, message=message, user_id=user_id, guest_id=guest_id
+                )
+                response_text = result.get("response", "")
+                skill_used = result.get("skill_used") or "chat"
+                prompt_est = max(len(message.split()) * 3, 30)
+                completion_est = max(len(response_text.split()), 15)
+                record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
+                yield f"data: {json.dumps({'type': 'token', 'value': response_text})}\n\n"
+                yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used})}\n\n"
                 return
 
             try:
@@ -582,15 +607,18 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
             except Exception as save_err:
                 logger.warning(f"Could not persist streamed messages: {save_err}")
 
-            prompt_est = len(message.split()) * 3
-            completion_est = len(full_text.split())
-            record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
+            if usage_data:
+                record_usage(_settings.ROUTER_MODEL, getattr(usage_data, "prompt_tokens", 30), getattr(usage_data, "completion_tokens", 15))
+            else:
+                prompt_est = len(message.split()) * 3
+                completion_est = len(full_text.split())
+                record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
 
             yield f"data: {json.dumps({'type': 'done', 'conversation_id': conv_id, 'skill_used': 'chat'})}\n\n"
 
         except asyncio.CancelledError:
             logger.info("Chat SSE stream cancelled by client disconnect.")
-            return
+            raise
         except Exception as e:
             logger.warning(f"SSE stream error ({e}); falling back to non-streaming orchestrator")
             try:
@@ -598,14 +626,15 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
                     conversation_id=req.conversation_id, message=message, user_id=user_id, guest_id=guest_id
                 )
                 response_text = result.get("response", "")
+                skill_used = result.get("skill_used") or "chat"
                 prompt_est = max(len(message.split()) * 3, 30)
                 completion_est = max(len(response_text.split()), 15)
                 record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
                 yield f"data: {json.dumps({'type': 'token', 'value': response_text})}\n\n"
-                yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': result.get('skill_used', 'add_task' if 'task' in message.lower() else 'chat')})}\n\n"
-            except Exception:
-                logger.exception("SSE fallback error")
-                yield f"data: {json.dumps({'type': 'error', 'message': 'An internal error occurred.'})}\n\n"
+                yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used})}\n\n"
+            except Exception as terminal_err:
+                logger.exception("SSE terminal error: %s", terminal_err)
+                yield f"data: {json.dumps({'type': 'error', 'detail': str(terminal_err), 'terminal': True})}\n\n"
 
     return StreamingResponse(
         event_generator(),

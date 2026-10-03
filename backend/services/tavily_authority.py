@@ -73,12 +73,20 @@ def extract_domain(url: str) -> str:
         return ""
 
 
-def classify_domain_authority(url: str, organizer_domains: Optional[set[str]] = None) -> Dict[str, Any]:
+def classify_domain_authority(
+    url: str,
+    organizer_domains: Optional[set[str]] = None,
+    target_entity: Optional[str] = None,
+    is_entity_bound: bool = False,
+    page_title_matches_entity: bool = False,
+) -> Dict[str, Any]:
     """Classify the source authority of a URL.
 
     Rules:
-      - Tier 1: ONLY government/academic domains, pinned organizer domains, or recognized primary authority.
-      - Tier 2: Platform and user-generated content hosts (devpost, github, medium, etc.) capped at Tier 2.
+      - Tier 1: Government/academic domains, pinned organizer domains from config, or platform event pages meeting the Event-Page Rule.
+      - Event-Page Rule: Platform-hosted pages (Devpost, Lablab, etc.) count as official (Tier 1) for that event ONLY when
+        the page title/organizer matches target_entity AND the URL is pinned or entity-bound; otherwise Tier 2.
+      - Tier 2: General platform and user-generated content hosts (github, medium, unpinned devpost, etc.).
       - Tier 3: General web pages.
     """
     domain = extract_domain(url)
@@ -109,18 +117,48 @@ def classify_domain_authority(url: str, organizer_domains: Optional[set[str]] = 
             "reason": "Accredited academic institution",
         }
 
-    # Check explicitly pinned organizer domains
+    from backend.config import get_settings
+    settings = get_settings()
+    configured_tier_1 = set(getattr(settings, "PINNED_TIER_1_DOMAINS", []))
     if organizer_domains:
-        for od in organizer_domains:
-            clean_od = od.strip().lower()
-            if domain == clean_od or domain.endswith("." + clean_od):
-                return {
-                    "tier": AuthorityTier.TIER_1_OFFICIAL.value,
-                    "badge": "Official Organizer",
-                    "weight": 1.0,
-                    "domain": domain,
-                    "reason": f"Matched organizer domain ({clean_od})",
-                }
+        configured_tier_1.update(od.strip().lower() for od in organizer_domains if od)
+
+    # Check explicitly pinned organizer domains from config
+    for od in configured_tier_1:
+        if domain == od or domain.endswith("." + od):
+            return {
+                "tier": AuthorityTier.TIER_1_OFFICIAL.value,
+                "badge": "Official Organizer",
+                "weight": 1.0,
+                "domain": domain,
+                "reason": f"Matched pinned organizer domain ({od})",
+            }
+
+    # Event-Page Rule for Platform-Hosted Pages
+    platform_hosts = {"devpost.com", "lablab.ai", "dorahacks.io", "kaggle.com"}
+    is_platform = any(domain == p or domain.endswith("." + p) for p in platform_hosts)
+    if is_platform:
+        # Check if URL itself or subdomain contains target entity
+        clean_target = (target_entity or "").strip().lower()
+        url_contains_entity = bool(clean_target and clean_target in url.lower())
+        entity_qualifies = is_entity_bound or (url_contains_entity and page_title_matches_entity)
+
+        if entity_qualifies and clean_target:
+            return {
+                "tier": AuthorityTier.TIER_1_OFFICIAL.value,
+                "badge": "Official Event Page (Platform)",
+                "weight": 0.95,
+                "domain": domain,
+                "reason": f"Platform-hosted official event page bound to '{clean_target}'",
+            }
+        else:
+            return {
+                "tier": AuthorityTier.TIER_2_TECHNICAL.value,
+                "badge": "Platform / Community Host",
+                "weight": 0.75,
+                "domain": domain,
+                "reason": f"Platform host ({domain}) without official entity binding (Tier 2)",
+            }
 
     # Check Tier 1 primary official domains
     for t1 in _TIER_1_DOMAINS:
