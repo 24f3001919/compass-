@@ -15,7 +15,7 @@ import ipaddress
 import logging
 import socket
 import urllib.parse
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Union
 from fastapi import Request
 import httpx
 
@@ -28,11 +28,13 @@ BLOCKED_HOSTNAMES = {
 }
 
 
-def _is_ip_blocked(ip: ipaddress._BaseAddress) -> bool:
+def _is_ip_blocked(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
     """Check if an IP address belongs to any blocked non-global networks, unwrapping IPv4-mapped IPv6."""
     if getattr(ip, "ipv4_mapped", None):
-        ip = ip.ipv4_mapped
-    if not ip.is_global:
+        mapped = ip.ipv4_mapped
+        if mapped is not None:
+            ip = mapped
+    if not getattr(ip, "is_global", False):
         return True
     if str(ip) in ("0.0.0.0", "::", "::1", "127.0.0.1"):  # nosec B104 - SSRF filter, not a socket bind
         return True
@@ -185,7 +187,8 @@ async def safe_http_get(
         path_query = (parsed.path or "/") + (f"?{parsed.query}" if parsed.query else "")
 
         # Pinned-IP transport: connect directly to resolved_ip with TLS SNI verification
-        target_ip = f"[{resolved_ip}]" if ":" in resolved_ip else resolved_ip
+        resolved_ip_str = str(resolved_ip)
+        target_ip = f"[{resolved_ip_str}]" if ":" in resolved_ip_str else resolved_ip_str
         pinned_target = f"{parsed.scheme}://{target_ip}:{port}{path_query}"
 
         async with httpx.AsyncClient(timeout=timeout, verify=True, follow_redirects=False) as client:
