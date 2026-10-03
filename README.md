@@ -336,6 +336,8 @@ compass/
 - **[Testing](docs/testing.md)** — Test coverage breakdown, infrastructure, and how to run
 - **[API Contract](docs/api_contract.md)** — Endpoint reference
 - **[Demo Script](docs/demo_script.md)** — Video walkthrough script and recording checklist
+- **[Contributing](CONTRIBUTING.md)** — Development setup, CLI instructions, and coding standards
+- **[Nebius Platform Feedback](NEBIUS_PLATFORM_FEEDBACK.md)** — In-depth developer experience feedback and benchmarks
 - **[Submission Kit](SUBMISSION_KIT.md)** — Hackathon submission details, Tavily justification, benchmarks
 
 ---
