@@ -45,10 +45,12 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
         ALTER TABLE conversations ADD COLUMN IF NOT EXISTS imported_from_id UUID;
         ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE;
         ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_shared BOOLEAN NOT NULL DEFAULT FALSE;
         CREATE INDEX IF NOT EXISTS idx_conversations_last_active ON conversations(last_active_at DESC);
         CREATE INDEX IF NOT EXISTS idx_conversations_guest_id ON conversations(guest_id);
         CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id);
         CREATE INDEX IF NOT EXISTS idx_conversations_imported_from ON conversations(imported_from_id);
+        CREATE INDEX IF NOT EXISTS idx_conversations_is_shared ON conversations(is_shared);
 
         CREATE TABLE IF NOT EXISTS guest_migration_log (
             id                      SERIAL        PRIMARY KEY,

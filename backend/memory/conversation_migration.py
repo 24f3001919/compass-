@@ -93,39 +93,44 @@ async def list_guest_conversations_for_migration(
         "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'guest_migration_log')"
     )
 
-    log_join = """
-        LEFT JOIN guest_migration_log gml 
-        ON gml.guest_conversation_id = c.id AND gml.user_id = $2
-    """ if has_log_table else ""
-
-    select_fields = """
-        c.id, c.title, c.started_at, c.last_active_at,
-        COUNT(m.id) AS message_count,
-        (
-            SELECT content FROM messages
-            WHERE conversation_id = c.id
-            ORDER BY created_at DESC, id DESC LIMIT 1
-        ) AS last_message_preview
-    """
     if has_log_table:
-        select_fields += ", (gml.id IS NOT NULL) AS already_imported, gml.imported_at"
+        query = """
+            SELECT c.id, c.title, c.started_at, c.last_active_at,
+                   COUNT(m.id) AS message_count,
+                   (
+                       SELECT content FROM messages
+                       WHERE conversation_id = c.id
+                       ORDER BY created_at DESC, id DESC LIMIT 1
+                   ) AS last_message_preview,
+                   (gml.id IS NOT NULL) AS already_imported,
+                   gml.imported_at
+            FROM conversations c
+            LEFT JOIN messages m ON m.conversation_id = c.id
+            LEFT JOIN guest_migration_log gml 
+                ON gml.guest_conversation_id = c.id AND gml.user_id = $2
+            WHERE c.guest_id = $1 AND c.user_id IS NULL
+            GROUP BY c.id, c.title, c.started_at, c.last_active_at, gml.id, gml.imported_at
+            ORDER BY c.last_active_at DESC
+        """
+        rows = await conn.fetch(query, guest_id, user_id)
     else:
-        select_fields += ", FALSE AS already_imported, NULL::timestamptz AS imported_at"
-
-    query = f"""
-        SELECT {select_fields}
-        FROM conversations c
-        LEFT JOIN messages m ON m.conversation_id = c.id
-        {log_join}
-        WHERE c.guest_id = $1 AND c.user_id IS NULL
-        GROUP BY c.id, c.title, c.started_at, c.last_active_at
-    """
-    if has_log_table:
-        query += ", gml.id, gml.imported_at"
-
-    query += " ORDER BY c.last_active_at DESC"
-
-    rows = await conn.fetch(query, guest_id, user_id)
+        query = """
+            SELECT c.id, c.title, c.started_at, c.last_active_at,
+                   COUNT(m.id) AS message_count,
+                   (
+                       SELECT content FROM messages
+                       WHERE conversation_id = c.id
+                       ORDER BY created_at DESC, id DESC LIMIT 1
+                   ) AS last_message_preview,
+                   FALSE AS already_imported,
+                   NULL::timestamptz AS imported_at
+            FROM conversations c
+            LEFT JOIN messages m ON m.conversation_id = c.id
+            WHERE c.guest_id = $1 AND c.user_id IS NULL
+            GROUP BY c.id, c.title, c.started_at, c.last_active_at
+            ORDER BY c.last_active_at DESC
+        """
+        rows = await conn.fetch(query, guest_id)
     return [
         {
             "id": str(r["id"]),

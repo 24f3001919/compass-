@@ -15,6 +15,23 @@ logger = logging.getLogger("compass.conversations")
 DbConn = Union[asyncpg.Connection, PoolConnectionProxy]
 
 
+async def ensure_conversation_columns(conn: DbConn) -> None:
+    """Ensure optional metadata columns exist on the conversations table."""
+    try:
+        await conn.execute(
+            """
+            ALTER TABLE conversations ADD COLUMN IF NOT EXISTS title TEXT;
+            ALTER TABLE conversations ADD COLUMN IF NOT EXISTS user_id TEXT;
+            ALTER TABLE conversations ADD COLUMN IF NOT EXISTS guest_id TEXT;
+            ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE;
+            ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE;
+            ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_shared BOOLEAN NOT NULL DEFAULT FALSE;
+            """
+        )
+    except Exception:
+        pass
+
+
 async def get_or_create_conversation(
     conn: DbConn,
     conversation_id: Optional[str] = None,
@@ -191,57 +208,12 @@ async def list_conversations(
     Strictly isolates authenticated user chats from anonymous guest chats.
     """
     try:
-        # Check column existence safely
-        has_title_col = await conn.fetchval(
-            """
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'conversations' AND column_name = 'title'
-            )
-            """
-        )
-        has_user_col = await conn.fetchval(
-            """
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'conversations' AND column_name = 'user_id'
-            )
-            """
-        )
-        has_guest_col = await conn.fetchval(
-            """
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'conversations' AND column_name = 'guest_id'
-            )
-            """
-        )
-        has_pinned_col = await conn.fetchval(
-            """
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'conversations' AND column_name = 'is_pinned'
-            )
-            """
-        )
-        has_archived_col = await conn.fetchval(
-            """
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'conversations' AND column_name = 'is_archived'
-            )
-            """
-        )
-
-        title_expr = "c.title" if has_title_col else "NULL"
-        pinned_expr = "c.is_pinned" if has_pinned_col else "FALSE"
-        archived_expr = "c.is_archived" if has_archived_col else "FALSE"
-
-        query = f"""
+        await ensure_conversation_columns(conn)
+        query = """
             SELECT c.id, c.started_at, c.last_active_at,
-                   {title_expr} AS title,
-                   {pinned_expr} AS is_pinned,
-                   {archived_expr} AS is_archived,
+                   c.title AS title,
+                   COALESCE(c.is_pinned, FALSE) AS is_pinned,
+                   COALESCE(c.is_archived, FALSE) AS is_archived,
                    COUNT(m.id) AS message_count,
                    (
                        SELECT content FROM messages
@@ -255,48 +227,17 @@ async def list_conversations(
                    ) AS last_msg
             FROM conversations c
             LEFT JOIN messages m ON m.conversation_id = c.id
+            WHERE (
+                ($1::text IS NOT NULL AND c.user_id = $1)
+                OR ($2::text IS NOT NULL AND c.guest_id = $2 AND c.user_id IS NULL)
+                OR ($1::text IS NULL AND $2::text IS NULL AND c.user_id IS NULL AND (c.guest_id IS NULL OR c.guest_id = ''))
+            )
+            AND ($3::boolean = TRUE OR c.is_archived = FALSE OR c.is_archived IS NULL)
+            GROUP BY c.id, c.started_at, c.last_active_at, c.title, c.is_pinned, c.is_archived
+            ORDER BY COALESCE(c.is_pinned, FALSE) DESC, c.last_active_at DESC
+            LIMIT $4
         """
-
-        where_clauses = []
-        params: List[Any] = []
-
-        if user_id and has_user_col:
-            params.append(user_id)
-            where_clauses.append(f"c.user_id = ${len(params)}")
-        elif guest_id and has_guest_col:
-            params.append(guest_id)
-            where_clauses.append(f"(c.guest_id = ${len(params)} AND c.user_id IS NULL)")
-        else:
-            if has_guest_col:
-                where_clauses.append("(c.user_id IS NULL AND (c.guest_id IS NULL OR c.guest_id = ''))")
-            elif has_user_col:
-                where_clauses.append("c.user_id IS NULL")
-
-        if not include_archived and has_archived_col:
-            where_clauses.append("(c.is_archived = FALSE OR c.is_archived IS NULL)")
-
-        if where_clauses:
-            query += f" WHERE {' AND '.join(where_clauses)} "
-
-
-        group_cols = ["c.id", "c.started_at", "c.last_active_at"]
-        if has_title_col:
-            group_cols.append("c.title")
-        if has_pinned_col:
-            group_cols.append("c.is_pinned")
-        if has_archived_col:
-            group_cols.append("c.is_archived")
-
-        order_by = "ORDER BY c.is_pinned DESC, c.last_active_at DESC" if has_pinned_col else "ORDER BY c.last_active_at DESC"
-
-        query += f"""
-            GROUP BY {', '.join(group_cols)}
-            {order_by}
-            LIMIT ${len(params) + 1}
-        """
-        params.append(limit)
-
-        rows = await conn.fetch(query, *params)
+        rows = await conn.fetch(query, user_id, guest_id, include_archived, limit)
         conversations_list = []
         for r in rows:
             title = r.get("title") or r.get("first_user_msg") or "Chat Session"
@@ -331,43 +272,30 @@ async def update_conversation(
         updates: List[str] = []
         params: List[Any] = [cid]
 
-        if title is not None:
-            clean_title = title.strip()[:100]
-            params.append(clean_title)
-            updates.append(f"title = ${len(params)}")
-
-        if is_pinned is not None:
-            has_pinned = await conn.fetchval(
-                "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversations' AND column_name = 'is_pinned')"
-            )
-            if not has_pinned:
-                await conn.execute("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE")
-            params.append(bool(is_pinned))
-            updates.append(f"is_pinned = ${len(params)}")
-
-        if is_archived is not None:
-            has_archived = await conn.fetchval(
-                "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversations' AND column_name = 'is_archived')"
-            )
-            if not has_archived:
-                await conn.execute("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE")
-            params.append(bool(is_archived))
-            updates.append(f"is_archived = ${len(params)}")
-
-        if is_shared is not None:
-            has_shared = await conn.fetchval(
-                "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversations' AND column_name = 'is_shared')"
-            )
-            if not has_shared:
-                await conn.execute("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_shared BOOLEAN NOT NULL DEFAULT FALSE")
-            params.append(bool(is_shared))
-            updates.append(f"is_shared = ${len(params)}")
-
-        if not updates:
+        if title is None and is_pinned is None and is_archived is None and is_shared is None:
             return True
 
-        query = f"UPDATE conversations SET {', '.join(updates)} WHERE id = $1"
-        await conn.execute(query, *params)
+        await ensure_conversation_columns(conn)
+        query = """
+            UPDATE conversations
+            SET title = CASE WHEN $2::boolean THEN $3::text ELSE title END,
+                is_pinned = CASE WHEN $4::boolean THEN $5::boolean ELSE is_pinned END,
+                is_archived = CASE WHEN $6::boolean THEN $7::boolean ELSE is_archived END,
+                is_shared = CASE WHEN $8::boolean THEN $9::boolean ELSE is_shared END
+            WHERE id = $1
+        """
+        await conn.execute(
+            query,
+            cid,
+            title is not None,
+            title.strip()[:100] if title is not None else "",
+            is_pinned is not None,
+            bool(is_pinned) if is_pinned is not None else False,
+            is_archived is not None,
+            bool(is_archived) if is_archived is not None else False,
+            is_shared is not None,
+            bool(is_shared) if is_shared is not None else False,
+        )
         return True
     except Exception as e:
         logger.error(f"update_conversation failed: {e}", exc_info=True)
@@ -397,35 +325,27 @@ async def get_cross_conversation_memory(
 ) -> List[Dict[str, Any]]:
     """Retrieve messages and decisions from prior conversations for cross-session recall."""
     try:
-        where_clauses = []
-        params: List[Any] = []
+        cid = None
         if exclude_conversation_id:
             try:
                 cid = uuid.UUID(exclude_conversation_id)
-                where_clauses.append(f"c.id != ${len(params) + 1}")
-                params.append(cid)
             except (ValueError, TypeError):
-                pass
-
-        if user_id:
-            where_clauses.append(f"c.user_id = ${len(params) + 1}")
-            params.append(user_id)
-        elif guest_id:
-            where_clauses.append(f"(c.guest_id = ${len(params) + 1} AND c.user_id IS NULL)")
-            params.append(guest_id)
+                cid = None
 
         query = """
             SELECT m.role, m.content, m.created_at, c.id AS conversation_id
             FROM messages m
             JOIN conversations c ON m.conversation_id = c.id
+            WHERE ($1::uuid IS NULL OR c.id != $1)
+              AND (
+                  ($2::text IS NOT NULL AND c.user_id = $2)
+                  OR ($3::text IS NOT NULL AND c.guest_id = $3 AND c.user_id IS NULL)
+                  OR ($2::text IS NULL AND $3::text IS NULL)
+              )
+            ORDER BY m.created_at DESC
+            LIMIT $4
         """
-        if where_clauses:
-            query += " WHERE " + " AND ".join(where_clauses)
-
-        query += f" ORDER BY m.created_at DESC LIMIT ${len(params) + 1}"
-        params.append(limit)
-
-        rows = await conn.fetch(query, *params)
+        rows = await conn.fetch(query, cid, user_id, guest_id, limit)
         return [dict(r) for r in reversed(rows)]
     except Exception:
         return []
@@ -450,35 +370,31 @@ async def check_conversation_access(
     except (ValueError, TypeError):
         return False, "Invalid conversation ID"
 
-    has_user_col = await conn.fetchval(
-        "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversations' AND column_name = 'user_id')"
-    )
-    has_guest_col = await conn.fetchval(
-        "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversations' AND column_name = 'guest_id')"
-    )
-    has_shared_col = await conn.fetchval(
-        "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversations' AND column_name = 'is_shared')"
-    )
-    cols = ["id"]
-    if has_user_col:
-        cols.append("user_id")
-    if has_guest_col:
-        cols.append("guest_id")
-    if has_shared_col:
-        cols.append("is_shared")
-
-    conv_row = await conn.fetchrow(f"SELECT {', '.join(cols)} FROM conversations WHERE id = $1", cid)
+    try:
+        conv_row = await conn.fetchrow(
+            """
+            SELECT id, user_id, guest_id, is_shared
+            FROM conversations
+            WHERE id = $1
+            """,
+            cid,
+        )
+    except Exception:
+        conv_row = await conn.fetchrow(
+            "SELECT id FROM conversations WHERE id = $1",
+            cid,
+        )
     if not conv_row:
         return False, "Conversation not found"
 
-    if allow_shared and has_shared_col and conv_row.get("is_shared"):
+    if allow_shared and conv_row.get("is_shared"):
         return True, None
 
     if is_admin:
         return True, None
 
-    conv_owner = conv_row.get("user_id") if has_user_col else None
-    conv_guest = conv_row.get("guest_id") if has_guest_col else None
+    conv_owner = conv_row.get("user_id")
+    conv_guest = conv_row.get("guest_id")
 
     if conv_owner:
         if not user_id or user_id.lower() != conv_owner.lower():

@@ -236,30 +236,32 @@ async def get_shared_conversation(conversation_id: str, request: Request):
             except (ValueError, TypeError):
                 raise HTTPException(status_code=400, detail="Invalid conversation ID")
 
-            has_shared_col = await conn.fetchval(
-                "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversations' AND column_name = 'is_shared')"
-            )
-            has_user_col = await conn.fetchval(
-                "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'conversations' AND column_name = 'user_id')"
-            )
-
-            cols = ["id", "started_at", "last_active_at", "COALESCE(title, 'Chat Session') AS title"]
-            if has_shared_col:
-                cols.append("is_shared")
-            if has_user_col:
-                cols.append("user_id")
-
-            conv_row = await conn.fetchrow(
-                f"SELECT {', '.join(cols)} FROM conversations WHERE id = $1",
-                cid
-            )
+            try:
+                conv_row = await conn.fetchrow(
+                    """
+                    SELECT id, started_at, last_active_at, COALESCE(title, 'Chat Session') AS title,
+                           is_shared, user_id
+                    FROM conversations
+                    WHERE id = $1
+                    """,
+                    cid,
+                )
+            except Exception:
+                conv_row = await conn.fetchrow(
+                    """
+                    SELECT id, started_at, last_active_at, COALESCE(title, 'Chat Session') AS title
+                    FROM conversations
+                    WHERE id = $1
+                    """,
+                    cid,
+                )
             if not conv_row:
                 raise HTTPException(status_code=404, detail="Conversation not found")
 
             # Privacy gate: If is_shared column exists, only allow public access if is_shared is TRUE or caller is the owner
-            if has_shared_col and not conv_row.get("is_shared"):
+            if "is_shared" in conv_row and not conv_row.get("is_shared"):
                 user_id = _get_current_user_id(request)
-                owner = conv_row.get("user_id") if has_user_col else None
+                owner = conv_row.get("user_id")
                 if not owner or not user_id or user_id.lower() != owner.lower():
                     raise HTTPException(status_code=403, detail="This conversation is private and has not been shared.")
 

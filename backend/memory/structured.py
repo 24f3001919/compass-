@@ -198,33 +198,25 @@ async def list_tasks(
                p.id AS project_id, p.name AS project_name
         FROM tasks t
         LEFT JOIN projects p ON t.project_id = p.id
-        WHERE 1=1
+        WHERE ($1::text IS NULL OR (t.user_id = $1 OR (t.user_id IS NULL AND NOT EXISTS (SELECT 1 FROM tasks WHERE user_id = $1))))
+          AND ($2::text IS NULL OR t.domain = $2)
+          AND ($3::integer IS NULL OR t.project_id = $3)
+          AND ($4::text IS NULL OR t.status = $4)
+          AND ($5::date IS NULL OR t.due_date <= $5)
+          AND (NOT $6::boolean OR t.scheduled_start IS NOT NULL)
+          AND (NOT $7::boolean OR t.scheduled_start IS NULL)
+        ORDER BY t.scheduled_start ASC NULLS LAST, t.due_date ASC NULLS LAST, t.id ASC
     """
-    params: list[Any] = []
-
-    if user_id:
-        params.append(user_id)
-        query += f" AND (t.user_id = ${len(params)} OR (t.user_id IS NULL AND NOT EXISTS (SELECT 1 FROM tasks WHERE user_id = ${len(params)})))"
-    if domain:
-        params.append(domain)
-        query += f" AND t.domain = ${len(params)}"
-    if project_id:
-        params.append(project_id)
-        query += f" AND t.project_id = ${len(params)}"
-    if status:
-        params.append(status)
-        query += f" AND t.status = ${len(params)}"
-    if due_before:
-        params.append(due_before)
-        query += f" AND t.due_date <= ${len(params)}"
-    if scheduled_only:
-        query += " AND t.scheduled_start IS NOT NULL"
-    if unscheduled_only:
-        query += " AND t.scheduled_start IS NULL"
-
-    query += " ORDER BY t.scheduled_start ASC NULLS LAST, t.due_date ASC NULLS LAST, t.id ASC"
-
-    rows = await conn.fetch(query, *params)
+    rows = await conn.fetch(
+        query,
+        user_id,
+        domain,
+        project_id,
+        status,
+        due_before,
+        bool(scheduled_only),
+        bool(unscheduled_only),
+    )
     results = []
     for r in rows:
         item = dict(r)
@@ -264,20 +256,52 @@ async def update_task(
         except (ValueError, TypeError):
             updates["duration_minutes"] = 60
 
-    set_clauses = []
-    params: list[Any] = [task_id]
-    for k, v in updates.items():
-        params.append(v)
-        set_clauses.append(f"{k} = ${len(params)}")
-
-    set_clause_str = ", ".join(set_clauses)
-    query = f"""
+    query = """
         UPDATE tasks
-        SET {set_clause_str}, updated_at = now()
+        SET domain = CASE WHEN $2::boolean THEN $3::text ELSE domain END,
+            project_id = CASE WHEN $4::boolean THEN $5::integer ELSE project_id END,
+            title = CASE WHEN $6::boolean THEN $7::text ELSE title END,
+            due_date = CASE WHEN $8::boolean THEN $9::date ELSE due_date END,
+            status = CASE WHEN $10::boolean THEN $11::text ELSE status END,
+            priority = CASE WHEN $12::boolean THEN $13::text ELSE priority END,
+            notes = CASE WHEN $14::boolean THEN $15::text ELSE notes END,
+            duration_minutes = CASE WHEN $16::boolean THEN $17::integer ELSE duration_minutes END,
+            scheduled_start = CASE WHEN $18::boolean THEN $19::timestamptz ELSE scheduled_start END,
+            scheduled_end = CASE WHEN $20::boolean THEN $21::timestamptz ELSE scheduled_end END,
+            is_fixed = CASE WHEN $22::boolean THEN $23::boolean ELSE is_fixed END,
+            recurrence_rule = CASE WHEN $24::boolean THEN $25::text ELSE recurrence_rule END,
+            updated_at = now()
         WHERE id = $1
         RETURNING id
     """
-    row = await conn.fetchrow(query, *params)
+    row = await conn.fetchrow(
+        query,
+        task_id,
+        "domain" in updates,
+        updates.get("domain"),
+        "project_id" in updates,
+        updates.get("project_id"),
+        "title" in updates,
+        updates.get("title"),
+        "due_date" in updates,
+        updates.get("due_date"),
+        "status" in updates,
+        updates.get("status"),
+        "priority" in updates,
+        updates.get("priority"),
+        "notes" in updates,
+        updates.get("notes"),
+        "duration_minutes" in updates,
+        updates.get("duration_minutes"),
+        "scheduled_start" in updates,
+        updates.get("scheduled_start"),
+        "scheduled_end" in updates,
+        updates.get("scheduled_end"),
+        "is_fixed" in updates,
+        updates.get("is_fixed"),
+        "recurrence_rule" in updates,
+        updates.get("recurrence_rule"),
+    )
     if not row:
         return None
     return await get_task(conn, task_id)
@@ -348,14 +372,29 @@ async def update_scheduling_preferences(
     if not updates:
         return await get_scheduling_preferences(conn, user_id)
 
-    set_clauses = []
-    params: list[Any] = [user_id]
-    for k, v in updates.items():
-        params.append(v)
-        set_clauses.append(f"{k} = ${len(params)}")
-
-    query = f"UPDATE scheduling_preferences SET {', '.join(set_clauses)} WHERE user_id = $1"
-    await conn.execute(query, *params)
+    query = """
+        UPDATE scheduling_preferences
+        SET work_start_time = CASE WHEN $2::boolean THEN $3::time ELSE work_start_time END,
+            work_end_time = CASE WHEN $4::boolean THEN $5::time ELSE work_end_time END,
+            work_days = CASE WHEN $6::boolean THEN $7::integer[] ELSE work_days END,
+            buffer_minutes = CASE WHEN $8::boolean THEN $9::integer ELSE buffer_minutes END,
+            preferred_focus = CASE WHEN $10::boolean THEN $11::text ELSE preferred_focus END
+        WHERE user_id = $1
+    """
+    await conn.execute(
+        query,
+        user_id,
+        "work_start_time" in updates,
+        updates.get("work_start_time"),
+        "work_end_time" in updates,
+        updates.get("work_end_time"),
+        "work_days" in updates,
+        updates.get("work_days"),
+        "buffer_minutes" in updates,
+        updates.get("buffer_minutes"),
+        "preferred_focus" in updates,
+        updates.get("preferred_focus"),
+    )
     return await get_scheduling_preferences(conn, user_id)
 
 
