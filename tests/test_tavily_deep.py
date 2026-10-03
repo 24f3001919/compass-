@@ -12,6 +12,7 @@ Verifies:
 """
 
 import pytest
+from urllib.parse import urlparse
 from unittest.mock import AsyncMock, MagicMock
 from backend.services.tavily_authority import (
     classify_domain_authority,
@@ -166,7 +167,8 @@ async def test_deep_research_synthesis_and_citations(monkeypatch):
     top_citation = data["citations"][0]
     assert top_citation["marker"] == "[1]"
     assert "authority_badge" in top_citation
-    assert "docs.nebius.com" in top_citation["url"]
+    parsed_url = urlparse(top_citation["url"])
+    assert parsed_url.hostname == "docs.nebius.com"
     assert "### Deep Research Synthesis" in res["response"]
     assert "[1]" in res["response"]
     assert "<untrusted_web_content>" in res["fenced_context"]
