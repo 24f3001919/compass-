@@ -219,3 +219,20 @@ CREATE TABLE IF NOT EXISTS guest_mint_log (
 );
 CREATE INDEX IF NOT EXISTS idx_guest_mint_created ON guest_mint_log(created_at);
 
+-- ============================================================
+-- Sessions — multi-worker persistent session store
+-- ============================================================
+CREATE TABLE IF NOT EXISTS sessions (
+    token_hash        TEXT          PRIMARY KEY,
+    user_id           TEXT          NOT NULL,
+    oauth_verified    BOOLEAN       NOT NULL DEFAULT FALSE,
+    created_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    last_accessed_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    expires_at        TIMESTAMPTZ   NOT NULL,
+    revoked_at        TIMESTAMPTZ   DEFAULT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_sessions_revoked_at ON sessions(revoked_at);
+
+

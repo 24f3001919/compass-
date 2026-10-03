@@ -125,10 +125,11 @@ Compass routes every request through a cost-efficient 3-tier model hierarchy on 
 
 | Model | Role | When invoked |
 |-------|------|-------------|
-| `NVIDIA-Nemotron-3-Nano-30B-A3B` | Intent router | Every message — selects tool or chat |
-| `nemotron-3-super-120b-a12b` | Skill reasoning | Multi-step tasks, agent loops |
-| `Nemotron-3-Ultra-550b-a55b` | Cross-domain synthesis | `summarize_across_domains` only |
-| `Qwen/Qwen3-Embedding-8B` | 768-dim vector embeddings | Code, notes, ingested web docs |
+| `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | Intent router & tool parameter extraction | Every message — selects tool or chat |
+| `nvidia/Nemotron-3_5-Lightning` | Rapid conversational drafting | Proactive briefing, chat streaming |
+| `nvidia/nemotron-3-super-120b-a12b` | Skill reasoning & plan critic | Multi-step tasks, agent ReAct loops |
+| `nvidia/Nemotron-3-Ultra-550b-a55b` | Cross-domain strategic synthesis | `summarize_across_domains` only |
+| `Qwen/Qwen3-Embedding-8B` | 768-dim dense vector embeddings | Code, notes, ingested web docs |
 
 **Token Economics** (measured across 106 internal evaluation turns): total spend was $0.019 on Nebius Token Factory. Over 85% of queries were resolved by Nano and direct PostgreSQL queries without escalating to larger models.
 

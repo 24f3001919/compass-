@@ -280,12 +280,26 @@ async def agent_activity(request: Request, limit: int = 30):
 
 
 @router.get("/critique-stats")
-async def agent_critique_stats():
-    """Surface critique effectiveness metrics computed from persisted agent runs."""
+async def agent_critique_stats(request: Request):
+    """Surface critique effectiveness metrics computed from persisted agent runs.
+    Strips individual run details and goals to high-level aggregate counts unless caller is authenticated admin.
+    """
     from backend.agent import get_critique_stats
+    from backend.dependencies import _get_current_identity
+
+    ident = _get_current_identity(request)
+    is_admin = bool(ident and ident.is_admin)
 
     pool = await get_pool()
     stats = await get_critique_stats(pool)
+    if not is_admin:
+        # Strip granular run goals and evaluations, exposing only high-level aggregate telemetry
+        stats = {
+            "total_runs_analyzed": stats.get("total_runs_analyzed", 0),
+            "runs_with_critique": stats.get("runs_with_critique", 0),
+            "critique_issues_flagged": stats.get("critique_issues_flagged", 0),
+            "critique_effectiveness_rate": stats.get("critique_effectiveness_rate", 0.0),
+        }
     return stats
 
 

@@ -97,7 +97,7 @@ jobs:
 
       - name: Collect tests (verify count before running)
         env:
-          DATABASE_URL: postgresql://compass:compass@localhost:5432/compass_test
+          DATABASE_URL: postgresql://compass:compass@localhost:5432/compass_primary_standby
           TEST_DATABASE_URL: postgresql://compass:compass@localhost:5432/compass_test
           AUTH_TOKEN: ci-test-token
           NEBIUS_API_KEY: mock-key-not-used-in-tests
@@ -108,7 +108,7 @@ jobs:
 
       - name: Run test suite
         env:
-          DATABASE_URL: postgresql://compass:compass@localhost:5432/compass_test
+          DATABASE_URL: postgresql://compass:compass@localhost:5432/compass_primary_standby
           TEST_DATABASE_URL: postgresql://compass:compass@localhost:5432/compass_test
           AUTH_TOKEN: ci-test-token
           NEBIUS_API_KEY: mock-key-not-used-in-tests

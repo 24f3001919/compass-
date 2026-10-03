@@ -41,6 +41,18 @@ def _is_ip_blocked(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> b
     return False
 
 
+def is_valid_ip(ip_str: str) -> bool:
+    """Validate whether a string is a valid IPv4 or IPv6 address literal."""
+    if not ip_str or not isinstance(ip_str, str):
+        return False
+    try:
+        ipaddress.ip_address(ip_str.strip())
+        return True
+    except (ValueError, AttributeError):
+        return False
+
+
+
 def is_safe_url(url: str) -> Tuple[bool, str]:
     """Validate that a URL is safe to fetch and not pointing to private/internal infrastructure (SSRF defense).
 
@@ -213,13 +225,34 @@ async def safe_http_get(
     raise ValueError(f"Too many redirects ({max_redirects})")
 
 
+import hmac
+import hashlib
+import time
+
+
+def verify_edge_signature(sig_header: Optional[str], secret: str, max_age_seconds: int = 300) -> bool:
+    """Verify HMAC SHA-256 edge signature over timestamp in format '<timestamp_unix>.<hex_hmac>'."""
+    if not sig_header or not secret or "." not in sig_header:
+        return False
+    try:
+        ts_str, expected_hmac = sig_header.split(".", 1)
+        ts = int(ts_str)
+        now = int(time.time())
+        if abs(now - ts) > max_age_seconds:
+            return False
+        computed = hmac.new(secret.encode("utf-8"), ts_str.encode("utf-8"), hashlib.sha256).hexdigest()
+        return hmac.compare_digest(computed, expected_hmac)
+    except Exception:
+        return False
+
+
 def get_client_ip(request: Request) -> str:
     """Safely extract client IP address behind trusted reverse proxies (Render / Cloudflare / Vercel).
 
-    Prevents header spoofing attacks where an attacker prepends arbitrary fake IPs into X-Forwarded-For.
-    By default ignores cf-connecting-ip and true-client-ip unless explicitly enabled by configuration.
-    Extracts the Nth-from-right IP from X-Forwarded-For based on TRUSTED_PROXY_HOPS.
-    If the proxy chain is shorter than TRUSTED_PROXY_HOPS, falls back to TCP peer address (never attacker-controlled element).
+    Prevents header spoofing attacks where direct-to-Render callers inject arbitrary IPs into X-Forwarded-For.
+    - If valid Vercel edge signature header is present (added by Vercel middleware), trusts parts[-2] (2 hops).
+    - Otherwise (direct-to-Render or untrusted path), trusts ONLY parts[-1] (1 hop).
+    - If the proxy chain is shorter than expected hops, falls back strictly to TCP peer address.
     """
     from backend.config import get_settings
     settings = get_settings()
@@ -236,21 +269,29 @@ def get_client_ip(request: Request) -> str:
         if t_ip and t_ip.strip():
             return t_ip.strip()
 
-    # 3. X-Forwarded-For: take the Nth-from-right IP appended by the trusted proxy chain
+    # 3. Dynamic proxy hop detection based on cryptographic Edge Signature
+    edge_sig = request.headers.get("x-compass-edge-sig") or request.headers.get("x-vercel-edge-sig")
+    edge_secret = getattr(settings, "VERCEL_EDGE_SECRET", "")
+    is_trusted_edge = verify_edge_signature(edge_sig, edge_secret) if edge_sig and edge_secret else False
+
+    effective_hops = 2 if is_trusted_edge else 1
+
+    # 4. X-Forwarded-For: take the effective Nth-from-right IP appended by the trusted proxy chain
     xff = request.headers.get("x-forwarded-for")
     if xff and xff.strip():
         parts = [p.strip() for p in xff.split(",") if p.strip()]
         if parts:
-            hops = int(getattr(settings, "TRUSTED_PROXY_HOPS", 1))
-            if len(parts) >= hops:
-                return parts[-hops]
+            if len(parts) >= effective_hops:
+                candidate = parts[-effective_hops]
+                if is_valid_ip(candidate):
+                    return candidate
             # Chain is shorter than expected proxy hops: fallback strictly to TCP peer address
             if request.client and request.client.host:
                 return request.client.host
 
-    # 4. X-Real-IP (if present and no X-Forwarded-For)
+    # 5. X-Real-IP (if present and no X-Forwarded-For)
     real_ip = request.headers.get("x-real-ip")
-    if real_ip and real_ip.strip():
+    if real_ip and real_ip.strip() and is_valid_ip(real_ip.strip()):
         return real_ip.strip()
 
     if request.client and request.client.host:

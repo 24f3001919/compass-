@@ -50,35 +50,24 @@ async def _run_critic_pass(
 
     critic_cost = 0.0
     try:
-        is_mocked = (
-            hasattr(client, "mock_calls")
-            or hasattr(getattr(client, "chat", None), "mock_calls")
-            or hasattr(getattr(getattr(client, "chat", None), "completions", None), "mock_calls")
-            or hasattr(getattr(getattr(getattr(client, "chat", None), "completions", None), "create", None), "mock_calls")
+        completions: Any = client.chat.completions
+        resp = await completions.create(
+            model=str(settings.SKILL_MODEL),
+            messages=cast(Any, [
+                {"role": "system", "content": "You are a critical reviewer. Be thorough but concise."},
+                {"role": "user", "content": critic_prompt},
+            ]),
+            max_tokens=384,
+            temperature=0.3,
+            stream=False,
         )
-        if not is_mocked and settings.NEBIUS_API_KEY.startswith("your_nebius_"):
-            critic_text = "APPROVED: Plan looks sound, constraints verified against task database."
-            record_usage(settings.SKILL_MODEL, 300, 50)
-            critic_cost = compute_step_cost(settings.SKILL_MODEL, 300, 50)
-        else:
-            completions: Any = client.chat.completions
-            resp = await completions.create(
-                model=str(settings.SKILL_MODEL),
-                messages=cast(Any, [
-                    {"role": "system", "content": "You are a critical reviewer. Be thorough but concise."},
-                    {"role": "user", "content": critic_prompt},
-                ]),
-                max_tokens=384,
-                temperature=0.3,
-                stream=False,
-            )
-            usage = getattr(resp, "usage", None)
-            p_tok = usage.prompt_tokens if usage else 300
-            c_tok = usage.completion_tokens if usage else 100
-            record_usage(settings.SKILL_MODEL, p_tok, c_tok)
-            critic_cost = compute_step_cost(settings.SKILL_MODEL, p_tok, c_tok)
+        usage = getattr(resp, "usage", None)
+        p_tok = usage.prompt_tokens if usage else 300
+        c_tok = usage.completion_tokens if usage else 100
+        record_usage(settings.SKILL_MODEL, p_tok, c_tok)
+        critic_cost = compute_step_cost(settings.SKILL_MODEL, p_tok, c_tok)
 
-            critic_text = await _extract_content_from_response(resp, default_text="APPROVED: Plan looks reasonable.")
+        critic_text = await _extract_content_from_response(resp, default_text="APPROVED: Plan looks reasonable.")
     except Exception as e:
         logger.warning(f"Critic pass failed: {e}")
         critic_text = "APPROVED: (Critic pass skipped due to error)"

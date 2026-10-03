@@ -91,6 +91,76 @@ KNOWN_ROUTE_METADATA = {
     ("/tasks", "GET"): ("_get_current_identity", "WHERE user_id = $1 tasks list", "test_direct_tasks.py::test_list_tasks"),
 }
 
+# ---------------------------------------------------------------------------
+# Negative Cross-Identity Test Mapping for All User-Data Routes
+# ---------------------------------------------------------------------------
+NEGATIVE_CROSS_IDENTITY_TESTS = {
+    # Tasks & verification
+    ("/api/tasks", "GET"): "tests/test_round5_hardening.py::test_cross_identity_tasks_isolation_negative",
+    ("/api/tasks", "POST"): "tests/test_round5_hardening.py::test_cross_identity_tasks_isolation_negative",
+    ("/api/tasks/{task_id}", "DELETE"): "tests/test_round5_hardening.py::test_cross_identity_tasks_isolation_negative",
+    ("/api/tasks/{task_id}", "PATCH"): "tests/test_round5_hardening.py::test_cross_identity_tasks_isolation_negative",
+    ("/api/tasks/{task_id}", "PUT"): "tests/test_round5_hardening.py::test_cross_identity_tasks_isolation_negative",
+    ("/api/tasks/{task_id}/dependencies", "GET"): "tests/test_round5_hardening.py::test_cross_identity_tasks_isolation_negative",
+    ("/api/tasks/{task_id}/dependencies", "POST"): "tests/test_round5_hardening.py::test_cross_identity_tasks_isolation_negative",
+    ("/api/tasks/{task_id}/dependencies/{depends_on_task_id}", "DELETE"): "tests/test_round5_hardening.py::test_cross_identity_tasks_isolation_negative",
+    ("/api/tasks/{task_id}/verify", "POST"): "tests/test_round5_hardening.py::test_cross_identity_tasks_isolation_negative",
+    ("/api/tasks/verify-deadlines", "POST"): "tests/test_round5_hardening.py::test_cross_identity_tasks_isolation_negative",
+    ("/tasks", "GET"): "tests/test_round5_hardening.py::test_cross_identity_tasks_isolation_negative",
+    ("/dashboard", "GET"): "tests/test_round5_hardening.py::test_cross_identity_tasks_isolation_negative",
+    ("/projects", "GET"): "tests/test_round5_hardening.py::test_cross_identity_tasks_isolation_negative",
+    ("/memory/timeline", "GET"): "tests/test_round5_hardening.py::test_cross_identity_tasks_isolation_negative",
+
+    # Conversations & Chat
+    ("/api/chat", "POST"): "tests/test_round5_hardening.py::test_cross_identity_conversation_isolation_negative",
+    ("/api/chat/stream", "POST"): "tests/test_round5_hardening.py::test_cross_identity_conversation_isolation_negative",
+    ("/chat", "POST"): "tests/test_round5_hardening.py::test_cross_identity_conversation_isolation_negative",
+    ("/api/conversations", "GET"): "tests/test_round5_hardening.py::test_cross_identity_conversation_isolation_negative",
+    ("/api/conversations/{conversation_id}", "DELETE"): "tests/test_round5_hardening.py::test_cross_identity_conversation_isolation_negative",
+    ("/api/conversations/{conversation_id}", "PATCH"): "tests/test_round5_hardening.py::test_cross_identity_conversation_isolation_negative",
+    ("/api/conversations/{conversation_id}/messages", "GET"): "tests/test_round5_hardening.py::test_cross_identity_conversation_isolation_negative",
+
+    # Guest & Migration
+    ("/api/guest/data", "DELETE"): "tests/test_round5_hardening.py::test_cross_identity_migration_isolation_negative",
+    ("/api/guest/migrate", "POST"): "tests/test_round5_hardening.py::test_cross_identity_migration_isolation_negative",
+    ("/api/migration/conversations", "GET"): "tests/test_round5_hardening.py::test_cross_identity_migration_isolation_negative",
+    ("/api/migration/import-all", "POST"): "tests/test_round5_hardening.py::test_cross_identity_migration_isolation_negative",
+    ("/api/migration/import-selected", "POST"): "tests/test_round5_hardening.py::test_cross_identity_migration_isolation_negative",
+    ("/api/migration/status", "GET"): "tests/test_round5_hardening.py::test_cross_identity_migration_isolation_negative",
+
+    # Agent user operations
+    ("/api/agent/activity", "GET"): "tests/test_round3_corrections.py::test_agent_activity_auth_isolation",
+    ("/api/agent/confirm", "POST"): "tests/test_round5_hardening.py::test_cross_identity_agent_undo_isolation_negative",
+    ("/api/agent/proactive-briefing", "GET"): "tests/test_round5_hardening.py::test_cross_identity_agent_undo_isolation_negative",
+    ("/api/agent/run", "POST"): "tests/test_round5_hardening.py::test_cross_identity_agent_undo_isolation_negative",
+    ("/api/agent/runs", "GET"): "tests/test_round5_hardening.py::test_cross_identity_agent_undo_isolation_negative",
+    ("/api/agent/runs/{run_id}", "GET"): "tests/test_round5_hardening.py::test_cross_identity_agent_undo_isolation_negative",
+    ("/api/agent/undo", "POST"): "tests/test_round5_hardening.py::test_cross_identity_agent_undo_isolation_negative",
+
+    # Calendar & Scheduling user operations
+    ("/api/calendar/availability", "GET"): "tests/test_user_isolation.py::test_account_selection_and_task_isolation",
+    ("/api/calendar/callback", "GET"): "tests/test_round3_corrections.py::test_oauth_state_binding_isolation_negative",
+    ("/api/calendar/connect", "GET"): "tests/test_round3_corrections.py::test_oauth_state_binding_isolation_negative",
+    ("/api/calendar/disconnect", "POST"): "tests/test_round3_corrections.py::test_calendar_disconnect_isolation_negative",
+    ("/api/calendar/export.ics", "GET"): "tests/test_user_isolation.py::test_calendar_status_isolation",
+    ("/api/calendar/preferences", "PUT"): "tests/test_user_isolation.py::test_account_selection_and_task_isolation",
+    ("/api/calendar/status", "GET"): "tests/test_user_isolation.py::test_calendar_status_isolation",
+    ("/api/calendar/sync-now", "POST"): "tests/test_round3_corrections.py::test_calendar_sync_now_isolation_negative",
+    ("/api/schedule/commit", "POST"): "tests/test_user_isolation.py::test_account_selection_and_task_isolation",
+    ("/api/schedule/conflicts", "GET"): "tests/test_user_isolation.py::test_account_selection_and_task_isolation",
+
+    # Memory
+    ("/api/log", "POST"): "tests/test_user_isolation.py::test_account_selection_and_task_isolation",
+    ("/api/memory/overview", "GET"): "tests/test_round5_hardening.py::test_cross_identity_conversation_isolation_negative",
+
+    # Identity & Seeding
+    ("/api/auth/me", "GET"): "tests/test_round5_hardening.py::test_cross_identity_migration_isolation_negative",
+    ("/api/demo/seed", "POST"): "tests/test_round5_hardening.py::test_cross_identity_tasks_isolation_negative",
+}
+
+USER_DATA_ROUTES = set(NEGATIVE_CROSS_IDENTITY_TESTS.keys())
+
+
 def verify_all_routes():
     untracked = []
     seen = set()
@@ -108,9 +178,29 @@ def verify_all_routes():
                 untracked.append(key)
     return untracked
 
+
+def verify_negative_cross_identity_coverage():
+    """Verify that every route touching user data has a designated negative cross-identity test."""
+    missing = []
+    for route in sorted(app.routes, key=lambda r: getattr(r, "path", "")):
+        path = getattr(route, "path", "")
+        methods = getattr(route, "methods", set())
+        for m in sorted(methods):
+            if m in ("OPTIONS", "HEAD"):
+                continue
+            key = (path, m)
+            if key in USER_DATA_ROUTES:
+                test_ref = NEGATIVE_CROSS_IDENTITY_TESTS.get(key)
+                if not test_ref:
+                    missing.append((path, m, "Missing negative cross-identity test in mapping"))
+                elif "negative" not in test_ref.lower() and "isolation" not in test_ref.lower():
+                    missing.append((path, m, f"Test '{test_ref}' does not explicitly test negative isolation"))
+    return missing
+
+
 def print_markdown_table():
-    print("| Route | Method | Identity Dep | Ownership Check / Access Policy | Test Function |")
-    print("| :--- | :--- | :--- | :--- | :--- |")
+    print("| Route | Method | Identity Dep | Ownership Check / Access Policy | Test Function | Negative Cross-Identity Test |")
+    print("| :--- | :--- | :--- | :--- | :--- | :--- |")
     seen = set()
     for route in sorted(app.routes, key=lambda r: getattr(r, "path", "")):
         path = getattr(route, "path", "")
@@ -123,7 +213,9 @@ def print_markdown_table():
                 continue
             seen.add(key)
             meta = KNOWN_ROUTE_METADATA.get(key, ("None", "Public or Default", "tests/test_api_endpoints.py"))
-            print(f"| `{path}` | `{m}` | `{meta[0]}` | {meta[1]} | `{meta[2]}` |")
+            neg = NEGATIVE_CROSS_IDENTITY_TESTS.get(key, "N/A (Public / Infrastructure)")
+            print(f"| `{path}` | `{m}` | `{meta[0]}` | {meta[1]} | `{meta[2]}` | `{neg}` |")
+
 
 if __name__ == "__main__":
     untracked = verify_all_routes()
@@ -132,6 +224,15 @@ if __name__ == "__main__":
         for path, method in untracked:
             print(f"  - ({path}, {method})", file=sys.stderr)
         sys.exit(1)
-    print("SUCCESS: All registered FastAPI routes are verified with metadata and designated tests.")
+
+    missing_negative = verify_negative_cross_identity_coverage()
+    if missing_negative:
+        print(f"ERROR: {len(missing_negative)} user-data routes lack a NEGATIVE cross-identity test:", file=sys.stderr)
+        for path, method, reason in missing_negative:
+            print(f"  - ({path}, {method}): {reason}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"SUCCESS: All {len(KNOWN_ROUTE_METADATA)} registered FastAPI routes are verified with metadata, designated tests, and negative cross-identity test coverage across all {len(USER_DATA_ROUTES)} user-data endpoints.")
     if len(sys.argv) > 1 and sys.argv[1] == "--markdown":
         print_markdown_table()
+

@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     TRUSTED_PROXY_HOPS: int = 1
     TRUST_CF_CONNECTING_IP: bool = False
     TRUST_TRUE_CLIENT_IP: bool = False
+    VERCEL_EDGE_SECRET: str = "compass_vercel_edge_hmac_secret_2026"
 
     # --- Rate Limiter & Abuse Protection ---
     RATE_LIMIT_FAIL_CLOSED: bool = True
@@ -48,12 +49,17 @@ class Settings(BaseSettings):
     GLOBAL_DAILY_MINT_CAP: int = 200
     COMPASS_KILL_SWITCH_ACTIVE: bool = False
 
-    # --- Pinned Authority Domains ---
+    # --- Pinned Authority Domains & Event Prefixes ---
     PINNED_TIER_1_DOMAINS: list[str] = [
         "docs.nebius.com",
         "nebius.com",
         "studio.nebius.ai",
         "api.tokenfactory.nebius.com",
+    ]
+    PINNED_EVENT_PREFIXES: list[str] = [
+        "https://nebiusglobalaihackathon.devpost.com",
+        "http://nebiusglobalaihackathon.devpost.com",
+        "nebiusglobalaihackathon.devpost.com",
     ]
 
     # --- Auth ---

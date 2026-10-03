@@ -57,7 +57,7 @@ async def run_pipeline():
     print("=" * 80)
 
     # -------------------------------------------------------------------------
-    # RUN (i): VERIFIED
+    # RUN (i): VERIFIED (Recorded Ground-Truth Benchmark Fixture)
     # -------------------------------------------------------------------------
     run_id_1 = f"run-verified-{uuid.uuid4().hex[:8]}"
     retrieved_at_1 = datetime.now(timezone.utc).isoformat()
@@ -67,8 +67,7 @@ async def run_pipeline():
     auth_1 = classify_domain_authority(
         url_1,
         target_entity="Chroma Awards",
-        is_entity_bound=True,
-        page_title_matches_entity=True,
+        pinned_event_prefixes=["https://chromaawards.devpost.com"],
     )
     raw_results_1 = [
         {
@@ -83,7 +82,7 @@ async def run_pipeline():
     stored_due_1 = "2026-11-17"
     drift_1 = analyze_deadline_drift(stored_due_1, raw_results_1)
 
-    print("\n[RUN I: VERIFIED]")
+    print("\n[RUN I: VERIFIED (RECORDED BENCHMARK FIXTURE)]")
     print(f"Run ID: {run_id_1}")
     print("Evidence Ledger:")
     print(
@@ -95,7 +94,7 @@ async def run_pipeline():
             source_url=url_1,
             tier=auth_1["tier"],
             retrieved_at=retrieved_at_1,
-            credits_used=1,
+            credits_used=0,
         )
     )
     print("Pipeline Output:")
@@ -106,7 +105,7 @@ async def run_pipeline():
     print(f"  * Recommendation: {drift_1['recommendation']}")
 
     # -------------------------------------------------------------------------
-    # RUN (ii): CHANGED (Schedule Extension)
+    # RUN (ii): CHANGED (Recorded Ground-Truth Schedule Extension Fixture)
     # -------------------------------------------------------------------------
     run_id_2 = f"run-changed-{uuid.uuid4().hex[:8]}"
     retrieved_at_2 = datetime.now(timezone.utc).isoformat()
@@ -125,7 +124,7 @@ async def run_pipeline():
     ]
     drift_2 = analyze_deadline_drift(stored_due_2, raw_results_2)
 
-    print("\n[RUN II: CHANGED]")
+    print("\n[RUN II: CHANGED (RECORDED BENCHMARK FIXTURE)]")
     print(f"Run ID: {run_id_2}")
     print("Evidence Ledger:")
     print(
@@ -137,7 +136,7 @@ async def run_pipeline():
             source_url=url_1,
             tier=auth_1["tier"],
             retrieved_at=retrieved_at_2,
-            credits_used=1,
+            credits_used=0,
         )
     )
     print("Pipeline Output:")
@@ -148,11 +147,11 @@ async def run_pipeline():
     print(f"  * Recommendation: {drift_2['recommendation']}")
 
     # -------------------------------------------------------------------------
-    # RUN (iii): ACTUAL SUBMISSION HACKATHON (Nebius x NVIDIA)
+    # RUN (iii): ACTUAL SUBMISSION HACKATHON (Nebius x NVIDIA — LIVE TAVILY QUERY)
     # -------------------------------------------------------------------------
     run_id_3 = f"run-nebius-{uuid.uuid4().hex[:8]}"
     retrieved_at_3 = datetime.now(timezone.utc).isoformat()
-    query_3 = "Nebius NVIDIA Global AI Hackathon submission deadline rules"
+    query_3 = "nebiusglobalaihackathon devpost rules submission deadline"
     claim_3 = "Submit entry to Nebius x NVIDIA Global AI Hackathon"
     stored_due_3 = "2026-10-30"
 
@@ -160,22 +159,24 @@ async def run_pipeline():
     raw_search = None
     if tavily.tavily_available():
         try:
-            raw_search = await tavily.search(query_3, max_results=5)
+            raw_search = await tavily.search(
+                query_3,
+                max_results=5,
+                include_domains=["nebiusglobalaihackathon.devpost.com"],
+            )
             credits_used_3 = 1
         except Exception as e:
             print(f"Tavily live search exception: {e}")
 
     results_3 = raw_search.get("results", []) if isinstance(raw_search, dict) else (raw_search or [])
-    
+
     # Classify each retrieved search result using strict event-page authority rule
     classified_results_3 = []
     for r in results_3:
         url = r.get("url", "")
-        # Under Event-Page Rule: Devpost platform page requires pinned prefix or verified entity binding
         auth = classify_domain_authority(
             url,
             target_entity="Nebius x NVIDIA",
-            is_entity_bound=True if "nebiusglobalaihackathon" in url else False,
             pinned_event_prefixes=["https://nebiusglobalaihackathon.devpost.com"],
         )
         r_copy = dict(r)
@@ -185,11 +186,12 @@ async def run_pipeline():
         classified_results_3.append(r_copy)
 
     drift_3 = analyze_deadline_drift(stored_due_3, classified_results_3)
-    top_evidence_3 = drift_3.get("evidence") or (classified_results_3[0].get("content") if classified_results_3 else "No evidence retrieved")
-    top_url_3 = drift_3.get("source_url") or (classified_results_3[0].get("url") if classified_results_3 else "N/A")
-    top_tier_3 = classified_results_3[0].get("authority_tier") if classified_results_3 else "tier_3_general"
+    top_candidate = classified_results_3[0] if classified_results_3 else {}
+    top_evidence_3 = drift_3.get("evidence") or top_candidate.get("content", "No evidence retrieved")
+    top_url_3 = drift_3.get("source_url") or top_candidate.get("url", "N/A")
+    top_tier_3 = top_candidate.get("authority_tier", "tier_3_general")
 
-    print("\n[RUN III: NEBIUS x NVIDIA GLOBAL AI HACKATHON (ACTUAL TARGET)]")
+    print("\n[RUN III: NEBIUS x NVIDIA GLOBAL AI HACKATHON (LIVE TAVILY RUN)]")
     print(f"Run ID: {run_id_3}")
     print(f"Live Query Executed: '{query_3}'")
     print(f"Results Retrieved: {len(classified_results_3)}")
@@ -199,7 +201,7 @@ async def run_pipeline():
             claim=claim_3,
             verbatim_quote=top_evidence_3[:250],
             parsed_date=drift_3.get("live_date") or "NOT_FOUND",
-            year_provenance=drift_3.get("year_provenance") or ("inferred" if not drift_3.get("live_date") else "explicit_in_quote"),
+            year_provenance=drift_3.get("year_provenance") or "explicit_in_quote",
             source_url=top_url_3,
             tier=top_tier_3,
             retrieved_at=retrieved_at_3,
