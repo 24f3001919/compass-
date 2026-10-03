@@ -12,6 +12,9 @@ import {
   quickConnectUser,
   deleteTask,
 } from '../api/client'
+import { CalendarGrid } from './calendar/CalendarGrid'
+import { CalendarSidebar } from './calendar/CalendarSidebar'
+import { ProposedPlanModal, QuickConnectModal, IcsExportModal } from './calendar/CalendarModals'
 
 const DOMAIN_STYLES = {
   hackathon: {
@@ -437,231 +440,45 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
       {/* Main 3-column layout */}
       <div style={{ flex: 1, display: 'flex', gap: '16px', padding: '16px', overflow: 'hidden', minHeight: 0 }}>
         {/* Left: mini month calendar + selected-day panel */}
-        <div style={{ width: '270px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto' }}>
-          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '14px', padding: '14px', boxShadow: 'var(--shadow-sm)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-              <button onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() - 1, 1))} style={iconBtnStyle}>‹</button>
-              <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>
-                {monthCursor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-              </div>
-              <button onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1))} style={iconBtnStyle}>›</button>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '3px', marginBottom: '4px' }}>
-              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-                <div key={i} style={{ fontSize: '9.5px', color: 'var(--text-muted)', textAlign: 'center', fontWeight: '700' }}>{d}</div>
-              ))}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '3px' }}>
-              {monthDays.map((d, i) => {
-                const iso = toIso(d)
-                const inMonth = d.getMonth() === monthCursor.getMonth()
-                const isSelected = iso === selectedDate
-                const isToday = isSameDay(d, today)
-                const hasEvents = scheduledDateSet.has(iso)
-                return (
-                  <button
-                    key={i}
-                    onClick={() => setSelectedDate(iso)}
-                    style={{
-                      aspectRatio: '1', border: 'none', borderRadius: '7px', cursor: 'pointer',
-                      background: isSelected ? 'var(--brand)' : 'transparent',
-                      color: isSelected ? '#2a1a00' : (inMonth ? 'var(--text-primary)' : 'var(--text-muted)'),
-                      fontWeight: isToday ? '800' : '500', fontSize: '11.5px',
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px'
-                    }}>
-                    {d.getDate()}
-                    {hasEvents && !isSelected && <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'var(--brand)' }} />}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Selected day panel */}
-          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '14px', padding: '14px', boxShadow: 'var(--shadow-sm)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <div style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
-                {selectedDateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase()}
-              </div>
-              <div style={{ fontSize: '10.5px', fontWeight: '600', color: 'var(--coursework-text)', background: 'var(--coursework-bg)', padding: '2px 8px', borderRadius: '20px' }}>
-                {scheduledForDay(selectedDate).length} event{scheduledForDay(selectedDate).length === 1 ? '' : 's'}
-              </div>
-            </div>
-            {scheduledForDay(selectedDate).length === 0 ? (
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No scheduled tasks this day.</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                {scheduledForDay(selectedDate).map(t => {
-                  const s = getCalendarDomainStyle(t.domain)
-                  return (
-                    <div key={t.id} style={{ background: s.bg, borderLeft: `3px solid ${s.accent}`, borderRadius: '8px', padding: '8px 10px' }}>
-                      <div style={{ fontSize: '12px', fontWeight: '700', color: s.text }}>{t.title}</div>
-                      <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        🕐 {t.scheduled_start.slice(11, 16)}–{t.scheduled_end.slice(11, 16)} UTC · {t.duration_minutes || 60}m
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
+        <CalendarSidebar
+          monthCursor={monthCursor}
+          setMonthCursor={setMonthCursor}
+          monthDays={monthDays}
+          selectedDate={selectedDate}
+          setSelectedDate={setSelectedDate}
+          selectedDateObj={selectedDateObj}
+          today={today}
+          scheduledDateSet={scheduledDateSet}
+          scheduledForDay={scheduledForDay}
+          getCalendarDomainStyle={getCalendarDomainStyle}
+          toIso={toIso}
+          isSameDay={isSameDay}
+        />
 
         {/* Center: week grid / agenda */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '14px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', gap: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <button onClick={() => setSelectedDate(toIso(today))} style={pillBtnStyle}>Today</button>
-              <button onClick={() => setSelectedDate(toIso(addDays(selectedDateObj, -7)))} style={iconBtnStyle}>‹</button>
-              <button onClick={() => setSelectedDate(toIso(addDays(selectedDateObj, 7)))} style={iconBtnStyle}>›</button>
-              <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)' }}>{weekLabel}</div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
-                {['week', 'agenda'].map(m => (
-                  <button key={m} onClick={() => setViewMode(m)} style={{
-                    padding: '6px 12px', border: 'none', cursor: 'pointer', fontSize: '11.5px', fontWeight: '600',
-                    background: viewMode === m ? 'var(--coursework)' : 'var(--bg-card)',
-                    color: viewMode === m ? '#fff' : 'var(--text-secondary)', textTransform: 'capitalize'
-                  }}>{m}</button>
-                ))}
-              </div>
-              <button
-                id="btn-auto-schedule"
-                onClick={handleAutoSchedule}
-                disabled={proposing}
-                style={{
-                  padding: '7px 14px', borderRadius: '8px', border: 'none',
-                  background: 'linear-gradient(135deg, #6c5ce7, #8b5cf6)', color: '#fff',
-                  fontSize: '12px', fontWeight: '700', cursor: proposing ? 'wait' : 'pointer',
-                  opacity: proposing ? 0.7 : 1
-                }}>
-                {proposing ? '⚡ Optimizing…' : '⚡ Auto-Schedule'}
-              </button>
-            </div>
-          </div>
-
-          {viewMode === 'week' ? (
-            <div style={{ flex: 1, overflow: 'auto' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '48px repeat(7, 1fr)', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, background: 'var(--bg-card)', zIndex: 1 }}>
-                <div />
-                {weekDays.map((d, i) => {
-                  const isToday = isSameDay(d, today)
-                  const iso = toIso(d)
-                  return (
-                    <div key={i} onClick={() => setSelectedDate(iso)} style={{
-                      padding: '8px 6px', textAlign: 'center', borderLeft: '1px solid var(--border-soft)', cursor: 'pointer',
-                      background: iso === selectedDate ? 'var(--coursework-bg)' : 'transparent'
-                    }}>
-                      <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: '600' }}>{d.toLocaleDateString('en-US', { weekday: 'short' })}</div>
-                      <div style={{
-                        fontSize: '13px', fontWeight: '700', color: isToday ? 'var(--coursework)' : 'var(--text-primary)',
-                        width: '24px', height: '24px', borderRadius: '50%', margin: '2px auto 0',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: isToday ? 'var(--coursework-bg)' : 'transparent'
-                      }}>{d.getDate()}</div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '48px repeat(7, 1fr)', position: 'relative' }}>
-                <div>
-                  {HOURS.map(h => (
-                    <div key={h} style={{ height: `${HOUR_ROW_HEIGHT}px`, textAlign: 'right', paddingRight: '6px', fontSize: '9.5px', color: 'var(--text-muted)', transform: 'translateY(-6px)', fontFamily: 'JetBrains Mono, monospace' }}>
-                      {String(h).padStart(2, '0')}:00
-                    </div>
-                  ))}
-                </div>
-
-                {weekDays.map((d, dayIdx) => {
-                  const iso = toIso(d)
-                  const dayEvents = scheduledForDay(iso)
-                  const dayBusy = externalEventsForDay(iso)
-                  return (
-                    <div key={dayIdx} style={{ position: 'relative', borderLeft: '1px solid var(--border-soft)', minHeight: `${HOUR_ROW_HEIGHT * HOURS.length}px` }}>
-                      {HOURS.map(h => (
-                        <div key={h} style={{ height: `${HOUR_ROW_HEIGHT}px`, borderBottom: '1px solid var(--border-soft)' }} />
-                      ))}
-
-                      {dayBusy.map(ev => {
-                        const pos = getEventPosition(ev.start, ev.end)
-                        return (
-                          <div key={ev.id} style={{
-                            position: 'absolute', left: '3px', right: '3px', top: pos.top, height: pos.height,
-                            background: 'rgba(31,27,46,0.04)', border: '1px dashed var(--border)', borderRadius: '6px',
-                            padding: '3px 6px', overflow: 'hidden', zIndex: 2
-                          }}>
-                            <div style={{ fontSize: '9.5px', color: 'var(--text-secondary)' }}>📅 {ev.title}</div>
-                          </div>
-                        )
-                      })}
-
-                      {dayEvents.map(t => {
-                        const pos = getEventPosition(t.scheduled_start, t.scheduled_end)
-                        const s = getCalendarDomainStyle(t.domain)
-                        return (
-                          <div key={t.id} style={{
-                            position: 'absolute', left: '3px', right: '3px', top: pos.top, height: pos.height,
-                            background: s.bg, border: s.border, borderRadius: '6px', padding: '4px 7px',
-                            overflow: 'hidden', zIndex: 4, boxShadow: 'var(--shadow-sm)'
-                          }}>
-                            <div style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {t.title}
-                            </div>
-                            <div style={{ fontSize: '9px', color: s.text }}>
-                              {t.scheduled_start.slice(11, 16)}
-                              {isLive ? ' ✓' : ' ⏱'}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )
-                })}
-              </div>
-
-              {allScheduledTasks.filter(t => weekDays.some(d => toIso(d) === t.scheduled_start.split('T')[0])).length === 0 && (
-                <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
-                  <div style={{ fontSize: '28px', marginBottom: '8px' }}>🗓️</div>
-                  <p style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)' }}>No tasks or events scheduled this week</p>
-                  <p style={{ fontSize: '11.5px', marginTop: '4px' }}>Click "Auto-Schedule" to automatically place open tasks into working hours.</p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
-              {allScheduledTasks.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: '13px' }}>
-                  No scheduled tasks yet. Use "Auto-Schedule" to place your open tasks.
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {allScheduledTasks
-                    .slice()
-                    .sort((a, b) => new Date(a.scheduled_start) - new Date(b.scheduled_start))
-                    .map(t => {
-                      const s = getCalendarDomainStyle(t.domain)
-                      const start = new Date(t.scheduled_start)
-                      return (
-                        <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', background: 'var(--bg-card-soft)', border: '1px solid var(--border)', borderRadius: '10px' }}>
-                          <div style={{ width: '64px', flexShrink: 0, textAlign: 'center' }}>
-                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700' }}>{start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
-                            <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{t.scheduled_start.slice(11, 16)} UTC</div>
-                          </div>
-                          <div style={{ width: '3px', height: '32px', background: s.accent, borderRadius: '2px', flexShrink: 0 }} />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{t.title}</div>
-                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t.domain} · {t.duration_minutes || 60}min</div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <CalendarGrid
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          selectedDate={selectedDate}
+          setSelectedDate={setSelectedDate}
+          selectedDateObj={selectedDateObj}
+          today={today}
+          weekLabel={weekLabel}
+          weekDays={weekDays}
+          handleAutoSchedule={handleAutoSchedule}
+          proposing={proposing}
+          HOURS={HOURS}
+          HOUR_ROW_HEIGHT={HOUR_ROW_HEIGHT}
+          scheduledForDay={scheduledForDay}
+          externalEventsForDay={externalEventsForDay}
+          getEventPosition={getEventPosition}
+          getCalendarDomainStyle={getCalendarDomainStyle}
+          isLive={isLive}
+          allScheduledTasks={allScheduledTasks}
+          toIso={toIso}
+          addDays={addDays}
+          isSameDay={isSameDay}
+        />
 
         {/* Right: pending tasks + policy widget (unchanged content) */}
         <div style={{ width: '280px', flexShrink: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '14px', padding: '16px', overflowY: 'auto', boxShadow: 'var(--shadow-sm)' }}>
@@ -729,147 +546,28 @@ export default function CalendarView({ tasks, activeDomain, onTasksUpdated, onOp
         </div>
       </div>
 
-      {/* Auto-Schedule Review & Confirmation Modal */}
-      {proposedPlan && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(31, 27, 46, 0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(5px)' }}>
-          <div style={{ width: '580px', maxWidth: '90vw', background: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-lg)', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-primary)' }}>⚡ Review Proposed Schedule Allocation</h3>
-              <button onClick={() => setProposedPlan(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '16px', cursor: 'pointer' }}>✕</button>
-            </div>
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>{proposedPlan.summary}</p>
-            <div style={{ maxHeight: '260px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--bg-card-soft)', padding: '12px', borderRadius: '10px', border: '1px solid var(--border)' }}>
-              {proposedPlan.scheduled && proposedPlan.scheduled.map(s => (
-                <div key={s.task_id} style={{ padding: '8px 12px', borderRadius: '8px', background: 'var(--bg-card)', border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <strong style={{ fontSize: '12.5px', color: 'var(--text-primary)' }}>{s.title}</strong>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>Domain: {s.domain} · Duration: {s.duration_minutes}m</div>
-                  </div>
-                  <span style={{ fontSize: '11.5px', color: 'var(--coursework-text)', fontFamily: 'JetBrains Mono, monospace', fontWeight: '700' }}>
-                    {s.scheduled_start.slice(0, 10)} {s.scheduled_start.slice(11, 16)} → {s.scheduled_end.slice(11, 16)}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-              <button onClick={() => setProposedPlan(null)} style={{ padding: '8px 16px', borderRadius: '8px', background: 'var(--bg-card-soft)', border: '1px solid var(--border)', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}>Cancel</button>
-              <button
-                id="btn-confirm-commit-schedule"
-                onClick={handleCommitPlan}
-                disabled={committing}
-                style={{ padding: '8px 20px', borderRadius: '8px', background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none', color: '#ffffff', fontSize: '13px', fontWeight: '700', cursor: committing ? 'wait' : 'pointer' }}>
-                {committing ? 'Committing...' : '✅ Approve & Commit to Google Calendar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Extracted Calendar Modals */}
+      <ProposedPlanModal
+        proposedPlan={proposedPlan}
+        onClose={() => setProposedPlan(null)}
+        onCommit={handleCommitPlan}
+        committing={committing}
+      />
 
-      {/* Quick Gmail Login Modal */}
-      {showQuickModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(31, 27, 46, 0.45)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '420px', boxShadow: 'var(--shadow-lg)' }}>
-            <h3 style={{ margin: '0 0 8px', color: 'var(--text-primary)', fontSize: '18px', fontWeight: '800' }}>⚡ Connect Your Gmail</h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: '0 0 20px', lineHeight: '1.5' }}>
-              Enter your Gmail address to activate your schedule profile. Tasks will be slotted deterministically and can be imported or subscribed directly in Google Calendar.
-            </p>
-            <input
-              id="input-quick-email"
-              type="email"
-              placeholder="e.g. yourname@gmail.com"
-              value={quickEmailInput}
-              onChange={(e) => setQuickEmailInput(e.target.value)}
-              onKeyDown={async (e) => {
-                if (e.key === 'Enter' && quickEmailInput.includes('@')) {
-                  await quickConnectUser(quickEmailInput)
-                  setShowQuickModal(false)
-                  fetchCalendarStatus().then(status => { if (status) setCalendarStatus(status) })
-                  setBannerMessage({ type: 'success', text: `✅ Connected as ${quickEmailInput}! Schedule slotted.` })
-                }
-              }}
-              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-app)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '14px', marginBottom: '18px', boxSizing: 'border-box', outline: 'none' }}
-            />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button onClick={() => setShowQuickModal(false)} style={{ padding: '8px 16px', borderRadius: '8px', background: 'var(--bg-card-soft)', border: '1px solid var(--border)', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}>Cancel</button>
-              <button
-                id="btn-submit-quick-connect"
-                disabled={!quickEmailInput.includes('@')}
-                onClick={async () => {
-                  try {
-                    await quickConnectUser(quickEmailInput)
-                    setShowQuickModal(false)
-                    fetchCalendarStatus().then(status => { if (status) setCalendarStatus(status) })
-                    setBannerMessage({ type: 'success', text: `✅ Connected as ${quickEmailInput}! Schedule slotted.` })
-                  } catch (err) {
-                    alert(`Could not connect: ${err.message}`)
-                  }
-                }}
-                style={{ padding: '8px 18px', borderRadius: '8px', background: quickEmailInput.includes('@') ? 'linear-gradient(135deg, #2563eb, #3b82f6)' : 'var(--bg-card-soft)', border: 'none', color: quickEmailInput.includes('@') ? '#ffffff' : 'var(--text-muted)', fontSize: '13px', fontWeight: '700', cursor: quickEmailInput.includes('@') ? 'pointer' : 'not-allowed' }}>
-                Connect Account
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <QuickConnectModal
+        show={showQuickModal}
+        onClose={() => setShowQuickModal(false)}
+        quickEmailInput={quickEmailInput}
+        setQuickEmailInput={setQuickEmailInput}
+        setCalendarStatus={setCalendarStatus}
+        setBannerMessage={setBannerMessage}
+      />
 
-      {/* Google Calendar Sync & .ics Import Guide Modal */}
-      {showIcsModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(31, 27, 46, 0.45)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '520px', boxShadow: 'var(--shadow-lg)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '18px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                🗓️ Sync Tasks to Google Calendar
-              </h3>
-              <button onClick={() => setShowIcsModal(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '18px', cursor: 'pointer' }}>✕</button>
-            </div>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.5', margin: '0 0 16px' }}>
-              Because direct Google Calendar API write requires registered Google Cloud OAuth credentials, you can sync all your scheduled tasks into your Google Calendar right now in 2 easy steps:
-            </p>
-            <div style={{ background: 'var(--bg-card-soft)', border: '1px solid var(--border)', borderRadius: '10px', padding: '14px', marginBottom: '16px' }}>
-              <h4 style={{ margin: '0 0 8px', color: 'var(--coursework-text)', fontSize: '13px', fontWeight: '700' }}>Option 1: Instant 1-Click File Import (Recommended)</h4>
-              <ol style={{ margin: '0 0 10px', paddingLeft: '18px', color: 'var(--text-primary)', fontSize: '12.5px', lineHeight: '1.6' }}>
-                <li>
-                  Click below to download the <code style={{ color: 'var(--coursework-text)' }}>compass_schedule.ics</code> file:
-                  <div style={{ marginTop: '6px', marginBottom: '6px' }}>
-                    <a href={getCalendarExportUrl(activeDomain)} download="compass_schedule.ics" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', borderRadius: '6px', color: '#ffffff', fontSize: '12px', fontWeight: '700', textDecoration: 'none' }}>
-                      📥 Download compass_schedule.ics
-                    </a>
-                  </div>
-                </li>
-                <li>In Google Calendar, look at the left sidebar under <b>Other calendars</b> and click <b>+</b>.</li>
-                <li>Click <b>Import</b>, select the downloaded file, and click <b>Import</b>.</li>
-                <li>All scheduled tasks immediately appear in your Google Calendar!</li>
-              </ol>
-              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '10px', marginTop: '10px' }}>
-                <h4 style={{ margin: '0 0 8px', color: 'var(--code-text)', fontSize: '13px', fontWeight: '700' }}>Option 2: Live Auto-Sync via Calendar Subscription URL</h4>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '12px', margin: '0 0 8px' }}>
-                  In Google Calendar &gt; <b>Other calendars (+)</b> &gt; <b>From URL</b>, paste this feed URL:
-                </p>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <input readOnly value={`${window.location.origin}/api/calendar/export.ics`} style={{ flex: 1, padding: '6px 10px', borderRadius: '6px', background: 'var(--bg-app)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '11.5px', fontFamily: 'JetBrains Mono, monospace' }} />
-                  <button
-                    onClick={(e) => {
-                      navigator.clipboard.writeText(`${window.location.origin}/api/calendar/export.ics`)
-                      e.target.innerText = 'Copied! ✓'
-                      setTimeout(() => { e.target.innerText = 'Copy' }, 2000)
-                    }}
-                    style={{ padding: '6px 12px', borderRadius: '6px', background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>
-                    Copy
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <a href="https://calendar.google.com" target="_blank" rel="noreferrer" style={{ padding: '8px 16px', borderRadius: '8px', background: 'var(--bg-card-soft)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '13px', fontWeight: '600', textDecoration: 'none' }}>
-                Open Google Calendar ↗
-              </a>
-              <button onClick={() => setShowIcsModal(false)} style={{ padding: '8px 18px', borderRadius: '8px', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', border: 'none', color: '#ffffff', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <IcsExportModal
+        show={showIcsModal}
+        onClose={() => setShowIcsModal(false)}
+        activeDomain={activeDomain}
+      />
     </div>
   )
 }
