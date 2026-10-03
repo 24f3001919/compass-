@@ -62,7 +62,7 @@ def run_pillar2():
         if st_type == "confirm_request":
             confirm_ev = ev
             mutating_tool_args = ev.get("tool_args")
-            print(f"    >>> CONFIRM_REQUEST DETECTED!")
+            print("    >>> CONFIRM_REQUEST DETECTED!")
             print(f"    >>> Tool: {ev.get('tool_name')}")
             print(f"    >>> Tool Args: {json.dumps(mutating_tool_args, indent=6)}")
 
