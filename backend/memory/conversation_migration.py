@@ -45,9 +45,10 @@ async def get_guest_migration_overview(
             "unimported_memories": 0,
         }
 
+    guest_alt = guest_id[6:] if guest_id.startswith("guest_") else f"guest_{guest_id}"
     total_convs = await conn.fetchval(
-        "SELECT COUNT(*) FROM conversations WHERE guest_id = $1 AND user_id IS NULL",
-        guest_id
+        "SELECT COUNT(*) FROM conversations WHERE (guest_id = $1 OR guest_id = $2) AND user_id IS NULL",
+        guest_id, guest_alt
     ) or 0
 
     already_imported = 0
@@ -56,9 +57,9 @@ async def get_guest_migration_overview(
             """
             SELECT COUNT(*) FROM guest_migration_log gml
             JOIN conversations c ON c.id = gml.guest_conversation_id
-            WHERE gml.guest_id = $1 AND gml.user_id = $2
+            WHERE (gml.guest_id = $1 OR gml.guest_id = $3) AND gml.user_id = $2
             """,
-            guest_id, user_id
+            guest_id, user_id, guest_alt
         ) or 0
 
     unimported_convs = max(0, total_convs - already_imported)
@@ -93,6 +94,7 @@ async def list_guest_conversations_for_migration(
         "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'guest_migration_log')"
     )
 
+    guest_alt = guest_id[6:] if guest_id.startswith("guest_") else f"guest_{guest_id}"
     if has_log_table:
         query = """
             SELECT c.id, c.title, c.started_at, c.last_active_at,
@@ -108,11 +110,11 @@ async def list_guest_conversations_for_migration(
             LEFT JOIN messages m ON m.conversation_id = c.id
             LEFT JOIN guest_migration_log gml 
                 ON gml.guest_conversation_id = c.id AND gml.user_id = $2
-            WHERE c.guest_id = $1 AND c.user_id IS NULL
+            WHERE (c.guest_id = $1 OR c.guest_id = $3) AND c.user_id IS NULL
             GROUP BY c.id, c.title, c.started_at, c.last_active_at, gml.id, gml.imported_at
             ORDER BY c.last_active_at DESC
         """
-        rows = await conn.fetch(query, guest_id, user_id)
+        rows = await conn.fetch(query, guest_id, user_id, guest_alt)
     else:
         query = """
             SELECT c.id, c.title, c.started_at, c.last_active_at,
@@ -126,11 +128,11 @@ async def list_guest_conversations_for_migration(
                    NULL::timestamptz AS imported_at
             FROM conversations c
             LEFT JOIN messages m ON m.conversation_id = c.id
-            WHERE c.guest_id = $1 AND c.user_id IS NULL
+            WHERE (c.guest_id = $1 OR c.guest_id = $2) AND c.user_id IS NULL
             GROUP BY c.id, c.title, c.started_at, c.last_active_at
             ORDER BY c.last_active_at DESC
         """
-        rows = await conn.fetch(query, guest_id)
+        rows = await conn.fetch(query, guest_id, guest_alt)
     return [
         {
             "id": str(r["id"]),
@@ -224,14 +226,15 @@ async def migrate_all_guest_conversations(
     user_id: str,
 ) -> int:
     """Migrate all unimported conversations belonging to guest_id into user_id."""
+    guest_alt = guest_id[6:] if guest_id.startswith("guest_") else f"guest_{guest_id}"
     unimported = await conn.fetch(
         """
         SELECT c.id FROM conversations c
         LEFT JOIN guest_migration_log gml 
         ON gml.guest_conversation_id = c.id AND gml.user_id = $2
-        WHERE c.guest_id = $1 AND c.user_id IS NULL AND gml.id IS NULL
+        WHERE (c.guest_id = $1 OR c.guest_id = $3) AND c.user_id IS NULL AND gml.id IS NULL
         """,
-        guest_id, user_id
+        guest_id, user_id, guest_alt
     )
 
     count = 0
@@ -292,18 +295,18 @@ async def delete_guest_data(
     guest_id: str,
 ) -> Dict[str, int]:
     """Privacy control: permanently delete all guest conversations and memory chunks for a guest."""
-    guest_pattern = f"guest_{guest_id}"
+    guest_alt = guest_id[6:] if guest_id.startswith("guest_") else f"guest_{guest_id}"
 
     deleted_convs = await conn.fetchval(
         """
         WITH deleted AS (
             DELETE FROM conversations
-            WHERE guest_id = $1 AND user_id IS NULL
+            WHERE (guest_id = $1 OR guest_id = $2) AND user_id IS NULL
             RETURNING id
         )
         SELECT COUNT(*) FROM deleted
         """,
-        guest_id
+        guest_id, guest_alt
     ) or 0
 
     deleted_mems = await conn.fetchval(
@@ -315,7 +318,7 @@ async def delete_guest_data(
         )
         SELECT COUNT(*) FROM deleted
         """,
-        guest_id, guest_pattern
+        guest_id, guest_alt
     ) or 0
 
     return {

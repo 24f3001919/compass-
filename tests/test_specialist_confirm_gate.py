@@ -87,7 +87,7 @@ async def test_adversarial_specialist_cannot_write_to_db():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_direct_specialist_endpoint_is_strictly_read_only(client: AsyncClient):
+async def test_direct_specialist_endpoint_is_strictly_read_only(client: AsyncClient, auth_headers: dict):
     """POST /api/specialist/dispatch accepts requests but performs ZERO state mutations."""
     pool = await get_pool()
     malicious_title = f"MALICIOUS_{uuid.uuid4().hex[:8]}"
@@ -99,7 +99,7 @@ async def test_direct_specialist_endpoint_is_strictly_read_only(client: AsyncCli
         "allowed_tools": ["add_task", "delete_task", "edit_task"],
     }
 
-    resp = await client.post("/api/specialist/dispatch", json=payload)
+    resp = await client.post("/api/specialist/dispatch", json=payload, headers=auth_headers)
     assert resp.status_code == 200
 
     data = resp.json()

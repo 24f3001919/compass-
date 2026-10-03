@@ -52,34 +52,58 @@ def extract_dates_from_results(
         url = r.get("url") or ""
         content = f"{r.get('title', '')} {r.get('content', '')}"
         auth = classify_domain_authority(url)
-        matches = DATE_PATTERN.findall(content)
+        matches = DATE_PATTERN.finditer(content)
 
-        for raw_match in matches:
+        for match in matches:
+            raw_match = match.group(0)
+            start_pos, end_pos = match.span()
+            # Context window around the match
+            ctx_start = max(0, start_pos - 100)
+            ctx_end = min(len(content), end_pos + 100)
+            context_window = content[ctx_start:ctx_end].lower()
+
+            # Determine relevance score: highest priority for explicit deadline / closing indicators
+            relevance_score = 0
+            if any(k in context_window for k in ("deadline:", "submissions close", "submission deadline", "deadline :", "due date", "closes on")):
+                relevance_score += 20
+            elif any(k in context_window for k in ("deadline", "due", "final date", "submission period")):
+                if "judging" in context_window:
+                    relevance_score += 2
+                elif any(k in context_window for k in ("start", "opens", "begins")):
+                    relevance_score += 3
+                else:
+                    relevance_score += 10
+            elif any(k in context_window for k in ("submis", "close", "ends")):
+                relevance_score += 5
+
             match_str = raw_match
+            year_provenance = "explicit_in_quote"
             if not re.search(r"\d{4}", match_str):
                 match_str = f"{match_str}, {default_year}"
+                year_provenance = "inferred"
 
             parsed = parse_date_candidate(match_str)
             if parsed:
                 key = (parsed.isoformat(), url)
                 if key not in seen:
                     seen.add(key)
-                    # Extract surrounding sentence as evidence
-                    snippet = (r.get("content") or "")[:350].strip()
+                    snippet = content[ctx_start:ctx_end].strip()
                     extracted.append({
                         "date": parsed,
                         "date_str": parsed.isoformat(),
                         "raw_match": raw_match,
+                        "year_provenance": year_provenance,
                         "url": url,
                         "domain": auth.get("domain", ""),
                         "authority_tier": auth.get("tier", "tier_3_general"),
                         "authority_badge": auth.get("badge", "Web"),
                         "authority_weight": auth.get("weight", 0.5),
+                        "relevance_score": relevance_score,
                         "snippet": snippet,
                     })
 
-    # Sort candidates by source authority weight first, then by earliest date
-    extracted.sort(key=lambda x: (x["authority_weight"], x["date"]), reverse=True)
+    # Sort candidates by authority weight first, then by deadline keyword relevance score
+    extracted.sort(key=lambda x: (x["authority_weight"], x["relevance_score"]), reverse=True)
     return extracted
 
 
@@ -130,13 +154,26 @@ def analyze_deadline_drift(
     tier1_candidates = [c for c in candidates if c["authority_tier"] == "tier_1_official"]
     primary_pool = tier1_candidates if tier1_candidates else candidates
 
+    # Filter to top relevance score candidates (e.g. specifically marked with 'deadline', 'due', 'submission period')
+    max_relevance = max((c.get("relevance_score", 0) for c in primary_pool), default=0)
+    if max_relevance > 0:
+        high_rel_pool = [c for c in primary_pool if c.get("relevance_score", 0) == max_relevance]
+        if high_rel_pool:
+            primary_pool = high_rel_pool
+
+    # If the stored date matches one of the high-relevance candidates, select it as top candidate
+    if stored_date:
+        matching_stored = [c for c in primary_pool if c["date"] == stored_date]
+        if matching_stored:
+            primary_pool = matching_stored + [c for c in primary_pool if c["date"] != stored_date]
+
     # If the announcement mentions the stored date and an updated date, filter out the stored date
     distinct_dates = {c["date"] for c in primary_pool}
     new_dates = {d for d in distinct_dates if d != stored_date}
-    if stored_date and new_dates and len(new_dates) == 1:
+    if stored_date and new_dates and len(new_dates) == 1 and not [c for c in primary_pool if c["date"] == stored_date]:
         primary_pool = [c for c in primary_pool if c["date"] != stored_date]
         distinct_dates = new_dates
-    elif len(distinct_dates) > 1 and len(primary_pool) >= 2:
+    elif len(distinct_dates) > 1 and len(primary_pool) >= 2 and not (stored_date and stored_date in distinct_dates and len(distinct_dates) <= 2):
         return {
             "verdict": "CONFLICTING",
             "drift_verdict": "CONFLICTING",
@@ -154,6 +191,24 @@ def analyze_deadline_drift(
 
     top_candidate = primary_pool[0]
     detected_date = top_candidate["date"]
+    year_provenance = top_candidate.get("year_provenance", "explicit_in_quote")
+
+    if year_provenance == "inferred":
+        return {
+            "verdict": "UNVERIFIED",
+            "drift_verdict": "UNVERIFIED_AMBIGUOUS",
+            "has_drift": False,
+            "stored_date": stored_date.isoformat() if stored_date else None,
+            "live_date": detected_date.isoformat(),
+            "year_provenance": year_provenance,
+            "drift_days": 0,
+            "direction": "inferred_year_unverified",
+            "source_url": top_candidate["url"],
+            "source_authority": top_candidate["authority_badge"],
+            "evidence": top_candidate["snippet"],
+            "candidates_found": len(candidates),
+            "recommendation": "Year was inferred rather than present in official quote/metadata; requires manual verification.",
+        }
 
     if not stored_date:
         return {
@@ -162,6 +217,7 @@ def analyze_deadline_drift(
             "has_drift": False,
             "stored_date": None,
             "live_date": detected_date.isoformat(),
+            "year_provenance": year_provenance,
             "drift_days": 0,
             "direction": "new_date_discovered",
             "source_url": top_candidate["url"],
@@ -194,6 +250,7 @@ def analyze_deadline_drift(
         "has_drift": has_drift,
         "stored_date": stored_date.isoformat(),
         "live_date": detected_date.isoformat(),
+        "year_provenance": year_provenance,
         "drift_days": drift_days,
         "direction": direction,
         "source_url": top_candidate["url"],

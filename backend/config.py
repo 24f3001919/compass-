@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     TRUSTED_PROXY_HOPS: int = 1
     TRUST_CF_CONNECTING_IP: bool = False
     TRUST_TRUE_CLIENT_IP: bool = False
+    EDGE_HMAC_SECRET: str = "compass_vercel_edge_hmac_secret_2026"
+    VERCEL_EDGE_SECRET: str = "compass_vercel_edge_hmac_secret_2026"
 
     # --- Rate Limiter & Abuse Protection ---
     RATE_LIMIT_FAIL_CLOSED: bool = True
@@ -47,13 +49,23 @@ class Settings(BaseSettings):
     GLOBAL_DAILY_MODEL_CALL_CAP: int = 1000
     GLOBAL_DAILY_MINT_CAP: int = 200
     COMPASS_KILL_SWITCH_ACTIVE: bool = False
+    TRUST_CF_CONNECTING_IP: bool = True
+    TRUSTED_PROXY_HOPS: int = 1
 
-    # --- Pinned Authority Domains ---
+    # --- Pinned Authority Domains & Event Prefixes ---
     PINNED_TIER_1_DOMAINS: list[str] = [
         "docs.nebius.com",
         "nebius.com",
         "studio.nebius.ai",
         "api.tokenfactory.nebius.com",
+    ]
+    PINNED_EVENT_PREFIXES: list[str] = [
+        "https://nebiusglobalaihackathon.devpost.com",
+        "http://nebiusglobalaihackathon.devpost.com",
+        "nebiusglobalaihackathon.devpost.com",
+        "https://nebius-hackathon.devpost.com",
+        "http://nebius-hackathon.devpost.com",
+        "nebius-hackathon.devpost.com",
     ]
 
     # --- Auth ---
@@ -65,6 +77,8 @@ class Settings(BaseSettings):
     GUEST_MAX_MEMORIES: int = 100
     GUEST_RETENTION_DAYS: int = 30
     GUEST_RATE_LIMIT: int = 30
+    GUEST_MINT_HOURLY_IP_LIMIT: int = 5
+    GUEST_SIGNING_SECRET: str = ""
 
     # --- Tavily Search API ---
     TAVILY_API_KEY: str = ""

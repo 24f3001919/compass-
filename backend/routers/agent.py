@@ -9,8 +9,14 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
+from backend import dependencies as _dependencies
 from backend.config import get_settings
-from backend.dependencies import agent_rate_limit, verify_token, _get_current_user_id, _get_or_create_user_id
+from backend.dependencies import (
+    _get_current_identity,
+    _get_or_create_user_id,
+    agent_rate_limit,
+    verify_token,
+)
 from backend.memory.db import get_pool
 from backend.models import (
     AgentRequest,
@@ -91,9 +97,8 @@ async def agent_run(req: AgentRequest, request: Request):
 async def agent_confirm(req: AgentConfirmRequest, request: Request):
     """Execute previously confirmed state-mutating actions from an agent run with proposal verification, replay protection, and admin audit logging."""
     from backend.agent import execute_confirmed_actions, get_agent_run, save_agent_run
-    from backend.dependencies import _get_current_identity
 
-    ident = _get_current_identity(request)
+    ident = _dependencies._get_current_identity(request)
     if not ident:
         raise HTTPException(status_code=401, detail="Authentication required")
 
@@ -102,6 +107,7 @@ async def agent_confirm(req: AgentConfirmRequest, request: Request):
     run_id = getattr(req, "run_id", None)
     caller = ident.id
     is_admin = ident.is_admin
+    audit_record_ids: list[int] = []
 
     if run_id:
         existing_run = await get_agent_run(pool, run_id)
@@ -127,22 +133,25 @@ async def agent_confirm(req: AgentConfirmRequest, request: Request):
             else:
                 actions = pending
 
-            # Audit record admin overrides atomically: failure to log blocks the action
+            # Write+commit admin-override audit row BEFORE executing action; abort if write fails
+            audit_record_ids = []
             if is_admin and pool:
                 try:
                     logger.warning("SECURITY AUDIT: Admin override invoked for run %s by %s", run_id, caller)
                     async with pool.acquire() as conn:
                         async with conn.transaction():
                             for a in actions:
-                                await conn.execute(
+                                aid = await conn.fetchval(
                                     """
-                                    INSERT INTO agent_audit_log (run_id, tool, args, approved_by)
-                                    VALUES ($1, $2, $3::jsonb, 'admin_override')
+                                    INSERT INTO agent_audit_log (run_id, tool, args, approved_by, new_state)
+                                    VALUES ($1, $2, $3::jsonb, 'admin_override', '{"status": "pending_execution"}'::jsonb)
+                                    RETURNING id
                                     """,
                                     run_id,
                                     a.get("tool", "unknown"),
                                     json.dumps(a.get("args") or {}),
                                 )
+                                audit_record_ids.append(aid)
                 except Exception as log_err:
                     logger.error("Failed to record admin override in agent_audit_log: %s", log_err)
                     raise HTTPException(
@@ -167,6 +176,25 @@ async def agent_confirm(req: AgentConfirmRequest, request: Request):
     results = await execute_confirmed_actions(
         actions, pool, run_id=run_id, approved_by="admin_override" if is_admin else "user", user_id=caller
     )
+
+    # Record post-execution outcome in audit log
+    if is_admin and pool and audit_record_ids:
+        try:
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+                    for aid, res in zip(audit_record_ids, results):
+                        await conn.execute(
+                            """
+                            UPDATE agent_audit_log
+                            SET new_state = $1::jsonb
+                            WHERE id = $2
+                            """,
+                            json.dumps({"status": "executed", "result": res}),
+                            aid,
+                        )
+        except Exception as outcome_err:
+            logger.warning("Failed to record post-execution outcome in agent_audit_log: %s", outcome_err)
+
     return {"status": "ok", "results": results}
 
 
@@ -174,14 +202,36 @@ async def agent_confirm(req: AgentConfirmRequest, request: Request):
 async def agent_undo(req: AgentUndoRequest, request: Request):
     """Revert an agent-executed mutation using agent_audit_log with identity ownership verification."""
     from backend.agent import undo_last_agent_action
-    from backend.dependencies import _get_current_identity
 
-    ident = _get_current_identity(request)
+    ident = _dependencies._get_current_identity(request)
     if not ident:
         raise HTTPException(status_code=401, detail="Authentication required")
 
     pool = await get_pool()
     audit_log_id = getattr(req, "audit_log_id", None)
+    caller = ident.id
+    is_admin = ident.is_admin
+
+    if not is_admin and pool:
+        async with pool.acquire() as conn:
+            if audit_log_id:
+                row = await conn.fetchrow("SELECT * FROM agent_audit_log WHERE id = $1", audit_log_id)
+            elif req.run_id:
+                row = await conn.fetchrow("SELECT * FROM agent_audit_log WHERE run_id = $1 ORDER BY id DESC LIMIT 1", req.run_id)
+            else:
+                row = None
+            if row:
+                approved_by = row.get("approved_by") or ""
+                args = row.get("args") or {}
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                    except Exception:
+                        args = {}
+                owner = args.get("user_id") or approved_by
+                if owner and owner.lower() != caller.lower() and approved_by != "admin_override":
+                    raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to undo another user's action.")
+
     result = await undo_last_agent_action(pool, run_id=req.run_id, audit_log_id=audit_log_id)
     return result
 
@@ -189,9 +239,8 @@ async def agent_undo(req: AgentUndoRequest, request: Request):
 @router.get("/activity")
 async def agent_activity(request: Request, limit: int = 30):
     """Retrieve recent agent audit log entries scoped to the authenticated caller to prevent cross-user data leakage."""
-    from backend.dependencies import _get_current_identity
 
-    ident = _get_current_identity(request)
+    ident = _dependencies._get_current_identity(request)
     if not ident:
         raise HTTPException(status_code=401, detail="Authentication required")
 
@@ -235,12 +284,25 @@ async def agent_activity(request: Request, limit: int = 30):
 
 
 @router.get("/critique-stats")
-async def agent_critique_stats():
-    """Surface critique effectiveness metrics computed from persisted agent runs."""
+async def agent_critique_stats(request: Request):
+    """Surface critique effectiveness metrics computed from persisted agent runs.
+    Strips individual run details and goals to high-level aggregate counts unless caller is authenticated admin.
+    """
     from backend.agent import get_critique_stats
+
+    ident = _dependencies._get_current_identity(request)
+    is_admin = bool(ident and ident.is_admin)
 
     pool = await get_pool()
     stats = await get_critique_stats(pool)
+    if not is_admin:
+        # Strip granular run goals and evaluations, exposing only high-level aggregate telemetry
+        stats = {
+            "total_runs_analyzed": stats.get("total_runs_analyzed", 0),
+            "runs_with_critique": stats.get("runs_with_critique", 0),
+            "critique_issues_flagged": stats.get("critique_issues_flagged", 0),
+            "critique_effectiveness_rate": stats.get("critique_effectiveness_rate", 0.0),
+        }
     return stats
 
 

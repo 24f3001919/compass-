@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from backend.config import get_settings
 from backend.dependencies import (
-    _get_current_user_id,
+    _get_current_identity,
     _get_or_create_user_id,
     rate_limit,
     verify_token,
@@ -271,7 +271,8 @@ async def get_timeline(
 async def get_frontend_tasks(request: Request, domain: Optional[str] = Query(None)):
     """Public frontend endpoint matching frontend/src/api/client.js format with per-account isolation."""
     try:
-        user_id = _get_current_user_id(request)
+        ident = _get_current_identity(request)
+        user_id = ident.id if ident else None
         pool = await get_pool()
         async with pool.acquire() as conn:
             raw_tasks = await structured.list_tasks(conn, domain=domain, user_id=user_id)
@@ -285,9 +286,8 @@ async def get_frontend_tasks(request: Request, domain: Optional[str] = Query(Non
         return []
 
 
-# ---- POST /api/tasks and POST /tasks ----------------------------------
+# ---- POST /api/tasks --------------------------------------------------
 @router.post("/api/tasks", response_model=FrontendTaskOut, dependencies=[Depends(rate_limit)])
-@router.post("/tasks", response_model=FrontendTaskOut, dependencies=[Depends(rate_limit)])
 async def create_frontend_task(request: Request, req: CreateTaskRequest):
     """Direct user endpoint to create a task or deadline with per-account isolation."""
     title = req.title.strip()
@@ -309,28 +309,15 @@ async def create_frontend_task(request: Request, req: CreateTaskRequest):
 
     try:
         pool = await get_pool()
+        if not pool:
+            raise HTTPException(status_code=503, detail="Database unavailable")
         async with pool.acquire() as conn:
             return await handle_create_task(conn, req, user_id)
     except HTTPException:
         raise
     except Exception as e:
-        logger.warning(f"DB unavailable for task creation, falling back to mock: {e}")
-        import uuid
-        return FrontendTaskOut(
-            id=f"demo-{uuid.uuid4().hex[:8]}",
-            title=title,
-            domain=dom_clean,
-            project=proj_name,
-            countdown=format_countdown(parsed_date),
-            tags=[dom_clean],
-            vector_dim=768,
-            timestamp="Just now",
-            priority=req.priority or "medium",
-            status="open",
-            duration_minutes=req.duration_minutes or 60,
-            description=req.notes or req.description,
-            due_date=parsed_date.isoformat() if parsed_date else None,
-        )
+        logger.error(f"DB unavailable for task creation: {e}")
+        raise HTTPException(status_code=503, detail="Database unavailable") from e
 
 
 # ---- PATCH & PUT /api/tasks/{task_id} ---------------------------------
@@ -413,31 +400,30 @@ async def update_frontend_task(task_id: str, req: UpdateTaskRequest, request: Re
         raise HTTPException(status_code=503, detail="Database unavailable")
 
 
-# ---- DELETE /api/tasks/{task_id} and DELETE /tasks/{task_id} ----------
+# ---- DELETE /api/tasks/{task_id} --------------------------------------
 @router.delete("/api/tasks/{task_id}")
-@router.delete("/tasks/{task_id}")
 async def delete_frontend_task(task_id: str, request: Request):
     """Direct user endpoint to delete a task or deadline without relying on AI chat."""
-    try:
-        numeric_id = int(task_id)
-    except ValueError:
-        return {"status": "ok", "deleted": True, "task_id": task_id}
+    if not task_id.isdigit():
+        if task_id.startswith(("demo-", "mock-", "sim-")):
+            if getattr(settings, "ENVIRONMENT", "").lower() in ("development", "test"):
+                return {"status": "ok", "deleted": True, "task_id": task_id}
+        raise HTTPException(status_code=400, detail="Invalid task ID format")
+    numeric_id = int(task_id)
 
     try:
         pool = await get_pool()
+        if not pool:
+            raise HTTPException(status_code=503, detail="Database unavailable")
         async with pool.acquire() as conn:
             existing = await structured.get_task(conn, numeric_id)
             if not existing:
                 raise HTTPException(status_code=404, detail="Task not found")
 
             # Ownership check (IDOR mitigation)
-            user_id = _get_or_create_user_id(request) if request else None
-            auth_header = request.headers.get("authorization", "") if request else ""
-            is_admin = False
-            if auth_header.startswith("Bearer "):
-                token = auth_header[7:].strip()
-                if token and settings.AUTH_TOKEN and hmac.compare_digest(token, settings.AUTH_TOKEN):
-                    is_admin = True
+            ident = _get_current_identity(request) if request else None
+            is_admin = bool(ident and ident.is_admin)
+            user_id = ident.id if ident else _get_or_create_user_id(request)
 
             if not is_admin:
                 task_owner = existing.get("user_id")
@@ -463,5 +449,5 @@ async def delete_frontend_task(task_id: str, request: Request):
     except HTTPException:
         raise
     except Exception as e:
-        logger.warning(f"DB unavailable for task deletion, treating as mock: {e}")
-        return {"status": "ok", "deleted": True, "task_id": task_id}
+        logger.error(f"DB error during task deletion: {e}")
+        raise HTTPException(status_code=503, detail="Database unavailable") from e

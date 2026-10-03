@@ -79,6 +79,7 @@ def classify_domain_authority(
     target_entity: Optional[str] = None,
     is_entity_bound: bool = False,
     page_title_matches_entity: bool = False,
+    pinned_event_prefixes: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Classify the source authority of a URL.
 
@@ -134,22 +135,68 @@ def classify_domain_authority(
                 "reason": f"Matched pinned organizer domain ({od})",
             }
 
+    # Absolute blacklist: Devpost project submissions (/software/...), GitHub, Medium, etc. NEVER promoted to Tier 1
+    parsed_url = urllib.parse.urlsplit(url.strip())
+    path_lower = (parsed_url.path or "").lower()
+    is_user_submission_path = "/software/" in path_lower or "/project/" in path_lower
+    is_user_content_host = any(
+        domain == d or domain.endswith("." + d)
+        for d in ("github.com", "medium.com", "substack.com", "reddit.com", "twitter.com", "x.com")
+    )
+
+    if is_user_content_host:
+        return {
+            "tier": AuthorityTier.TIER_2_TECHNICAL.value,
+            "badge": "Community / Code Host",
+            "weight": 0.70,
+            "domain": domain,
+            "reason": f"User-generated content host ({domain}) is restricted to Tier 2",
+        }
+
     # Event-Page Rule for Platform-Hosted Pages
     platform_hosts = {"devpost.com", "lablab.ai", "dorahacks.io", "kaggle.com"}
     is_platform = any(domain == p or domain.endswith("." + p) for p in platform_hosts)
     if is_platform:
-        # Check if URL itself or subdomain contains target entity
-        clean_target = (target_entity or "").strip().lower()
-        url_contains_entity = bool(clean_target and clean_target in url.lower())
-        entity_qualifies = is_entity_bound or (url_contains_entity and page_title_matches_entity)
+        # Devpost project pages are user-submitted software entries — NEVER promoted to Tier 1
+        if is_user_submission_path:
+            return {
+                "tier": AuthorityTier.TIER_2_TECHNICAL.value,
+                "badge": "Platform / User Submission",
+                "weight": 0.70,
+                "domain": domain,
+                "reason": "Platform user-submitted project page (/software/...) cannot be Tier 1 official",
+            }
 
-        if entity_qualifies and clean_target:
+        # Strict Event-Page Rule: Official status for platform hosts requires exact match
+        # against a pinned list (host + path prefix) from config or user input.
+        # Substring/subdomain matching is completely removed.
+        configured_prefixes = set(getattr(settings, "PINNED_EVENT_PREFIXES", []))
+        if pinned_event_prefixes:
+            configured_prefixes.update(p.strip().lower() for p in pinned_event_prefixes if p)
+
+        url_clean = url.strip().lower()
+        # Normalizes both https://host/path and host/path
+        matches_pinned_prefix = False
+        for pref in configured_prefixes:
+            p_clean = pref.strip().lower()
+            if not p_clean.startswith("http://") and not p_clean.startswith("https://"):
+                # Host/prefix match against parsed URL without scheme
+                no_scheme_url = parsed_url.netloc.lower() + (parsed_url.path or "").lower()
+                if no_scheme_url.startswith(p_clean.rstrip("/")):
+                    matches_pinned_prefix = True
+                    break
+            else:
+                if url_clean.startswith(p_clean.rstrip("/") + "/") or url_clean == p_clean.rstrip("/"):
+                    matches_pinned_prefix = True
+                    break
+
+        if matches_pinned_prefix:
             return {
                 "tier": AuthorityTier.TIER_1_OFFICIAL.value,
-                "badge": "Official Event Page (Platform)",
+                "badge": "Official Event Page (Pinned Platform)",
                 "weight": 0.95,
                 "domain": domain,
-                "reason": f"Platform-hosted official event page bound to '{clean_target}'",
+                "reason": f"Platform-hosted event exactly matches pinned official prefix ({domain})",
             }
         else:
             return {
@@ -157,7 +204,7 @@ def classify_domain_authority(
                 "badge": "Platform / Community Host",
                 "weight": 0.75,
                 "domain": domain,
-                "reason": f"Platform host ({domain}) without official entity binding (Tier 2)",
+                "reason": f"Platform host ({domain}) without exact match in pinned event list stays Tier 2",
             }
 
     # Check Tier 1 primary official domains

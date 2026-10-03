@@ -110,13 +110,23 @@ export function CalendarGrid({
 
                   {dayBusy.map(ev => {
                     const pos = getEventPosition(ev.start, ev.end)
+                    const isSimulated = !isLive || ev.is_simulated || ev.source === 'google_calendar_simulated' || (ev.title && (ev.title.includes('(demo simulation)') || ev.title.includes('demo')))
                     return (
                       <div key={ev.id} style={{
                         position: 'absolute', left: '3px', right: '3px', top: pos.top, height: pos.height,
-                        background: 'rgba(31,27,46,0.04)', border: '1px dashed var(--border)', borderRadius: '6px',
+                        background: isSimulated ? 'rgba(245, 166, 35, 0.08)' : 'rgba(31,27,46,0.04)',
+                        border: isSimulated ? '1px dashed #f5a623' : '1px dashed var(--border)',
+                        borderRadius: '6px',
                         padding: '3px 6px', overflow: 'hidden', zIndex: 2
                       }}>
-                        <div style={{ fontSize: '9.5px', color: 'var(--text-secondary)' }}>📅 {ev.title}</div>
+                        <div style={{ fontSize: '9.5px', color: isSimulated ? '#b45309' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                          <span>📅 {ev.title}</span>
+                          {isSimulated && (
+                            <span style={{ fontSize: '8px', padding: '1px 4px', borderRadius: '4px', background: '#fef3c7', color: '#b45309', fontWeight: '700' }}>
+                              Simulated
+                            </span>
+                          )}
+                        </div>
                       </div>
                     )
                   })}

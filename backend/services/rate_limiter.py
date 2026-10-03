@@ -8,6 +8,7 @@ Supports per-IP, per-user, and per-guest limits across multiple workers.
 
 from __future__ import annotations
 
+import hmac
 import logging
 import time
 from collections import defaultdict, deque
@@ -123,7 +124,7 @@ async def enforce_rate_limit(
     identity_refill_per_sec: float = 0.5, # 30/minute
 ) -> None:
     """Enforce shared multi-tier rate limits: per-IP AND per-Identity (user or guest)."""
-    from backend.dependencies import _get_current_user_id, _get_current_guest_id
+    from backend.dependencies import _get_current_identity
 
     client_ip = get_client_ip(request)
     ip_key = f"ip:{client_ip}:{action}"
@@ -137,13 +138,13 @@ async def enforce_rate_limit(
         )
 
     # Check identity if authenticated or guest
-    user_id = _get_current_user_id(request)
-    guest_id = _get_current_guest_id(request)
+    ident = _get_current_identity(request)
     identity_key = None
-    if user_id:
-        identity_key = f"user:{user_id}:{action}"
-    elif guest_id:
-        identity_key = f"guest:{guest_id}:{action}"
+    if ident:
+        if ident.is_guest and ident.guest_id:
+            identity_key = f"guest:{ident.guest_id}:{action}"
+        elif ident.user_id:
+            identity_key = f"user:{ident.user_id}:{action}"
 
     if identity_key:
         id_allowed, id_retry = await _consume_token(
@@ -158,18 +159,40 @@ async def enforce_rate_limit(
 
 
 async def enforce_mint_rate_limit(request: Request) -> None:
-    """Strict rate limiter for guest session minting: max 10 mints per minute per IP.
+    """Rate limiter for guest session minting: configurable per-IP budget per hour.
     
-    Prevents mass guest creation attacks (e.g. minting 50 guests from one IP).
+    Prevents mass guest creation attacks while providing an admin override and clear 429 detail.
     """
+    from backend.config import get_settings
+    settings = get_settings()
+
+    # 1. Admin override check via Authorization Bearer token
+    auth_hdr = request.headers.get("authorization") or ""
+    if auth_hdr.lower().startswith("bearer "):
+        bearer_token = auth_hdr.split(" ", 1)[1].strip()
+        if settings.AUTH_TOKEN and hmac.compare_digest(bearer_token, settings.AUTH_TOKEN):
+            return
+
+    try:
+        from backend.dependencies import _get_current_identity
+        ident = _get_current_identity(request)
+        if ident and ident.is_admin:
+            return
+    except Exception:
+        pass
+
+    # 2. Configurable per-IP hourly capacity
+    hourly_limit = int(getattr(settings, "GUEST_MINT_HOURLY_IP_LIMIT", 5))
+    capacity = float(hourly_limit)
+    refill_rate = capacity / 3600.0
+
     client_ip = get_client_ip(request)
     mint_key = f"mint:ip:{client_ip}"
-    # 10 capacity, refills at 10 per 60s (~0.166/sec)
-    allowed, retry_after = await _consume_token(mint_key, capacity=10.0, refill_rate_per_sec=10.0 / 60.0)
+    allowed, retry_after = await _consume_token(mint_key, capacity=capacity, refill_rate_per_sec=refill_rate)
     if not allowed:
         raise HTTPException(
             status_code=429,
-            detail="Guest token minting rate limit exceeded. Max 10 guest tokens per minute per IP.",
+            detail=f"Guest session creation limit reached for this IP (max {hourly_limit} per hour). Please try again later or log in.",
             headers={"Retry-After": str(retry_after)},
         )
 

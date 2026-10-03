@@ -5,6 +5,7 @@ Compass — Chat, Conversations, and Streaming Endpoints.
 import asyncio
 import json
 import logging
+import re
 import uuid
 from datetime import date
 from typing import Any, List, Optional, cast
@@ -21,9 +22,8 @@ except (ImportError, ModuleNotFoundError):
 from backend.dependencies import (
     rate_limit,
     verify_token,
-    _get_current_user_id,
+    _get_current_identity,
     _get_or_create_user_id,
-    _resolve_identities,
     guest_rate_limit,
 )
 from backend.memory.db import get_pool
@@ -50,7 +50,9 @@ router = APIRouter(tags=["chat"])
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest, req: Request, _token: str = Depends(verify_token)):
     """Main conversational endpoint — wired to Nemotron router and orchestrator."""
-    user_id, guest_id = _resolve_identities(req)
+    ident = _get_current_identity(req)
+    user_id = ident.user_id if ident else None
+    guest_id = ident.guest_id if ident else None
     result = await orchestrator.handle_message(
         conversation_id=request.conversation_id,
         message=request.message,
@@ -60,11 +62,7 @@ async def chat(request: ChatRequest, req: Request, _token: str = Depends(verify_
     return ChatResponse(**result)
 
 
-# ---- GET /conversations/{conversation_id}/messages ------------------------
-@router.get(
-    "/conversations/{conversation_id}/messages",
-    response_model=MessagesResponse,
-)
+# ---- GET /api/conversations/{conversation_id}/messages --------------------
 @router.get(
     "/api/conversations/{conversation_id}/messages",
     response_model=MessagesResponse,
@@ -78,16 +76,10 @@ async def get_messages(
     try:
         pool = await get_pool()
         async with pool.acquire() as conn:
-            user_id, guest_id = _resolve_identities(request)
-            auth_header = request.headers.get("authorization", "")
-            is_admin = False
-            if auth_header.startswith("Bearer "):
-                token = auth_header[7:].strip()
-                from backend.config import get_settings
-                import hmac
-                s = get_settings()
-                if token and s.AUTH_TOKEN and hmac.compare_digest(token, s.AUTH_TOKEN):
-                    is_admin = True
+            ident = _get_current_identity(request)
+            user_id = ident.user_id if ident else None
+            guest_id = ident.guest_id if ident else None
+            is_admin = bool(ident and ident.is_admin)
 
             has_access, err = await conversations.check_conversation_access(
                 conn, conversation_id, user_id=user_id, guest_id=guest_id, is_admin=is_admin, allow_shared=True
@@ -126,7 +118,9 @@ async def list_past_conversations(
     pool = await get_pool()
     if not pool:
         return {"conversations": [], "total": 0}
-    user_id, guest_id = _resolve_identities(request)
+    ident = _get_current_identity(request)
+    user_id = ident.id if ident and not ident.is_guest else None
+    guest_id = ident.id if ident and ident.is_guest else None
     try:
         async with pool.acquire() as conn:
             convs = await conversations.list_conversations(
@@ -152,16 +146,10 @@ async def update_past_conversation(
 
     try:
         async with pool.acquire() as conn:
-            user_id, guest_id = _resolve_identities(request)
-            auth_header = request.headers.get("authorization", "")
-            is_admin = False
-            if auth_header.startswith("Bearer "):
-                token = auth_header[7:].strip()
-                from backend.config import get_settings
-                import hmac
-                s = get_settings()
-                if token and s.AUTH_TOKEN and hmac.compare_digest(token, s.AUTH_TOKEN):
-                    is_admin = True
+            ident = _get_current_identity(request)
+            user_id = ident.id if ident and not ident.is_guest else None
+            guest_id = ident.id if ident and ident.is_guest else None
+            is_admin = bool(ident and ident.is_admin)
 
             has_access, err = await conversations.check_conversation_access(
                 conn, conversation_id, user_id=user_id, guest_id=guest_id, is_admin=is_admin, allow_shared=False
@@ -196,16 +184,10 @@ async def delete_past_conversation(conversation_id: str, request: Request):
 
     try:
         async with pool.acquire() as conn:
-            user_id, guest_id = _resolve_identities(request)
-            auth_header = request.headers.get("authorization", "")
-            is_admin = False
-            if auth_header.startswith("Bearer "):
-                token = auth_header[7:].strip()
-                from backend.config import get_settings
-                import hmac
-                s = get_settings()
-                if token and s.AUTH_TOKEN and hmac.compare_digest(token, s.AUTH_TOKEN):
-                    is_admin = True
+            ident = _get_current_identity(request)
+            user_id = ident.id if ident and not ident.is_guest else None
+            guest_id = ident.id if ident and ident.is_guest else None
+            is_admin = bool(ident and ident.is_admin)
 
             has_access, err = await conversations.check_conversation_access(
                 conn, conversation_id, user_id=user_id, guest_id=guest_id, is_admin=is_admin, allow_shared=False
@@ -229,25 +211,26 @@ async def get_shared_conversation(share_token: str, request: Request):
     """Retrieve shared conversation details and its messages publicly via revocable unguessable share_token.
 
     Zero owner PII (user_id, guest_id, email) is returned.
+    Conversation ID does NOT resolve a share.
     """
+    clean_token = (share_token or "").strip()
+    # Validate token: alphanumeric, underscores, hyphens, min 16 chars
+    if not clean_token or len(clean_token) < 16 or len(clean_token) > 128 or not re.match(r"^[A-Za-z0-9_-]+$", clean_token):
+        raise HTTPException(status_code=404, detail="Shared conversation not found or access has been revoked.")
+
     try:
         pool = await get_pool()
         if not pool:
             raise HTTPException(status_code=503, detail="Database unavailable")
         async with pool.acquire() as conn:
-            try:
-                st_uuid = uuid.UUID(share_token)
-            except (ValueError, TypeError):
-                raise HTTPException(status_code=400, detail="Invalid share token format")
-
-            # Look up strictly by share_token WHERE is_shared = TRUE
+            # Look up strictly by share_token WHERE is_shared = TRUE (Zero "OR id = $1")
             conv_row = await conn.fetchrow(
                 """
                 SELECT id, started_at, last_active_at, COALESCE(title, 'Shared Chat') AS title
                 FROM conversations
-                WHERE (share_token = $1 OR id = $1) AND is_shared = TRUE
+                WHERE share_token = $1 AND is_shared = TRUE
                 """,
-                st_uuid,
+                clean_token,
             )
             if not conv_row:
                 raise HTTPException(status_code=404, detail="Shared conversation not found or access has been revoked.")
@@ -269,13 +252,12 @@ async def get_shared_conversation(share_token: str, request: Request):
                 "last_active_at": conv_row["last_active_at"].isoformat() if hasattr(conv_row["last_active_at"], "isoformat") else str(conv_row["last_active_at"]),
                 "messages": messages,
             }
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid conversation ID")
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error fetching shared conversation: {e}")
         raise HTTPException(status_code=500, detail="Failed to load shared conversation")
+
 
 
 # ---- GET /api/memory/overview --------------------------------------------
@@ -291,7 +273,9 @@ async def get_memory_overview(request: Request):
             "total_tasks": 0,
             "total_memories": 0,
         }
-    user_id, guest_id = _resolve_identities(request) if request else (None, None)
+    ident = _get_current_identity(request) if request else None
+    user_id = ident.id if ident and not ident.is_guest else None
+    guest_id = ident.id if ident and ident.is_guest else None
     try:
         async with pool.acquire() as conn:
             convs = await conversations.list_conversations(conn, limit=10, user_id=user_id, guest_id=guest_id)
@@ -331,7 +315,19 @@ async def get_memory_overview(request: Request):
 @router.post("/api/chat", response_model=PublicChatResponse)
 async def public_chat(req: PublicChatRequest, request: Request, _rl: None = Depends(rate_limit)):
     """Executes orchestrator.handle_message(), records usage, and returns response and latency."""
-    user_id, guest_id = _resolve_identities(request)
+    ident = _get_current_identity(request)
+    user_id = ident.id if ident and not ident.is_guest else None
+    guest_id = ident.id if ident and ident.is_guest else None
+    if req.conversation_id:
+        pool = await get_pool()
+        if pool:
+            async with pool.acquire() as conn:
+                has_access, err = await conversations.check_conversation_access(
+                    conn, req.conversation_id, user_id=user_id, guest_id=guest_id, is_admin=bool(ident and ident.is_admin), allow_shared=False
+                )
+                if not has_access and err != "Conversation not found":
+                    raise HTTPException(status_code=403, detail="Forbidden: conversation belongs to another user")
+
     msg = req.message.strip()
     result = await orchestrator.handle_message(
         conversation_id=req.conversation_id, message=msg, user_id=user_id, guest_id=guest_id
@@ -426,25 +422,26 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
     from backend.services.usage import record_usage
 
     _settings = _gs()
-    user_id, guest_id = _resolve_identities(request)
+    ident = _get_current_identity(request)
+    user_id = ident.id if ident and not ident.is_guest else None
+    guest_id = ident.id if ident and ident.is_guest else None
+
+    if req.conversation_id:
+        pool = await get_pool()
+        if pool:
+            async with pool.acquire() as conn:
+                has_access, err = await conversations.check_conversation_access(
+                    conn, req.conversation_id, user_id=user_id, guest_id=guest_id, is_admin=bool(ident and ident.is_admin), allow_shared=False
+                )
+                if not has_access and err != "Conversation not found":
+                    raise HTTPException(status_code=403, detail="Forbidden: conversation belongs to another user")
 
     async def event_generator():
         conv_id = req.conversation_id or str(uuid.uuid4())
         message = req.message.strip()
         yield ": ping\n\n"
 
-        if not _settings.NEBIUS_API_KEY:
-            result = await orchestrator.handle_message(
-                conversation_id=req.conversation_id, message=message, user_id=user_id, guest_id=guest_id
-            )
-            response_text = result.get("response", "")
-            prompt_est = max(len(message.split()) * 3, 30)
-            completion_est = max(len(response_text.split()), 15)
-            record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
-            yield f"data: {json.dumps({'type': 'token', 'value': response_text})}\n\n"
-            yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': result.get('skill_used', 'chat')})}\n\n"
-            return
-
+        stream = None
         try:
             client = AsyncOpenAI(
                 api_key=_settings.NEBIUS_API_KEY,
@@ -516,21 +513,36 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
 
             tools: List[ChatCompletionToolParam] = cast(List[ChatCompletionToolParam], TOOLS)
 
-            stream = cast(
-                AsyncStream[ChatCompletionChunk],
-                await client.chat.completions.create(
-                    model=_settings.ROUTER_MODEL,
-                    messages=messages,
-                    tools=tools,
-                    tool_choice="auto",
-                    max_tokens=10000,
-                    temperature=0.7,
-                    stream=True,
-                ),
-            )
+            try:
+                stream = cast(
+                    AsyncStream[ChatCompletionChunk],
+                    await client.chat.completions.create(
+                        model=_settings.ROUTER_MODEL,
+                        messages=messages,
+                        tools=tools,
+                        tool_choice="auto",
+                        max_tokens=10000,
+                        temperature=0.7,
+                        stream=True,
+                        stream_options={"include_usage": True},
+                    ),
+                )
+            except Exception as create_err:
+                logger.warning(f"Upstream stream creation failed: {create_err}, falling back to orchestrator")
+                result = await orchestrator.handle_message(
+                    conversation_id=req.conversation_id, message=message, user_id=user_id, guest_id=guest_id
+                )
+                response_text = result.get("response", "")
+                skill_used = result.get("skill_used") or "chat"
+                prompt_est = max(len(message.split()) * 3, 30)
+                completion_est = max(len(response_text.split()), 15)
+                record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
+                yield f"data: {json.dumps({'type': 'token', 'value': response_text})}\n\n"
+                yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used})}\n\n"
+                return
 
             full_text = ""
-            buffered_tokens: List[str] = []
+            emitted_text = ""
             tool_call_detected = False
             usage_data = None
 
@@ -550,7 +562,8 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
                         delta = choices[0].delta
                         finish_reason = choices[0].finish_reason
 
-                        if finish_reason in ("tool_calls", "function_call") or (delta and delta.tool_calls):
+                        # Structured tool call detection via delta.tool_calls or finish_reason
+                        if finish_reason in ("tool_calls", "function_call") or (delta and getattr(delta, "tool_calls", None)):
                             tool_call_detected = True
                             if hasattr(stream, "aclose"):
                                 await stream.aclose()
@@ -558,18 +571,24 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
 
                         token = (delta.content if delta else None) or ""
                         if token:
-                            buffered_tokens.append(token)
                             full_text += token
+                            emitted_text += token
                             yield f"data: {json.dumps({'type': 'token', 'value': token})}\n\n"
 
             except asyncio.CancelledError:
                 logger.info("Chat SSE stream cancelled; closing upstream model stream.")
-                if hasattr(stream, "aclose"):
+                if stream and hasattr(stream, "aclose"):
                     await stream.aclose()
                 raise
+            except Exception as stream_err:
+                logger.error("Mid-stream failure reading model chunks: %s", stream_err)
+                if stream and hasattr(stream, "aclose"):
+                    await stream.aclose()
+                yield f"data: {json.dumps({'type': 'error', 'detail': str(stream_err), 'terminal': True})}\n\n"
+                return
 
             if tool_call_detected:
-                # Discard any buffered partial tokens and execute via orchestrator (never emit duplicate text)
+                # Execute tool via orchestrator. Emits zero duplicate text.
                 result = await orchestrator.handle_message(
                     conversation_id=req.conversation_id, message=message, user_id=user_id, guest_id=guest_id
                 )
@@ -578,7 +597,17 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
                 prompt_est = max(len(message.split()) * 3, 30)
                 completion_est = max(len(response_text.split()), 15)
                 record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
-                yield f"data: {json.dumps({'type': 'token', 'value': response_text})}\n\n"
+
+                # If text was somehow emitted before tool call, only emit un-emitted suffix to avoid duplication
+                if emitted_text and response_text.startswith(emitted_text):
+                    to_emit = response_text[len(emitted_text):]
+                elif not emitted_text:
+                    to_emit = response_text
+                else:
+                    to_emit = response_text
+
+                if to_emit:
+                    yield f"data: {json.dumps({'type': 'token', 'value': to_emit})}\n\n"
                 yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used})}\n\n"
                 return
 
@@ -607,6 +636,7 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
             except Exception as save_err:
                 logger.warning(f"Could not persist streamed messages: {save_err}")
 
+            # Always count call toward caps regardless of provider usage return
             if usage_data:
                 record_usage(_settings.ROUTER_MODEL, getattr(usage_data, "prompt_tokens", 30), getattr(usage_data, "completion_tokens", 15))
             else:
@@ -618,23 +648,14 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
 
         except asyncio.CancelledError:
             logger.info("Chat SSE stream cancelled by client disconnect.")
+            if stream and hasattr(stream, "aclose"):
+                await stream.aclose()
             raise
         except Exception as e:
-            logger.warning(f"SSE stream error ({e}); falling back to non-streaming orchestrator")
-            try:
-                result = await orchestrator.handle_message(
-                    conversation_id=req.conversation_id, message=message, user_id=user_id, guest_id=guest_id
-                )
-                response_text = result.get("response", "")
-                skill_used = result.get("skill_used") or "chat"
-                prompt_est = max(len(message.split()) * 3, 30)
-                completion_est = max(len(response_text.split()), 15)
-                record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
-                yield f"data: {json.dumps({'type': 'token', 'value': response_text})}\n\n"
-                yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used})}\n\n"
-            except Exception as terminal_err:
-                logger.exception("SSE terminal error: %s", terminal_err)
-                yield f"data: {json.dumps({'type': 'error', 'detail': str(terminal_err), 'terminal': True})}\n\n"
+            logger.error("SSE stream outer error: %s", e)
+            if stream and hasattr(stream, "aclose"):
+                await stream.aclose()
+            yield f"data: {json.dumps({'type': 'error', 'detail': str(e), 'terminal': True})}\n\n"
 
     return StreamingResponse(
         event_generator(),

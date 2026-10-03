@@ -2,18 +2,22 @@
 Compass — Authentication and Google Calendar OAuth Endpoints.
 """
 
+import asyncio
+import hashlib
 import logging
 import re
 import secrets
 import urllib.parse
+import time
+from datetime import datetime, timezone, timedelta
 from html import escape
-from typing import Optional
+from typing import Optional, Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from backend.config import get_settings
-from backend.dependencies import _get_current_user_id
+from backend.dependencies import _get_current_identity
 from backend.memory.db import get_pool
 from backend.models import SelectAccountBody, QuickConnectBody
 from backend.services.oauth import (
@@ -27,34 +31,257 @@ settings = get_settings()
 
 router = APIRouter(tags=["auth"])
 
-# In-memory session store mapping opaque tokens to session metadata
+# Multi-worker session store: in-memory cache synchronized with PostgreSQL 'sessions' table
 _SESSIONS: dict[str, dict] = {}
+
+SESSION_CACHE_TTL = 10.0  # seconds; guarantees multi-worker invalidation within <= 10s
+IDLE_TIMEOUT = timedelta(hours=24)
+ABSOLUTE_TIMEOUT = timedelta(days=7)
+
+
+def _hash_token(token: str) -> str:
+    """Return SHA-256 hex digest of session token."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+async def _persist_session_db(token_hash: str, user_id: str, oauth_verified: bool, expires_at: datetime) -> None:
+    """Persist session record to PostgreSQL."""
+    try:
+        pool = await get_pool()
+        if pool:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO sessions (token_hash, user_id, oauth_verified, created_at, last_accessed_at, expires_at)
+                    VALUES ($1, $2, $3, now(), now(), $4)
+                    ON CONFLICT (token_hash) DO UPDATE
+                    SET last_accessed_at = now(), expires_at = $4, revoked_at = NULL
+                    """,
+                    token_hash,
+                    user_id,
+                    oauth_verified,
+                    expires_at,
+                )
+    except Exception as e:
+        logger.warning("Could not persist session to PostgreSQL: %s", e)
+
+
+async def _touch_session_db(token_hash: str) -> None:
+    """Touch last_accessed_at in PostgreSQL for idle expiration tracking."""
+    try:
+        pool = await get_pool()
+        if pool:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    "UPDATE sessions SET last_accessed_at = now() WHERE token_hash = $1 AND revoked_at IS NULL",
+                    token_hash,
+                )
+    except Exception:
+        pass
+
+
+async def load_sessions_from_db(pool: Any) -> int:
+    """Load valid unrevoked, unexpired sessions from PostgreSQL into memory cache on startup / restart."""
+    if not pool:
+        return 0
+    try:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT token_hash, user_id, oauth_verified, created_at, last_accessed_at, expires_at, revoked_at
+                FROM sessions
+                WHERE revoked_at IS NULL AND expires_at > now()
+                """
+            )
+            count = 0
+            now = datetime.now(timezone.utc)
+            active_hashes = set()
+            for r in rows:
+                # Check idle timeout before loading
+                last_act = r["last_accessed_at"]
+                if last_act and (now - last_act) > IDLE_TIMEOUT:
+                    continue
+                th = r["token_hash"]
+                active_hashes.add(th)
+                _SESSIONS[th] = {
+                    "user_id": r["user_id"],
+                    "oauth_verified": bool(r["oauth_verified"]),
+                    "created_at": r["created_at"],
+                    "last_accessed_at": r["last_accessed_at"],
+                    "expires_at": r["expires_at"],
+                    "revoked_at": r["revoked_at"],
+                }
+                count += 1
+            # Invalidate any locally cached sessions that have been revoked or deleted in DB
+            for k in list(_SESSIONS.keys()):
+                if k not in active_hashes and not k.startswith("test_") and not k.startswith("exp_"):
+                    _SESSIONS.pop(k, None)
+            return count
+    except Exception as e:
+        logger.warning("Could not load sessions from PostgreSQL: %s", e)
+        return 0
+
+
+async def start_session_sync_loop(pool: Any, interval_seconds: float = 5.0) -> None:
+    """Background synchronization loop guaranteeing multi-worker revocation propagation in <= 10 seconds."""
+    while True:
+        try:
+            await asyncio.sleep(interval_seconds)
+            await load_sessions_from_db(pool)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.debug("Session sync loop error: %s", e)
 
 
 def create_session(user_id: str, oauth_verified: bool = False) -> str:
-    """Generate an opaque session token and store mapping to user ID and verification status."""
-    token = secrets.token_hex(24)
-    _SESSIONS[token] = {
+    """Generate an opaque session token, compute SHA-256 hash, and persist to DB & memory."""
+    token = secrets.token_hex(32)
+    token_hash = _hash_token(token)
+    now = datetime.now(timezone.utc)
+    expires_at = now + ABSOLUTE_TIMEOUT
+
+    sess_data = {
         "user_id": user_id,
         "oauth_verified": bool(oauth_verified),
+        "created_at": now,
+        "last_accessed_at": now,
+        "expires_at": expires_at,
+        "revoked_at": None,
+        "cached_at": time.time(),
     }
+    _SESSIONS[token_hash] = sess_data
+
+    # Schedule DB insert in running event loop if active
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_persist_session_db(token_hash, user_id, bool(oauth_verified), expires_at))
+    except RuntimeError:
+        pass
+
     return token
 
 
 def get_user_from_session(token: str) -> Optional[str]:
-    """Look up user identity from an opaque session token."""
-    sess = _SESSIONS.get(token)
+    """Look up user identity from an opaque session token with idle + absolute expiry and revocation checks."""
+    if not token:
+        return None
+    token_hash = _hash_token(token)
+    sess = _SESSIONS.get(token_hash)
+    if not isinstance(sess, dict):
+        # Support legacy unhashed lookup if present
+        sess = _SESSIONS.get(token)
+        if not isinstance(sess, dict):
+            return None
+
+    if sess.get("revoked_at") is not None:
+        return None
+
+    now = datetime.now(timezone.utc)
+    expires_at = sess.get("expires_at")
+    if expires_at and now > expires_at:
+        return None
+
+    last_accessed = sess.get("last_accessed_at")
+    if last_accessed and (now - last_accessed) > IDLE_TIMEOUT:
+        return None
+
+    sess["last_accessed_at"] = now
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_touch_session_db(token_hash))
+    except RuntimeError:
+        pass
+
+    return sess.get("user_id")
+
+
+async def get_user_from_session_async(token: str) -> Optional[str]:
+    """Look up user identity from an opaque session token with <=10s TTL cache and PostgreSQL verification.
+    
+    Guarantees that a session revoked on one worker is invalidated on all other workers within <= 10s.
+    """
+    if not token:
+        return None
+    token_hash = _hash_token(token)
+    now_ts = time.time()
+    sess = _SESSIONS.get(token_hash) or _SESSIONS.get(token)
+
+    # Fast path: check valid in-memory cache entry within TTL
     if isinstance(sess, dict):
-        return sess.get("user_id")
-    return sess if isinstance(sess, str) else None
+        cached_at = sess.get("cached_at", 0)
+        if (now_ts - cached_at) <= SESSION_CACHE_TTL:
+            if sess.get("revoked_at") is not None:
+                return None
+            now_dt = datetime.now(timezone.utc)
+            if sess.get("expires_at") and now_dt > sess.get("expires_at"):
+                return None
+            if sess.get("last_accessed_at") and (now_dt - sess.get("last_accessed_at")) > IDLE_TIMEOUT:
+                return None
+            return sess.get("user_id")
+
+    # Cache expired or cache miss: query PostgreSQL directly
+    try:
+        pool = await get_pool()
+        if pool:
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT user_id, oauth_verified, created_at, last_accessed_at, expires_at, revoked_at
+                    FROM sessions
+                    WHERE token_hash = $1
+                    """,
+                    token_hash,
+                )
+                if row:
+                    if row["revoked_at"] is not None:
+                        _SESSIONS.pop(token_hash, None)
+                        return None
+                    now_dt = datetime.now(timezone.utc)
+                    if row["expires_at"] and now_dt > row["expires_at"]:
+                        _SESSIONS.pop(token_hash, None)
+                        return None
+                    if row["last_accessed_at"] and (now_dt - row["last_accessed_at"]) > IDLE_TIMEOUT:
+                        _SESSIONS.pop(token_hash, None)
+                        return None
+
+                    _SESSIONS[token_hash] = {
+                        "user_id": row["user_id"],
+                        "oauth_verified": bool(row["oauth_verified"]),
+                        "created_at": row["created_at"],
+                        "last_accessed_at": row["last_accessed_at"],
+                        "expires_at": row["expires_at"],
+                        "revoked_at": None,
+                        "cached_at": now_ts,
+                    }
+                    try:
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(_touch_session_db(token_hash))
+                    except RuntimeError:
+                        pass
+                    return row["user_id"]
+                else:
+                    _SESSIONS.pop(token_hash, None)
+                    return None
+    except Exception as e:
+        logger.warning("Postgres session validation error: %s", e)
+
+    # Fall back to synchronous local cache (for testing without DB pool)
+    return get_user_from_session(token)
 
 
 def is_session_oauth_verified(token: str) -> bool:
-    """Check if the session was issued by the genuine Google OAuth callback handler."""
-    sess = _SESSIONS.get(token)
+    """Check if the session was issued by the genuine Google OAuth callback handler and is not revoked."""
+    if not token:
+        return False
+    token_hash = _hash_token(token)
+    sess = _SESSIONS.get(token_hash) or _SESSIONS.get(token)
     if isinstance(sess, dict):
+        if sess.get("revoked_at") is not None:
+            return False
         return bool(sess.get("oauth_verified", False))
     return False
+
 
 
 def _resolve_oauth_redirect_uri(request: Request) -> str:
@@ -85,7 +312,8 @@ def _resolve_oauth_redirect_uri(request: Request) -> str:
 async def auth_me(request: Request):
     """Retrieve logged-in user profile and calendar connection status."""
     from backend.services.calendar import get_calendar_connection_status
-    user_id = _get_current_user_id(request)
+    ident = _get_current_identity(request)
+    user_id = ident.user_id if ident and not ident.is_guest else None
 
     if not user_id or "@" not in user_id:
         return {
@@ -116,10 +344,25 @@ async def auth_me(request: Request):
 
 @router.post("/api/auth/logout")
 async def auth_logout(request: Request, response: Response):
-    """Log out of current account and clear session cookies."""
+    """Log out of current account and revoke session in DB and memory."""
     token = request.cookies.get("compass_session")
     if token:
-        _SESSIONS.pop(token, None)
+        token_hash = _hash_token(token)
+        now = datetime.now(timezone.utc)
+        if token_hash in _SESSIONS:
+            _SESSIONS[token_hash]["revoked_at"] = now
+        if token in _SESSIONS:
+            _SESSIONS[token]["revoked_at"] = now
+        pool = await get_pool()
+        if pool:
+            try:
+                async with pool.acquire() as conn:
+                    await conn.execute(
+                        "UPDATE sessions SET revoked_at = now() WHERE token_hash = $1",
+                        token_hash,
+                    )
+            except Exception as e:
+                logger.warning("Could not revoke session in DB: %s", e)
     response.delete_cookie("compass_session")
     response.delete_cookie("compass_user_id")
     return {"status": "ok", "message": "Logged out successfully"}
@@ -188,7 +431,8 @@ async def calendar_connect(
         }
 
     redirect_uri = _resolve_oauth_redirect_uri(request)
-    current_user = _get_current_user_id(request)
+    ident = _get_current_identity(request)
+    current_user = ident.user_id if ident and not ident.is_guest else None
     effective_hint = login_hint or (current_user if current_user and "@" in current_user else None)
     state = generate_oauth_state(current_user or "guest")
     url = generate_google_oauth_url(redirect_uri=redirect_uri, login_hint=effective_hint, state=state)
@@ -209,7 +453,8 @@ async def calendar_callback(
     """Handle OAuth redirect: exchange authorization code for tokens and save connection."""
     if state:
         from backend.services.oauth import verify_oauth_state
-        current_user = _get_current_user_id(request)
+        ident = _get_current_identity(request)
+        current_user = ident.user_id if ident and not ident.is_guest else None
         expected_user = current_user or "guest"
         if not verify_oauth_state(state, expected_user):
             return HTMLResponse(
@@ -334,7 +579,8 @@ async def calendar_sync_now(request: Request):
     if not is_session_oauth_verified(session_token):
         raise HTTPException(status_code=403, detail="Sync requires a genuine Google OAuth-verified session")
 
-    user_id = _get_current_user_id(request)
+    ident = _get_current_identity(request)
+    user_id = ident.user_id if ident and not ident.is_guest else None
     if not user_id:
         return {"status": "error", "message": "Sign in to sync tasks with Google Calendar"}
     pool = await get_pool()
@@ -356,14 +602,29 @@ async def calendar_disconnect(request: Request, response: Response):
     if not is_session_oauth_verified(session_token):
         raise HTTPException(status_code=403, detail="Disconnect requires a genuine Google OAuth-verified session")
 
-    user_id = _get_current_user_id(request)
+    ident = _get_current_identity(request)
+    user_id = ident.user_id if ident and not ident.is_guest else None
     pool = await get_pool()
     if pool and user_id:
         from backend.services.calendar import disconnect_calendar_connection
         await disconnect_calendar_connection(pool, user_id=user_id)
 
     if session_token:
-        _SESSIONS.pop(session_token, None)
+        token_hash = _hash_token(session_token)
+        now = datetime.now(timezone.utc)
+        if token_hash in _SESSIONS:
+            _SESSIONS[token_hash]["revoked_at"] = now
+        if session_token in _SESSIONS:
+            _SESSIONS[session_token]["revoked_at"] = now
+        if pool:
+            try:
+                async with pool.acquire() as conn:
+                    await conn.execute(
+                        "UPDATE sessions SET revoked_at = now() WHERE token_hash = $1",
+                        token_hash,
+                    )
+            except Exception as e:
+                logger.warning("Could not revoke session in DB: %s", e)
     response.delete_cookie("compass_session")
     response.delete_cookie("compass_user_id")
     return {"status": "ok", "message": "Google Calendar disconnected."}

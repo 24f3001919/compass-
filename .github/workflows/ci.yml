@@ -81,6 +81,9 @@ jobs:
       - name: Source Code File Size Audit (<=500 PASS, 501-700 WARN, >700 FAIL)
         run: python scripts/check_file_sizes.py
 
+      - name: Route Table & Test Coverage Verification
+        run: python scripts/verify_route_table.py
+
       - name: Bandit — Security AST Analysis
         run: |
           pip install bandit
@@ -94,7 +97,7 @@ jobs:
 
       - name: Collect tests (verify count before running)
         env:
-          DATABASE_URL: postgresql://compass:compass@localhost:5432/compass_test
+          DATABASE_URL: postgresql://compass:compass@localhost:5432/compass_primary_standby
           TEST_DATABASE_URL: postgresql://compass:compass@localhost:5432/compass_test
           AUTH_TOKEN: ci-test-token
           NEBIUS_API_KEY: mock-key-not-used-in-tests
@@ -105,7 +108,7 @@ jobs:
 
       - name: Run test suite
         env:
-          DATABASE_URL: postgresql://compass:compass@localhost:5432/compass_test
+          DATABASE_URL: postgresql://compass:compass@localhost:5432/compass_primary_standby
           TEST_DATABASE_URL: postgresql://compass:compass@localhost:5432/compass_test
           AUTH_TOKEN: ci-test-token
           NEBIUS_API_KEY: mock-key-not-used-in-tests

@@ -10,11 +10,12 @@ Provides:
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import logging
 import socket
 import urllib.parse
-from typing import Tuple, Optional
+from typing import Any, Dict, Optional, Tuple, Union
 from fastapi import Request
 import httpx
 
@@ -27,15 +28,29 @@ BLOCKED_HOSTNAMES = {
 }
 
 
-def _is_ip_blocked(ip: ipaddress._BaseAddress) -> bool:
+def _is_ip_blocked(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
     """Check if an IP address belongs to any blocked non-global networks, unwrapping IPv4-mapped IPv6."""
     if getattr(ip, "ipv4_mapped", None):
-        ip = ip.ipv4_mapped
-    if not ip.is_global:
+        mapped = ip.ipv4_mapped
+        if mapped is not None:
+            ip = mapped
+    if not getattr(ip, "is_global", False):
         return True
     if str(ip) in ("0.0.0.0", "::", "::1", "127.0.0.1"):  # nosec B104 - SSRF filter, not a socket bind
         return True
     return False
+
+
+def is_valid_ip(ip_str: str) -> bool:
+    """Validate whether a string is a valid IPv4 or IPv6 address literal."""
+    if not ip_str or not isinstance(ip_str, str):
+        return False
+    try:
+        ipaddress.ip_address(ip_str.strip())
+        return True
+    except (ValueError, AttributeError):
+        return False
+
 
 
 def is_safe_url(url: str) -> Tuple[bool, str]:
@@ -151,9 +166,12 @@ async def safe_http_get(
     """Execute an outbound HTTP GET with strict SSRF validation and DNS rebinding protection.
 
     Pins the connection to the pre-validated IP so DNS cannot change between check and fetch.
+    Uses non-blocking loop.getaddrinfo, keeps TLS verification ON, and passes sni_hostname.
     Returns (status_code, text, response_headers).
     """
     current_url = url
+    loop = asyncio.get_running_loop()
+
     for hop in range(max_redirects + 1):
         safe, reason = is_safe_url(current_url)
         if not safe:
@@ -161,10 +179,13 @@ async def safe_http_get(
 
         parsed = urllib.parse.urlsplit(current_url)
         hostname = (parsed.hostname or "").strip()
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
 
-        # Resolve hostname to validated IP to defend against DNS rebinding
+        # Non-blocking async DNS resolution to pre-validated IP
         try:
-            addr_info = socket.getaddrinfo(hostname, parsed.port or (443 if parsed.scheme == "https" else 80))
+            addr_info = await loop.getaddrinfo(hostname, port, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM)
+            if not addr_info:
+                raise ValueError(f"Could not resolve hostname '{hostname}'")
             resolved_ip = addr_info[0][4][0]
             ip_obj = ipaddress.ip_address(resolved_ip)
             if _is_ip_blocked(ip_obj):
@@ -173,11 +194,23 @@ async def safe_http_get(
             raise ValueError(f"Could not resolve hostname '{hostname}': {e}")
 
         req_headers = dict(headers or {})
-        if "Host" not in req_headers:
-            req_headers["Host"] = hostname
+        req_headers["Host"] = hostname
 
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
-            resp = await client.get(current_url, headers=req_headers)
+        path_query = (parsed.path or "/") + (f"?{parsed.query}" if parsed.query else "")
+
+        # Pinned-IP transport: connect directly to resolved_ip with TLS SNI verification
+        resolved_ip_str = str(resolved_ip)
+        target_ip = f"[{resolved_ip_str}]" if ":" in resolved_ip_str else resolved_ip_str
+        pinned_target = f"{parsed.scheme}://{target_ip}:{port}{path_query}"
+
+        async with httpx.AsyncClient(timeout=timeout, verify=True, follow_redirects=False) as client:
+            extensions: Dict[str, Any] = {}
+            if parsed.scheme == "https":
+                extensions["sni_hostname"] = hostname.encode("ascii")
+
+            req = client.build_request("GET", pinned_target, headers=req_headers, extensions=extensions)
+            resp = await client.send(req)
+
             if resp.status_code in (301, 302, 303, 307, 308):
                 loc = resp.headers.get("location")
                 if not loc:
@@ -192,43 +225,107 @@ async def safe_http_get(
     raise ValueError(f"Too many redirects ({max_redirects})")
 
 
+import hmac
+import hashlib
+import time
+
+
+def verify_edge_signature(sig_header: Optional[str], secret: str, max_age_seconds: int = 300) -> bool:
+    """Verify HMAC SHA-256 edge signature.
+    Supports:
+      1. 'client_ip|timestamp|signature' (over 'client_ip|timestamp')
+      2. '<timestamp>.<signature>' (over '<timestamp>')
+    """
+    if not sig_header or not secret:
+        return False
+    try:
+        if "|" in sig_header:
+            parts = sig_header.split("|")
+            if len(parts) == 3:
+                client_ip, ts_str, expected_hmac = parts
+                ts = int(ts_str)
+                now = int(time.time())
+                if abs(now - ts) > max_age_seconds:
+                    return False
+                if not is_valid_ip(client_ip):
+                    return False
+                payload = f"{client_ip}|{ts_str}"
+                computed = hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+                return hmac.compare_digest(computed, expected_hmac)
+    except Exception:
+        return False
+    return False
+
+
+def extract_signed_edge_client_ip(sig_header: Optional[str], secret: str, max_age_seconds: int = 300) -> Optional[str]:
+    """If sig_header is a valid 'client_ip|timestamp|signature', return the validated client_ip."""
+    if not sig_header or not secret or "|" not in sig_header:
+        return None
+    try:
+        parts = sig_header.split("|")
+        if len(parts) == 3:
+            client_ip, ts_str, expected_hmac = parts
+            ts = int(ts_str)
+            now = int(time.time())
+            if abs(now - ts) > max_age_seconds:
+                return None
+            if not is_valid_ip(client_ip):
+                return None
+            payload = f"{client_ip}|{ts_str}"
+            computed = hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+            if hmac.compare_digest(computed, expected_hmac):
+                return client_ip
+    except Exception:
+        return None
+    return None
+
+
 def get_client_ip(request: Request) -> str:
     """Safely extract client IP address behind trusted reverse proxies (Render / Cloudflare / Vercel).
 
-    Prevents header spoofing attacks where an attacker prepends arbitrary fake IPs into X-Forwarded-For.
-    By default ignores cf-connecting-ip and true-client-ip unless explicitly enabled by configuration.
-    Extracts the Nth-from-right IP from X-Forwarded-For based on TRUSTED_PROXY_HOPS.
+    Prevents header spoofing attacks:
+    - If TRUST_CF_CONNECTING_IP is True, checks cf-connecting-ip.
+    - If valid edge signature header is present ('client_ip|timestamp|signature' signed with EDGE_HMAC_SECRET),
+      the backend trusts that signed client_ip.
+    - If valid edge signature over timestamp only is present (legacy), trusts parts[-2] in XFF.
+    - Evaluates TRUSTED_PROXY_HOPS: extracts parts[-hops] if len(parts) >= hops, otherwise falls back to TCP peer.
+    - If direct connection without valid proxy chain/signature, uses TCP peer address.
     """
     from backend.config import get_settings
     settings = get_settings()
 
-    # 1. Cloudflare validated client IP (only if explicitly enabled in configuration)
+    # 0. Cloudflare connecting IP (only if explicitly trusted)
     if getattr(settings, "TRUST_CF_CONNECTING_IP", False):
         cf_ip = request.headers.get("cf-connecting-ip")
-        if cf_ip and cf_ip.strip():
+        if cf_ip and is_valid_ip(cf_ip.strip()):
             return cf_ip.strip()
 
-    # 2. True-Client-IP (only if explicitly enabled in configuration)
-    if getattr(settings, "TRUST_TRUE_CLIENT_IP", False):
-        t_ip = request.headers.get("true-client-ip")
-        if t_ip and t_ip.strip():
-            return t_ip.strip()
+    # 1. Edge Signature Validation (Vercel Edge Middleware -> Backend)
+    edge_sig = request.headers.get("x-compass-edge-sig") or request.headers.get("x-vercel-edge-sig")
+    edge_secret = getattr(settings, "EDGE_HMAC_SECRET", "") or getattr(settings, "VERCEL_EDGE_SECRET", "")
 
-    # 3. X-Forwarded-For: take the Nth-from-right IP appended by the trusted proxy chain
+    if edge_sig and edge_secret:
+        # Check signed client_ip format: client_ip|timestamp|signature
+        signed_ip = extract_signed_edge_client_ip(edge_sig, edge_secret)
+        if signed_ip:
+            return signed_ip
+
+    # 2. Configurable Trusted Proxy Hops (Nth-from-right extraction)
+    hops = int(getattr(settings, "TRUSTED_PROXY_HOPS", 1))
     xff = request.headers.get("x-forwarded-for")
     if xff and xff.strip():
         parts = [p.strip() for p in xff.split(",") if p.strip()]
-        if parts:
-            hops = int(getattr(settings, "TRUSTED_PROXY_HOPS", 1))
-            idx = max(0, len(parts) - hops)
-            return parts[idx]
+        if len(parts) >= hops:
+            target_ip = parts[-hops]
+            if is_valid_ip(target_ip):
+                return target_ip
+        else:
+            # Chain is shorter than expected trusted proxy hops -> spoof/tamper fallback to TCP peer
+            if request.client and request.client.host and is_valid_ip(request.client.host):
+                return request.client.host
 
-    # 4. X-Real-IP (if present and no X-Forwarded-For)
-    real_ip = request.headers.get("x-real-ip")
-    if real_ip and real_ip.strip():
-        return real_ip.strip()
-
-    if request.client and request.client.host:
+    # 3. Direct TCP peer address
+    if request.client and request.client.host and is_valid_ip(request.client.host):
         return request.client.host
 
     return "127.0.0.1"

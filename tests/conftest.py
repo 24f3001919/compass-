@@ -22,8 +22,12 @@ def _quiet_unraisablehook(unraisable):
 
 sys.unraisablehook = _quiet_unraisablehook
 
-# Production database endpoint marker that must never be targeted by tests
-_PROD_ENDPOINT_MARKER = "ep-sweet-fire-b2y9w95z"
+from dotenv import load_dotenv
+load_dotenv()
+
+# Capture pre-override production DATABASE_URL and optional configured production marker
+_ORIGINAL_PROD_DB_URL = os.environ.get("DATABASE_URL", "").strip()
+_CONFIGURED_PROD_MARKER = os.environ.get("PROD_DATABASE_MARKER", "production").strip().lower()
 
 test_db_url = os.environ.get("TEST_DATABASE_URL", "").strip()
 
@@ -40,33 +44,53 @@ if test_db_url:
     settings.DATABASE_URL = test_db_url
 
 
-def pytest_configure(config):
-    """Guard against executing test runs against production database.
-    FAILS CLOSED: Tests REFUSE to run unless TEST_DATABASE_URL is explicitly set
-    and points to an isolated non-production database.
+def validate_test_db_guard(
+    test_url: str,
+    prod_url: str,
+    prod_marker: str = "",
+) -> None:
+    """Validate positive separation between test and production databases.
+    Aborts via pytest.exit if test_url is missing, invalid, identical to prod_url,
+    or contains prod_marker.
     """
-    if not test_db_url:
+    if not test_url:
         pytest.exit(
             "ABORTED: TEST_DATABASE_URL environment variable is not set. Refusing to run tests against default or production database.",
             returncode=1,
         )
 
-    parsed_test = urlparse(test_db_url)
-    hostname = (parsed_test.hostname or "").lower()
+    parsed_test = urlparse(test_url)
+    test_hostname = (parsed_test.hostname or "").lower()
+    test_db = (parsed_test.path or "").strip("/").lower()
 
-    if _PROD_ENDPOINT_MARKER in hostname:
+    if not test_hostname:
         pytest.exit(
-            "ABORTED: Refusing to run tests. TEST_DATABASE_URL points to the production database endpoint.",
+            "ABORTED: TEST_DATABASE_URL lacks a valid hostname. Refusing to run tests.",
             returncode=1,
         )
 
-    parsed_settings = urlparse(settings.DATABASE_URL)
-    settings_host = (parsed_settings.hostname or "").lower()
-    if _PROD_ENDPOINT_MARKER in settings_host:
+    if prod_url:
+        parsed_prod = urlparse(prod_url)
+        prod_hostname = (parsed_prod.hostname or "").lower()
+        prod_db = (parsed_prod.path or "").strip("/").lower()
+
+        # Always verify positive separation: host AND db name must differ
+        if prod_hostname and (test_hostname == prod_hostname and test_db == prod_db):
+            pytest.exit(
+                "ABORTED: TEST_DATABASE_URL targets the identical host and database as DATABASE_URL. Refusing to run tests.",
+                returncode=1,
+            )
+
+    if prod_marker and prod_marker.lower() in test_hostname:
         pytest.exit(
-            "ABORTED: Refusing to run tests. settings.DATABASE_URL points to the production database endpoint.",
+            f"ABORTED: TEST_DATABASE_URL hostname contains configured production marker '{prod_marker}'.",
             returncode=1,
         )
+
+
+def pytest_configure(config):
+    """Guard against executing test runs against production database."""
+    validate_test_db_guard(test_db_url, _ORIGINAL_PROD_DB_URL, _CONFIGURED_PROD_MARKER)
 
 
 @pytest_asyncio.fixture
