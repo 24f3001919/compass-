@@ -13,6 +13,7 @@ Tests cover:
 """
 
 from datetime import datetime, date, time, timedelta, timezone
+from urllib.parse import urlparse
 import pytest
 from httpx import AsyncClient
 
@@ -250,7 +251,9 @@ async def test_oauth_endpoints(client: AsyncClient, monkeypatch):
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ok"
-    assert "accounts.google.com" in data["url"]
+    parsed_oauth_url = urlparse(data["url"])
+    assert parsed_oauth_url.scheme == "https"
+    assert parsed_oauth_url.hostname == "accounts.google.com"
 
     # 2. Callback redirect with mock code
     callback_resp = await client.get("/api/calendar/callback?code=test_mock_oauth_code")
