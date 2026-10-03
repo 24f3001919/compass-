@@ -8,6 +8,8 @@ from backend.skills.handlers.web import (
     handle_search_web,
     handle_ingest_url,
     handle_verify_deadline,
+    handle_deep_research,
+    handle_save_verified_finding,
 )
 from backend.skills.handlers.tasks import (
     handle_query_tasks,
@@ -45,6 +47,8 @@ __all__ = [
     "handle_search_web",
     "handle_ingest_url",
     "handle_verify_deadline",
+    "handle_deep_research",
+    "handle_save_verified_finding",
     "handle_query_tasks",
     "handle_query_coursework_tasks",
     "handle_get_hackathon_deadlines",
