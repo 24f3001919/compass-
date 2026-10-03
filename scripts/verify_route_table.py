@@ -179,9 +179,41 @@ def verify_all_routes():
     return untracked
 
 
+def discover_negative_route_tests() -> dict[tuple[str, str], str]:
+    """Dynamically parse all test files in tests/ via AST to find @pytest.mark.route('METHOD /path') decorations."""
+    import ast
+    tests_dir = _project_root / "tests"
+    mapping: dict[tuple[str, str], str] = {}
+
+    for test_file in tests_dir.glob("test_*.py"):
+        try:
+            tree = ast.parse(test_file.read_text(encoding="utf-8"), filename=str(test_file))
+        except Exception:
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for deco in node.decorator_list:
+                    if isinstance(deco, ast.Call):
+                        name = ""
+                        if isinstance(deco.func, ast.Attribute):
+                            name = deco.func.attr
+                        if name == "route" and deco.args:
+                            arg0 = deco.args[0]
+                            if isinstance(arg0, ast.Constant) and isinstance(arg0.value, str):
+                                val = arg0.value.strip()
+                                parts = val.split(" ", 1)
+                                if len(parts) == 2:
+                                    method, path = parts[0].upper(), parts[1]
+                                    mapping[(path, method)] = f"{test_file.name}::{node.name}"
+    return mapping
+
+
 def verify_negative_cross_identity_coverage():
-    """Verify that every route touching user data has a designated negative cross-identity test."""
+    """Verify that each user-data route has its OWN negative cross-identity test that actually hits that route."""
+    discovered = discover_negative_route_tests()
     missing = []
+    seen_tests = set()
+
     for route in sorted(app.routes, key=lambda r: getattr(r, "path", "")):
         path = getattr(route, "path", "")
         methods = getattr(route, "methods", set())
@@ -190,15 +222,19 @@ def verify_negative_cross_identity_coverage():
                 continue
             key = (path, m)
             if key in USER_DATA_ROUTES:
-                test_ref = NEGATIVE_CROSS_IDENTITY_TESTS.get(key)
+                test_ref = discovered.get(key)
                 if not test_ref:
-                    missing.append((path, m, "Missing negative cross-identity test in mapping"))
-                elif "negative" not in test_ref.lower() and "isolation" not in test_ref.lower():
-                    missing.append((path, m, f"Test '{test_ref}' does not explicitly test negative isolation"))
-    return missing
+                    missing.append((path, m, "No negative test with @pytest.mark.route found in test suite"))
+                else:
+                    if test_ref in seen_tests:
+                        missing.append((path, m, f"Test '{test_ref}' is reused across multiple routes; each user-data route must have its own test"))
+                    seen_tests.add(test_ref)
+
+    return missing, len(discovered), len(USER_DATA_ROUTES)
 
 
 def print_markdown_table():
+    discovered = discover_negative_route_tests()
     print("| Route | Method | Identity Dep | Ownership Check / Access Policy | Test Function | Negative Cross-Identity Test |")
     print("| :--- | :--- | :--- | :--- | :--- | :--- |")
     seen = set()
@@ -213,7 +249,7 @@ def print_markdown_table():
                 continue
             seen.add(key)
             meta = KNOWN_ROUTE_METADATA.get(key, ("None", "Public or Default", "tests/test_api_endpoints.py"))
-            neg = NEGATIVE_CROSS_IDENTITY_TESTS.get(key, "N/A (Public / Infrastructure)")
+            neg = discovered.get(key, "N/A (Public / Infrastructure)")
             print(f"| `{path}` | `{m}` | `{meta[0]}` | {meta[1]} | `{meta[2]}` | `{neg}` |")
 
 
@@ -225,14 +261,14 @@ if __name__ == "__main__":
             print(f"  - ({path}, {method})", file=sys.stderr)
         sys.exit(1)
 
-    missing_negative = verify_negative_cross_identity_coverage()
+    missing_negative, discovered_count, required_count = verify_negative_cross_identity_coverage()
     if missing_negative:
-        print(f"ERROR: {len(missing_negative)} user-data routes lack a NEGATIVE cross-identity test:", file=sys.stderr)
+        print(f"ERROR: {len(missing_negative)} user-data routes lack a distinct NEGATIVE cross-identity test:", file=sys.stderr)
         for path, method, reason in missing_negative:
             print(f"  - ({path}, {method}): {reason}", file=sys.stderr)
         sys.exit(1)
 
-    print(f"SUCCESS: All {len(KNOWN_ROUTE_METADATA)} registered FastAPI routes are verified with metadata, designated tests, and negative cross-identity test coverage across all {len(USER_DATA_ROUTES)} user-data endpoints.")
+    print(f"SUCCESS: All {len(KNOWN_ROUTE_METADATA)} registered FastAPI routes verified. Real count: {discovered_count}/{required_count} user-data routes covered by distinct negative cross-identity tests derived from @pytest.mark.route.")
     if len(sys.argv) > 1 and sys.argv[1] == "--markdown":
         print_markdown_table()
 

@@ -202,8 +202,11 @@ async def exchange_code_for_tokens(
     client_id = getattr(settings, "GOOGLE_CLIENT_ID", None) or os.getenv("GOOGLE_CLIENT_ID", "")
     client_secret = getattr(settings, "GOOGLE_CLIENT_SECRET", None) or os.getenv("GOOGLE_CLIENT_SECRET", "")
 
-    # If demo/mock credentials or mock test code, provide simulated authenticated response
+    # If demo/mock credentials or mock test code, provide simulated authenticated response ONLY in dev/test
+    is_dev = getattr(settings, "ENVIRONMENT", "").lower() in ("development", "test")
     if not client_id or not client_secret or client_id.startswith("demo-") or "mock" in code.lower() or code.startswith("test"):
+        if not is_dev:
+            raise ValueError("Google OAuth credentials not configured in production or invalid authorization code.")
         logger.info("Using simulated OAuth token exchange (demo mode credentials or test code)")
         return {
             "access_token": f"mock_ya29_{secrets.token_hex(16)}",
@@ -299,6 +302,8 @@ async def refresh_google_access_token(
     c_secret = client_secret or getattr(settings, "GOOGLE_CLIENT_SECRET", None) or os.getenv("GOOGLE_CLIENT_SECRET", "")
 
     if not c_id or not c_secret or c_id.startswith("demo-") or refresh_token.startswith("mock_"):
+        if getattr(settings, "ENVIRONMENT", "").lower() not in ("development", "test"):
+            raise ValueError("Google OAuth credentials not configured in production.")
         return {
             "access_token": f"mock_ya29_{secrets.token_hex(16)}",
             "expires_in": 3600,

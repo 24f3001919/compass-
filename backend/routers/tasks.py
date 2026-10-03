@@ -406,7 +406,8 @@ async def delete_frontend_task(task_id: str, request: Request):
     """Direct user endpoint to delete a task or deadline without relying on AI chat."""
     if not task_id.isdigit():
         if task_id.startswith(("demo-", "mock-", "sim-")):
-            return {"status": "ok", "deleted": True, "task_id": task_id}
+            if getattr(settings, "ENVIRONMENT", "").lower() in ("development", "test"):
+                return {"status": "ok", "deleted": True, "task_id": task_id}
         raise HTTPException(status_code=400, detail="Invalid task ID format")
     numeric_id = int(task_id)
 

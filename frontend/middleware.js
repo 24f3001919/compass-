@@ -22,10 +22,13 @@ async function hmacSha256(secret, message) {
 }
 
 export default async function middleware(request) {
-  const secret = process.env.VERCEL_EDGE_SECRET || 'compass_vercel_edge_hmac_secret_2026'
+  const secret = process.env.EDGE_HMAC_SECRET || process.env.VERCEL_EDGE_SECRET || 'compass_vercel_edge_hmac_secret_2026'
+  const xff = request.headers.get('x-forwarded-for') || ''
+  const clientIp = xff ? xff.split(',')[0].trim() : (request.ip || '127.0.0.1')
   const timestamp = Math.floor(Date.now() / 1000).toString()
-  const signature = await hmacSha256(secret, timestamp)
-  const edgeSigHeader = `${timestamp}.${signature}`
+  const payload = `${clientIp}|${timestamp}`
+  const signature = await hmacSha256(secret, payload)
+  const edgeSigHeader = `${clientIp}|${timestamp}|${signature}`
 
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set('x-compass-edge-sig', edgeSigHeader)

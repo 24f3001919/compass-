@@ -318,6 +318,16 @@ async def public_chat(req: PublicChatRequest, request: Request, _rl: None = Depe
     ident = _get_current_identity(request)
     user_id = ident.id if ident and not ident.is_guest else None
     guest_id = ident.id if ident and ident.is_guest else None
+    if req.conversation_id:
+        pool = await get_pool()
+        if pool:
+            async with pool.acquire() as conn:
+                has_access, err = await conversations.check_conversation_access(
+                    conn, req.conversation_id, user_id=user_id, guest_id=guest_id, is_admin=bool(ident and ident.is_admin), allow_shared=False
+                )
+                if not has_access and err != "Conversation not found":
+                    raise HTTPException(status_code=403, detail="Forbidden: conversation belongs to another user")
+
     msg = req.message.strip()
     result = await orchestrator.handle_message(
         conversation_id=req.conversation_id, message=msg, user_id=user_id, guest_id=guest_id
@@ -415,6 +425,16 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
     ident = _get_current_identity(request)
     user_id = ident.id if ident and not ident.is_guest else None
     guest_id = ident.id if ident and ident.is_guest else None
+
+    if req.conversation_id:
+        pool = await get_pool()
+        if pool:
+            async with pool.acquire() as conn:
+                has_access, err = await conversations.check_conversation_access(
+                    conn, req.conversation_id, user_id=user_id, guest_id=guest_id, is_admin=bool(ident and ident.is_admin), allow_shared=False
+                )
+                if not has_access and err != "Conversation not found":
+                    raise HTTPException(status_code=403, detail="Forbidden: conversation belongs to another user")
 
     async def event_generator():
         conv_id = req.conversation_id or str(uuid.uuid4())

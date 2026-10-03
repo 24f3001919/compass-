@@ -69,7 +69,7 @@ async def execute_subqueries(
     sub_queries: List[str],
     include_domains: Optional[List[str]] = None,
     max_credits: int = 4,
-) -> List[Dict[str, Any]]:
+) -> Tuple[List[Dict[str, Any]], int]:
     """Execute sub-queries concurrently with a semaphore, bounded by credit budget."""
     semaphore = asyncio.Semaphore(2)
     credits_used = 0
@@ -104,19 +104,36 @@ async def execute_subqueries(
         url = (r.get("url") or "").strip()
         if url and url not in deduped:
             deduped[url] = r
-    return list(deduped.values())
+    return list(deduped.values()), credits_used
 
 
-def _parse_explicit_year_date(date_str: Optional[str]) -> Optional[datetime]:
-    """Parse date string only if it contains an explicit 4-digit year (e.g. 2024, 2025, 2026).
-    Returns aware UTC datetime or None if missing or yearless.
+def _parse_explicit_year_date(date_str: Optional[str]) -> Tuple[Optional[datetime], str]:
+    """Parse date string extracting date candidate and checking for explicit 4-digit year.
+    Returns (aware UTC datetime or None, 'explicit_in_quote' | 'inferred').
     """
     if not date_str or not isinstance(date_str, str):
-        return None
+        return None, "inferred"
+
     year_match = re.search(r"\b((?:19|20)\d{2})\b", date_str)
     if not year_match:
-        return None  # Missing explicit year -> reject
+        return None, "inferred"
+    year_provenance = "explicit_in_quote"
 
+    # Use DATE_PATTERN from tavily_deadline
+    from backend.services.tavily_deadline import DATE_PATTERN, parse_date_candidate
+    candidates = []
+    for m in DATE_PATTERN.finditer(date_str):
+        raw_m = m.group(0)
+        parsed = parse_date_candidate(raw_m)
+        if parsed:
+            candidates.append(parsed)
+
+    if candidates:
+        # For deadline queries, select the closing / latest date candidate
+        chosen = max(candidates)
+        return datetime(chosen.year, chosen.month, chosen.day, tzinfo=timezone.utc), year_provenance
+
+    # Direct format attempts
     for fmt in (
         "%Y-%m-%dT%H:%M:%SZ",
         "%Y-%m-%dT%H:%M:%S%z",
@@ -130,15 +147,11 @@ def _parse_explicit_year_date(date_str: Optional[str]) -> Optional[datetime]:
             dt = datetime.strptime(date_str.strip(), fmt)
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
-            return dt
+            return dt, year_provenance
         except Exception:
             pass
 
-    try:
-        y = int(year_match.group(1))
-        return datetime(y, 1, 1, tzinfo=timezone.utc)
-    except Exception:
-        return None
+    return None, year_provenance
 
 
 def evaluate_deterministic_verdict(
@@ -226,7 +239,7 @@ def evaluate_deterministic_verdict(
         verbatim_match = bool(normalized_quote and normalized_quote in normalized_raw)
 
         tier = url_tier_map.get(source_url, AuthorityTier.TIER_3_GENERAL.value)
-        parsed_dt = _parse_explicit_year_date(raw_date)
+        parsed_dt, year_provenance = _parse_explicit_year_date(raw_date or claim_text)
 
         # "Verified quote" rule: quote appears verbatim AND entity matches AND date parses (if date present)
         is_verified_quote = bool(verbatim_match and entity_matched and (parsed_dt is not None if raw_date else True))
@@ -239,6 +252,8 @@ def evaluate_deterministic_verdict(
             verdict = "UNVERIFIED"
         elif raw_date and not parsed_dt:
             verdict = "UNVERIFIED"  # Missing explicit 4-digit year
+        elif year_provenance == "inferred":
+            verdict = "UNVERIFIED"
         elif parsed_dt and parsed_dt < datetime.now(timezone.utc):
             verdict = "STALE"
         elif tier == AuthorityTier.TIER_1_OFFICIAL.value:
@@ -254,7 +269,8 @@ def evaluate_deterministic_verdict(
             "source_url": source_url,
             "verbatim_quote": quote,
             "published_date": raw_date,
-            "parsed_date": parsed_dt.isoformat() if parsed_dt else None,
+            "parsed_date": parsed_dt.strftime("%Y-%m-%d") if parsed_dt else None,
+            "year_provenance": year_provenance,
             "authority_tier": tier,
             "verdict": verdict,
             "verbatim_verified": is_verified_quote,
@@ -355,8 +371,10 @@ async def run_tavily_research(
     sub_queries = await decompose_query(query)
 
     # 3. Concurrent search
+    total_credits = 0
     try:
-        raw_results = await execute_subqueries(sub_queries, include_domains=include_domains, max_credits=max_credits)
+        raw_results, search_credits = await execute_subqueries(sub_queries, include_domains=include_domains, max_credits=max_credits)
+        total_credits += search_credits
     except Exception as e:
         logger.warning("execute_subqueries failed: %s", e)
         return {
@@ -365,6 +383,7 @@ async def run_tavily_research(
             "summary": f"Search execution failed: {e}",
             "evidence_ledger": [],
             "sources": [],
+            "credits": 0,
         }
 
     if not raw_results:
@@ -374,6 +393,7 @@ async def run_tavily_research(
             "summary": f"No web sources found for '{query}'.",
             "evidence_ledger": [],
             "sources": [],
+            "credits": total_credits,
         }
 
     # 4. Enrich and rank sources by domain authority
@@ -385,7 +405,9 @@ async def run_tavily_research(
     extracted_text_blocks = []
     try:
         extract_resp = await tavily_extract(extract_urls[:2], extract_depth="basic")
-        for item in extract_resp.get("results", []) or []:
+        results_list = extract_resp.get("results", []) or []
+        total_credits += len(results_list)
+        for item in results_list:
             raw = item.get("raw_content") or item.get("content") or ""
             if raw:
                 extracted_text_blocks.append(sanitize_untrusted_text(raw[:3000]))
@@ -401,24 +423,50 @@ async def run_tavily_research(
     claims: List[Dict[str, Any]] = []
     for s in top_sources:
         content = s.get("content", "")
-        # Look for salient sentences as claims (reject markdown headers, tables, non-sentences)
+        # Check both full extracted corpus and snippet for this source
+        candidate_pool = [content]
+        for blk in extracted_text_blocks:
+            if s.get("domain", "") in blk.lower() or s["url"] in blk:
+                candidate_pool.append(blk)
+
+        text_to_scan = "\n".join(candidate_pool)
         sentences = [
-            sent.strip() for sent in re.split(r"[.!?]\s+", content)
+            sent.strip() for sent in re.split(r"[.!?\n]+", text_to_scan)
             if len(sent.strip()) > 20 and not sent.strip().startswith(("#", "|", "*", "-")) and "|" not in sent[:15]
         ]
-        if sentences:
-            dt_match = re.search(r"\b(202[4-9])\b", sentences[0])
+
+        # Prioritize sentences with deadline / submission / date keywords
+        deadline_sentences = [
+            st for st in sentences
+            if re.search(r"\b(deadline|due|ends|closes|submission|period|schedule)\b", st, re.IGNORECASE)
+            and re.search(r"\b(202[4-9]|October|November|December|August|September)\b", st, re.IGNORECASE)
+        ]
+        chosen_sentence = deadline_sentences[0] if deadline_sentences else (sentences[0] if sentences else None)
+
+        if chosen_sentence:
+            dt_match = re.search(r"\b(202[4-9])\b", chosen_sentence)
+            # Find exact verbatim substring in full_extracted_corpus or content
+            exact_quote = chosen_sentence[:140].strip()
+            # If comma or paren at end, trim
+            if exact_quote and exact_quote[-1] in (",", ";", ":", "("):
+                exact_quote = exact_quote[:-1].strip()
+
             claims.append({
-                "claim": sentences[0],
+                "claim": chosen_sentence,
                 "source_url": s.get("url", ""),
-                "exact_quote": sentences[0][:120],
-                "extracted_date": sentences[0] if dt_match else None,
+                "exact_quote": exact_quote,
+                "extracted_date": chosen_sentence if dt_match else None,
             })
 
     # 7. Evaluate deterministic verdicts with verbatim quote validation and entity binding
     overall_verdict, evidence_ledger = evaluate_deterministic_verdict(
-        claims, full_extracted_corpus, top_sources, target_entity=target_entity or query
+        claims, full_extracted_corpus if full_extracted_corpus else " ".join(s.get("content", "") for s in top_sources), top_sources, target_entity=target_entity or query
     )
+
+    # Attach credits and run_id to each ledger item
+    for item in evidence_ledger:
+        item["run_id"] = active_run_id
+        item["credits"] = total_credits
 
     # 8. Persist to DB evidence_ledger table
     await persist_evidence_ledger(active_run_id, evidence_ledger)

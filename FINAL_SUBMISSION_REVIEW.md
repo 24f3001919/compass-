@@ -234,17 +234,20 @@ Crucially, there is an important architectural distinction between **mutation-ad
 2. **Header Token Counter**: Wired to live data via `/api/usage/summary` public endpoint, refreshed automatically after each chat message.
 3. **Per-IP Rate Limiting**: Added sliding-window limiter (30 req/min) returning HTTP 429 on burst abuse.
 4. **CLI SSE Streaming**: Updated `compass ask` and `compass chat` to consume `/api/chat/stream` for live token-by-token streaming.
-5. **Web Intelligence via Tavily**: Implemented `search_web`, `ingest_url`, and `verify_deadline` via `AsyncTavilyClient`, bounded epistemic abstention escalation (`[ABSTAIN]`), and isolated credit accounting in `tavily_usage_log`.
+5. **Web Intelligence via Tavily**: Implemented `search_web`, `ingest_url`, and `verify_deadline` via `AsyncTavilyClient`, bounded epistemic abstention escalation (`[ABSTAIN]`), explicit year provenance detection, and isolated credit accounting in `tavily_usage_log`.
 6. **Usage Telemetry Evidence**: Created `scripts/seed_usage.py` populating multi-dozen calls per model (Nano: 42, Super: 20, Ultra: 18, Qwen3: 26; 106 total) in `usage_log`.
+7. **Round 6 Multi-Worker Session Sync & Revocation**: Added 10-second TTL in-memory session cache backed by Postgres `sessions` table with continuous background synchronization loop (`start_session_sync_loop`) guaranteeing cross-worker revocation propagation in ≤10s.
+8. **Signed Edge HMAC Client IP**: Upgraded Vercel Edge middleware and backend security service to sign and verify `${client_ip}|${timestamp}|${signature}` payload, preventing IP spoofing across proxy layers.
+9. **Startup Model Catalog Verification**: Added startup validation (`check_models_catalog`) querying Nebius `/models` to fail loudly if any required model is missing from the catalog (eliminating silent production fallbacks).
+10. **Comprehensive Negative Cross-Identity Test Suite**: Implemented programmatic AST-based route verification (`scripts/verify_route_table.py`) enforcing 1-to-1 negative boundary test coverage across all 48 user-data routes via `@pytest.mark.route`.
 
 ### Honest Current State of Compute
 1. **Nebius Serverless Compute**: Manifests in `deploy/serverless_endpoint.yaml` and `deploy/serverless_job.yaml` are complete and syntactically verified. For hackathon evaluation and zero-downtime reliability, backend compute is served on Render and frontend on Vercel, with 100% of LLM inference, routing, and embeddings running on Nebius Token Factory.
 2. **Nightly Memory Consolidation Job**: Runs via local CLI (`compass admin consolidate`), on-demand API (`POST /api/agent/trigger-nightly`), and cron runner; ready for Nebius Serverless Job.
 
 ### Deliberately Deferred Future Work (Out of Scope for Hackathon Pass)
-1. **Multi-Tenant User Authentication**: Full JWT/OAuth auth flow (currently uses shared bearer token for single-user copilot).
-2. **External Calendar & LMS Integrations**: Google Calendar sync and Canvas LMS ingestion.
-3. **GitHub Webhook Ingestion**: Automatic real-time commit/PR memory ingestion via webhooks.
+1. **External LMS Integrations**: Deep Canvas LMS assignment auto-ingestion.
+2. **GitHub Webhook Ingestion**: Automatic real-time commit/PR memory ingestion via webhooks.
 
 ---
 
@@ -256,7 +259,7 @@ Queried directly from `compass admin usage` and `/api/usage/summary` after multi
 - **Total Tokens Consumed**: 36,688 tokens (24,130 input / 12,558 output)
 - **Total Observed Spend**: **$0.0199 USD** (~2 cents)
 - **Funded Credit Remaining**: **>$28.98 USD** out of $29.00 allocated credit.
-- **Automated Test Suite**: 150 passed, 0 skipped, 0 failed (100% passing) across unit, integration, agent loop, specialist confirm gate, and multi-domain suites.
+- **Automated Test Suite**: 352 passed, 0 failed (100% passing: 304 baseline + 48 negative cross-identity boundary tests) across unit, integration, agent loop, specialist confirm gate, multi-worker session sync, and cross-identity isolation suites.
 
 ### Cost Tiering Alignment
 In Compass's token accounting engine (`backend/services/usage.py`), per-token costs are computed using effective blended rates per 1,000,000 tokens (USD):

@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     TRUSTED_PROXY_HOPS: int = 1
     TRUST_CF_CONNECTING_IP: bool = False
     TRUST_TRUE_CLIENT_IP: bool = False
+    EDGE_HMAC_SECRET: str = "compass_vercel_edge_hmac_secret_2026"
     VERCEL_EDGE_SECRET: str = "compass_vercel_edge_hmac_secret_2026"
 
     # --- Rate Limiter & Abuse Protection ---
@@ -74,6 +75,8 @@ class Settings(BaseSettings):
     GUEST_MAX_MEMORIES: int = 100
     GUEST_RETENTION_DAYS: int = 30
     GUEST_RATE_LIMIT: int = 30
+    GUEST_MINT_HOURLY_IP_LIMIT: int = 5
+    GUEST_SIGNING_SECRET: str = ""
 
     # --- Tavily Search API ---
     TAVILY_API_KEY: str = ""
