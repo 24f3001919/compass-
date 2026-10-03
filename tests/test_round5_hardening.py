@@ -45,21 +45,24 @@ from backend.services.tavily_authority import classify_domain_authority, Authori
 # ===========================================================================
 
 def test_edge_signature_verification():
-    """Verify HMAC SHA-256 edge signature verification with timestamp tolerance."""
+    """Verify HMAC SHA-256 edge signature verification with client_ip|timestamp|signature format."""
     secret = "test_secret_12345"
+    client_ip = "198.51.100.42"
     now_ts = str(int(time.time()))
-    valid_hmac = hmac.new(secret.encode(), now_ts.encode(), hashlib.sha256).hexdigest()
-    valid_header = f"{now_ts}.{valid_hmac}"
+    payload = f"{client_ip}|{now_ts}"
+    valid_hmac = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    valid_header = f"{client_ip}|{now_ts}|{valid_hmac}"
 
     assert verify_edge_signature(valid_header, secret) is True
     # Forged signature
-    assert verify_edge_signature(f"{now_ts}.forged_signature_hex", secret) is False
+    assert verify_edge_signature(f"{client_ip}|{now_ts}|forged_signature_hex", secret) is False
     # Expired signature (older than max_age_seconds=300)
     old_ts = str(int(time.time()) - 400)
-    old_hmac = hmac.new(secret.encode(), old_ts.encode(), hashlib.sha256).hexdigest()
-    assert verify_edge_signature(f"{old_ts}.{old_hmac}", secret) is False
+    old_payload = f"{client_ip}|{old_ts}"
+    old_hmac = hmac.new(secret.encode(), old_payload.encode(), hashlib.sha256).hexdigest()
+    assert verify_edge_signature(f"{client_ip}|{old_ts}|{old_hmac}", secret) is False
     # Malformed header
-    assert verify_edge_signature("invalid_no_dot", secret) is False
+    assert verify_edge_signature("invalid_no_pipes", secret) is False
 
 
 def test_forged_xff_direct_call_trusts_only_last_hop():

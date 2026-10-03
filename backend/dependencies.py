@@ -124,8 +124,8 @@ async def verify_token(
             "test-token",
         ):
             raise HTTPException(
-                status_code=500,
-                detail="Server configuration error: production authentication token is not securely configured.",
+                status_code=401,
+                detail="Unauthorized",
             )
 
     if not settings.AUTH_TOKEN:
