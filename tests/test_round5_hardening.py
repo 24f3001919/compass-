@@ -77,13 +77,15 @@ def test_forged_xff_direct_call_trusts_only_last_hop():
     assert resolved_ip == "198.51.100.22"
 
 
-def test_xff_via_trusted_vercel_edge_trusts_second_from_right():
-    """Vercel reverse proxy with valid edge signature has 2 hops; trusts parts[-2]."""
+def test_xff_via_trusted_vercel_edge_trusts_signed_client_ip():
+    """Vercel edge middleware signs client_ip|timestamp|sig; backend extracts signed client_ip."""
     settings = get_settings()
-    secret = settings.VERCEL_EDGE_SECRET
+    secret = settings.EDGE_HMAC_SECRET or settings.VERCEL_EDGE_SECRET
     now_ts = str(int(time.time()))
-    sig = hmac.new(secret.encode(), now_ts.encode(), hashlib.sha256).hexdigest()
-    header_val = f"{now_ts}.{sig}".encode()
+    client_ip = "203.0.113.195"
+    payload = f"{client_ip}|{now_ts}"
+    sig = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    header_val = f"{client_ip}|{now_ts}|{sig}".encode()
 
     scope = {
         "type": "http",
@@ -94,30 +96,26 @@ def test_xff_via_trusted_vercel_edge_trusts_second_from_right():
         "client": ("10.0.0.1", 12345),
     }
     req = Request(scope)
-    # Valid edge signature -> effective hops = 2 -> parts[-2] is 203.0.113.195
     resolved_ip = get_client_ip(req)
     assert resolved_ip == "203.0.113.195"
 
 
 def test_proxy_hops_chain_shorter_falls_back_to_client_host():
-    """If chain has fewer hops than expected, falls back strictly to request.client.host."""
-    settings = get_settings()
-    secret = settings.VERCEL_EDGE_SECRET
-    now_ts = str(int(time.time()))
-    sig = hmac.new(secret.encode(), now_ts.encode(), hashlib.sha256).hexdigest()
-    header_val = f"{now_ts}.{sig}".encode()
+    """If chain has fewer hops than expected and no valid edge sig, falls back strictly to request.client.host."""
+    from backend.config import Settings
+    s = Settings(TRUSTED_PROXY_HOPS=2)
+    with patch("backend.config.get_settings", return_value=s):
+        scope = {
+            "type": "http",
+            "headers": [
+                (b"x-forwarded-for", b"203.0.113.195"),  # only 1 hop in chain, but hops=2
+            ],
+            "client": ("192.0.2.1", 54321),
+        }
+        req = Request(scope)
+        resolved_ip = get_client_ip(req)
+        assert resolved_ip == "192.0.2.1"
 
-    scope = {
-        "type": "http",
-        "headers": [
-            (b"x-forwarded-for", b"203.0.113.195"),  # only 1 hop in chain, but edge sig requests 2
-            (b"x-compass-edge-sig", header_val),
-        ],
-        "client": ("192.0.2.1", 54321),
-    }
-    req = Request(scope)
-    resolved_ip = get_client_ip(req)
-    assert resolved_ip == "192.0.2.1"
 
 
 # ===========================================================================
@@ -244,6 +242,40 @@ async def test_session_revocation_on_logout():
 
     assert get_user_from_session(token) is None
     assert is_session_oauth_verified(token) is False
+
+
+@pytest.mark.asyncio
+async def test_session_revocation_propagates_within_ttl():
+    """Verify session revocation in PostgreSQL propagates within the <=10s TTL cache."""
+    from backend.routers.auth import (
+        get_user_from_session_async,
+        SESSION_CACHE_TTL,
+        _persist_session_db,
+        ABSOLUTE_TIMEOUT,
+    )
+    pool = await _safe_get_pool()
+
+    user_email = f"ttl_revocation_{uuid.uuid4().hex[:6]}@compass.ai"
+    token = create_session(user_email)
+    token_hash = _hash_token(token)
+    expires_at = datetime.now(timezone.utc) + ABSOLUTE_TIMEOUT
+    await _persist_session_db(token_hash, user_email, False, expires_at)
+
+    # Fast path: user resolves while cache is fresh
+    assert await get_user_from_session_async(token) == user_email
+
+    # Revoke in PostgreSQL directly (as if another worker received POST /api/auth/logout)
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE sessions SET revoked_at = now() WHERE token_hash = $1", token_hash)
+
+    # Simulate TTL expiration (advance cached_at past 10.0s TTL)
+    assert token_hash in _SESSIONS
+    _SESSIONS[token_hash]["cached_at"] = time.time() - (SESSION_CACHE_TTL + 1.0)
+
+    # Next lookup detects TTL expiry, queries Postgres, sees revoked_at, invalidates local cache, returns None
+    user_after_ttl = await get_user_from_session_async(token)
+    assert user_after_ttl is None
+    assert token_hash not in _SESSIONS
 
 
 # ===========================================================================

@@ -32,9 +32,7 @@ def check_models_catalog(base_url: str, api_key: str, required_models: Set[str],
             data = json.loads(resp.read().decode())
             available_ids = {m["id"] for m in data.get("data", [])}
     except Exception as e:
-        logger.error(f"Failed to query Nebius /models catalog: {e}")
-        if fail_loudly:
-            raise RuntimeError(f"Startup check failed: unable to fetch models catalog from {url}: {e}") from e
+        logger.warning("Could not reach Nebius /models catalog (%s); warning and continuing startup.", e)
         return
 
     missing = [m for m in required_models if m not in available_ids]

@@ -75,6 +75,8 @@ class Settings(BaseSettings):
     GUEST_MAX_MEMORIES: int = 100
     GUEST_RETENTION_DAYS: int = 30
     GUEST_RATE_LIMIT: int = 30
+    GUEST_MINT_HOURLY_IP_LIMIT: int = 5
+    GUEST_SIGNING_SECRET: str = ""
 
     # --- Tavily Search API ---
     TAVILY_API_KEY: str = ""

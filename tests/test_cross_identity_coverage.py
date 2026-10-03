@@ -278,41 +278,105 @@ async def test_neg_get_conversation_messages(client: AsyncClient):
 @pytest.mark.asyncio
 @pytest.mark.route("DELETE /api/guest/data")
 async def test_neg_delete_guest_data(client: AsyncClient):
-    """Caller without valid guest token cannot delete guest data."""
-    res = await client.delete("/api/guest/data")
-    assert res.status_code in (400, 401)
+    """User B cannot delete Guest A's data without Guest A's token."""
+    from backend.dependencies import generate_guest_token
+    from backend.memory.db import get_pool
+    gid_a, _ = generate_guest_token()
+    user_b = f"bob_{uuid.uuid4().hex[:6]}@example.com"
+
+    pool = await get_pool()
+    if pool:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO conversations (id, user_id, title) VALUES ($1, $2, 'Guest A Data') ON CONFLICT DO NOTHING",
+                uuid.uuid4(), gid_a,
+            )
+
+    user_b = f"bob_{uuid.uuid4().hex[:6]}@example.com"
+    res = await client.delete("/api/guest/data", headers=_auth(user_b))
+    assert res.status_code in (400, 401, 403)
 
 
 @pytest.mark.asyncio
 @pytest.mark.route("POST /api/guest/migrate")
 async def test_neg_post_guest_migrate(client: AsyncClient):
-    """Unauthenticated caller cannot trigger guest migration."""
-    res = await client.post("/api/guest/migrate", json={"guest_token": "invalid"})
-    assert res.status_code == 401
+    """User B cannot migrate or access Guest A's private conversations."""
+    from backend.dependencies import generate_guest_token
+    from backend.memory.db import get_pool
+    gid_a, _ = generate_guest_token()
+    conv_id = uuid.uuid4()
+
+    pool = await get_pool()
+    if pool:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO conversations (id, user_id, title) VALUES ($1, $2, 'Guest A Plan') ON CONFLICT DO NOTHING",
+                conv_id, gid_a,
+            )
+
+    user_b = f"bob_{uuid.uuid4().hex[:6]}@example.com"
+    res = await client.post("/api/guest/migrate", headers=_auth(user_b))
+    assert res.status_code in (400, 403, 404)
 
 
 @pytest.mark.asyncio
 @pytest.mark.route("GET /api/migration/conversations")
 async def test_neg_get_migration_conversations(client: AsyncClient):
-    """Unauthenticated request to /api/migration/conversations returns 401."""
-    res = await client.get("/api/migration/conversations")
-    assert res.status_code == 401
+    """User B cannot view Guest A's private conversations for migration."""
+    from backend.dependencies import generate_guest_token
+    from backend.memory.db import get_pool
+    gid_a, _ = generate_guest_token()
+    conv_id = uuid.uuid4()
+
+    pool = await get_pool()
+    if pool:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO conversations (id, user_id, title) VALUES ($1, $2, 'Guest A Secret') ON CONFLICT DO NOTHING",
+                conv_id, gid_a,
+            )
+
+    user_b = f"bob_{uuid.uuid4().hex[:6]}@example.com"
+    res = await client.get("/api/migration/conversations", headers=_auth(user_b))
+    assert res.status_code in (200, 400, 403)
+    if res.status_code == 200:
+        convs = res.json().get("conversations", [])
+        assert all(str(c.get("id")) != str(conv_id) for c in convs)
 
 
 @pytest.mark.asyncio
 @pytest.mark.route("POST /api/migration/import-all")
 async def test_neg_post_migration_import_all(client: AsyncClient):
-    """Unauthenticated caller cannot import all migration items."""
-    res = await client.post("/api/migration/import-all")
-    assert res.status_code == 401
+    """User B cannot import all guest data without an active guest session."""
+    user_b = f"bob_{uuid.uuid4().hex[:6]}@example.com"
+    res = await client.post("/api/migration/import-all", headers=_auth(user_b))
+    assert res.status_code in (400, 403, 404)
 
 
 @pytest.mark.asyncio
 @pytest.mark.route("POST /api/migration/import-selected")
 async def test_neg_post_migration_import_selected(client: AsyncClient):
-    """Unauthenticated caller cannot import selected migration items."""
-    res = await client.post("/api/migration/import-selected", json={"conversation_ids": []})
-    assert res.status_code == 401
+    """User B cannot selectively import Guest A's conversation."""
+    from backend.dependencies import generate_guest_token
+    from backend.memory.db import get_pool
+    gid_a, _ = generate_guest_token()
+    conv_id = uuid.uuid4()
+
+    pool = await get_pool()
+    if pool:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO conversations (id, user_id, title) VALUES ($1, $2, 'Guest A Selected') ON CONFLICT DO NOTHING",
+                conv_id, gid_a,
+            )
+
+    user_b = f"bob_{uuid.uuid4().hex[:6]}@example.com"
+    res = await client.post(
+        "/api/migration/import-selected",
+        json={"conversation_ids": [str(conv_id)]},
+        headers=_auth(user_b),
+    )
+    assert res.status_code in (400, 403, 404)
 
 
 @pytest.mark.asyncio

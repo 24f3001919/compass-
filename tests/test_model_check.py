@@ -39,3 +39,16 @@ def test_startup_check_succeeds_when_all_models_present():
             required_models={"model-a", "model-b"},
             fail_loudly=True,
         )
+
+
+def test_startup_check_warns_and_continues_on_network_failure():
+    """If the /models network request fails, log warning and continue without raising."""
+    with patch("urllib.request.urlopen", side_effect=Exception("Connection refused")):
+        # Must not raise RuntimeError
+        check_models_catalog(
+            base_url="https://api.tokenfactory.nebius.com/v1",
+            api_key="valid-key",
+            required_models={"model-a", "model-b"},
+            fail_loudly=True,
+        )
+

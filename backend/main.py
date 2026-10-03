@@ -94,7 +94,6 @@ async def lifespan(app: FastAPI):
     """Manage application startup and shutdown."""
     logger.info("🧭 Compass starting up — initializing database pool...")
     cleanup_task = None
-    session_sync_task = None
 
     async def _periodic_cleanup_worker():
         while True:
@@ -114,9 +113,8 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Database pool initialized")
         from backend.services.usage import hydrate_usage_from_db
         await hydrate_usage_from_db(pool)
-        from backend.routers.auth import load_sessions_from_db, start_session_sync_loop
+        from backend.routers.auth import load_sessions_from_db
         await load_sessions_from_db(pool)
-        session_sync_task = asyncio.create_task(start_session_sync_loop(pool, interval_seconds=5.0))
         cleanup_task = asyncio.create_task(_periodic_cleanup_worker())
 
         # Startup check: verify configured models exist in Nebius catalog (fail loudly, never silently fall back)
@@ -141,8 +139,6 @@ async def lifespan(app: FastAPI):
     yield
     if cleanup_task:
         cleanup_task.cancel()
-    if session_sync_task:
-        session_sync_task.cancel()
     logger.info("🧭 Compass shutting down — closing database pool...")
     await close_pool()
     logger.info("✅ Database pool closed")

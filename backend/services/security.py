@@ -252,15 +252,6 @@ def verify_edge_signature(sig_header: Optional[str], secret: str, max_age_second
                 payload = f"{client_ip}|{ts_str}"
                 computed = hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
                 return hmac.compare_digest(computed, expected_hmac)
-
-        if "." in sig_header:
-            ts_str, expected_hmac = sig_header.split(".", 1)
-            ts = int(ts_str)
-            now = int(time.time())
-            if abs(now - ts) > max_age_seconds:
-                return False
-            computed = hmac.new(secret.encode("utf-8"), ts_str.encode("utf-8"), hashlib.sha256).hexdigest()
-            return hmac.compare_digest(computed, expected_hmac)
     except Exception:
         return False
     return False
@@ -318,16 +309,6 @@ def get_client_ip(request: Request) -> str:
         signed_ip = extract_signed_edge_client_ip(edge_sig, edge_secret)
         if signed_ip:
             return signed_ip
-
-        # Check timestamp.signature format: trust parts[-2] if available
-        if verify_edge_signature(edge_sig, edge_secret):
-            xff = request.headers.get("x-forwarded-for")
-            if xff and xff.strip():
-                parts = [p.strip() for p in xff.split(",") if p.strip()]
-                if len(parts) >= 2 and is_valid_ip(parts[-2]):
-                    return parts[-2]
-                if request.client and request.client.host and is_valid_ip(request.client.host):
-                    return request.client.host
 
     # 2. Configurable Trusted Proxy Hops (Nth-from-right extraction)
     hops = int(getattr(settings, "TRUSTED_PROXY_HOPS", 1))
