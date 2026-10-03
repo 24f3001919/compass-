@@ -172,6 +172,8 @@ async def test_migration_flow_and_preservation(client: AsyncClient):
     """
     gid, token = generate_guest_token()
     user_email = f"migrate_tester_{uuid.uuid4().hex[:6]}@example.com"
+    from backend.routers.auth import create_session
+    user_auth = f"Bearer {create_session(user_email)}"
 
     # 1. Guest creates 2 conversations
     chat_1 = await client.post(
@@ -193,7 +195,7 @@ async def test_migration_flow_and_preservation(client: AsyncClient):
     # 2. Check migration status with both user and guest headers
     status_res = await client.get(
         "/api/migration/status",
-        headers={"x-user-id": user_email, "x-guest-token": token, "x-guest-id": gid},
+        headers={"Authorization": user_auth, "x-user-id": user_email, "x-guest-token": token, "x-guest-id": gid},
     )
     assert status_res.status_code == 200
     status_data = status_res.json()
@@ -203,7 +205,7 @@ async def test_migration_flow_and_preservation(client: AsyncClient):
     # 3. Check migration conversations list
     list_mig_res = await client.get(
         "/api/migration/conversations",
-        headers={"x-user-id": user_email, "x-guest-token": token, "x-guest-id": gid},
+        headers={"Authorization": user_auth, "x-user-id": user_email, "x-guest-token": token, "x-guest-id": gid},
     )
     assert list_mig_res.status_code == 200
     mig_convs = list_mig_res.json().get("conversations", [])
@@ -214,7 +216,7 @@ async def test_migration_flow_and_preservation(client: AsyncClient):
     select_res = await client.post(
         "/api/migration/import-selected",
         json={"conversation_ids": [conv_1_id], "import_memory": True},
-        headers={"x-user-id": user_email, "x-guest-token": token, "x-guest-id": gid},
+        headers={"Authorization": user_auth, "x-user-id": user_email, "x-guest-token": token, "x-guest-id": gid},
     )
     assert select_res.status_code == 200
     select_data = select_res.json()
@@ -224,7 +226,7 @@ async def test_migration_flow_and_preservation(client: AsyncClient):
     # 5. Check Authenticated User history — should now contain imported conversation
     user_convs_res = await client.get(
         "/api/conversations",
-        headers={"x-user-id": user_email},
+        headers={"Authorization": user_auth, "x-user-id": user_email},
     )
     assert user_convs_res.status_code == 200
     user_convs = user_convs_res.json().get("conversations", [])
@@ -245,7 +247,7 @@ async def test_migration_flow_and_preservation(client: AsyncClient):
     repeat_res = await client.post(
         "/api/migration/import-selected",
         json={"conversation_ids": [conv_1_id], "import_memory": False},
-        headers={"x-user-id": user_email, "x-guest-token": token, "x-guest-id": gid},
+        headers={"Authorization": user_auth, "x-user-id": user_email, "x-guest-token": token, "x-guest-id": gid},
     )
     assert repeat_res.status_code == 200
     repeat_data = repeat_res.json()
@@ -256,7 +258,7 @@ async def test_migration_flow_and_preservation(client: AsyncClient):
     # 8. Import All remaining: Should import conv_2_id safely
     import_all_res = await client.post(
         "/api/migration/import-all",
-        headers={"x-user-id": user_email, "x-guest-token": token, "x-guest-id": gid},
+        headers={"Authorization": user_auth, "x-user-id": user_email, "x-guest-token": token, "x-guest-id": gid},
     )
     assert import_all_res.status_code == 200
     import_all_data = import_all_res.json()

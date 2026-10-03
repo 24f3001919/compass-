@@ -34,23 +34,56 @@ async def rate_limit(request: Request) -> None:
     """Shared rate limiter: 30 requests/min per client IP and per identity on chat/log endpoints.
     Returns HTTP 429 Too Many Requests with Retry-After header when exceeded.
     """
+    client_ip = get_client_ip(request)
+    now = time.monotonic()
+    timestamps = _rate_store[client_ip]
+    while timestamps and (now - timestamps[0]) > _RATE_LIMIT_WINDOW_SECONDS:
+        timestamps.popleft()
+    if len(timestamps) >= _RATE_LIMIT_MAX_REQUESTS:
+        retry_after = int(_RATE_LIMIT_WINDOW_SECONDS - (now - timestamps[0])) + 1
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded: maximum {_RATE_LIMIT_MAX_REQUESTS} requests per minute.",
+            headers={"Retry-After": str(max(1, retry_after))},
+        )
+
     from backend.services.rate_limiter import enforce_rate_limit
     await enforce_rate_limit(request, action="chat", ip_capacity=30.0, ip_refill_per_sec=0.5)
+    timestamps.append(now)
 
 
 async def agent_rate_limit(request: Request) -> None:
     """Shared rate limiter for agent runs: 10 requests/min per client IP and per identity.
     Returns HTTP 429 Too Many Requests with Retry-After header when exceeded.
     """
+    client_ip = get_client_ip(request)
+    now = time.monotonic()
+    timestamps = _agent_rate_store[client_ip]
+    while timestamps and (now - timestamps[0]) > _AGENT_RATE_LIMIT_WINDOW_SECONDS:
+        timestamps.popleft()
+    if len(timestamps) >= _AGENT_RATE_LIMIT_MAX_REQUESTS:
+        retry_after = int(_AGENT_RATE_LIMIT_WINDOW_SECONDS - (now - timestamps[0])) + 1
+        raise HTTPException(
+            status_code=429,
+            detail=f"Agent rate limit exceeded: maximum {_AGENT_RATE_LIMIT_MAX_REQUESTS} requests per minute.",
+            headers={"Retry-After": str(max(1, retry_after))},
+        )
+
     from backend.services.rate_limiter import enforce_rate_limit
-    await enforce_rate_limit(
-        request,
-        action="agent",
-        ip_capacity=10.0,
-        ip_refill_per_sec=10.0 / 60.0,
-        identity_capacity=10.0,
-        identity_refill_per_sec=10.0 / 60.0,
-    )
+    try:
+        await enforce_rate_limit(
+            request,
+            action="agent",
+            ip_capacity=10.0,
+            ip_refill_per_sec=10.0 / 60.0,
+            identity_capacity=10.0,
+            identity_refill_per_sec=10.0 / 60.0,
+        )
+    except HTTPException as e:
+        if "Agent rate limit exceeded" not in str(e.detail):
+            e.detail = f"Agent rate limit exceeded: {e.detail}"
+        raise e
+    timestamps.append(now)
 
 
 async def mint_rate_limit(request: Request) -> None:

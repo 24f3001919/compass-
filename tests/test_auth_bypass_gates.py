@@ -87,7 +87,7 @@ async def test_agent_admin_override_logged_to_audit():
     with patch("backend.routers.agent.get_pool") as mock_get_pool, \
          patch("backend.agent_pending.verify_and_claim_action", return_value=(True, "OK", {})) as mock_verify, \
          patch("backend.agent.execute_confirmed_actions", return_value=[{"status": "executed"}]) as mock_exec, \
-         patch("backend.agent.get_agent_run", return_value={"id": "run_test_admin"}):
+         patch("backend.agent.get_agent_run", return_value={"id": "run_test_admin", "pending_actions": [{"action_id": action_id, "tool": "calendar_create_event", "args": {"title": "Test"}}]}):
 
         mock_conn = AsyncMock()
         mock_pool = MagicMock()
