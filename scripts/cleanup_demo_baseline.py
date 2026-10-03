@@ -159,8 +159,8 @@ async def run_cleanup(db_url: str, dry_run: bool, i_mean_prod: bool, confirm_hos
             WHERE t.created_at >= '2026-09-20 00:00:00+00'
         """)
         print(f"\ncalendar_event_links for doomed tasks: {len(links)}")
-        for l in links:
-            print(f"  link_id={l['id']} | task_id={l['task_id']} | title={l['title']!r} | google_event_id={l['google_event_id']}")
+        for link_item in links:
+            print(f"  link_id={link_item['id']} | task_id={link_item['task_id']} | title={link_item['title']!r} | google_event_id={link_item['google_event_id']}")
 
         # 6. Projected survivor counts
         curr_tasks = await conn.fetchval("SELECT count(*) FROM tasks")
