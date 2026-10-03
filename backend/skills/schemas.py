@@ -191,73 +191,13 @@ LOG_CODE_CONTEXT_TOOL: Dict[str, Any] = {
     }
 }
 
-SEARCH_WEB_TOOL: Dict[str, Any] = {
-    "type": "function",
-    "function": {
-        "name": "search_web",
-        "description": (
-            "Search the live web for current information that is NOT in Compass's "
-            "stored memory. Use only after checking memory first. Good for: current "
-            "deadlines, library/API changes since a note was written, facts that "
-            "post-date stored context."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Search query, under 390 chars"},
-                "depth": {
-                    "type": "string",
-                    "enum": ["basic", "advanced"],
-                    "description": "Use 'advanced' (2 credits) only when basic is insufficient",
-                },
-            },
-            "required": ["query"],
-        },
-    },
-}
-
-INGEST_URL_TOOL: Dict[str, Any] = {
-    "type": "function",
-    "function": {
-        "name": "ingest_url",
-        "description": (
-            "Permanently add the contents of a web page to Compass's long-term "
-            "memory so it becomes semantically searchable later. Use when the user "
-            "says to remember, save, or read a link."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "url": {"type": "string", "description": "The URL to extract and ingest"},
-                "domain": {
-                    "type": "string",
-                    "enum": ["hackathon", "coursework", "code", "general"],
-                    "description": "Domain to store memory under",
-                },
-                "project": {"type": "string", "description": "Optional project name to associate with"},
-            },
-            "required": ["url", "domain"],
-        },
-    },
-}
-
-VERIFY_DEADLINE_TOOL: Dict[str, Any] = {
-    "type": "function",
-    "function": {
-        "name": "verify_deadline",
-        "description": (
-            "Compare a stored task's due_date against what the live web currently says. "
-            "Searches for deadline announcements or updates and flags drift."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "task_id": {"type": "integer", "description": "The ID of the task to verify"},
-            },
-            "required": ["task_id"],
-        },
-    },
-}
+from backend.skills.schemas_web import (
+    SEARCH_WEB_TOOL,
+    INGEST_URL_TOOL,
+    VERIFY_DEADLINE_TOOL,
+    DEEP_RESEARCH_TOOL,
+    SAVE_VERIFIED_FINDING_TOOL,
+)
 
 UPDATE_TASK_STATUS_TOOL: Dict[str, Any] = {
     "type": "function",
@@ -614,12 +554,18 @@ BASE_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
 
 def get_tool_definitions() -> List[Dict[str, Any]]:
     """Return active tool definitions for the Nemotron router.
-    search_web, ingest_url, and verify_deadline are available when Tavily is enabled.
+    Tavily tools are available when Tavily is enabled.
     """
     try:
         from backend.services.tavily import tavily_available
         if tavily_available():
-            return BASE_TOOL_DEFINITIONS + [SEARCH_WEB_TOOL, INGEST_URL_TOOL, VERIFY_DEADLINE_TOOL]
+            return BASE_TOOL_DEFINITIONS + [
+                SEARCH_WEB_TOOL,
+                INGEST_URL_TOOL,
+                VERIFY_DEADLINE_TOOL,
+                DEEP_RESEARCH_TOOL,
+                SAVE_VERIFIED_FINDING_TOOL,
+            ]
     except Exception:
         pass
     return list(BASE_TOOL_DEFINITIONS)
@@ -637,5 +583,6 @@ MUTATING_TOOLS = frozenset({
     "ingest_url",
     "apply_triage_plan",
     "commit_schedule",
+    "save_verified_finding",
 })
 
