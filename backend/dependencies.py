@@ -194,7 +194,7 @@ def _get_current_user_id(request: Request) -> Optional[str]:
     user_header = request.headers.get("x-user-id")
     if user_header and user_header.strip():
         val = user_header.strip().lower()
-        if "@" in val:
+        if val:
             return val
 
     session_token = request.cookies.get("compass_session")
@@ -202,7 +202,7 @@ def _get_current_user_id(request: Request) -> Optional[str]:
         try:
             from backend.routers.auth import get_user_from_session
             user = get_user_from_session(session_token)
-            if user and "@" in user:
+            if user:
                 return user.lower()
         except Exception:
             pass
@@ -211,7 +211,7 @@ def _get_current_user_id(request: Request) -> Optional[str]:
     if cookie_user and cookie_user.strip():
         import urllib.parse
         val = urllib.parse.unquote(cookie_user.strip()).lower()
-        if "@" in val:
+        if val:
             return val
     return None
 
@@ -257,10 +257,9 @@ def _resolve_identities(request: Request) -> tuple[Optional[str], Optional[str]]
 
 
 def _get_or_create_user_id(request: Request) -> str:
-    """Resolve current user identity, falling back to verified guest identity or fresh UUID.
+    """Resolve current user identity, falling back to verified guest identity or deterministic client hash.
 
     Guarantees every mutation is bound to an isolated user or guest workspace identity.
-    Does NOT use IP address or browser fingerprinting.
     """
     uid = _get_current_user_id(request)
     if uid:
@@ -268,8 +267,11 @@ def _get_or_create_user_id(request: Request) -> str:
     gid = _get_current_guest_id(request)
     if gid:
         return f"guest_{gid}"
-    import uuid as _uuid
-    return f"guest_{_uuid.uuid4()}"
+    from backend.services.security import get_client_ip
+    import hashlib
+    client_ip = get_client_ip(request)
+    h = hashlib.sha256(client_ip.encode("utf-8")).hexdigest()[:12]
+    return f"guest_{h}"
 
 
 def _now_iso() -> str:
