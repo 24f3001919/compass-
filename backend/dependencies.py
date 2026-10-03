@@ -12,8 +12,11 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from backend.config import get_settings
 
+import logging
 import hmac
 from backend.services.security import get_client_ip
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Rate Limiter — Sliding-window per client IP (30 requests/minute on chat)
@@ -34,23 +37,56 @@ async def rate_limit(request: Request) -> None:
     """Shared rate limiter: 30 requests/min per client IP and per identity on chat/log endpoints.
     Returns HTTP 429 Too Many Requests with Retry-After header when exceeded.
     """
+    client_ip = get_client_ip(request)
+    now = time.monotonic()
+    timestamps = _rate_store[client_ip]
+    while timestamps and (now - timestamps[0]) > _RATE_LIMIT_WINDOW_SECONDS:
+        timestamps.popleft()
+    if len(timestamps) >= _RATE_LIMIT_MAX_REQUESTS:
+        retry_after = int(_RATE_LIMIT_WINDOW_SECONDS - (now - timestamps[0])) + 1
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded: maximum {_RATE_LIMIT_MAX_REQUESTS} requests per minute.",
+            headers={"Retry-After": str(max(1, retry_after))},
+        )
+
     from backend.services.rate_limiter import enforce_rate_limit
     await enforce_rate_limit(request, action="chat", ip_capacity=30.0, ip_refill_per_sec=0.5)
+    timestamps.append(now)
 
 
 async def agent_rate_limit(request: Request) -> None:
     """Shared rate limiter for agent runs: 10 requests/min per client IP and per identity.
     Returns HTTP 429 Too Many Requests with Retry-After header when exceeded.
     """
+    client_ip = get_client_ip(request)
+    now = time.monotonic()
+    timestamps = _agent_rate_store[client_ip]
+    while timestamps and (now - timestamps[0]) > _AGENT_RATE_LIMIT_WINDOW_SECONDS:
+        timestamps.popleft()
+    if len(timestamps) >= _AGENT_RATE_LIMIT_MAX_REQUESTS:
+        retry_after = int(_AGENT_RATE_LIMIT_WINDOW_SECONDS - (now - timestamps[0])) + 1
+        raise HTTPException(
+            status_code=429,
+            detail=f"Agent rate limit exceeded: maximum {_AGENT_RATE_LIMIT_MAX_REQUESTS} requests per minute.",
+            headers={"Retry-After": str(max(1, retry_after))},
+        )
+
     from backend.services.rate_limiter import enforce_rate_limit
-    await enforce_rate_limit(
-        request,
-        action="agent",
-        ip_capacity=10.0,
-        ip_refill_per_sec=10.0 / 60.0,
-        identity_capacity=10.0,
-        identity_refill_per_sec=10.0 / 60.0,
-    )
+    try:
+        await enforce_rate_limit(
+            request,
+            action="agent",
+            ip_capacity=10.0,
+            ip_refill_per_sec=10.0 / 60.0,
+            identity_capacity=10.0,
+            identity_refill_per_sec=10.0 / 60.0,
+        )
+    except HTTPException as e:
+        if "Agent rate limit exceeded" not in str(e.detail):
+            e.detail = f"Agent rate limit exceeded: {e.detail}"
+        raise e
+    timestamps.append(now)
 
 
 async def mint_rate_limit(request: Request) -> None:
@@ -199,41 +235,70 @@ async def guest_rate_limit(request: Request) -> None:
 
 
 # ---------------------------------------------------------------------------
-# User & Guest Identity Helpers (Strictly Verified)
 # ---------------------------------------------------------------------------
-def _get_current_user_id(request: Request) -> Optional[str]:
-    """Resolve authenticated user identity strictly from verified credentials.
+# User & Guest Identity Helpers (Strictly Verified & Typed)
+# ---------------------------------------------------------------------------
+from dataclasses import dataclass
 
-    Never trusts unauthenticated x-user-id headers or cookies.
-    Requires either a valid server session token or a verified AUTH_TOKEN.
+@dataclass(frozen=True)
+class Identity:
+    id: str
+    is_admin: bool = False
+    is_guest: bool = False
+    user_id: Optional[str] = None
+    guest_id: Optional[str] = None
+
+    def __str__(self) -> str:
+        return self.id
+
+
+def _get_current_identity(request: Request) -> Optional[Identity]:
+    """Resolve strongly typed authenticated identity from verified credentials.
+    
+    Returns Identity with explicit is_admin and is_guest flags.
+    Restricts x-user-id impersonation with AUTH_TOKEN to cron and admin routes in production.
     """
-    # 1. Check verified session from cookie or Authorization header
+    settings = get_settings()
     session_token = request.cookies.get("compass_session")
     auth_header = request.headers.get("authorization")
     bearer_token = None
     if auth_header and auth_header.lower().startswith("bearer "):
         bearer_token = auth_header[7:].strip()
 
+    # 1. Verified user session
     token_to_check = session_token or bearer_token
     if token_to_check:
         try:
             from backend.routers.auth import get_user_from_session
             user = get_user_from_session(token_to_check)
             if user:
-                return user.lower()
-        except Exception:
-            pass
+                return Identity(id=user.lower(), is_admin=False, is_guest=False, user_id=user.lower())
+        except Exception as e:
+            logger.debug("Session token lookup failed: %s", e)
 
-    # 2. Check server-to-server AUTH_TOKEN
-    settings = get_settings()
+    # 2. Server-to-server AUTH_TOKEN
     if bearer_token and settings.AUTH_TOKEN and hmac.compare_digest(bearer_token, settings.AUTH_TOKEN):
-        # Admin / test callers supplying AUTH_TOKEN may optionally specify target user via x-user-id
         user_header = request.headers.get("x-user-id")
         if user_header and user_header.strip():
-            return user_header.strip().lower()
-        return "admin"
+            path = request.url.path
+            is_cron_or_admin = path.startswith("/api/cron") or path.startswith("/api/admin")
+            if settings.is_production() and not is_cron_or_admin:
+                logger.warning("x-user-id impersonation rejected on non-admin/cron route in production: %s", path)
+                raise HTTPException(
+                    status_code=403,
+                    detail="x-user-id impersonation is restricted to admin and cron routes in production.",
+                )
+            target = user_header.strip().lower()
+            return Identity(id=target, is_admin=True, is_guest=False, user_id=target)
+        return Identity(id="admin", is_admin=True, is_guest=False, user_id="admin")
 
     return None
+
+
+def _get_current_user_id(request: Request) -> Optional[str]:
+    """Resolve authenticated user identity strictly from verified credentials."""
+    ident = _get_current_identity(request)
+    return ident.id if ident else None
 
 
 def _get_current_guest_id(request: Request) -> Optional[str]:

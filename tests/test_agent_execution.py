@@ -202,7 +202,7 @@ async def test_agent_activity_feed_and_per_item_undo(client: AsyncClient, auth_h
     )
 
     # 3. GET /api/agent/activity
-    resp = await client.get("/api/agent/activity?limit=10")
+    resp = await client.get("/api/agent/activity?limit=10", headers=auth_headers)
     assert resp.status_code == 200
     activities = resp.json().get("activity", [])
     assert any(a["id"] == audit_id for a in activities)

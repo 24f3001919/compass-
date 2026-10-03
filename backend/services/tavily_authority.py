@@ -21,8 +21,19 @@ class AuthorityTier(str, enum.Enum):
 
 
 _TIER_1_DOMAINS = {
-    # Official Platforms & Repositories
+    # Official First-Party / Organizer Platforms
+    "nebius.com",
+    "docs.nebius.com",
+    "nvidia.com",
+    "developer.nvidia.com",
+    "arxiv.org",
+}
+
+_TIER_2_DOMAINS = {
+    # Platform & User-Generated Content Hosts (max Tier 2 per specification)
+    "devpost.com",
     "github.com",
+    "github.io",
     "raw.githubusercontent.com",
     "gitlab.com",
     "huggingface.co",
@@ -30,17 +41,9 @@ _TIER_1_DOMAINS = {
     "npmjs.com",
     "crates.io",
     "pkg.go.dev",
-    # Official Hackathon / Model Platforms
-    "nebius.com",
-    "docs.nebius.com",
-    "nvidia.com",
-    "developer.nvidia.com",
-    "devpost.com",
-    "arxiv.org",
-}
-
-_TIER_2_DOMAINS = {
-    # Reputable Tech & Knowledge Platforms
+    "notion.site",
+    "medium.com",
+    "substack.com",
     "stackoverflow.com",
     "stackexchange.com",
     "wikipedia.org",
@@ -50,8 +53,6 @@ _TIER_2_DOMAINS = {
     "theverge.com",
     "techcrunch.com",
     "venturebeat.com",
-    "medium.com",
-    "substack.com",
     "towardsdatascience.com",
 }
 
@@ -72,14 +73,21 @@ def extract_domain(url: str) -> str:
         return ""
 
 
-def classify_domain_authority(url: str) -> Dict[str, Any]:
+def classify_domain_authority(
+    url: str,
+    organizer_domains: Optional[set[str]] = None,
+    target_entity: Optional[str] = None,
+    is_entity_bound: bool = False,
+    page_title_matches_entity: bool = False,
+) -> Dict[str, Any]:
     """Classify the source authority of a URL.
 
-    Returns:
-        tier: AuthorityTier enum string
-        badge: Human-readable badge text
-        weight: Float multiplier between 0.5 and 1.0
-        reason: Explanation of classification
+    Rules:
+      - Tier 1: Government/academic domains, pinned organizer domains from config, or platform event pages meeting the Event-Page Rule.
+      - Event-Page Rule: Platform-hosted pages (Devpost, Lablab, etc.) count as official (Tier 1) for that event ONLY when
+        the page title/organizer matches target_entity AND the URL is pinned or entity-bound; otherwise Tier 2.
+      - Tier 2: General platform and user-generated content hosts (github, medium, unpinned devpost, etc.).
+      - Tier 3: General web pages.
     """
     domain = extract_domain(url)
     if not domain:
@@ -109,32 +117,75 @@ def classify_domain_authority(url: str) -> Dict[str, Any]:
             "reason": "Accredited academic institution",
         }
 
-    # Check Tier 1 exact or subdomain matches with strict dot boundary
+    from backend.config import get_settings
+    settings = get_settings()
+    configured_tier_1 = set(getattr(settings, "PINNED_TIER_1_DOMAINS", []))
+    if organizer_domains:
+        configured_tier_1.update(od.strip().lower() for od in organizer_domains if od)
+
+    # Check explicitly pinned organizer domains from config
+    for od in configured_tier_1:
+        if domain == od or domain.endswith("." + od):
+            return {
+                "tier": AuthorityTier.TIER_1_OFFICIAL.value,
+                "badge": "Official Organizer",
+                "weight": 1.0,
+                "domain": domain,
+                "reason": f"Matched pinned organizer domain ({od})",
+            }
+
+    # Event-Page Rule for Platform-Hosted Pages
+    platform_hosts = {"devpost.com", "lablab.ai", "dorahacks.io", "kaggle.com"}
+    is_platform = any(domain == p or domain.endswith("." + p) for p in platform_hosts)
+    if is_platform:
+        # Check if URL itself or subdomain contains target entity
+        clean_target = (target_entity or "").strip().lower()
+        url_contains_entity = bool(clean_target and clean_target in url.lower())
+        entity_qualifies = is_entity_bound or (url_contains_entity and page_title_matches_entity)
+
+        if entity_qualifies and clean_target:
+            return {
+                "tier": AuthorityTier.TIER_1_OFFICIAL.value,
+                "badge": "Official Event Page (Platform)",
+                "weight": 0.95,
+                "domain": domain,
+                "reason": f"Platform-hosted official event page bound to '{clean_target}'",
+            }
+        else:
+            return {
+                "tier": AuthorityTier.TIER_2_TECHNICAL.value,
+                "badge": "Platform / Community Host",
+                "weight": 0.75,
+                "domain": domain,
+                "reason": f"Platform host ({domain}) without official entity binding (Tier 2)",
+            }
+
+    # Check Tier 1 primary official domains
     for t1 in _TIER_1_DOMAINS:
         if domain == t1 or domain.endswith("." + t1):
             return {
                 "tier": AuthorityTier.TIER_1_OFFICIAL.value,
-                "badge": "Official Docs / Repo",
+                "badge": "Official Organizer",
                 "weight": 1.0,
                 "domain": domain,
                 "reason": f"Recognized primary authority ({t1})",
             }
 
-    # Check Tier 2 exact or subdomain matches with strict dot boundary
+    # Check Tier 2 platform & community hosts (max Tier 2)
     for t2 in _TIER_2_DOMAINS:
         if domain == t2 or domain.endswith("." + t2):
             return {
                 "tier": AuthorityTier.TIER_2_TECHNICAL.value,
-                "badge": "Technical Publication",
+                "badge": "Platform / Community Host",
                 "weight": 0.75,
                 "domain": domain,
-                "reason": f"Reputable technical/reference domain ({t2})",
+                "reason": f"Platform or community host ({t2})",
             }
 
     # Default to Tier 3 general web
     return {
         "tier": AuthorityTier.TIER_3_GENERAL.value,
-        "badge": "Web Source",
+        "badge": "General Web",
         "weight": 0.50,
         "domain": domain,
         "reason": "General public web source",

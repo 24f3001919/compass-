@@ -180,3 +180,42 @@ CREATE TABLE IF NOT EXISTS tavily_usage_log (
 
 CREATE INDEX IF NOT EXISTS idx_tavily_usage_created_at ON tavily_usage_log(created_at);
 
+-- ============================================================
+-- Shared DB Rate Limiter Table
+-- ============================================================
+CREATE TABLE IF NOT EXISTS rate_limit_buckets (
+    key          TEXT PRIMARY KEY,
+    tokens       DOUBLE PRECISION NOT NULL,
+    last_updated TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_rate_limit_updated ON rate_limit_buckets(last_updated);
+
+-- ============================================================
+-- DB-Backed Single-Use Pending Actions
+-- ============================================================
+CREATE TABLE IF NOT EXISTS pending_actions (
+    action_id      TEXT PRIMARY KEY,
+    run_id         TEXT NOT NULL,
+    owner_identity TEXT NOT NULL,
+    tool           TEXT NOT NULL,
+    args_hash      TEXT NOT NULL,
+    original_args  JSONB NOT NULL DEFAULT '{}'::jsonb,
+    status         TEXT NOT NULL DEFAULT 'pending',
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at     TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pending_actions_run ON pending_actions(run_id);
+CREATE INDEX IF NOT EXISTS idx_pending_actions_owner ON pending_actions(owner_identity);
+CREATE INDEX IF NOT EXISTS idx_pending_actions_status ON pending_actions(status);
+
+-- ============================================================
+-- Guest Mint Log for Abuse & Global Cap Enforcement
+-- ============================================================
+CREATE TABLE IF NOT EXISTS guest_mint_log (
+    id SERIAL PRIMARY KEY,
+    guest_id TEXT NOT NULL,
+    client_ip TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_guest_mint_created ON guest_mint_log(created_at);
+

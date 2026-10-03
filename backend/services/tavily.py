@@ -116,12 +116,14 @@ def sanitize_untrusted_text(text: str) -> str:
     """Disarm closing XML tags and prompt injection delimiters in untrusted web text."""
     if not text:
         return ""
-    return re.sub(
-        r"<\s*/?\s*(untrusted_web_content|web_source|system|instructions?|tool_call)\b[^>]*>",
+    # Strip any XML tags that match known framing/tool/system delimiters
+    sanitized = re.sub(
+        r"<\s*/?\s*(untrusted_web_content|web_source|research_evidence|evidence|system|instructions?|tool_call|function_call)\b[^>]*>",
         "[stripped_tag]",
         text,
         flags=re.IGNORECASE,
     )
+    return sanitized
 
 
 def scan_for_injection(text: str) -> List[str]:

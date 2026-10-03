@@ -1,18 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import {
-  selectAccount,
   logoutUser,
   getGoogleOAuthConnectUrl,
   disconnectCalendar,
   syncCalendarNow,
   getCalendarExportUrl,
   checkGoogleOAuthStatus,
-  getKnownAccounts,
-  addKnownAccount,
 } from '../api/client'
 
 export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged }) {
-  const [emailInput, setEmailInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [successMsg, setSuccessMsg] = useState(null)
@@ -27,31 +23,6 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
   }, [isOpen])
 
   if (!isOpen) return null
-
-  const handleSwitchAccount = async (targetEmail) => {
-    const clean = targetEmail.trim().toLowerCase()
-    if (!clean || !clean.includes('@')) {
-      setError('Please enter a valid email address.')
-      return
-    }
-
-    setLoading(true)
-    setError(null)
-    setSuccessMsg(null)
-    try {
-      await selectAccount(clean)
-      addKnownAccount(clean)
-      setSuccessMsg(`Switched to account: ${clean}`)
-      if (onUserChanged) onUserChanged(clean)
-      setTimeout(() => {
-        onClose()
-      }, 700)
-    } catch (err) {
-      setError(err.message || 'Failed to switch account')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleLogout = async () => {
     setLoading(true)
@@ -222,98 +193,77 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
           </div>
         </div>
 
-        {/* Account Selection */}
+        {/* Authentication Status & Actions */}
         <div style={{ marginBottom: '24px' }}>
           <h4 style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)', fontWeight: '700', marginBottom: '12px' }}>
-            1. Select Login Account
+            1. Identity & Sign-In
           </h4>
 
-          {/* Remembered Accounts Quick Picker */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
-            {getKnownAccounts().map(accEmail => {
-              const isActive = activeEmail === accEmail
-              return (
-                <button
-                  key={accEmail}
-                  onClick={() => handleSwitchAccount(accEmail)}
-                  disabled={loading}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    border: isActive ? '1.5px solid var(--primary)' : '1px solid var(--border)',
-                    background: isActive ? 'rgba(99, 102, 241, 0.08)' : 'var(--bg-card-soft)',
-                    color: 'var(--text-primary)',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ fontSize: '16px' }}>{isActive ? '⭐' : '👤'}</span>
-                    <div>
-                      <div style={{ fontSize: '13.5px', fontWeight: '600', color: 'var(--text-primary)' }}>
-                        {accEmail}
-                      </div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        {accEmail === 'demo@compass.app' ? 'Demo Workspace (Primary)' : 'Isolated Workspace'}
-                      </div>
-                    </div>
-                  </div>
-                  {isActive ? (
-                    <span style={{ fontSize: '11.5px', color: 'var(--primary)', fontWeight: '700' }}>✓ Active</span>
-                  ) : (
-                    <span style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: '600' }}>Switch →</span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Custom Email Input */}
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <input
-              type="email"
-              placeholder="Or enter another email (e.g. user@gmail.com)"
-              value={emailInput}
-              onChange={e => setEmailInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  if (emailInput.trim()) handleSwitchAccount(emailInput)
-                }
-              }}
-              style={{
-                flex: 1,
-                padding: '9px 12px',
-                borderRadius: '8px',
-                border: '1px solid var(--border)',
-                background: 'var(--bg-app)',
-                color: 'var(--text-primary)',
-                fontSize: '13px',
-                outline: 'none'
-              }}
-            />
-            <button
-              onClick={() => handleSwitchAccount(emailInput)}
-              disabled={loading || !emailInput.trim()}
-              style={{
-                padding: '9px 16px',
-                borderRadius: '8px',
-                border: 'none',
-                background: 'var(--primary)',
-                color: '#fff',
-                fontSize: '13px',
-                fontWeight: '600',
-                cursor: loading || !emailInput.trim() ? 'not-allowed' : 'pointer',
-                opacity: loading || !emailInput.trim() ? 0.6 : 1
-              }}
-            >
-              Switch
-            </button>
-          </div>
+          {currentUser?.authenticated ? (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '14px',
+              borderRadius: '10px',
+              background: 'rgba(16, 185, 129, 0.08)',
+              border: '1px solid rgba(16, 185, 129, 0.25)'
+            }}>
+              <div>
+                <div style={{ fontSize: '13.5px', fontWeight: '700', color: '#059669' }}>
+                  ✓ Authenticated as {activeEmail}
+                </div>
+                <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                  Session verified and active.
+                </div>
+              </div>
+              <button
+                onClick={handleLogout}
+                disabled={loading}
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-card)',
+                  color: 'var(--danger)',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Sign Out
+              </button>
+            </div>
+          ) : (
+            <div style={{
+              padding: '16px',
+              borderRadius: '10px',
+              background: 'var(--bg-card-soft)',
+              border: '1px solid var(--border)',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '14px' }}>
+                You are currently in Guest Mode. Sign in with Google to sync your calendar and persist memory across devices.
+              </div>
+              <a
+                href={getGoogleOAuthConnectUrl(true)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  background: 'var(--primary)',
+                  color: '#fff',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  textDecoration: 'none'
+                }}
+              >
+                <span>🔑</span> Sign in with Google
+              </a>
+            </div>
+          )}
         </div>
 
         {/* Google Calendar Section */}

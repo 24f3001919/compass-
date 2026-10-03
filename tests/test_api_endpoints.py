@@ -15,10 +15,13 @@ from httpx import AsyncClient
 
 @pytest.mark.asyncio
 async def test_root_redirect(client: AsyncClient):
-    """GET / should redirect to /docs."""
+    """GET / returns 200 in production/test or 307 to /docs in development."""
     resp = await client.get("/", follow_redirects=False)
-    assert resp.status_code == 307
-    assert resp.headers["location"] == "/docs"
+    if resp.status_code == 307:
+        assert resp.headers["location"] == "/docs"
+    else:
+        assert resp.status_code == 200
+        assert resp.json().get("status") == "ok"
 
 
 @pytest.mark.asyncio

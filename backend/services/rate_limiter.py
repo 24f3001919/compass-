@@ -28,14 +28,24 @@ async def _consume_token(
     key: str,
     capacity: float,
     refill_rate_per_sec: float,
+    fail_closed: Optional[bool] = None,
 ) -> Tuple[bool, int]:
     """Atomically consume 1 token for a given key.
     
     Returns:
         (allowed, retry_after_seconds)
     """
+    from backend.config import get_settings
+    settings = get_settings()
+    is_fail_closed = fail_closed if fail_closed is not None else getattr(settings, "RATE_LIMIT_FAIL_CLOSED", True)
+
     try:
         pool = await get_pool()
+        if not pool and is_fail_closed:
+            raise HTTPException(
+                status_code=503,
+                detail="Service unavailable: rate limiter database connection is unavailable.",
+            )
         if pool:
             async with pool.acquire() as conn:
                 async with conn.transaction():
@@ -71,8 +81,15 @@ async def _consume_token(
                         needed = 1.0 - now_tokens
                         retry_after = max(1, int(needed / max(0.0001, refill_rate_per_sec)) + 1)
                         return False, retry_after
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.debug(f"DB rate limiter fallback for key {key}: {e}")
+        logger.warning(f"DB rate limiter failure for key {key}: {e}")
+        if is_fail_closed:
+            raise HTTPException(
+                status_code=503,
+                detail="Service unavailable: rate limiter database is unreachable.",
+            ) from e
 
     # Fallback: In-memory token bucket
     now = time.monotonic()
@@ -155,3 +172,19 @@ async def enforce_mint_rate_limit(request: Request) -> None:
             detail="Guest token minting rate limit exceeded. Max 10 guest tokens per minute per IP.",
             headers={"Retry-After": str(retry_after)},
         )
+
+
+async def cleanup_stale_rate_limit_buckets(older_than_hours: int = 24) -> int:
+    """Purge expired rate limit buckets to prevent table bloat."""
+    try:
+        pool = await get_pool()
+        if pool:
+            async with pool.acquire() as conn:
+                res = await conn.execute(
+                    "DELETE FROM rate_limit_buckets WHERE last_updated < now() - ($1 || ' hours')::interval",
+                    str(older_than_hours),
+                )
+                return int(res.split()[-1]) if res and "DELETE" in res else 0
+    except Exception as e:
+        logger.warning("Failed to clean up stale rate limit buckets: %s", e)
+    return 0

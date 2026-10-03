@@ -31,9 +31,30 @@ class Settings(BaseSettings):
     EMBEDDING_DIMENSION: int = 768
 
     # --- Environment & Security ---
-    ENVIRONMENT: str = "development"  # development | test | production
+    ENVIRONMENT: str = "production"  # development | test | production (must be explicitly 'development' to expose docs)
     DEFAULT_DEV_TOKEN: str = "dev-token"
     DEFAULT_DEV_ENCRYPTION_KEY: str = "compass_secure_local_dev_token_encryption_key_32bytes!"
+
+    # --- Proxy & IP Resolution ---
+    # Path: Vercel rewrite -> Render (2 hops: Render is hop 1, Vercel is hop 2)
+    TRUSTED_PROXY_HOPS: int = 1
+    TRUST_CF_CONNECTING_IP: bool = False
+    TRUST_TRUE_CLIENT_IP: bool = False
+
+    # --- Rate Limiter & Abuse Protection ---
+    RATE_LIMIT_FAIL_CLOSED: bool = True
+    GLOBAL_DAILY_TAVILY_CREDIT_CAP: int = 100
+    GLOBAL_DAILY_MODEL_CALL_CAP: int = 1000
+    GLOBAL_DAILY_MINT_CAP: int = 200
+    COMPASS_KILL_SWITCH_ACTIVE: bool = False
+
+    # --- Pinned Authority Domains ---
+    PINNED_TIER_1_DOMAINS: list[str] = [
+        "docs.nebius.com",
+        "nebius.com",
+        "studio.nebius.ai",
+        "api.tokenfactory.nebius.com",
+    ]
 
     # --- Auth ---
     AUTH_TOKEN: str = ""  # Required — set in .env
@@ -62,6 +83,10 @@ class Settings(BaseSettings):
     # --- App ---
     LOG_LEVEL: str = "INFO"
     PORT: int = 8000
+
+    def is_development(self) -> bool:
+        """Check if explicitly running in development mode."""
+        return self.ENVIRONMENT.lower() == "development"
 
     def is_production(self) -> bool:
         """Check if running in production mode."""

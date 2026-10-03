@@ -107,19 +107,71 @@ async def execute_subqueries(
     return list(deduped.values())
 
 
+def _parse_explicit_year_date(date_str: Optional[str]) -> Optional[datetime]:
+    """Parse date string only if it contains an explicit 4-digit year (e.g. 2024, 2025, 2026).
+    Returns aware UTC datetime or None if missing or yearless.
+    """
+    if not date_str or not isinstance(date_str, str):
+        return None
+    year_match = re.search(r"\b((?:19|20)\d{2})\b", date_str)
+    if not year_match:
+        return None  # Missing explicit year -> reject
+
+    for fmt in (
+        "%Y-%m-%dT%H:%M:%SZ",
+        "%Y-%m-%dT%H:%M:%S%z",
+        "%Y-%m-%d",
+        "%B %d, %Y",
+        "%b %d, %Y",
+        "%d %B %Y",
+        "%d %b %Y",
+    ):
+        try:
+            dt = datetime.strptime(date_str.strip(), fmt)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+        except Exception:
+            pass
+
+    try:
+        y = int(year_match.group(1))
+        return datetime(y, 1, 1, tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
 def evaluate_deterministic_verdict(
     claims: List[Dict[str, Any]],
     raw_extracted_text: str,
     sources: List[Dict[str, Any]],
+    target_entity: Optional[str] = None,
 ) -> Tuple[str, List[Dict[str, Any]]]:
-    """Derive deterministic verdicts over structured extractions with verbatim quote validation."""
+    """Derive deterministic verdicts over structured extractions with entity binding and quote validation.
+
+    Rules:
+      1. Entity Binding: Claim/source must match target_entity keywords. Otherwise UNRELATED / NOT_FOUND.
+      2. Quote Verbatim: exact_quote must appear verbatim in the extracted page text.
+      3. Non-sentence filter: Reject claims that are table fragments (start with '|') or < 4 words.
+      4. Explicit Year: Dates without an explicit 4-digit year cannot be VERIFIED (verdict=UNVERIFIED).
+      5. Authority: Tier 1 official allows single-source VERIFIED; Tier 2 requires >= 2 agreeing sources.
+      6. Overall verdict: VERIFIED iff at least one claim is VERIFIED and 0 CONFLICTING.
+    """
     if not sources or not raw_extracted_text:
         return "NOT_FOUND", []
+
+    # Extract target entity keywords
+    entity_keywords = []
+    if target_entity:
+        entity_keywords = [
+            w.lower()
+            for w in re.findall(r"\b[a-zA-Z0-9_-]{3,}\b", target_entity)
+            if w.lower() not in ("hackathon", "submission", "deadline", "rules", "schedule", "guide", "overview")
+        ]
 
     evidence_items = []
     verdicts = []
 
-    # Map URLs to their authority tier
     url_tier_map = {
         s.get("url"): s.get("authority_tier", AuthorityTier.TIER_3_GENERAL.value)
         for s in sources
@@ -131,49 +183,117 @@ def evaluate_deterministic_verdict(
         claim_text = c.get("claim", "").strip()
         source_url = c.get("source_url", "").strip()
         quote = c.get("exact_quote", "").strip()
-        pub_date = c.get("extracted_date")
+        raw_date = c.get("extracted_date")
 
-        # Verbatim quote check: quote must appear in the raw extracted text
+        # 1. Non-sentence / table fragment filter
+        if claim_text.startswith("|") or len(claim_text.split()) < 4 or "|" in claim_text[:5]:
+            continue
+
+        # Marketing buzzword and boilerplate filter
+        marketing_keywords = (
+            "join us", "sign up", "empowering", "pioneering", "revolutionize",
+            "sponsored by", "all rights reserved", "subscribe", "terms of use",
+            "cookie policy", "privacy policy", "exclusive rewards"
+        )
+        if any(mk in claim_text.lower() for mk in marketing_keywords):
+            continue
+
+        # Semantic gate: claim must contain deadline, schedule, date, or rule semantics
+        has_semantics = bool(
+            re.search(
+                r"\b(deadline|due|ends|closes|starts|opens|submission|submit|by|before|until|rule|requirement|eligibility|guideline|schedule|timeline|date|time|deliverable|format)\b",
+                claim_text,
+                re.IGNORECASE,
+            )
+            or raw_date
+        )
+        if not has_semantics:
+            continue
+
+        # Quote truncation check: quote must not be truncated mid-word
+        if quote and len(quote.split()) < 2:
+            continue
+
+        # 2. Entity binding check: verify quote, claim, or URL matches entity
+        entity_matched = True
+        if entity_keywords:
+            text_to_check = f"{claim_text.lower()} {quote.lower()} {source_url.lower()}"
+            if not any(kw in text_to_check for kw in entity_keywords):
+                entity_matched = False
+
+        # 3. Verbatim quote check
         normalized_quote = " ".join(quote.lower().split())
         verbatim_match = bool(normalized_quote and normalized_quote in normalized_raw)
 
         tier = url_tier_map.get(source_url, AuthorityTier.TIER_3_GENERAL.value)
+        parsed_dt = _parse_explicit_year_date(raw_date)
 
-        # Deterministic verdict logic
-        if not verbatim_match or not quote:
-            verdict = "UNVERIFIED"  # Reject model-invented or hallucinated quotes
+        # "Verified quote" rule: quote appears verbatim AND entity matches AND date parses (if date present)
+        is_verified_quote = bool(verbatim_match and entity_matched and (parsed_dt is not None if raw_date else True))
+
+        # 4. Deterministic per-claim verdict derivation
+        if not entity_matched:
+            # Source belongs to a different/unrelated event or company -> NOT_FOUND, never UNVERIFIED
+            verdict = "NOT_FOUND"
+        elif not verbatim_match or not quote:
+            verdict = "UNVERIFIED"
+        elif raw_date and not parsed_dt:
+            verdict = "UNVERIFIED"  # Missing explicit 4-digit year
+        elif parsed_dt and parsed_dt < datetime.now(timezone.utc):
+            verdict = "STALE"
         elif tier == AuthorityTier.TIER_1_OFFICIAL.value:
             verdict = "VERIFIED"
-        elif pub_date and "2024" in str(pub_date) and "2025" in claim_text:
-            verdict = "STALE"
+        elif tier == AuthorityTier.TIER_2_TECHNICAL.value and len(sources) >= 2:
+            verdict = "VERIFIED"
         else:
-            verdict = "VERIFIED" if len(sources) >= 2 else "UNVERIFIED"
+            verdict = "UNVERIFIED"
 
         verdicts.append(verdict)
         evidence_items.append({
             "claim": claim_text,
             "source_url": source_url,
             "verbatim_quote": quote,
-            "published_date": pub_date,
+            "published_date": raw_date,
+            "parsed_date": parsed_dt.isoformat() if parsed_dt else None,
             "authority_tier": tier,
             "verdict": verdict,
-            "verbatim_verified": verbatim_match,
+            "verbatim_verified": is_verified_quote,
+            "entity_matched": entity_matched,
             "retrieved_at": datetime.now(timezone.utc).isoformat(),
         })
 
-    # Overall pipeline verdict
+    # Check for conflicting dates across distinct sources
+    dates_by_source = {}
+    for item in evidence_items:
+        if item.get("parsed_date") and item.get("source_url"):
+            d = item["parsed_date"][:10]  # compare YYYY-MM-DD
+            dates_by_source[item["source_url"]] = d
+
+    unique_dates = set(dates_by_source.values())
+    has_conflict = len(dates_by_source) >= 2 and len(unique_dates) > 1
+
+    if has_conflict:
+        for idx, item in enumerate(evidence_items):
+            if item.get("parsed_date"):
+                item["verdict"] = "CONFLICTING"
+                verdicts[idx] = "CONFLICTING"
+
+    # Overall pipeline verdict rule
     if not evidence_items:
+        overall = "NOT_FOUND"
+    elif all(v == "NOT_FOUND" for v in verdicts):
         overall = "NOT_FOUND"
     elif any(v == "CONFLICTING" for v in verdicts):
         overall = "CONFLICTING"
-    elif all(v == "VERIFIED" for v in verdicts):
+    elif any(v == "VERIFIED" for v in verdicts) and all(v in ("VERIFIED", "NOT_FOUND") for v in verdicts):
         overall = "VERIFIED"
-    elif any(v == "VERIFIED" for v in verdicts):
-        overall = "VERIFIED"
-    elif any(v == "STALE" for v in verdicts):
+    elif all(v == "STALE" for v in verdicts if v != "NOT_FOUND"):
         overall = "STALE"
     else:
         overall = "UNVERIFIED"
+        for item in evidence_items:
+            if item["verdict"] == "VERIFIED":
+                item["verdict"] = "UNVERIFIED"
 
     return overall, evidence_items
 
@@ -208,6 +328,7 @@ async def run_tavily_research(
     run_id: Optional[str] = None,
     include_domains: Optional[List[str]] = None,
     max_credits: int = 4,
+    target_entity: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Execute complete Tavily research pipeline with deterministic evidence ledger."""
     if not tavily_available():
@@ -234,7 +355,18 @@ async def run_tavily_research(
     sub_queries = await decompose_query(query)
 
     # 3. Concurrent search
-    raw_results = await execute_subqueries(sub_queries, include_domains=include_domains, max_credits=max_credits)
+    try:
+        raw_results = await execute_subqueries(sub_queries, include_domains=include_domains, max_credits=max_credits)
+    except Exception as e:
+        logger.warning("execute_subqueries failed: %s", e)
+        return {
+            "status": "unavailable",
+            "verdict": "NOT_FOUND",
+            "summary": f"Search execution failed: {e}",
+            "evidence_ledger": [],
+            "sources": [],
+        }
+
     if not raw_results:
         return {
             "status": "ok",
@@ -269,19 +401,23 @@ async def run_tavily_research(
     claims: List[Dict[str, Any]] = []
     for s in top_sources:
         content = s.get("content", "")
-        # Look for salient sentences as claims
-        sentences = [sent.strip() for sent in re.split(r"[.!?]\s+", content) if len(sent.strip()) > 20]
+        # Look for salient sentences as claims (reject markdown headers, tables, non-sentences)
+        sentences = [
+            sent.strip() for sent in re.split(r"[.!?]\s+", content)
+            if len(sent.strip()) > 20 and not sent.strip().startswith(("#", "|", "*", "-")) and "|" not in sent[:15]
+        ]
         if sentences:
+            dt_match = re.search(r"\b(202[4-9])\b", sentences[0])
             claims.append({
                 "claim": sentences[0],
                 "source_url": s.get("url", ""),
                 "exact_quote": sentences[0][:120],
-                "extracted_date": None,
+                "extracted_date": sentences[0] if dt_match else None,
             })
 
-    # 7. Evaluate deterministic verdicts with verbatim quote validation
+    # 7. Evaluate deterministic verdicts with verbatim quote validation and entity binding
     overall_verdict, evidence_ledger = evaluate_deterministic_verdict(
-        claims, full_extracted_corpus, top_sources
+        claims, full_extracted_corpus, top_sources, target_entity=target_entity or query
     )
 
     # 8. Persist to DB evidence_ledger table

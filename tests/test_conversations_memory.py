@@ -157,11 +157,11 @@ async def test_update_conversation_pin_archive_rename(db_conn):
     await add_message(db_conn, conversation_id=cid2, role="user", content="Chat Two")
 
     # 1. Rename cid1
-    ok_rename = await update_conversation(db_conn, cid1, title="Sprint Planning Q3")
+    ok_rename, _ = await update_conversation(db_conn, cid1, title="Sprint Planning Q3")
     assert ok_rename is True
 
     # 2. Pin cid1
-    ok_pin = await update_conversation(db_conn, cid1, is_pinned=True)
+    ok_pin, _ = await update_conversation(db_conn, cid1, is_pinned=True)
     assert ok_pin is True
 
     # Check that cid1 is pinned and appears first
@@ -171,7 +171,7 @@ async def test_update_conversation_pin_archive_rename(db_conn):
     assert convs[0]["is_pinned"] is True
 
     # 3. Archive cid2
-    ok_archive = await update_conversation(db_conn, cid2, is_archived=True)
+    ok_archive, _ = await update_conversation(db_conn, cid2, is_archived=True)
     assert ok_archive is True
 
     # Check list without archived: cid2 should not be in standard list
@@ -181,4 +181,37 @@ async def test_update_conversation_pin_archive_rename(db_conn):
     # Check list with archived: cid2 should be included
     convs_all = await list_conversations(db_conn, limit=10, user_id=test_user_id, include_archived=True)
     assert any(c["id"] == cid2 for c in convs_all)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_writes_to_one_conversation():
+    """Verify concurrent async message writes to the same conversation via pool do not deadlock or drop messages."""
+    import asyncio
+    pool = await asyncpg.create_pool(settings.DATABASE_URL, min_size=2, max_size=5, timeout=15.0)
+    try:
+        test_user_id = f"user_{uuid.uuid4().hex[:6]}"
+        async with pool.acquire() as conn:
+            cid = await get_or_create_conversation(conn, user_id=test_user_id)
+
+        async def _write_msg(idx: int):
+            async with pool.acquire() as conn:
+                return await add_message(
+                    conn,
+                    conversation_id=cid,
+                    role="user" if idx % 2 == 0 else "assistant",
+                    content=f"Concurrent message payload #{idx}",
+                )
+
+        tasks = [_write_msg(i) for i in range(5)]
+        results = await asyncio.gather(*tasks)
+        assert len(results) == 5
+
+        async with pool.acquire() as conn:
+            recent = await get_recent_messages(conn, conversation_id=cid, limit=20)
+            assert len(recent) == 5
+            contents = [m["content"] for m in recent]
+            for i in range(5):
+                assert any(f"#{i}" in c for c in contents)
+    finally:
+        await pool.close()
 

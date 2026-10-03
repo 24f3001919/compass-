@@ -40,7 +40,7 @@ async def main():
     print(f"\n🔍 Research Objective: '{query}'")
     print("Executing query decomposition, official source retrieval, and evidence extraction...\n")
 
-    res = await run_tavily_research(query, include_domains=["nebius.com", "devpost.com"])
+    res = await run_tavily_research(query, include_domains=["nebius.com", "devpost.com"], target_entity="Nebius AI Studio")
 
     print("-" * 80)
     print(f"VERDICT:  {res.get('verdict')}")

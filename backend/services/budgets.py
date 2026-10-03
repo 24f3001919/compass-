@@ -96,3 +96,115 @@ async def check_daily_identity_budget(
         raise
     except Exception as e:
         logger.debug(f"Could not verify daily budget against DB: {e}")
+
+
+def _get_budget_settings():
+    from backend.config import get_settings
+    return get_settings()
+
+
+async def check_global_spend_cap(pool: Any = None) -> None:
+    """Validate that global daily consumption across all users and guests has not exceeded hard limits.
+    Prevents sybil or mass-guest creation attacks from draining paid external API credits.
+    """
+    settings = _get_budget_settings()
+    import os
+    if settings.COMPASS_KILL_SWITCH_ACTIVE or os.environ.get("COMPASS_KILL_SWITCH_ACTIVE", "").lower() in ("true", "1", "yes"):
+        raise HTTPException(
+            status_code=503,
+            detail="Service temporarily paused: Global API kill-switch is engaged.",
+        )
+
+    tav_cap = getattr(settings, "GLOBAL_DAILY_TAVILY_CREDIT_CAP", 100)
+
+    try:
+        p = pool or await get_pool()
+        if p:
+            async with p.acquire() as conn:
+                global_tav = await conn.fetchval(
+                    "SELECT COALESCE(SUM(credits), 0) FROM tavily_usage_log WHERE created_at >= date_trunc('day', now())"
+                ) or 0
+                if int(global_tav) >= tav_cap:
+                    raise HTTPException(
+                        status_code=429,
+                        detail=f"Global daily Tavily credit cap ({tav_cap} credits) reached. Operations paused until reset.",
+                    )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.debug(f"Global spend cap check skipped: {e}")
+
+
+async def check_global_mint_cap(pool: Any = None) -> None:
+    """Check that total minted guests today do not exceed the DB-backed global mint cap.
+    
+    Prevents bot networks or distributed sybil scripts from creating unbounded guest sessions.
+    """
+    settings = _get_budget_settings()
+    import os
+    if settings.COMPASS_KILL_SWITCH_ACTIVE or os.environ.get("COMPASS_KILL_SWITCH_ACTIVE", "").lower() in ("true", "1", "yes"):
+        raise HTTPException(
+            status_code=503,
+            detail="Service temporarily paused: Global API kill-switch is engaged.",
+        )
+
+    mint_cap = getattr(settings, "GLOBAL_DAILY_MINT_CAP", 200)
+
+    try:
+        p = pool or await get_pool()
+        if p:
+            async with p.acquire() as conn:
+                count = await conn.fetchval(
+                    "SELECT COUNT(*) FROM guest_mint_log WHERE created_at >= date_trunc('day', now())"
+                ) or 0
+                if int(count) >= mint_cap:
+                    raise HTTPException(
+                        status_code=429,
+                        detail=f"Global daily guest creation limit of {mint_cap} reached. Guest session creation paused until tomorrow.",
+                    )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.debug(f"Global mint cap check DB error: {e}")
+
+
+async def record_guest_mint(guest_id: str, client_ip: str, pool: Any = None) -> None:
+    """Record guest session creation in DB for audit and global abuse tracking."""
+    try:
+        p = pool or await get_pool()
+        if p:
+            async with p.acquire() as conn:
+                await conn.execute(
+                    "INSERT INTO guest_mint_log (guest_id, client_ip, created_at) VALUES ($1, $2, now())",
+                    guest_id,
+                    client_ip,
+                )
+    except Exception as e:
+        logger.warning(f"Failed to record guest mint in DB: {e}")
+
+
+async def prune_expired_guests(retention_days: int = 30, pool: Any = None) -> int:
+    """Purge expired guest sessions, guest mint logs, and orphaned conversations."""
+    try:
+        p = pool or await get_pool()
+        if p:
+            async with p.acquire() as conn:
+                res1 = await conn.execute(
+                    "DELETE FROM guest_mint_log WHERE created_at < now() - ($1 || ' days')::interval",
+                    str(retention_days),
+                )
+                res2 = await conn.execute(
+                    """
+                    DELETE FROM conversations
+                    WHERE (user_id LIKE 'guest_%' OR user_id IS NULL)
+                      AND updated_at < now() - ($1 || ' days')::interval
+                    """,
+                    str(retention_days),
+                )
+                count1 = int(res1.split()[-1]) if res1 and "DELETE" in res1 else 0
+                count2 = int(res2.split()[-1]) if res2 and "DELETE" in res2 else 0
+                return count1 + count2
+    except Exception as e:
+        logger.warning(f"Guest session pruning failed: {e}")
+    return 0
+

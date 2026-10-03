@@ -66,12 +66,17 @@ async def guest_session_endpoint(request: Request, response: Response):
             "is_new": False,
         }
 
-    # POST: Enforce strict guest-mint rate limit per IP
+    # POST: Enforce strict guest-mint rate limit per IP and global daily cap
     from backend.dependencies import mint_rate_limit
     await mint_rate_limit(request)
 
+    from backend.services.budgets import check_global_mint_cap, record_guest_mint
+    await check_global_mint_cap()
+
     # Always generate a brand new cryptographically random guest identity (zero user input)
     gid, token = generate_guest_token()
+    from backend.services.security import get_client_ip
+    await record_guest_mint(gid, get_client_ip(request))
 
     is_https = (
         request.url.scheme == "https"
@@ -165,9 +170,10 @@ async def list_migration_conversations(request: Request):
 
 
 # ---------------------------------------------------------------------------
-# Import All Guest Data
+# Import All Guest Data (with /api/guest/migrate alias)
 # ---------------------------------------------------------------------------
 @router.post("/api/migration/import-all")
+@router.post("/api/guest/migrate")
 async def import_all_guest_data(request: Request, _rl: None = Depends(guest_rate_limit)):
     """Import all unimported guest conversations and memories into the authenticated user account.
 
@@ -242,8 +248,8 @@ async def import_selected_guest_data(body: ImportSelectedBody, request: Request,
                     already_imported_count += 1
                     details.append({"id": cid_str, "status": "already_imported", "already_imported": True})
                     continue
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed querying guest_migration_log table: %s", e)
 
             res = await conversations.migrate_single_conversation(conn, cid_str, guest_id, user_id)
             if res:

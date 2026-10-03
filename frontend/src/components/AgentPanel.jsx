@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { getAuthHeaders } from '../api/client'
 import StepCard, { STEP_STYLES, friendlyTool } from './agent/StepCard'
 import ConfirmationGate from './agent/ConfirmationGate'
@@ -15,7 +15,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
   const [undoStatus, setUndoStatus] = useState(null)
   const [rejectFeedback, setRejectFeedback] = useState('')
   const [activityList, setActivityList] = useState([])
-  const [critiqueStats, setCritiqueStats] = useState(null)
+  const [_critiqueStats, setCritiqueStats] = useState(null)
   const [proactiveBriefing, setProactiveBriefing] = useState(null)
   const [triggeringNightly, setTriggeringNightly] = useState(false)
   const [runsList, setRunsList] = useState([])
@@ -30,7 +30,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
       : ''
   }
 
-  const fetchRunsHistory = async () => {
+  const fetchRunsHistory = useCallback(async () => {
     try {
       const res = await fetch(`${getApiBase()}/api/agent/runs?limit=25`, {
         headers: getAuthHeaders(),
@@ -42,9 +42,9 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
     } catch {
       // ignore
     }
-  }
+  }, [])
 
-  const fetchActivity = async () => {
+  const fetchActivity = useCallback(async () => {
     try {
       const res = await fetch(`${getApiBase()}/api/agent/activity?limit=15`, {
         headers: getAuthHeaders(),
@@ -56,9 +56,9 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
     } catch {
       // ignore
     }
-  }
+  }, [])
 
-  const fetchCritiqueStats = async () => {
+  const fetchCritiqueStats = useCallback(async () => {
     try {
       const res = await fetch(`${getApiBase()}/api/agent/critique-stats`, {
         headers: getAuthHeaders(),
@@ -70,9 +70,9 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
     } catch {
       // ignore
     }
-  }
+  }, [])
 
-  const fetchProactiveBriefing = async () => {
+  const fetchProactiveBriefing = useCallback(async () => {
     try {
       const res = await fetch(`${getApiBase()}/api/agent/proactive-briefing`, {
         headers: getAuthHeaders(),
@@ -86,7 +86,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
     } catch {
       // ignore
     }
-  }
+  }, [])
 
   const triggerNightlyJob = async () => {
     setTriggeringNightly(true)
@@ -121,7 +121,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
     fetchCritiqueStats()
     fetchProactiveBriefing()
     fetchRunsHistory()
-  }, [])
+  }, [fetchActivity, fetchCritiqueStats, fetchProactiveBriefing, fetchRunsHistory])
 
   useEffect(() => {
     if (scrollContainerRef.current) {

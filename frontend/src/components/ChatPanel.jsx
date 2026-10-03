@@ -209,13 +209,18 @@ export default function ChatPanel({
     }
   }
 
+  const handleSendRef = useRef(handleSend)
+  useEffect(() => {
+    handleSendRef.current = handleSend
+  })
+
   useEffect(() => {
     if (initialPrompt && initialPrompt.trim()) {
       const promptToRun = initialPrompt.trim()
       if (onClearInitialPrompt) onClearInitialPrompt()
-      handleSend(promptToRun)
+      handleSendRef.current(promptToRun)
     }
-  }, [initialPrompt])
+  }, [initialPrompt, onClearInitialPrompt])
 
   const handleNewChat = () => {
     if (isStreaming || isTyping) return

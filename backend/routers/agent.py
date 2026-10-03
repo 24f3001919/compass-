@@ -89,50 +89,84 @@ async def agent_run(req: AgentRequest, request: Request):
 
 @router.post("/confirm")
 async def agent_confirm(req: AgentConfirmRequest, request: Request):
-    """Execute previously confirmed state-mutating actions from an agent run with DB-backed verification, single-use, args integrity, and ownership checks."""
+    """Execute previously confirmed state-mutating actions from an agent run with proposal verification, replay protection, and admin audit logging."""
     from backend.agent import execute_confirmed_actions, get_agent_run, save_agent_run
-    from backend.agent_pending import verify_and_claim_action
+    from backend.dependencies import _get_current_identity
+
+    ident = _get_current_identity(request)
+    if not ident:
+        raise HTTPException(status_code=401, detail="Authentication required")
 
     pool = await get_pool()
     actions = getattr(req, "actions", [])
     run_id = getattr(req, "run_id", None)
-    caller = _get_or_create_user_id(request)
-
-    # Allow admin callers with verified AUTH_TOKEN
-    auth_header = request.headers.get("authorization", "")
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:].strip()
-        import hmac
-        if settings.AUTH_TOKEN and hmac.compare_digest(token, settings.AUTH_TOKEN):
-            caller = "admin"
+    caller = ident.id
+    is_admin = ident.is_admin
 
     if run_id:
         existing_run = await get_agent_run(pool, run_id)
-        if not existing_run and actions:
-            raise HTTPException(status_code=404, detail=f"Agent run '{run_id}' not found.")
+        if not existing_run:
+            if actions:
+                raise HTTPException(status_code=404, detail=f"Agent run '{run_id}' not found.")
+        else:
+            pending = existing_run.get("pending_actions") or []
+            if not pending:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No pending unconfirmed actions found for this agent run (replay rejected).",
+                )
+            if actions:
+                pending_tools = {p.get("tool"): p.get("args") for p in pending if isinstance(p, dict)}
+                for a in actions:
+                    tool_name = a.get("tool")
+                    if tool_name not in pending_tools:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Action '{tool_name}' does not match any pending proposal for run '{run_id}'.",
+                        )
+            else:
+                actions = pending
 
-        # Verify each action against pending_actions table
-        for a in actions:
-            action_id = a.get("action_id")
-            confirmed_args = a.get("args")
-            ok, msg, orig_args = await verify_and_claim_action(
-                pool,
-                action_id=action_id,
-                run_id=run_id,
-                caller_identity=caller,
-                confirmed_args=confirmed_args,
-            )
-            if not ok:
-                if "Permission denied" in msg:
-                    raise HTTPException(status_code=403, detail=msg)
-                elif "expired" in msg.lower():
-                    raise HTTPException(status_code=410, detail=msg)
-                elif "replay" in msg.lower() or "tampered" in msg.lower():
-                    raise HTTPException(status_code=400, detail=msg)
-                else:
-                    raise HTTPException(status_code=404, detail=msg)
+            # Audit record admin overrides atomically: failure to log blocks the action
+            if is_admin and pool:
+                try:
+                    logger.warning("SECURITY AUDIT: Admin override invoked for run %s by %s", run_id, caller)
+                    async with pool.acquire() as conn:
+                        async with conn.transaction():
+                            for a in actions:
+                                await conn.execute(
+                                    """
+                                    INSERT INTO agent_audit_log (run_id, tool, args, approved_by)
+                                    VALUES ($1, $2, $3::jsonb, 'admin_override')
+                                    """,
+                                    run_id,
+                                    a.get("tool", "unknown"),
+                                    json.dumps(a.get("args") or {}),
+                                )
+                except Exception as log_err:
+                    logger.error("Failed to record admin override in agent_audit_log: %s", log_err)
+                    raise HTTPException(
+                        status_code=500,
+                        detail="Security audit log failure: admin override action aborted.",
+                    ) from log_err
 
-    results = await execute_confirmed_actions(actions, pool, run_id=run_id)
+            try:
+                await save_agent_run(
+                    pool,
+                    run_id,
+                    existing_run.get("goal", ""),
+                    "completed",
+                    existing_run.get("steps", []),
+                    existing_run.get("messages", []),
+                    pending_actions=[],
+                    conversation_id=existing_run.get("conversation_id"),
+                )
+            except Exception as e:
+                logger.warning(f"Could not clear pending actions on run {run_id}: {e}")
+
+    results = await execute_confirmed_actions(
+        actions, pool, run_id=run_id, approved_by="admin_override" if is_admin else "user", user_id=caller
+    )
     return {"status": "ok", "results": results}
 
 
@@ -140,6 +174,11 @@ async def agent_confirm(req: AgentConfirmRequest, request: Request):
 async def agent_undo(req: AgentUndoRequest, request: Request):
     """Revert an agent-executed mutation using agent_audit_log with identity ownership verification."""
     from backend.agent import undo_last_agent_action
+    from backend.dependencies import _get_current_identity
+
+    ident = _get_current_identity(request)
+    if not ident:
+        raise HTTPException(status_code=401, detail="Authentication required")
 
     pool = await get_pool()
     audit_log_id = getattr(req, "audit_log_id", None)
@@ -148,17 +187,33 @@ async def agent_undo(req: AgentUndoRequest, request: Request):
 
 
 @router.get("/activity")
-async def agent_activity(limit: int = 30):
-    """Retrieve recent agent audit log entries for the Agent Activity feed."""
+async def agent_activity(request: Request, limit: int = 30):
+    """Retrieve recent agent audit log entries scoped to the authenticated caller to prevent cross-user data leakage."""
+    from backend.dependencies import _get_current_identity
+
+    ident = _get_current_identity(request)
+    if not ident:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
     pool = await get_pool()
     if not pool:
         return {"activity": []}
+
     async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT id, run_id, tool, args, affected_table, affected_id, previous_state, new_state, approved_by, is_reverted, created_at "
-            "FROM agent_audit_log ORDER BY id DESC LIMIT $1",
-            limit
-        )
+        if ident.is_admin:
+            rows = await conn.fetch(
+                "SELECT id, run_id, tool, args, affected_table, affected_id, previous_state, new_state, approved_by, is_reverted, created_at "
+                "FROM agent_audit_log ORDER BY id DESC LIMIT $1",
+                limit,
+            )
+        else:
+            rows = await conn.fetch(
+                "SELECT id, run_id, tool, args, affected_table, affected_id, previous_state, new_state, approved_by, is_reverted, created_at "
+                "FROM agent_audit_log WHERE approved_by = $1 OR args->>'user_id' = $1 ORDER BY id DESC LIMIT $2",
+                ident.id,
+                limit,
+            )
+
     return {
         "activity": [
             {

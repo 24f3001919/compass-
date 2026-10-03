@@ -127,6 +127,43 @@ def is_google_oauth_configured() -> bool:
     return bool(c_id and secret and not str(c_id).startswith("demo-"))
 
 
+import time
+
+
+def generate_oauth_state(user_id: str) -> str:
+    """Generate cryptographically HMAC-signed OAuth state bound to user_id and timestamp."""
+    secret = _get_encryption_key()
+    ts = int(time.time())
+    payload = f"{user_id}:{ts}".encode("utf-8")
+    sig = hmac.new(secret, payload, hashlib.sha256).hexdigest()[:16]
+    raw = f"{user_id}:{ts}:{sig}"
+    return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("utf-8")
+
+
+def verify_oauth_state(state: str, expected_user_id: str, max_age_seconds: int = 600) -> bool:
+    """Verify that an OAuth state parameter is valid, unexpired, and strictly bound to expected_user_id."""
+    if not state or not expected_user_id:
+        return False
+    try:
+        raw = base64.urlsafe_b64decode(state.encode("utf-8")).decode("utf-8")
+        parts = raw.split(":")
+        if len(parts) != 3:
+            return False
+        user_id, ts_str, sig = parts
+        if user_id.lower() != expected_user_id.lower():
+            return False
+        ts = int(ts_str)
+        now = int(time.time())
+        if abs(now - ts) > max_age_seconds:
+            return False
+        secret = _get_encryption_key()
+        payload = f"{user_id}:{ts}".encode("utf-8")
+        expected_sig = hmac.new(secret, payload, hashlib.sha256).hexdigest()[:16]
+        return hmac.compare_digest(sig, expected_sig)
+    except Exception:
+        return False
+
+
 def generate_google_oauth_url(
     redirect_uri: str = "http://localhost:8000/api/calendar/callback",
     state: Optional[str] = None,
@@ -199,8 +236,8 @@ async def exchange_code_for_tokens(
                 try:
                     err_json = resp.json()
                     err_detail = err_json.get("error_description") or err_json.get("error") or resp.text
-                except Exception:
-                    pass
+                except (ValueError, KeyError) as e:
+                    logger.debug("Failed to decode Google error response JSON: %s", e)
                 return {
                     "error": f"Google Token Exchange Failed ({resp.status_code}): {err_detail}",
                     "status_code": resp.status_code,

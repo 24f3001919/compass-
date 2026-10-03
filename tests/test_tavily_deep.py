@@ -43,14 +43,18 @@ def test_domain_authority_classification():
     # Tier 1 Official / Academic / Gov
     nebius_auth = classify_domain_authority("https://docs.nebius.com/token-factory/quickstart")
     assert nebius_auth["tier"] == AuthorityTier.TIER_1_OFFICIAL.value
-    assert "Official Docs" in nebius_auth["badge"]
+    assert "Official Organizer" in nebius_auth["badge"]
     assert nebius_auth["weight"] >= 0.90
 
     nvidia_auth = classify_domain_authority("https://developer.nvidia.com/nemotron")
     assert nvidia_auth["tier"] == AuthorityTier.TIER_1_OFFICIAL.value
 
+    # Platform / user-content hosts are strictly capped at Tier 2 (weight <= 0.75)
     github_auth = classify_domain_authority("https://github.com/Ratnesh-101/compass")
-    assert github_auth["tier"] == AuthorityTier.TIER_1_OFFICIAL.value
+    assert github_auth["tier"] == AuthorityTier.TIER_2_TECHNICAL.value
+
+    devpost_auth = classify_domain_authority("https://chromaawards.devpost.com")
+    assert devpost_auth["tier"] == AuthorityTier.TIER_2_TECHNICAL.value
 
     gov_auth = classify_domain_authority("https://data.gov/dataset/sample")
     assert gov_auth["tier"] == AuthorityTier.TIER_1_OFFICIAL.value
@@ -58,7 +62,7 @@ def test_domain_authority_classification():
     edu_auth = classify_domain_authority("https://eecs.berkeley.edu/research")
     assert edu_auth["tier"] == AuthorityTier.TIER_1_OFFICIAL.value
 
-    # Tier 2 Reputable Tech
+    # Tier 2 Reputable Tech & Platforms
     so_auth = classify_domain_authority("https://stackoverflow.com/questions/12345/asyncio")
     assert so_auth["tier"] == AuthorityTier.TIER_2_TECHNICAL.value
     assert so_auth["weight"] == 0.75

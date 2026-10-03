@@ -130,13 +130,22 @@ def test_safe_client_ip_prefers_direct_host_when_no_proxy():
     assert ip == "203.0.113.42"
 
 
-def test_safe_client_ip_handles_forwarded_for():
-    """get_client_ip extracts the client IP from standard proxy headers."""
+def test_safe_client_ip_handles_forwarded_for(monkeypatch):
+    """get_client_ip extracts the trusted rightmost client IP from proxy headers to prevent spoofing."""
     mock_request = MagicMock()
-    mock_request.headers = {"x-forwarded-for": "198.51.100.15, 10.0.0.1"}
+    mock_request.headers = {"x-forwarded-for": "spoofed-ip, 198.51.100.15"}
     mock_request.client.host = "10.0.0.1"
     ip = get_client_ip(mock_request)
     assert ip == "198.51.100.15"
+
+    # Cloudflare connecting IP is ignored by default unless explicitly enabled
+    mock_request.headers = {"cf-connecting-ip": "203.0.113.88", "x-forwarded-for": "spoofed-ip, 198.51.100.15"}
+    assert get_client_ip(mock_request) == "198.51.100.15"
+
+    # Cloudflare connecting IP is honored when TRUST_CF_CONNECTING_IP is True
+    from backend.config import get_settings
+    monkeypatch.setattr(get_settings(), "TRUST_CF_CONNECTING_IP", True)
+    assert get_client_ip(mock_request) == "203.0.113.88"
 
 
 # ===========================================================================
@@ -189,10 +198,14 @@ async def test_task_idor_user_cannot_modify_other_user_task(client: AsyncClient,
 
     monkeypatch.setattr(structured, "get_task", mock_get_task)
 
+    from backend.routers.auth import create_session
+    bob_cookie = {"compass_session": create_session("bob")}
+    alice_cookie = {"compass_session": create_session("alice")}
+
     # 1. User 'bob' attempts to PATCH Alice's task -> must be 403 Forbidden
     patch_resp = await client.patch(
         "/api/tasks/999",
-        headers={"x-user-id": "bob"},
+        cookies=bob_cookie,
         json={"title": "Hacked Title by Bob"},
     )
     assert patch_resp.status_code == 403
@@ -201,7 +214,7 @@ async def test_task_idor_user_cannot_modify_other_user_task(client: AsyncClient,
     # 2. User 'bob' attempts to DELETE Alice's task -> must be 403 Forbidden
     delete_resp = await client.delete(
         "/api/tasks/999",
-        headers={"x-user-id": "bob"},
+        cookies=bob_cookie,
     )
     assert delete_resp.status_code == 403
     assert "Forbidden" in delete_resp.json()["detail"]
@@ -215,7 +228,7 @@ async def test_task_idor_user_cannot_modify_other_user_task(client: AsyncClient,
     monkeypatch.setattr(structured, "update_task", mock_update_task)
     alice_patch_resp = await client.patch(
         "/api/tasks/999",
-        headers={"x-user-id": "alice"},
+        cookies=alice_cookie,
         json={"title": "Alice Updated Project"},
     )
     assert alice_patch_resp.status_code == 200

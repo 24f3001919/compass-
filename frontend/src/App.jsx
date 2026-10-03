@@ -13,8 +13,6 @@ import {
   sendQueryToAssistant,
   fetchUsageSummary,
   fetchCurrentUser,
-  getGoogleOAuthConnectUrl,
-  disconnectCalendar,
   seedJudgeDemoPersona,
   initGuestSession,
   fetchMigrationStatus,

@@ -11,6 +11,7 @@ Run with:
     uvicorn backend.main:app --reload --port 8000
 """
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -93,15 +94,33 @@ logger = logging.getLogger("compass")
 async def lifespan(app: FastAPI):
     """Manage application startup and shutdown."""
     logger.info("🧭 Compass starting up — initializing database pool...")
+    cleanup_task = None
+
+    async def _periodic_cleanup_worker():
+        while True:
+            try:
+                await asyncio.sleep(6 * 3600)  # every 6 hours
+                from backend.services.rate_limiter import cleanup_stale_rate_limit_buckets
+                from backend.services.budgets import prune_expired_guests
+                await cleanup_stale_rate_limit_buckets(older_than_hours=24)
+                await prune_expired_guests(retention_days=int(getattr(settings, "GUEST_RETENTION_DAYS", 30)))
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.warning(f"Periodic background cleanup error: {e}")
+
     try:
         pool = await init_pool()
         logger.info("✅ Database pool initialized")
         from backend.services.usage import hydrate_usage_from_db
         await hydrate_usage_from_db(pool)
+        cleanup_task = asyncio.create_task(_periodic_cleanup_worker())
     except Exception as e:
         logger.warning(f"⚠️  Database pool init failed (stubs will still work): {e}")
 
     yield
+    if cleanup_task:
+        cleanup_task.cancel()
     logger.info("🧭 Compass shutting down — closing database pool...")
     await close_pool()
     logger.info("✅ Database pool closed")
@@ -138,11 +157,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 # ---------------------------------------------------------------------------
 # App Instance
 # ---------------------------------------------------------------------------
+_is_dev = settings.is_development()
+
 app = FastAPI(
     title="Compass API",
     description="Personal AI assistant with persistent memory",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url="/docs" if _is_dev else None,
+    redoc_url="/redoc" if _is_dev else None,
+    openapi_url="/openapi.json" if _is_dev else None,
 )
 
 # ---------------------------------------------------------------------------

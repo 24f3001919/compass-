@@ -16,7 +16,11 @@ from backend.config import get_settings
 from backend.dependencies import _get_current_user_id
 from backend.memory.db import get_pool
 from backend.models import SelectAccountBody, QuickConnectBody
-from backend.services.oauth import generate_google_oauth_url, is_google_oauth_configured
+from backend.services.oauth import (
+    generate_google_oauth_url,
+    generate_oauth_state,
+    is_google_oauth_configured,
+)
 
 logger = logging.getLogger("compass.routers.auth")
 settings = get_settings()
@@ -110,32 +114,6 @@ async def auth_me(request: Request):
     }
 
 
-@router.post("/api/auth/select-account")
-async def auth_select_account(body: SelectAccountBody, response: Response):
-    """Select or switch active user account for memory and calendar isolation."""
-    raw_email = (body.email or body.user_id or "").strip().lower()
-    email = re.sub(r"[^\w@.-]", "", raw_email)
-    if not email or "@" not in email:
-        raise HTTPException(status_code=400, detail="A valid email address is required")
-
-    session_token = create_session(email)
-    response.set_cookie(
-        key="compass_session",
-        value=session_token,
-        max_age=86400 * 365,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-    )
-    return {
-        "status": "ok",
-        "user_id": email,
-        "email": email,
-        "name": email.split("@")[0].replace(".", " ").title(),
-        "message": f"Switched account to {email}",
-    }
-
-
 @router.post("/api/auth/logout")
 async def auth_logout(request: Request, response: Response):
     """Log out of current account and clear session cookies."""
@@ -147,9 +125,17 @@ async def auth_logout(request: Request, response: Response):
     return {"status": "ok", "message": "Logged out successfully"}
 
 
-@router.post("/api/auth/quick-connect")
-async def auth_quick_connect(body: QuickConnectBody, response: Response):
-    """Quick-login with user account for instant access and testing."""
+@router.api_route("/api/auth/quick-connect", methods=["GET", "POST"])
+async def auth_quick_connect(response: Response, body: Optional[QuickConnectBody] = None):
+    """Dev-only quick-connect helper for local offline UI debugging.
+    Strictly forbidden and disabled in production, test, and default environments.
+    """
+    if not settings.is_development():
+        raise HTTPException(
+            status_code=404,
+            detail="Endpoint disabled: Quick-connect is restricted to local development environments.",
+        )
+
     from backend.services.calendar import save_calendar_connection
     raw_val = re.sub(r"[^\w@.-]", "", (body.email or body.auth_code or "").strip().lower())
     if "@" in raw_val:
@@ -204,21 +190,37 @@ async def calendar_connect(
     redirect_uri = _resolve_oauth_redirect_uri(request)
     current_user = _get_current_user_id(request)
     effective_hint = login_hint or (current_user if current_user and "@" in current_user else None)
-    url = generate_google_oauth_url(redirect_uri=redirect_uri, login_hint=effective_hint)
+    state = generate_oauth_state(current_user or "guest")
+    url = generate_google_oauth_url(redirect_uri=redirect_uri, login_hint=effective_hint, state=state)
 
     accept = request.headers.get("accept", "")
     if redirect or "text/html" in accept:
         return RedirectResponse(url=url)
-    return {"status": "ok", "configured": True, "url": url}
+    return {"status": "ok", "configured": True, "url": url, "state": state}
 
 
 @router.get("/api/calendar/callback")
 async def calendar_callback(
     request: Request,
     code: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
     error: Optional[str] = Query(None),
 ):
     """Handle OAuth redirect: exchange authorization code for tokens and save connection."""
+    if state:
+        from backend.services.oauth import verify_oauth_state
+        current_user = _get_current_user_id(request)
+        expected_user = current_user or "guest"
+        if not verify_oauth_state(state, expected_user):
+            return HTMLResponse(
+                "<html><body style='font-family:sans-serif;padding:40px;background:#0f172a;color:#f87171;'>"
+                "<h3>OAuth State Verification Failed</h3>"
+                "<p style='color:#fca5a5;'>Invalid or cross-user OAuth state token rejected (CSRF protection).</p>"
+                "<p><a style='color:#38bdf8;' href='/'>Return to Compass</a></p>"
+                "</body></html>",
+                status_code=403,
+            )
+
     if error:
         safe_error = escape(error)
         return HTMLResponse(
