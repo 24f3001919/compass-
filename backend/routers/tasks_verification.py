@@ -249,7 +249,7 @@ async def verify_task_deadline_endpoint(task_id: int, request: Request):
         return {
             "success": False,
             "error": "Internal verification error",
-            "summary": "Verification failed due to an internal error.",
+            "summary": "Verification could not be completed at this time.",
             "data": {},
         }
 
