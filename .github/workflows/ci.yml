@@ -78,6 +78,9 @@ jobs:
       - name: Ruff — lint backend, cli, tests
         run: ruff check backend cli tests
 
+      - name: Source Code File Size Audit (<=500 PASS, 501-700 WARN, >700 FAIL)
+        run: python scripts/check_file_sizes.py
+
       - name: Initialize test database schema
         env:
           PGPASSWORD: compass
