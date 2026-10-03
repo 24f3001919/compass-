@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     TRUSTED_PROXY_HOPS: int = 1
     TRUST_CF_CONNECTING_IP: bool = False
     TRUST_TRUE_CLIENT_IP: bool = False
+    EDGE_HMAC_SECRET: str = "compass_vercel_edge_hmac_secret_2026"
     VERCEL_EDGE_SECRET: str = "compass_vercel_edge_hmac_secret_2026"
 
     # --- Rate Limiter & Abuse Protection ---

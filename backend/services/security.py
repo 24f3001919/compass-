@@ -231,71 +231,120 @@ import time
 
 
 def verify_edge_signature(sig_header: Optional[str], secret: str, max_age_seconds: int = 300) -> bool:
-    """Verify HMAC SHA-256 edge signature over timestamp in format '<timestamp_unix>.<hex_hmac>'."""
-    if not sig_header or not secret or "." not in sig_header:
+    """Verify HMAC SHA-256 edge signature.
+    Supports:
+      1. 'client_ip|timestamp|signature' (over 'client_ip|timestamp')
+      2. '<timestamp>.<signature>' (over '<timestamp>')
+    """
+    if not sig_header or not secret:
         return False
     try:
-        ts_str, expected_hmac = sig_header.split(".", 1)
-        ts = int(ts_str)
-        now = int(time.time())
-        if abs(now - ts) > max_age_seconds:
-            return False
-        computed = hmac.new(secret.encode("utf-8"), ts_str.encode("utf-8"), hashlib.sha256).hexdigest()
-        return hmac.compare_digest(computed, expected_hmac)
+        if "|" in sig_header:
+            parts = sig_header.split("|")
+            if len(parts) == 3:
+                client_ip, ts_str, expected_hmac = parts
+                ts = int(ts_str)
+                now = int(time.time())
+                if abs(now - ts) > max_age_seconds:
+                    return False
+                if not is_valid_ip(client_ip):
+                    return False
+                payload = f"{client_ip}|{ts_str}"
+                computed = hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+                return hmac.compare_digest(computed, expected_hmac)
+
+        if "." in sig_header:
+            ts_str, expected_hmac = sig_header.split(".", 1)
+            ts = int(ts_str)
+            now = int(time.time())
+            if abs(now - ts) > max_age_seconds:
+                return False
+            computed = hmac.new(secret.encode("utf-8"), ts_str.encode("utf-8"), hashlib.sha256).hexdigest()
+            return hmac.compare_digest(computed, expected_hmac)
     except Exception:
         return False
+    return False
+
+
+def extract_signed_edge_client_ip(sig_header: Optional[str], secret: str, max_age_seconds: int = 300) -> Optional[str]:
+    """If sig_header is a valid 'client_ip|timestamp|signature', return the validated client_ip."""
+    if not sig_header or not secret or "|" not in sig_header:
+        return None
+    try:
+        parts = sig_header.split("|")
+        if len(parts) == 3:
+            client_ip, ts_str, expected_hmac = parts
+            ts = int(ts_str)
+            now = int(time.time())
+            if abs(now - ts) > max_age_seconds:
+                return None
+            if not is_valid_ip(client_ip):
+                return None
+            payload = f"{client_ip}|{ts_str}"
+            computed = hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+            if hmac.compare_digest(computed, expected_hmac):
+                return client_ip
+    except Exception:
+        return None
+    return None
 
 
 def get_client_ip(request: Request) -> str:
     """Safely extract client IP address behind trusted reverse proxies (Render / Cloudflare / Vercel).
 
-    Prevents header spoofing attacks where direct-to-Render callers inject arbitrary IPs into X-Forwarded-For.
-    - If valid Vercel edge signature header is present (added by Vercel middleware), trusts parts[-2] (2 hops).
-    - Otherwise (direct-to-Render or untrusted path), trusts ONLY parts[-1] (1 hop).
-    - If the proxy chain is shorter than expected hops, falls back strictly to TCP peer address.
+    Prevents header spoofing attacks:
+    - If TRUST_CF_CONNECTING_IP is True, checks cf-connecting-ip.
+    - If valid edge signature header is present ('client_ip|timestamp|signature' signed with EDGE_HMAC_SECRET),
+      the backend trusts that signed client_ip.
+    - If valid edge signature over timestamp only is present (legacy), trusts parts[-2] in XFF.
+    - Evaluates TRUSTED_PROXY_HOPS: extracts parts[-hops] if len(parts) >= hops, otherwise falls back to TCP peer.
+    - If direct connection without valid proxy chain/signature, uses TCP peer address.
     """
     from backend.config import get_settings
     settings = get_settings()
 
-    # 1. Cloudflare validated client IP (only if explicitly enabled in configuration)
+    # 0. Cloudflare connecting IP (only if explicitly trusted)
     if getattr(settings, "TRUST_CF_CONNECTING_IP", False):
         cf_ip = request.headers.get("cf-connecting-ip")
-        if cf_ip and cf_ip.strip():
+        if cf_ip and is_valid_ip(cf_ip.strip()):
             return cf_ip.strip()
 
-    # 2. True-Client-IP (only if explicitly enabled in configuration)
-    if getattr(settings, "TRUST_TRUE_CLIENT_IP", False):
-        t_ip = request.headers.get("true-client-ip")
-        if t_ip and t_ip.strip():
-            return t_ip.strip()
-
-    # 3. Dynamic proxy hop detection based on cryptographic Edge Signature
-    configured_hops = int(getattr(settings, "TRUSTED_PROXY_HOPS", 1))
+    # 1. Edge Signature Validation (Vercel Edge Middleware -> Backend)
     edge_sig = request.headers.get("x-compass-edge-sig") or request.headers.get("x-vercel-edge-sig")
-    edge_secret = getattr(settings, "VERCEL_EDGE_SECRET", "")
-    is_trusted_edge = verify_edge_signature(edge_sig, edge_secret) if edge_sig and edge_secret else False
+    edge_secret = getattr(settings, "EDGE_HMAC_SECRET", "") or getattr(settings, "VERCEL_EDGE_SECRET", "")
 
-    effective_hops = max(2, configured_hops) if is_trusted_edge else configured_hops
+    if edge_sig and edge_secret:
+        # Check signed client_ip format: client_ip|timestamp|signature
+        signed_ip = extract_signed_edge_client_ip(edge_sig, edge_secret)
+        if signed_ip:
+            return signed_ip
 
-    # 4. X-Forwarded-For: take the effective Nth-from-right IP appended by the trusted proxy chain
+        # Check timestamp.signature format: trust parts[-2] if available
+        if verify_edge_signature(edge_sig, edge_secret):
+            xff = request.headers.get("x-forwarded-for")
+            if xff and xff.strip():
+                parts = [p.strip() for p in xff.split(",") if p.strip()]
+                if len(parts) >= 2 and is_valid_ip(parts[-2]):
+                    return parts[-2]
+                if request.client and request.client.host and is_valid_ip(request.client.host):
+                    return request.client.host
+
+    # 2. Configurable Trusted Proxy Hops (Nth-from-right extraction)
+    hops = int(getattr(settings, "TRUSTED_PROXY_HOPS", 1))
     xff = request.headers.get("x-forwarded-for")
     if xff and xff.strip():
         parts = [p.strip() for p in xff.split(",") if p.strip()]
-        if parts:
-            if len(parts) >= effective_hops:
-                candidate = parts[-effective_hops]
-                if is_valid_ip(candidate):
-                    return candidate
-            # Chain is shorter than expected proxy hops: fallback strictly to TCP peer address
-            if request.client and request.client.host:
+        if len(parts) >= hops:
+            target_ip = parts[-hops]
+            if is_valid_ip(target_ip):
+                return target_ip
+        else:
+            # Chain is shorter than expected trusted proxy hops -> spoof/tamper fallback to TCP peer
+            if request.client and request.client.host and is_valid_ip(request.client.host):
                 return request.client.host
 
-    # 5. X-Real-IP (if present and no X-Forwarded-For)
-    real_ip = request.headers.get("x-real-ip")
-    if real_ip and real_ip.strip() and is_valid_ip(real_ip.strip()):
-        return real_ip.strip()
-
-    if request.client and request.client.host:
+    # 3. Direct TCP peer address
+    if request.client and request.client.host and is_valid_ip(request.client.host):
         return request.client.host
 
     return "127.0.0.1"

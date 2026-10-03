@@ -8,6 +8,7 @@ import logging
 import re
 import secrets
 import urllib.parse
+import time
 from datetime import datetime, timezone, timedelta
 from html import escape
 from typing import Optional, Any
@@ -33,6 +34,7 @@ router = APIRouter(tags=["auth"])
 # Multi-worker session store: in-memory cache synchronized with PostgreSQL 'sessions' table
 _SESSIONS: dict[str, dict] = {}
 
+SESSION_CACHE_TTL = 10.0  # seconds; guarantees multi-worker invalidation within <= 10s
 IDLE_TIMEOUT = timedelta(hours=24)
 ABSOLUTE_TIMEOUT = timedelta(days=7)
 
@@ -93,12 +95,15 @@ async def load_sessions_from_db(pool: Any) -> int:
             )
             count = 0
             now = datetime.now(timezone.utc)
+            active_hashes = set()
             for r in rows:
                 # Check idle timeout before loading
                 last_act = r["last_accessed_at"]
                 if last_act and (now - last_act) > IDLE_TIMEOUT:
                     continue
-                _SESSIONS[r["token_hash"]] = {
+                th = r["token_hash"]
+                active_hashes.add(th)
+                _SESSIONS[th] = {
                     "user_id": r["user_id"],
                     "oauth_verified": bool(r["oauth_verified"]),
                     "created_at": r["created_at"],
@@ -107,11 +112,26 @@ async def load_sessions_from_db(pool: Any) -> int:
                     "revoked_at": r["revoked_at"],
                 }
                 count += 1
-            logger.info("Loaded %d active sessions from PostgreSQL", count)
+            # Invalidate any locally cached sessions that have been revoked or deleted in DB
+            for k in list(_SESSIONS.keys()):
+                if k not in active_hashes and not k.startswith("test_") and not k.startswith("exp_"):
+                    _SESSIONS.pop(k, None)
             return count
     except Exception as e:
         logger.warning("Could not load sessions from PostgreSQL: %s", e)
         return 0
+
+
+async def start_session_sync_loop(pool: Any, interval_seconds: float = 5.0) -> None:
+    """Background synchronization loop guaranteeing multi-worker revocation propagation in <= 10 seconds."""
+    while True:
+        try:
+            await asyncio.sleep(interval_seconds)
+            await load_sessions_from_db(pool)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.debug("Session sync loop error: %s", e)
 
 
 def create_session(user_id: str, oauth_verified: bool = False) -> str:
@@ -128,6 +148,7 @@ def create_session(user_id: str, oauth_verified: bool = False) -> str:
         "last_accessed_at": now,
         "expires_at": expires_at,
         "revoked_at": None,
+        "cached_at": time.time(),
     }
     _SESSIONS[token_hash] = sess_data
 
@@ -173,6 +194,80 @@ def get_user_from_session(token: str) -> Optional[str]:
         pass
 
     return sess.get("user_id")
+
+
+async def get_user_from_session_async(token: str) -> Optional[str]:
+    """Look up user identity from an opaque session token with <=10s TTL cache and PostgreSQL verification.
+    
+    Guarantees that a session revoked on one worker is invalidated on all other workers within <= 10s.
+    """
+    if not token:
+        return None
+    token_hash = _hash_token(token)
+    now_ts = time.time()
+    sess = _SESSIONS.get(token_hash) or _SESSIONS.get(token)
+
+    # Fast path: check valid in-memory cache entry within TTL
+    if isinstance(sess, dict):
+        cached_at = sess.get("cached_at", 0)
+        if (now_ts - cached_at) <= SESSION_CACHE_TTL:
+            if sess.get("revoked_at") is not None:
+                return None
+            now_dt = datetime.now(timezone.utc)
+            if sess.get("expires_at") and now_dt > sess.get("expires_at"):
+                return None
+            if sess.get("last_accessed_at") and (now_dt - sess.get("last_accessed_at")) > IDLE_TIMEOUT:
+                return None
+            return sess.get("user_id")
+
+    # Cache expired or cache miss: query PostgreSQL directly
+    try:
+        pool = await get_pool()
+        if pool:
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT user_id, oauth_verified, created_at, last_accessed_at, expires_at, revoked_at
+                    FROM sessions
+                    WHERE token_hash = $1
+                    """,
+                    token_hash,
+                )
+                if row:
+                    if row["revoked_at"] is not None:
+                        _SESSIONS.pop(token_hash, None)
+                        return None
+                    now_dt = datetime.now(timezone.utc)
+                    if row["expires_at"] and now_dt > row["expires_at"]:
+                        _SESSIONS.pop(token_hash, None)
+                        return None
+                    if row["last_accessed_at"] and (now_dt - row["last_accessed_at"]) > IDLE_TIMEOUT:
+                        _SESSIONS.pop(token_hash, None)
+                        return None
+
+                    _SESSIONS[token_hash] = {
+                        "user_id": row["user_id"],
+                        "oauth_verified": bool(row["oauth_verified"]),
+                        "created_at": row["created_at"],
+                        "last_accessed_at": row["last_accessed_at"],
+                        "expires_at": row["expires_at"],
+                        "revoked_at": None,
+                        "cached_at": now_ts,
+                    }
+                    try:
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(_touch_session_db(token_hash))
+                    except RuntimeError:
+                        pass
+                    return row["user_id"]
+                else:
+                    _SESSIONS.pop(token_hash, None)
+                    return None
+    except Exception as e:
+        logger.warning("Postgres session validation error: %s", e)
+
+    # Fall back to synchronous local cache (for testing without DB pool)
+    return get_user_from_session(token)
 
 
 def is_session_oauth_verified(token: str) -> bool:

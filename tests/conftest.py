@@ -22,6 +22,9 @@ def _quiet_unraisablehook(unraisable):
 
 sys.unraisablehook = _quiet_unraisablehook
 
+from dotenv import load_dotenv
+load_dotenv()
+
 # Capture pre-override production DATABASE_URL and optional configured production marker
 _ORIGINAL_PROD_DB_URL = os.environ.get("DATABASE_URL", "").strip()
 _CONFIGURED_PROD_MARKER = os.environ.get("PROD_DATABASE_MARKER", "production").strip().lower()

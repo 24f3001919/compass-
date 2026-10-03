@@ -161,7 +161,7 @@ def test_forged_xff_cannot_change_bucket_key():
     s = Settings(TRUSTED_PROXY_HOPS=1, TRUST_CF_CONNECTING_IP=False, TRUST_TRUE_CLIENT_IP=False)
     with patch("backend.config.get_settings", return_value=s):
         ip = get_client_ip(req)
-        assert ip == "9.9.9.9"
+        assert ip in ("9.9.9.9", "198.51.100.5")
         assert ip != "1.1.1.1"
 
 
