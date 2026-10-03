@@ -318,7 +318,7 @@ export default function OnboardingTour({
                   title="Test Nemotron Ultra cross-domain roadmap synthesis"
                 >
                   <span>🧭</span>
-                  <span>Test Northstar Copilot</span>
+                  <span>Compass</span>
                 </button>
               )}
             </div>

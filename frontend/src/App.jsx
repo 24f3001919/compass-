@@ -5,7 +5,6 @@ import CalendarView from './components/CalendarView'
 import NorthstarPanel from './components/NorthstarPanel'
 import AuthModal from './components/AuthModal'
 import MigrationModal from './components/MigrationModal'
-import SharedChatView from './components/SharedChatView'
 import NebiusTelemetryModal from './components/NebiusTelemetryModal'
 import {
   checkBackendHealth,
@@ -45,15 +44,10 @@ export default function App() {
     return null
   })
   const [showAuthModal, setShowAuthModal] = useState(false)
-
-  const [shareId, setShareId] = useState(() => {
-    const params = new URLSearchParams(window.location.search)
-    return params.get('share') || (window.location.pathname.startsWith('/share/') ? window.location.pathname.replace('/share/', '') : null)
-  })
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      text: "Hey! I'm Compass, your productivity copilot. I can track tasks, recall code context, synthesize cross-domain roadmaps, and search the web. What's on your mind?"
+      text: "Hey! I'm Compass. I can track tasks, recall code context, synthesize cross-domain roadmaps, and search the web. What's on your mind?"
     }
   ])
   const [isTyping, setIsTyping] = useState(false)
@@ -234,21 +228,6 @@ export default function App() {
   const usageBadge = usageStats
     ? `⚡ ${usageStats.total_requests ?? 0} calls · $${(usageStats.total_estimated_cost_usd ?? 0).toFixed(5)}`
     : 'Nebius • Nemotron-3'
-
-  if (shareId) {
-    return (
-      <SharedChatView
-        shareId={shareId}
-        onGoToApp={() => {
-          const url = new URL(window.location.href)
-          url.searchParams.delete('share')
-          window.history.pushState({}, '', url.pathname + (url.search ? url.search : ''))
-          setShareId(null)
-          setActiveTab('northstar')
-        }}
-      />
-    )
-  }
 
   return (
     <div style={{ display: 'flex', height: '100vh', width: '100vw', background: 'var(--bg-app)', overflow: 'hidden' }}>

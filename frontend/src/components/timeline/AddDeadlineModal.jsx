@@ -194,7 +194,7 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
               ➕ Add New Deadline
             </h3>
             <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', margin: '4px 0 0' }}>
-              Create a standalone deadline, or ask Northstar to look into schedules & resolve conflicts
+              Create a standalone deadline, or ask Compass to look into schedules & resolve conflicts
             </p>
           </div>
           <button
@@ -489,7 +489,7 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
                   }}
                 >
                   <span>🧭</span>
-                  <span>Ask Northstar to Look into Schedules & Fix It</span>
+                  <span>Ask Compass to Look into Schedules & Fix It</span>
                 </button>
               </div>
             </div>
@@ -579,7 +579,7 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
                   }}
                 >
                   <span>🧭</span>
-                  <span>Ask Northstar to Fix It</span>
+                  <span>Ask Compass to Fix It</span>
                 </button>
               </div>
             </div>
@@ -604,10 +604,10 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
                 alignItems: 'center',
                 gap: '6px'
               }}
-              title="Ask Northstar AI to analyze schedules and resolve conflicts before adding"
+              title="Ask Compass to analyze schedules and resolve conflicts before adding"
             >
               <span>🧭</span>
-              <span>Ask Northstar to Look into Schedules</span>
+              <span>Ask Compass to Look into Schedules</span>
             </button>
 
             <div style={{ display: 'flex', gap: '10px' }}>

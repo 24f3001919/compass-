@@ -51,7 +51,7 @@ export default function NorthstarPanel({
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
           <span style={{ fontSize: '18px' }}>🧭</span>
           <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.2px' }}>
-            Northstar AI
+            Compass
           </span>
           <span style={{
             fontSize: '11px',
@@ -62,7 +62,7 @@ export default function NorthstarPanel({
             borderRadius: '10px',
             whiteSpace: 'nowrap'
           }}>
-            All-in-One Copilot & Autonomous Agents
+            Assistant & Planner
           </span>
         </div>
 
@@ -83,7 +83,7 @@ export default function NorthstarPanel({
               cursor: 'pointer',
               transition: 'all 0.15s ease',
             }}>
-            💬 Chat Copilot
+            💬 Chat
           </button>
           <button
             id="northstar-subtab-planner"
@@ -100,7 +100,7 @@ export default function NorthstarPanel({
               cursor: 'pointer',
               transition: 'all 0.15s ease',
             }}>
-            📋 Goal Planner
+            📋 Planner
           </button>
           <button
             id="northstar-subtab-specialist"
@@ -117,7 +117,7 @@ export default function NorthstarPanel({
               cursor: 'pointer',
               transition: 'all 0.15s ease',
             }}>
-            🧠 Specialist Agents
+            🧠 Specialists
           </button>
         </div>
       </div>
