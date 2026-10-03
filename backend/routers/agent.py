@@ -10,7 +10,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from backend.config import get_settings
-from backend.dependencies import agent_rate_limit, verify_token, _get_or_create_user_id
+from backend.dependencies import (
+    _get_current_identity,
+    _get_or_create_user_id,
+    agent_rate_limit,
+    verify_token,
+)
 from backend.memory.db import get_pool
 from backend.models import (
     AgentRequest,
@@ -91,7 +96,6 @@ async def agent_run(req: AgentRequest, request: Request):
 async def agent_confirm(req: AgentConfirmRequest, request: Request):
     """Execute previously confirmed state-mutating actions from an agent run with proposal verification, replay protection, and admin audit logging."""
     from backend.agent import execute_confirmed_actions, get_agent_run, save_agent_run
-    from backend.dependencies import _get_current_identity
 
     ident = _get_current_identity(request)
     if not ident:
@@ -197,7 +201,6 @@ async def agent_confirm(req: AgentConfirmRequest, request: Request):
 async def agent_undo(req: AgentUndoRequest, request: Request):
     """Revert an agent-executed mutation using agent_audit_log with identity ownership verification."""
     from backend.agent import undo_last_agent_action
-    from backend.dependencies import _get_current_identity
 
     ident = _get_current_identity(request)
     if not ident:
@@ -235,7 +238,6 @@ async def agent_undo(req: AgentUndoRequest, request: Request):
 @router.get("/activity")
 async def agent_activity(request: Request, limit: int = 30):
     """Retrieve recent agent audit log entries scoped to the authenticated caller to prevent cross-user data leakage."""
-    from backend.dependencies import _get_current_identity
 
     ident = _get_current_identity(request)
     if not ident:
@@ -286,7 +288,6 @@ async def agent_critique_stats(request: Request):
     Strips individual run details and goals to high-level aggregate counts unless caller is authenticated admin.
     """
     from backend.agent import get_critique_stats
-    from backend.dependencies import _get_current_identity
 
     ident = _get_current_identity(request)
     is_admin = bool(ident and ident.is_admin)

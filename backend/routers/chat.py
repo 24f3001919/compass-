@@ -421,18 +421,6 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
         message = req.message.strip()
         yield ": ping\n\n"
 
-        if not _settings.NEBIUS_API_KEY or _settings.NEBIUS_API_KEY.startswith("mock-"):
-            result = await orchestrator.handle_message(
-                conversation_id=req.conversation_id, message=message, user_id=user_id, guest_id=guest_id
-            )
-            response_text = result.get("response", "")
-            prompt_est = max(len(message.split()) * 3, 30)
-            completion_est = max(len(response_text.split()), 15)
-            record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
-            yield f"data: {json.dumps({'type': 'token', 'value': response_text})}\n\n"
-            yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': result.get('skill_used', 'chat')})}\n\n"
-            return
-
         stream = None
         try:
             client = AsyncOpenAI(
@@ -505,19 +493,33 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
 
             tools: List[ChatCompletionToolParam] = cast(List[ChatCompletionToolParam], TOOLS)
 
-            stream = cast(
-                AsyncStream[ChatCompletionChunk],
-                await client.chat.completions.create(
-                    model=_settings.ROUTER_MODEL,
-                    messages=messages,
-                    tools=tools,
-                    tool_choice="auto",
-                    max_tokens=10000,
-                    temperature=0.7,
-                    stream=True,
-                    stream_options={"include_usage": True},
-                ),
-            )
+            try:
+                stream = cast(
+                    AsyncStream[ChatCompletionChunk],
+                    await client.chat.completions.create(
+                        model=_settings.ROUTER_MODEL,
+                        messages=messages,
+                        tools=tools,
+                        tool_choice="auto",
+                        max_tokens=10000,
+                        temperature=0.7,
+                        stream=True,
+                        stream_options={"include_usage": True},
+                    ),
+                )
+            except Exception as create_err:
+                logger.warning(f"Upstream stream creation failed: {create_err}, falling back to orchestrator")
+                result = await orchestrator.handle_message(
+                    conversation_id=req.conversation_id, message=message, user_id=user_id, guest_id=guest_id
+                )
+                response_text = result.get("response", "")
+                skill_used = result.get("skill_used") or "chat"
+                prompt_est = max(len(message.split()) * 3, 30)
+                completion_est = max(len(response_text.split()), 15)
+                record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
+                yield f"data: {json.dumps({'type': 'token', 'value': response_text})}\n\n"
+                yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used})}\n\n"
+                return
 
             full_text = ""
             emitted_text = ""
