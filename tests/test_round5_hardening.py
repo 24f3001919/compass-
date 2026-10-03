@@ -396,21 +396,22 @@ async def test_cross_identity_tasks_isolation_negative():
         )
 
     try:
-        from backend.routers.tasks_verification import update_task_endpoint, delete_task_endpoint
+        from backend.routers.tasks import update_frontend_task, delete_frontend_task
         from backend.models import UpdateTaskRequest
 
         req_scope = {"type": "http", "headers": [], "client": ("127.0.0.1", 1234)}
         fastapi_req = Request(req_scope)
 
-        with patch("backend.routers.tasks_verification._get_current_identity", return_value=ident_b):
+        with patch("backend.routers.tasks._get_current_identity", return_value=ident_b), \
+             patch("backend.dependencies._get_current_identity", return_value=ident_b):
             # Attempt to update User A's task as User B -> Expect 404 or 403
             with pytest.raises(HTTPException) as exc_info:
-                await update_task_endpoint(task_id, UpdateTaskRequest(title="Hacked title"), fastapi_req)
+                await update_frontend_task(str(task_id), UpdateTaskRequest(title="Hacked title"), fastapi_req)
             assert exc_info.value.status_code in (403, 404)
 
             # Attempt to delete User A's task as User B -> Expect 404 or 403
             with pytest.raises(HTTPException) as exc_info:
-                await delete_task_endpoint(task_id, fastapi_req)
+                await delete_frontend_task(str(task_id), fastapi_req)
             assert exc_info.value.status_code in (403, 404)
     finally:
         async with pool.acquire() as conn:
@@ -444,7 +445,8 @@ async def test_cross_identity_agent_undo_isolation_negative():
         req_scope = {"type": "http", "headers": [], "client": ("127.0.0.1", 1234)}
         fastapi_req = Request(req_scope)
 
-        with patch("backend.routers.agent._get_current_identity", return_value=ident_b):
+        with patch("backend.routers.agent._get_current_identity", return_value=ident_b), \
+             patch("backend.dependencies._get_current_identity", return_value=ident_b):
             with pytest.raises(HTTPException) as exc_info:
                 await agent_undo(AgentUndoRequest(audit_log_id=audit_id), fastapi_req)
             assert exc_info.value.status_code == 403
@@ -473,17 +475,18 @@ async def test_cross_identity_conversation_isolation_negative():
         )
 
     try:
-        from backend.routers.chat import delete_conversation, get_messages
+        from backend.routers.chat import delete_past_conversation, get_messages
         req_scope = {"type": "http", "headers": [], "client": ("127.0.0.1", 1234)}
         fastapi_req = Request(req_scope)
 
-        with patch("backend.routers.chat._get_current_identity", return_value=ident_b):
+        with patch("backend.routers.chat._get_current_identity", return_value=ident_b), \
+             patch("backend.dependencies._get_current_identity", return_value=ident_b):
             with pytest.raises(HTTPException) as exc_info:
                 await get_messages(conv_id, fastapi_req)
             assert exc_info.value.status_code == 403
 
             with pytest.raises(HTTPException) as exc_info:
-                await delete_conversation(conv_id, fastapi_req)
+                await delete_past_conversation(conv_id, fastapi_req)
             assert exc_info.value.status_code == 403
     finally:
         async with pool.acquire() as conn:

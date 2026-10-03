@@ -270,11 +270,12 @@ def get_client_ip(request: Request) -> str:
             return t_ip.strip()
 
     # 3. Dynamic proxy hop detection based on cryptographic Edge Signature
+    configured_hops = int(getattr(settings, "TRUSTED_PROXY_HOPS", 1))
     edge_sig = request.headers.get("x-compass-edge-sig") or request.headers.get("x-vercel-edge-sig")
     edge_secret = getattr(settings, "VERCEL_EDGE_SECRET", "")
     is_trusted_edge = verify_edge_signature(edge_sig, edge_secret) if edge_sig and edge_secret else False
 
-    effective_hops = 2 if is_trusted_edge else 1
+    effective_hops = max(2, configured_hops) if is_trusted_edge else configured_hops
 
     # 4. X-Forwarded-For: take the effective Nth-from-right IP appended by the trusted proxy chain
     xff = request.headers.get("x-forwarded-for")

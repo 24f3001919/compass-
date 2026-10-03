@@ -102,6 +102,7 @@ async def agent_confirm(req: AgentConfirmRequest, request: Request):
     run_id = getattr(req, "run_id", None)
     caller = ident.id
     is_admin = ident.is_admin
+    audit_record_ids: list[int] = []
 
     if run_id:
         existing_run = await get_agent_run(pool, run_id)

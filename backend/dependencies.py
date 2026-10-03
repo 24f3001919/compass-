@@ -324,13 +324,13 @@ def _get_current_identity(request: Request) -> Optional[Identity]:
                     detail="x-user-id impersonation is forbidden in this environment.",
                 )
             target = user_header.strip().lower()
-            return Identity(id=target, is_admin=True, is_guest=False, user_id=target, guest_id=None)
-        return Identity(id="admin", is_admin=True, is_guest=False, user_id="admin", guest_id=None)
+            return Identity(id=target, is_admin=True, is_guest=False, user_id=target, guest_id=verified_guest)
+        return Identity(id="admin", is_admin=True, is_guest=False, user_id="admin", guest_id=verified_guest)
 
     # 3. Verified guest token
     if verified_guest:
         return Identity(
-            id=f"guest_{verified_guest}",
+            id=verified_guest,
             is_admin=False,
             is_guest=True,
             user_id=None,

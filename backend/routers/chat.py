@@ -51,8 +51,8 @@ router = APIRouter(tags=["chat"])
 async def chat(request: ChatRequest, req: Request, _token: str = Depends(verify_token)):
     """Main conversational endpoint — wired to Nemotron router and orchestrator."""
     ident = _get_current_identity(req)
-    user_id = ident.id if ident and not ident.is_guest else None
-    guest_id = ident.id if ident and ident.is_guest else None
+    user_id = ident.user_id if ident else None
+    guest_id = ident.guest_id if ident else None
     result = await orchestrator.handle_message(
         conversation_id=request.conversation_id,
         message=request.message,
@@ -77,8 +77,8 @@ async def get_messages(
         pool = await get_pool()
         async with pool.acquire() as conn:
             ident = _get_current_identity(request)
-            user_id = ident.id if ident and not ident.is_guest else None
-            guest_id = ident.id if ident and ident.is_guest else None
+            user_id = ident.user_id if ident else None
+            guest_id = ident.guest_id if ident else None
             is_admin = bool(ident and ident.is_admin)
 
             has_access, err = await conversations.check_conversation_access(
@@ -421,7 +421,7 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
         message = req.message.strip()
         yield ": ping\n\n"
 
-        if not _settings.NEBIUS_API_KEY:
+        if not _settings.NEBIUS_API_KEY or _settings.NEBIUS_API_KEY.startswith("mock-"):
             result = await orchestrator.handle_message(
                 conversation_id=req.conversation_id, message=message, user_id=user_id, guest_id=guest_id
             )

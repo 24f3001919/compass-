@@ -60,6 +60,9 @@ class Settings(BaseSettings):
         "https://nebiusglobalaihackathon.devpost.com",
         "http://nebiusglobalaihackathon.devpost.com",
         "nebiusglobalaihackathon.devpost.com",
+        "https://nebius-hackathon.devpost.com",
+        "http://nebius-hackathon.devpost.com",
+        "nebius-hackathon.devpost.com",
     ]
 
     # --- Auth ---
