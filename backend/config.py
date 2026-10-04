@@ -41,7 +41,6 @@ class Settings(BaseSettings):
     TRUST_CF_CONNECTING_IP: bool = False
     TRUST_TRUE_CLIENT_IP: bool = False
     EDGE_HMAC_SECRET: str = "compass_vercel_edge_hmac_secret_2026"
-    VERCEL_EDGE_SECRET: str = "compass_vercel_edge_hmac_secret_2026"
 
     # --- Rate Limiter & Abuse Protection ---
     RATE_LIMIT_FAIL_CLOSED: bool = True
@@ -107,21 +106,40 @@ class Settings(BaseSettings):
         return self.ENVIRONMENT.lower() in ("production", "prod")
 
     def validate_production_secrets(self) -> None:
-        """Validate that insecure dev-default secrets are not used in production."""
+        """Validate that required production secrets are set, secure, and not reused."""
         if not self.is_production():
             return
 
+        missing = []
         if not self.AUTH_TOKEN or self.AUTH_TOKEN.strip() in (self.DEFAULT_DEV_TOKEN, "compass-token", "test-token"):
+            missing.append("AUTH_TOKEN")
+        if not self.TOKEN_ENCRYPTION_KEY or self.TOKEN_ENCRYPTION_KEY.strip() == self.DEFAULT_DEV_ENCRYPTION_KEY:
+            missing.append("TOKEN_ENCRYPTION_KEY")
+        if not self.GUEST_SIGNING_SECRET or self.GUEST_SIGNING_SECRET.strip() in ("dev-secret", "test-secret", "compass-guest-token-secret-2026"):
+            missing.append("GUEST_SIGNING_SECRET")
+        if not self.EDGE_HMAC_SECRET or self.EDGE_HMAC_SECRET.strip() in ("dev-secret", "test-secret", "compass_vercel_edge_hmac_secret_2026"):
+            missing.append("EDGE_HMAC_SECRET")
+
+        if missing:
             raise ValueError(
-                "CRITICAL SECURITY CONFIGURATION ERROR: AUTH_TOKEN must be securely configured in production "
-                "and cannot use default development tokens ('dev-token')."
+                f"CRITICAL SECURITY CONFIGURATION ERROR: Missing or default required production secrets: "
+                f"{', '.join(missing)}. Every secret must be set with a unique, secure value at startup in production."
             )
 
-        if not self.TOKEN_ENCRYPTION_KEY or self.TOKEN_ENCRYPTION_KEY.strip() == self.DEFAULT_DEV_ENCRYPTION_KEY:
-            raise ValueError(
-                "CRITICAL SECURITY CONFIGURATION ERROR: TOKEN_ENCRYPTION_KEY must be securely configured in production "
-                "and cannot use the default development encryption key."
-            )
+        secrets_dict = {
+            "AUTH_TOKEN": self.AUTH_TOKEN.strip(),
+            "TOKEN_ENCRYPTION_KEY": self.TOKEN_ENCRYPTION_KEY.strip(),
+            "GUEST_SIGNING_SECRET": self.GUEST_SIGNING_SECRET.strip(),
+            "EDGE_HMAC_SECRET": self.EDGE_HMAC_SECRET.strip(),
+        }
+        seen = {}
+        for name, val in secrets_dict.items():
+            if val in seen:
+                raise ValueError(
+                    f"CRITICAL SECURITY CONFIGURATION ERROR: Secret reuse detected between {seen[val]} and {name}. "
+                    "Each secret must have a separate, independent value per purpose."
+                )
+            seen[val] = name
 
     CORS_ORIGINS: list[str] = [
         "http://localhost:5173",

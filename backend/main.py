@@ -92,6 +92,9 @@ logger = logging.getLogger("compass")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application startup and shutdown."""
+    # 0. Startup Secrets Validation (fails immediately if production secrets are missing or reused)
+    settings.validate_production_secrets()
+
     logger.info("🧭 Compass starting up — initializing database pool...")
     cleanup_task = None
 
@@ -120,18 +123,19 @@ async def lifespan(app: FastAPI):
         # Startup check: verify configured models exist in Nebius catalog (fail loudly, never silently fall back)
         if settings.is_production() or (settings.NEBIUS_API_KEY and not settings.NEBIUS_API_KEY.startswith("mock-")):
             from backend.services.model_check import check_models_catalog
-            required_models = {
-                settings.ROUTER_MODEL,
-                settings.SKILL_MODEL,
-                settings.REASONING_MODEL,
-                settings.SYNTHESIS_MODEL,
-                settings.EMBEDDING_MODEL,
+            routed_roles = {
+                "router": settings.ROUTER_MODEL,
+                "skill": settings.SKILL_MODEL,
+                "reasoning": settings.REASONING_MODEL,
+                "synthesis": settings.SYNTHESIS_MODEL,
+                "embedding": settings.EMBEDDING_MODEL,
             }
             check_models_catalog(
                 base_url=settings.NEBIUS_BASE_URL,
                 api_key=settings.NEBIUS_API_KEY,
-                required_models=required_models,
+                required_models=set(routed_roles.values()),
                 fail_loudly=settings.is_production(),
+                routed_roles=routed_roles,
             )
     except Exception as e:
         logger.warning(f"⚠️  Database pool init failed (stubs will still work): {e}")
