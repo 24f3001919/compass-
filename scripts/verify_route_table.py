@@ -22,7 +22,6 @@ KNOWN_ROUTE_METADATA = {
     ("/health", "GET"): ("None", "Public Readiness / Neon DB pool ping", "test_api_endpoints.py::test_health_endpoint"),
     ("/admin/consolidate", "POST"): ("verify_token (AUTH_TOKEN)", "Restricted to callers with AUTH_TOKEN", "test_nightly_job.py::test_consolidate_endpoint"),
     ("/admin/usage", "GET"): ("verify_token (AUTH_TOKEN)", "Restricted to callers with AUTH_TOKEN", "test_telemetry.py::test_admin_usage_telemetry"),
-    ("/api/admin/proxy-hops", "GET"): ("None (Diagnostic)", "Inspects proxy hops & XFF chain", "test_round4_hardening.py::test_proxy_hops_shorter_chain_falls_back_to_peer_address"),
     ("/api/admin/usage", "GET"): ("verify_token (AUTH_TOKEN)", "Restricted to callers with AUTH_TOKEN", "test_telemetry.py::test_admin_usage_telemetry"),
     ("/api/agent/activity", "GET"): ("_get_current_identity", "WHERE approved_by = $1 OR args->>'user_id' = $1", "test_round3_corrections.py::test_agent_activity_auth_isolation"),
     ("/api/agent/capabilities", "GET"): ("None", "Static schema of available agent actions", "test_agent_execution.py::test_agent_capabilities"),
