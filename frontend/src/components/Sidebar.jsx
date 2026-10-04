@@ -1,27 +1,10 @@
 import React from 'react'
-import {
-  CheckSquare,
-  Compass,
-  Calendar,
-  Sparkles,
-  Cpu,
-  Layers,
-  Activity,
-  User,
-  ShieldCheck,
-  ChevronRight,
-  Flame,
-  BookOpen,
-  Code2,
-  Globe,
-  Tag,
-  Zap,
-} from 'lucide-react'
+import CreateDomainModal from './timeline/CreateDomainModal'
 
 const NAV_ITEMS = [
-  { key: 'timeline', icon: CheckSquare, label: 'Timeline & Tasks', sub: 'Executive Task Feed' },
-  { key: 'compass', icon: Compass, label: 'Compass', sub: 'Assistant & Agents' },
-  { key: 'calendar', icon: Calendar, label: 'Smart Schedule', sub: 'Calendar & Conflict Engine' },
+  { key: 'timeline', icon: '▦', label: 'Timeline', sub: 'Tasks & deadlines' },
+  { key: 'northstar', icon: '🧭', label: 'Northstar AI', sub: 'Copilot, planner & agents' },
+  { key: 'calendar', icon: '🗓️', label: 'Schedule', sub: 'Calendar & Google sync' },
 ]
 
 export default function Sidebar({
@@ -35,427 +18,684 @@ export default function Sidebar({
   currentUser,
   onOpenAuth,
   onOpenTelemetry,
+  customDomains = [],
+  onDomainCreated,
+  theme = 'light',
+  onToggleTheme,
 }) {
-  const isOnline =
-    backendStatus.toLowerCase().includes('neon') ||
-    backendStatus.toLowerCase().includes('live') ||
-    backendStatus.toLowerCase().includes('online')
+  const [showCreateDomainModal, setShowCreateDomainModal] = React.useState(false)
+  const [isCollapsed, setIsCollapsed] = React.useState(() => {
+    try {
+      return localStorage.getItem('compass.sidebar.collapsed') === 'true'
+    } catch {
+      /* ignore storage access error */
+      return false
+    }
+  })
 
-  const totalActive = Object.values(domainCounts || {}).reduce(
-    (sum, n) => sum + (typeof n === 'number' ? n : 0),
-    0
-  )
+  const toggleCollapsed = () => {
+    setIsCollapsed(prev => {
+      const next = !prev
+      try {
+        localStorage.setItem('compass.sidebar.collapsed', String(next))
+      } catch {
+        /* ignore storage access error */
+      }
+      return next
+    })
+  }
+
+  const isOnline = backendStatus.toLowerCase().includes('neon') || backendStatus.toLowerCase().includes('live')
+  const totalActive = Object.values(domainCounts || {}).reduce((sum, n) => sum + (typeof n === 'number' ? n : 0), 0)
 
   const baseDomains = [
-    { key: 'hackathon', label: 'Hackathon', icon: Flame, color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.12)' },
-    { key: 'coursework', label: 'Coursework', icon: BookOpen, color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)' },
-    { key: 'code', label: 'Code & Infra', icon: Code2, color: '#10b981', bg: 'rgba(16, 185, 129, 0.12)' },
-    { key: 'general', label: 'General', icon: Globe, color: '#94a3b8', bg: 'rgba(148, 163, 184, 0.12)' },
-    { key: 'other', label: 'Other', icon: Tag, color: '#a855f7', bg: 'rgba(168, 85, 247, 0.12)' },
+    { key: 'hackathon', label: 'Hackathon', icon: '🚀', color: '#fbbf24' },
+    { key: 'coursework', label: 'Coursework', icon: '📚', color: '#60a5fa' },
+    { key: 'code', label: 'Code', icon: '💻', color: '#34d399' },
+    { key: 'general', label: 'General', icon: '🌐', color: '#94a3b8' },
+    { key: 'other', label: 'Other', icon: '🏷️', color: '#a78bfa' },
   ]
 
-  const extraDomains = Object.keys(domainCounts || {})
-    .filter(k => !baseDomains.some(b => b.key === k) && ((domainCounts[k] || 0) > 0 || activeDomain === k))
-    .map(k => ({
-      key: k,
-      label: k.charAt(0).toUpperCase() + k.slice(1),
-      icon: Tag,
-      color: '#c084fc',
-      bg: 'rgba(192, 132, 252, 0.12)',
-    }))
+  // Combine user-created custom domains with any discovered domains in active tasks
+  const allCustom = [...customDomains]
+  Object.keys(domainCounts || {}).forEach(k => {
+    if (!baseDomains.some(b => b.key === k) && !allCustom.some(c => c.key === k)) {
+      if ((domainCounts[k] || 0) > 0 || activeDomain === k) {
+        allCustom.push({
+          key: k,
+          label: k.charAt(0).toUpperCase() + k.slice(1),
+          icon: '🏷️',
+          color: '#c084fc'
+        })
+      }
+    }
+  })
 
-  const displayDomains = [...baseDomains, ...extraDomains]
+  const displayDomains = [...baseDomains, ...allCustom]
 
   return (
     <aside
+      className={`compass-sidebar ${isCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}`}
       style={{
-        width: '264px',
-        minWidth: '240px',
-        maxWidth: '280px',
+        width: isCollapsed ? '68px' : '260px',
+        minWidth: isCollapsed ? '68px' : '240px',
+        maxWidth: isCollapsed ? '68px' : '280px',
         flexShrink: 0,
-        borderRight: '1px solid #1e293b',
-        background: '#0f172a',
+        borderRight: '1px solid var(--border)',
+        background: 'var(--bg-sidebar)',
         display: 'flex',
         flexDirection: 'column',
-        padding: '20px 16px',
+        padding: isCollapsed ? '20px 8px' : '22px 16px',
         height: '100vh',
         overflowY: 'auto',
+        overflowX: 'hidden',
+        boxSizing: 'border-box',
       }}
     >
       {/* Brand Header */}
-      <div
-        id="sidebar-brand-header"
-        onClick={() => {
-          onSelectTab('timeline')
-          if (onSelectDomain) onSelectDomain('all')
-        }}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          marginBottom: '26px',
-          padding: '0 4px',
-          cursor: 'pointer',
-          userSelect: 'none',
-          transition: 'all 0.15s ease',
-        }}
-        onMouseEnter={e => (e.currentTarget.style.opacity = '0.9')}
-        onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-        title="Compass Workspace — Return to Executive Overview"
-      >
+      {isCollapsed ? (
         <div
           style={{
-            width: '38px',
-            height: '38px',
-            borderRadius: '10px',
-            background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '20px',
+            userSelect: 'none',
+          }}
+        >
+          <div
+            id="sidebar-brand-header"
+            onClick={() => {
+              onSelectTab('timeline')
+              if (onSelectDomain) onSelectDomain('all')
+            }}
+            title="Compass Workspace — Click to return to default Timeline Feed"
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '10px',
+              background: 'var(--brand)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '18px',
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(245, 166, 35, 0.25)',
+              flexShrink: 0,
+              transition: 'opacity 0.15s ease',
+            }}
+            onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+          >
+            🧭
+          </div>
+
+          <button
+            id="sidebar-collapse-toggle"
+            onClick={toggleCollapsed}
+            title="Expand sidebar"
+            aria-label="Expand sidebar"
+            style={{
+              background: 'rgba(255, 255, 255, 0.04)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '6px',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              width: '28px',
+              height: '24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '15px',
+              lineHeight: 1,
+              padding: 0,
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.color = 'var(--text-on-dark)'
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.color = 'var(--text-muted)'
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)'
+            }}
+          >
+            ›
+          </button>
+        </div>
+      ) : (
+        <div
+          style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            color: '#ffffff',
-            flexShrink: 0,
-            boxShadow: '0 4px 14px rgba(245, 158, 11, 0.3)',
+            justifyContent: 'space-between',
+            marginBottom: '24px',
+            padding: '0 4px',
+            userSelect: 'none',
           }}
         >
-          <Compass size={22} strokeWidth={2.4} />
-        </div>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <h1 style={{ fontSize: '17px', fontWeight: '800', letterSpacing: '-0.4px', color: '#f8fafc', margin: 0 }}>
-              Compass
-            </h1>
-            <span
-              style={{
-                fontSize: '9.5px',
-                fontWeight: '700',
-                padding: '1px 6px',
-                borderRadius: '4px',
-                background: 'rgba(99, 102, 241, 0.25)',
-                color: '#a5b4fc',
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
-              }}
-            >
-              MoE
-            </span>
+          <div
+            id="sidebar-brand-header"
+            onClick={() => {
+              onSelectTab('timeline')
+              if (onSelectDomain) onSelectDomain('all')
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              cursor: 'pointer',
+              transition: 'opacity 0.15s ease',
+              minWidth: 0,
+            }}
+            onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+            title="Compass Workspace — Click to return to default Timeline Feed"
+          >
+            <div style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '10px',
+              background: 'var(--brand)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '18px',
+              flexShrink: 0,
+              boxShadow: '0 4px 12px rgba(245, 166, 35, 0.25)'
+            }}>
+              🧭
+            </div>
+            <div>
+              <h1 style={{ fontSize: '16px', fontWeight: '800', letterSpacing: '-0.3px', color: 'var(--text-on-dark)', margin: 0 }}>Compass</h1>
+              <p style={{ fontSize: '10.5px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: '600', margin: 0 }}>Workspace</p>
+            </div>
           </div>
-          <p style={{ fontSize: '11px', color: '#94a3b8', margin: '2px 0 0 0', fontWeight: '500' }}>
-            Autonomous AI Platform
-          </p>
+
+          <button
+            id="sidebar-collapse-toggle"
+            onClick={toggleCollapsed}
+            title="Collapse sidebar"
+            aria-label="Collapse sidebar"
+            style={{
+              background: 'transparent',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '6px',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              width: '26px',
+              height: '26px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '15px',
+              lineHeight: 1,
+              padding: 0,
+              transition: 'all 0.15s ease',
+              flexShrink: 0,
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.color = 'var(--text-on-dark)'
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.color = 'var(--text-muted)'
+              e.currentTarget.style.background = 'transparent'
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)'
+            }}
+          >
+            ‹
+          </button>
         </div>
+      )}
+
+      {/* Navigation */}
+      <div style={{ marginBottom: isCollapsed ? '16px' : '24px' }}>
+        {!isCollapsed && (
+          <p style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', fontWeight: '700', marginBottom: '10px', padding: '0 4px' }}>
+            Navigation
+          </p>
+        )}
+        {NAV_ITEMS.map(item => (
+          <button
+            key={item.key}
+            id={`sidebar-tab-${item.key}`}
+            onClick={() => onSelectTab(item.key)}
+            className={`nav-item ${activeTab === item.key ? 'active' : ''}`}
+            title={item.label}
+            style={isCollapsed ? {
+              justifyContent: 'center',
+              padding: '8px 0',
+              width: '100%',
+              gap: 0,
+            } : undefined}
+          >
+            <span className="nav-icon">{item.icon}</span>
+            {!isCollapsed && (
+              <span>
+                <div style={{ fontSize: '13.5px', fontWeight: '700', color: activeTab === item.key ? 'var(--text-on-dark)' : 'inherit' }}>
+                  {item.label}
+                </div>
+                <div style={{ fontSize: '11px', opacity: 0.75 }}>{item.sub}</div>
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
-      {/* Primary Navigation */}
-      <div style={{ marginBottom: '24px' }}>
-        <p
-          style={{
-            fontSize: '10.5px',
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            color: '#64748b',
-            fontWeight: '700',
-            marginBottom: '10px',
-            padding: '0 6px',
-          }}
-        >
-          Workspace
-        </p>
-
-        {NAV_ITEMS.map(item => {
-          const Icon = item.icon
-          const isActive = activeTab === item.key || (item.key === 'compass' && (activeTab === 'agent' || activeTab === 'planner'))
-          return (
-            <button
-              key={item.key}
-              id={`sidebar-tab-${item.key}`}
-              onClick={() => onSelectTab(item.key)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '10px 12px',
-                borderRadius: '10px',
-                cursor: 'pointer',
-                marginBottom: '4px',
-                border: 'none',
-                width: '100%',
-                textAlign: 'left',
-                background: isActive ? '#1e293b' : 'transparent',
-                color: isActive ? '#f8fafc' : '#94a3b8',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={e => {
-                if (!isActive) {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'
-                  e.currentTarget.style.color = '#f1f5f9'
-                }
-              }}
-              onMouseLeave={e => {
-                if (!isActive) {
-                  e.currentTarget.style.background = 'transparent'
-                  e.currentTarget.style.color = '#94a3b8'
-                }
-              }}
-            >
-              <div
+      {/* Domain Isolation Metrics */}
+      <div style={{ marginBottom: 'auto' }}>
+        {!isCollapsed && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', padding: '0 4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <p style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', fontWeight: '700', margin: 0 }}>
+                Domains
+              </p>
+              <button
+                id="btn-add-domain"
+                onClick={() => setShowCreateDomainModal(true)}
+                title="Add domain"
+                aria-label="Add domain"
                 style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '8px',
-                  background: isActive ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)' : 'rgba(255, 255, 255, 0.05)',
-                  color: isActive ? '#ffffff' : '#94a3b8',
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  lineHeight: 1,
+                  padding: '2px 4px',
+                  borderRadius: '4px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  flexShrink: 0,
-                  boxShadow: isActive ? '0 2px 8px rgba(99, 102, 241, 0.35)' : 'none',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.color = 'var(--text-on-dark)'
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.color = 'var(--text-muted)'
+                  e.currentTarget.style.background = 'transparent'
                 }}
               >
-                <Icon size={16} strokeWidth={isActive ? 2.5 : 2} />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '13px', fontWeight: isActive ? '700' : '600' }}>
-                  {item.label}
-                </div>
-                <div style={{ fontSize: '10.5px', color: isActive ? '#94a3b8' : '#64748b', marginTop: '1px' }}>
-                  {item.sub}
-                </div>
-              </div>
-              {isActive && <ChevronRight size={14} color="#6366f1" />}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Domain Isolation Filter List */}
-      <div style={{ marginBottom: 'auto' }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '10px',
-            padding: '0 6px',
-          }}
-        >
-          <p
-            style={{
-              fontSize: '10.5px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              color: '#64748b',
-              fontWeight: '700',
-              margin: 0,
-            }}
-          >
-            Context Domains
-          </p>
-          {activeDomain !== 'all' && (
-            <span
-              onClick={() => onSelectDomain('all')}
-              style={{
-                fontSize: '10.5px',
-                color: '#f59e0b',
-                cursor: 'pointer',
-                fontWeight: '700',
-              }}
-            >
-              Reset All
-            </span>
-          )}
-        </div>
-
-        {displayDomains.map(dom => {
-          const Icon = dom.icon
-          const isSelected = activeDomain === dom.key
-          const count = domainCounts[dom.key] ?? 0
-          return (
-            <div
-              key={dom.key}
-              onClick={() => onSelectDomain(dom.key)}
-              style={{
-                padding: '8px 12px',
-                borderRadius: '8px',
-                marginBottom: '3px',
-                cursor: 'pointer',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                background: isSelected ? '#1e293b' : 'transparent',
-                transition: 'background 0.15s ease',
-              }}
-              onMouseEnter={e => {
-                if (!isSelected) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)'
-              }}
-              onMouseLeave={e => {
-                if (!isSelected) e.currentTarget.style.background = 'transparent'
-              }}
-            >
-              <span
-                style={{
-                  fontSize: '12.5px',
-                  color: isSelected ? '#f8fafc' : '#94a3b8',
-                  fontWeight: isSelected ? '700' : '500',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '9px',
-                }}
-              >
-                <span
-                  style={{
-                    color: dom.color,
-                    display: 'flex',
-                    alignItems: 'center',
-                  }}
-                >
-                  <Icon size={14} />
-                </span>
-                {dom.label}
-              </span>
-              <span
-                style={{
-                  padding: '2px 7px',
-                  borderRadius: '12px',
-                  fontSize: '10.5px',
-                  fontWeight: '700',
-                  background: isSelected ? dom.bg : 'rgba(255, 255, 255, 0.05)',
-                  color: dom.color,
-                }}
-              >
-                {count}
-              </span>
+                +
+              </button>
             </div>
-          )
-        })}
-      </div>
+            {activeDomain !== 'all' && (
+              <span onClick={() => onSelectDomain('all')} style={{ fontSize: '10px', color: 'var(--brand)', cursor: 'pointer', fontWeight: '700' }}>
+                Reset
+              </span>
+            )}
+          </div>
+        )}
 
-      {/* Live Backend Connection Card */}
-      <div
-        style={{
-          padding: '12px 14px',
-          borderRadius: '12px',
-          background: 'rgba(255, 255, 255, 0.03)',
-          border: '1px solid rgba(255, 255, 255, 0.06)',
-          marginTop: '16px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+        {displayDomains.map(dom => (
           <div
+            key={dom.key}
+            id={`sidebar-domain-${dom.key}`}
+            onClick={() => onSelectDomain(dom.key)}
+            title={isCollapsed ? `${dom.label} (${domainCounts[dom.key] ?? 0})` : dom.label}
             style={{
-              width: '7px',
-              height: '7px',
-              borderRadius: '50%',
-              background: isOnline ? '#10b981' : '#f59e0b',
-              boxShadow: isOnline ? '0 0 8px rgba(16, 185, 129, 0.6)' : 'none',
-              flexShrink: 0,
-            }}
-          />
-          <span style={{ fontSize: '12px', fontWeight: '700', color: '#f1f5f9' }}>
-            {isOnline ? `${totalActive} tasks synced` : 'Reconnecting...'}
-          </span>
-        </div>
-        <div style={{ fontSize: '10.5px', color: '#64748b', paddingLeft: '15px' }}>
-          {backendStatus}
-        </div>
-
-        {usageBadge && (
-          <div
-            id="sidebar-usage-badge"
-            className="mono"
-            onClick={() => onOpenTelemetry && onOpenTelemetry()}
-            style={{
-              fontSize: '10.5px',
-              color: '#fbbf24',
-              padding: '6px 10px',
-              marginTop: '8px',
-              borderRadius: '8px',
-              background: 'rgba(245, 158, 11, 0.08)',
-              border: '1px solid rgba(245, 158, 11, 0.25)',
+              padding: isCollapsed ? '6px 0' : '9px 12px',
+              borderRadius: '10px',
+              marginBottom: '4px',
               cursor: 'pointer',
               display: 'flex',
+              justifyContent: isCollapsed ? 'center' : 'space-between',
               alignItems: 'center',
-              justifyContent: 'space-between',
-              transition: 'all 0.15s ease',
+              background: activeDomain === dom.key ? 'var(--bg-sidebar-active)' : 'transparent',
+              transition: 'background 0.15s ease',
+              width: '100%',
+              boxSizing: 'border-box',
             }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(245, 158, 11, 0.16)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(245, 158, 11, 0.08)')}
-            title="Inspect live Nebius Token Factory & NVIDIA telemetry"
+            onMouseEnter={e => {
+              if (activeDomain !== dom.key) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
+            }}
+            onMouseLeave={e => {
+              if (activeDomain !== dom.key) e.currentTarget.style.background = 'transparent'
+            }}
           >
-            <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <Zap size={12} color="#fbbf24" />
-              <span>{usageBadge}</span>
-            </span>
-            <Cpu size={12} opacity={0.8} />
+            {isCollapsed ? (
+              <span style={{
+                fontSize: '16px',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '8px',
+                background: activeDomain === dom.key ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
+              }}>
+                {dom.icon}
+              </span>
+            ) : (
+              <>
+                <span style={{ fontSize: '13px', color: activeDomain === dom.key ? 'var(--text-on-dark)' : 'var(--text-secondary)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>{dom.icon}</span> {dom.label}
+                </span>
+                <span style={{
+                  padding: '2px 8px',
+                  borderRadius: '20px',
+                  fontSize: '10.5px',
+                  fontWeight: '700',
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  color: dom.color
+                }}>
+                  {domainCounts[dom.key] ?? 0}
+                </span>
+              </>
+            )}
+          </div>
+        ))}
+
+        {isCollapsed && (
+          <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0 6px' }}>
+            <button
+              id="btn-add-domain-collapsed"
+              onClick={() => setShowCreateDomainModal(true)}
+              title="Add domain"
+              aria-label="Add domain"
+              style={{
+                background: 'transparent',
+                border: '1px dashed rgba(255, 255, 255, 0.18)',
+                borderRadius: '8px',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '15px',
+                lineHeight: 1,
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.color = 'var(--text-on-dark)'
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.35)'
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.color = 'var(--text-muted)'
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.18)'
+                e.currentTarget.style.background = 'transparent'
+              }}
+            >
+              +
+            </button>
           </div>
         )}
       </div>
 
-      {/* User Session & Account Footer */}
-      <div
-        id="sidebar-account-btn"
-        onClick={() => onOpenAuth && onOpenAuth()}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '10px 12px',
-          borderRadius: '10px',
-          background: 'rgba(255, 255, 255, 0.03)',
-          border: '1px solid rgba(255, 255, 255, 0.07)',
-          cursor: 'pointer',
-          marginTop: '12px',
-          transition: 'all 0.15s ease',
-        }}
-        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)')}
-        onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)')}
-        title="Manage Account, Google Calendar & Workspace Isolation"
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '9px', minWidth: 0 }}>
-          <div
+      {/* Live status card — replaces fake mock with real backend status */}
+      {isCollapsed ? (
+        <div
+          id="sidebar-specs-card"
+          onClick={() => onOpenTelemetry && onOpenTelemetry()}
+          title={isOnline ? `${totalActive} tasks synced — ${backendStatus}` : `Reconnecting — ${backendStatus}`}
+          style={{
+            padding: '10px 0',
+            borderRadius: '10px',
+            background: 'rgba(255, 255, 255, 0.04)',
+            border: '1px solid rgba(255, 255, 255, 0.06)',
+            marginTop: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: onOpenTelemetry ? 'pointer' : 'default',
+            gap: '6px',
+            transition: 'background 0.15s ease',
+            width: '100%',
+            boxSizing: 'border-box',
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'}
+        >
+          <div style={{
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            background: isOnline ? '#34d399' : '#f5a623',
+            boxShadow: isOnline ? '0 0 8px rgba(52, 211, 153, 0.4)' : '0 0 8px rgba(245, 166, 35, 0.4)',
+            flexShrink: 0,
+          }} />
+          {usageBadge && (
+            <span style={{ fontSize: '11px', opacity: 0.85 }}>📊</span>
+          )}
+        </div>
+      ) : (
+        <div style={{
+          padding: '13px 14px',
+          borderRadius: '12px',
+          background: 'rgba(255, 255, 255, 0.04)',
+          border: '1px solid rgba(255, 255, 255, 0.06)',
+          marginTop: '16px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <div style={{
+              width: '7px',
+              height: '7px',
+              borderRadius: '50%',
+              background: isOnline ? '#34d399' : '#f5a623',
+              flexShrink: 0
+            }} />
+            <span style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--text-on-dark)' }}>
+              {isOnline ? `${totalActive} tasks synced` : 'Reconnecting'}
+            </span>
+          </div>
+          <div style={{ fontSize: '10.5px', color: 'var(--text-muted)', paddingLeft: '15px' }}>
+            {backendStatus}
+          </div>
+          {usageBadge && (
+            <div
+              id="sidebar-usage-badge"
+              className="mono"
+              onClick={() => onOpenTelemetry && onOpenTelemetry()}
+              style={{
+                fontSize: '10.5px',
+                color: 'var(--brand, #fbbf24)',
+                padding: '6px 10px',
+                marginTop: '8px',
+                borderRadius: '7px',
+                background: 'rgba(245, 166, 35, 0.08)',
+                border: '1px solid rgba(245, 166, 35, 0.22)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(245, 166, 35, 0.16)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(245, 166, 35, 0.08)'}
+              title="Click to inspect live Nebius Token Factory & NVIDIA telemetry"
+            >
+              <span>{usageBadge}</span>
+              <span style={{ fontSize: '10px', opacity: 0.85 }}>📊</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Theme Toggle Control */}
+      {onToggleTheme && (
+        isCollapsed ? (
+          <button
+            id="sidebar-theme-toggle"
+            type="button"
+            role="switch"
+            aria-checked={theme === 'dark'}
+            aria-label={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+            title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+            onClick={onToggleTheme}
             style={{
-              width: '28px',
-              height: '28px',
-              borderRadius: '7px',
-              background: '#1e293b',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#94a3b8',
-              flexShrink: 0,
+              padding: '10px 0',
+              borderRadius: '10px',
+              background: theme === 'dark' ? 'rgba(245, 166, 35, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+              border: `1px solid ${theme === 'dark' ? 'rgba(245, 166, 35, 0.3)' : 'rgba(255, 255, 255, 0.08)'}`,
+              cursor: 'pointer',
+              marginTop: '12px',
+              transition: 'all 0.15s ease',
+              width: '100%',
+              boxSizing: 'border-box',
+              fontSize: '15px',
+              color: 'var(--text-on-dark)',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = theme === 'dark' ? 'rgba(245, 166, 35, 0.22)' : 'rgba(255, 255, 255, 0.08)'
+              e.currentTarget.style.borderColor = theme === 'dark' ? 'rgba(245, 166, 35, 0.45)' : 'rgba(255, 255, 255, 0.18)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = theme === 'dark' ? 'rgba(245, 166, 35, 0.12)' : 'rgba(255, 255, 255, 0.04)'
+              e.currentTarget.style.borderColor = theme === 'dark' ? 'rgba(245, 166, 35, 0.3)' : 'rgba(255, 255, 255, 0.08)'
             }}
           >
-            <User size={15} />
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div
-              style={{
+            <span>{theme === 'dark' ? '🌙' : '☀️'}</span>
+          </button>
+        ) : (
+          <button
+            id="sidebar-theme-toggle"
+            type="button"
+            role="switch"
+            aria-checked={theme === 'dark'}
+            aria-label={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+            onClick={onToggleTheme}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '9px 12px',
+              borderRadius: '10px',
+              background: theme === 'dark' ? 'rgba(245, 166, 35, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+              border: `1px solid ${theme === 'dark' ? 'rgba(245, 166, 35, 0.3)' : 'rgba(255, 255, 255, 0.08)'}`,
+              cursor: 'pointer',
+              marginTop: '12px',
+              transition: 'all 0.15s ease',
+              color: 'var(--text-on-dark)',
+              fontSize: '12.5px',
+              fontWeight: '600',
+              width: '100%',
+              boxSizing: 'border-box',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = theme === 'dark' ? 'rgba(245, 166, 35, 0.22)' : 'rgba(255, 255, 255, 0.08)'
+              e.currentTarget.style.borderColor = theme === 'dark' ? 'rgba(245, 166, 35, 0.45)' : 'rgba(255, 255, 255, 0.18)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = theme === 'dark' ? 'rgba(245, 166, 35, 0.12)' : 'rgba(255, 255, 255, 0.04)'
+              e.currentTarget.style.borderColor = theme === 'dark' ? 'rgba(245, 166, 35, 0.3)' : 'rgba(255, 255, 255, 0.08)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '14px', lineHeight: 1 }}>{theme === 'dark' ? '🌙' : '☀️'}</span>
+              <span>{theme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
+            </div>
+            <span style={{
+              fontSize: '10px',
+              padding: '2px 8px',
+              borderRadius: '12px',
+              background: theme === 'dark' ? 'rgba(245, 166, 35, 0.2)' : 'rgba(255, 255, 255, 0.08)',
+              color: theme === 'dark' ? '#fbbf24' : 'var(--text-on-dark-muted)',
+              fontWeight: '700',
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em'
+            }}>
+              {theme === 'dark' ? 'Dark' : 'Light'}
+            </span>
+          </button>
+        )
+      )}
+
+      {/* Account / Workspace Switcher */}
+      {isCollapsed ? (
+        <div
+          id="sidebar-account-btn"
+          onClick={() => onOpenAuth && onOpenAuth()}
+          title={currentUser?.authenticated ? `Signed in as ${currentUser.email} — Click to switch` : 'Sign in / Account'}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '10px 0',
+            borderRadius: '10px',
+            background: 'rgba(255, 255, 255, 0.04)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            cursor: 'pointer',
+            marginTop: '10px',
+            transition: 'all 0.15s ease',
+            width: '100%',
+            boxSizing: 'border-box',
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'}
+        >
+          <span style={{ fontSize: '15px' }}>👤</span>
+        </div>
+      ) : (
+        <div
+          id="sidebar-account-btn"
+          onClick={() => onOpenAuth && onOpenAuth()}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '10px 12px',
+            borderRadius: '10px',
+            background: 'rgba(255, 255, 255, 0.04)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            cursor: 'pointer',
+            marginTop: '10px',
+            transition: 'all 0.15s ease'
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'}
+          title="Manage Account & Google Calendar"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+            <span style={{ fontSize: '13px' }}>👤</span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{
                 fontSize: '12px',
-                color: '#f8fafc',
+                color: 'var(--text-on-dark)',
                 fontWeight: '600',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {currentUser?.authenticated ? currentUser.email : 'Guest Session'}
-            </div>
-            <div style={{ fontSize: '10px', color: '#64748b' }}>
-              {currentUser?.calendar?.connected ? 'Google Calendar ✓' : 'Isolated Workspace'}
+                whiteSpace: 'nowrap'
+              }}>
+                {currentUser?.authenticated ? currentUser.email : 'Sign in / Account'}
+              </div>
+              <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                {currentUser?.calendar?.connected ? 'Google Calendar ✓' : 'Isolated Workspace'}
+              </div>
             </div>
           </div>
+          <span style={{ fontSize: '11px', color: 'var(--brand)', fontWeight: '700', flexShrink: 0, paddingLeft: '6px' }}>
+            {currentUser?.authenticated ? 'Switch ▾' : 'Login ▾'}
+          </span>
         </div>
-        <span
-          style={{
-            fontSize: '11px',
-            color: '#f59e0b',
-            fontWeight: '700',
-            flexShrink: 0,
-            paddingLeft: '6px',
-          }}
-        >
-          {currentUser?.authenticated ? 'Switch' : 'Login'}
-        </span>
-      </div>
+      )}
+
+      <CreateDomainModal
+        isOpen={showCreateDomainModal}
+        onClose={() => setShowCreateDomainModal(false)}
+        onCreated={(newDomain) => {
+          if (onDomainCreated) {
+            onDomainCreated(newDomain)
+          }
+          if (onSelectDomain) {
+            onSelectDomain(newDomain.key)
+          }
+        }}
+        existingDomains={displayDomains}
+      />
     </aside>
   )
 }

@@ -161,6 +161,7 @@ CREATE TABLE IF NOT EXISTS agent_audit_log (
     previous_state     JSONB,
     new_state          JSONB,
     approved_by        TEXT          NOT NULL DEFAULT 'user',
+    status             TEXT          NOT NULL DEFAULT 'executed',
     is_reverted        BOOLEAN       NOT NULL DEFAULT FALSE,
     created_at         TIMESTAMPTZ   NOT NULL DEFAULT now()
 );

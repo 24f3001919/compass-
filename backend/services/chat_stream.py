@@ -389,14 +389,23 @@ async def generate_chat_events(
             record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
 
             if emitted_text and response_text.startswith(emitted_text):
+                # Partial prefix matches — only emit the remaining suffix
                 to_emit = response_text[len(emitted_text):]
+                if to_emit:
+                    yield f"data: {json.dumps({'type': 'token', 'value': to_emit})}\n\n"
             elif not emitted_text:
-                to_emit = response_text
+                # Nothing was streamed yet — emit full response as tokens
+                is_first = True
+                async for chunk in stream_chunks(response_text):
+                    if not is_first:
+                        await asyncio.sleep(0.012)
+                    is_first = False
+                    yield f"data: {json.dumps({'type': 'token', 'value': chunk})}\n\n"
             else:
-                to_emit = response_text
-
-            if to_emit:
-                yield f"data: {json.dumps({'type': 'token', 'value': to_emit})}\n\n"
+                # Partial streamed text does NOT match orchestrator response —
+                # send a replace event so the client discards the leaked markup
+                # and replaces it with the clean tool-call response.
+                yield f"data: {json.dumps({'type': 'replace', 'value': response_text})}\n\n"
 
             yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used})}\n\n"
             _schedule_stream_persistence(conv_id, message, response_text, user_id, guest_id, skill_used)

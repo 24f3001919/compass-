@@ -255,3 +255,48 @@ def test_adversarial_page_injection():
     )
     # Both fragments must be filtered out entirely
     assert len(evidence) == 0
+
+
+# ---------------------------------------------------------------------------
+# 8. Nebius Global AI Hackathon Recorded Rules Page Regression Test
+# ---------------------------------------------------------------------------
+def test_nebius_global_ai_hackathon_recorded_rules_page():
+    """Regression test: verify recorded rules page extracts Oct 30, 2026 @ 10:00am PDT with timezone and VERIFIED verdict."""
+    recorded_page_text = (
+        "Nebius x NVIDIA Global AI Hackathon: Build the next frontier of AI on open infrastructure\n"
+        "Deadline: Oct 30, 2026 @ 10:00am PDT\n"
+        "SUBMISSION OF ANY ENTRY CONSTITUTES AGREEMENT TO THESE OFFICIAL RULES AS A CONTRACT.\n"
+        "##### 1. Dates and Timing\n"
+        "Submission Period: Wednesday, August 26, 2026 (9:00 am Pacific Time) – Friday, October 30, 2026 (10:00 am Pacific Time) (\"Submission Period\").\n"
+        "Join Hackathon button. To complete registration, sign up to create a free Devpost account.\n"
+    )
+    quote = "Deadline: Oct 30, 2026 @ 10:00am PDT"
+    assert quote in recorded_page_text
+
+    claims = [
+        {
+            "claim": quote,
+            "source_url": "https://nebiusglobalaihackathon.devpost.com/rules",
+            "exact_quote": quote,
+            "extracted_date": quote,
+        }
+    ]
+    sources = [
+        {
+            "url": "https://nebiusglobalaihackathon.devpost.com/rules",
+            "authority_tier": AuthorityTier.TIER_1_OFFICIAL.value,
+        }
+    ]
+
+    verdict, evidence = evaluate_deterministic_verdict(
+        claims, recorded_page_text, sources, target_entity="nebius global ai hackathon"
+    )
+
+    assert verdict == "VERIFIED"
+    assert len(evidence) == 1
+    item = evidence[0]
+    assert item["verdict"] == "VERIFIED"
+    assert item["verbatim_quote"] == quote
+    assert item["verbatim_quote"] in recorded_page_text
+    assert item["parsed_date"] == "2026-10-30T10:00:00-07:00"
+    assert item["year_provenance"] == "explicit_in_quote"

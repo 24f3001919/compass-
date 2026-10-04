@@ -97,7 +97,7 @@ def pytest_configure(config):
 async def client():
     """Async HTTP client fixture configured against the FastAPI app instance."""
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(transport=transport, base_url="http://test", timeout=10.0) as ac:
         yield ac
     import asyncio
     await asyncio.sleep(0.05)

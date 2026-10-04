@@ -93,6 +93,11 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
           if (evt.type === 'token') {
             fullResponse += evt.value
             if (onToken) onToken(evt.value, fullResponse)
+          } else if (evt.type === 'replace') {
+            // Server detected a tool call after partial streaming —
+            // discard any leaked markup and replace with the clean response.
+            fullResponse = evt.value || ''
+            if (onToken) onToken(fullResponse, fullResponse)
           } else if (evt.type === 'done') {
             if (evt.conversation_id) lastConvId = evt.conversation_id
             if (evt.skill_used) lastSkill = evt.skill_used

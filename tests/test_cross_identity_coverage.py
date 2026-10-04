@@ -58,7 +58,13 @@ async def test_neg_delete_api_tasks_task_id(client: AsyncClient):
     task_id = task_res.json()["id"]
 
     del_res = await client.delete(f"/api/tasks/{task_id}", headers=_auth(user_b))
-    assert del_res.status_code in (403, 404)
+    assert del_res.status_code == 403
+
+    # Assert victim's data is unchanged afterwards: task still exists
+    get_res = await client.get("/api/tasks", headers=_auth(user_a))
+    assert get_res.status_code == 200
+    a_tasks = [t["id"] for t in get_res.json()]
+    assert task_id in a_tasks
 
 
 @pytest.mark.asyncio
@@ -199,7 +205,13 @@ async def test_neg_post_chat(client: AsyncClient):
     await client.post("/api/chat", json={"message": "A's start", "conversation_id": conv_id}, headers=_auth(user_a))
     # User B attempts to post to User A's conversation
     res = await client.post("/api/chat", json={"message": "B's intrusion", "conversation_id": conv_id}, headers=_auth(user_b))
-    assert res.status_code in (401, 403, 404)
+    assert res.status_code == 403
+
+    # Assert victim's data is unchanged afterwards: conversation messages count is unchanged
+    msg_res = await client.get(f"/api/conversations/{conv_id}/messages", headers=_auth(user_a))
+    assert msg_res.status_code == 200
+    msgs = msg_res.json().get("messages", [])
+    assert not any(m.get("content") == "B's intrusion" for m in msgs)
 
 
 @pytest.mark.asyncio

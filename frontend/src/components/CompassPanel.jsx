@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import ChatPanel from './ChatPanel'
 import AgentPanel from './AgentPanel'
+import SpecialistPanel from './SpecialistPanel'
 
-export default function CompassPanel({
+export default function NorthstarPanel({
   initialSubTab = 'assistant',
   messages,
   setMessages,
@@ -35,7 +36,7 @@ export default function CompassPanel({
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', minWidth: 0, overflow: 'hidden', background: 'var(--bg-app)' }}>
-      {/* Header Sub-bar */}
+      {/* Northstar Header Sub-bar */}
       <div style={{
         height: '52px',
         borderBottom: '1px solid var(--border)',
@@ -50,7 +51,7 @@ export default function CompassPanel({
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
           <span style={{ fontSize: '18px' }}>🧭</span>
           <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.2px' }}>
-            Compass
+            Northstar AI
           </span>
           <span style={{
             fontSize: '11px',
@@ -61,14 +62,14 @@ export default function CompassPanel({
             borderRadius: '10px',
             whiteSpace: 'nowrap'
           }}>
-            Assistant & Planner
+            Copilot & Workspace Assistant
           </span>
         </div>
 
         {/* View Toggle */}
         <div style={{ display: 'flex', background: 'var(--bg-card-soft)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border)', flexShrink: 0 }}>
           <button
-            id="compass-subtab-chat"
+            id="northstar-subtab-chat"
             onClick={() => setActiveSubTab('assistant')}
             style={{
               padding: '5px 14px',
@@ -82,10 +83,10 @@ export default function CompassPanel({
               cursor: 'pointer',
               transition: 'all 0.15s ease',
             }}>
-            💬 Chat
+            💬 Chat Copilot
           </button>
           <button
-            id="compass-subtab-planner"
+            id="northstar-subtab-planner"
             onClick={() => setActiveSubTab('planner')}
             style={{
               padding: '5px 14px',
@@ -99,19 +100,31 @@ export default function CompassPanel({
               cursor: 'pointer',
               transition: 'all 0.15s ease',
             }}>
-            📋 Planner
+            📋 Goal Planner
+          </button>
+          <button
+            id="northstar-subtab-specialist"
+            onClick={() => setActiveSubTab('specialist')}
+            style={{
+              padding: '5px 14px',
+              borderRadius: '6px',
+              border: 'none',
+              background: activeSubTab === 'specialist' ? 'var(--bg-card)' : 'transparent',
+              color: activeSubTab === 'specialist' ? 'var(--text-primary)' : 'var(--text-secondary)',
+              boxShadow: activeSubTab === 'specialist' ? 'var(--shadow-sm)' : 'none',
+              fontSize: '12.5px',
+              fontWeight: activeSubTab === 'specialist' ? '700' : '500',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}>
+            🧠 Specialist Agents
           </button>
         </div>
       </div>
 
       {/* Main Unified View Area */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-        {activeSubTab === 'planner' ? (
-          <AgentPanel
-            onTaskMutated={onTaskMutated}
-            conversationId={conversationId}
-          />
-        ) : (
+        {activeSubTab === 'assistant' ? (
           <ChatPanel
             messages={messages}
             setMessages={setMessages}
@@ -125,6 +138,16 @@ export default function CompassPanel({
             initialPrompt={pendingPrompt}
             onClearInitialPrompt={onClearPendingPrompt}
             onOpenMigration={onOpenMigration}
+          />
+        ) : activeSubTab === 'planner' ? (
+          <AgentPanel
+            onTaskMutated={onTaskMutated}
+            conversationId={conversationId}
+          />
+        ) : (
+          <SpecialistPanel
+            onTaskMutated={onTaskMutated}
+            onSelectTab={onSelectTab}
           />
         )}
       </div>

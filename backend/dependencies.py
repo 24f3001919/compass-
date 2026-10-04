@@ -144,17 +144,19 @@ _guest_rate_store: dict = defaultdict(deque)  # guest_id -> deque of timestamps
 
 
 def _get_guest_signing_secret() -> bytes:
-    """Derive secret for HMAC signing of guest session tokens."""
+    """Derive secret for HMAC signing of guest session tokens.
+    Reverted fallback chain: uses dedicated GUEST_SIGNING_SECRET only with no cross-purpose reuse.
+    """
     settings = get_settings()
-    candidate = (
-        getattr(settings, "GUEST_SIGNING_SECRET", "")
-        or (settings.AUTH_TOKEN if settings.AUTH_TOKEN and settings.AUTH_TOKEN.strip() not in (settings.DEFAULT_DEV_TOKEN, "compass-token", "test-token") else "")
-        or getattr(settings, "EDGE_HMAC_SECRET", "")
-        or getattr(settings, "TOKEN_ENCRYPTION_KEY", "")
-        or settings.DEFAULT_DEV_TOKEN
-        or "compass-guest-token-secret-2026"
-    )
-    return candidate.encode("utf-8")
+    secret = getattr(settings, "GUEST_SIGNING_SECRET", "")
+    if not secret:
+        if settings.is_production():
+            raise RuntimeError(
+                "CRITICAL: GUEST_SIGNING_SECRET must be configured in production. "
+                "No fallback to other secrets is permitted."
+            )
+        secret = "compass-guest-token-dev-secret-2026"
+    return secret.encode("utf-8")
 
 
 def generate_guest_token(guest_id: Optional[str] = None) -> tuple[str, str]:

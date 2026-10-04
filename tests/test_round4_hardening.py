@@ -202,6 +202,12 @@ class MockAsyncStream:
         pass
 
 
+def _to_text(val: Any) -> str:
+    if isinstance(val, (bytes, bytearray)):
+        return val.decode("utf-8")
+    return str(val)
+
+
 @pytest.mark.asyncio
 async def test_sse_disconnect_cancels_upstream():
     """Verify that client disconnect closes upstream generator and CancelledError is propagated."""
@@ -223,12 +229,12 @@ async def test_sse_disconnect_cancels_upstream():
          patch("backend.routers.chat.get_pool", return_value=None), \
          patch("backend.routers.chat._get_current_identity", return_value=Identity(id="u1", is_admin=False, user_id="u1")):
         resp = await stream_chat(req, request)
-        gen = resp.body_iterator
+        gen = aiter(resp.body_iterator)
 
         first = await anext(gen)  # ": ping\n\n"
-        assert "ping" in first
+        assert "ping" in _to_text(first)
         second = await anext(gen)  # first token
-        assert "chunk1" in second
+        assert "chunk1" in _to_text(second)
 
         # Next iteration detects is_disconnected=True and terminates stream
         with pytest.raises(StopAsyncIteration):
@@ -244,7 +250,7 @@ async def test_sse_disconnect_cancels_upstream():
          patch("backend.routers.chat.get_pool", return_value=None), \
          patch("backend.routers.chat._get_current_identity", return_value=Identity(id="u1", is_admin=False, user_id="u1")):
         resp = await stream_chat(req, request_cancel)
-        gen = resp.body_iterator
+        gen = aiter(resp.body_iterator)
         await anext(gen)  # ping
         await anext(gen)  # chunk1
         with pytest.raises(asyncio.CancelledError):
@@ -282,7 +288,7 @@ async def test_sse_tool_call_emits_no_duplicate_text():
         resp = await stream_chat(req, request)
         events = []
         async for ev in resp.body_iterator:
-            events.append(ev)
+            events.append(_to_text(ev))
 
         # Ensure tool was executed and zero duplicate partial token events emitted
         token_events = [e for e in events if '"type": "token"' in e]
@@ -312,7 +318,7 @@ async def test_sse_mid_stream_failure_emits_terminal_error():
         resp = await stream_chat(req, request)
         events = []
         async for ev in resp.body_iterator:
-            events.append(ev)
+            events.append(_to_text(ev))
 
         error_events = [e for e in events if '"type": "error"' in e]
         assert len(error_events) == 1

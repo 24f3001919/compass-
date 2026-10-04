@@ -272,7 +272,8 @@ async def handle_summarize_across_domains(args: Dict[str, Any], pool: Any) -> Di
             prompt = (
                 "You are an executive multi-domain roadmap planner powered by Nemotron-3 Ultra (550B). "
                 "Synthesize the following cross-domain state into an integrated executive roadmap. "
-                "Explicitly call out dependencies between hackathon deadlines, coursework exams/labs, and code implementation.\n\n"
+                "Explicitly call out dependencies between hackathon deadlines, coursework exams/labs, and code implementation. "
+                "Provide a clear, structured markdown roadmap without meta-commentary or thinking preamble.\n\n"
                 f"{combined_context}"
             )
             resp: Any = await client.chat.completions.create(
@@ -281,13 +282,17 @@ async def handle_summarize_across_domains(args: Dict[str, Any], pool: Any) -> Di
                     {"role": "system", "content": "You provide comprehensive, multi-domain executive roadmap briefings."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=384,
+                max_tokens=2048,
                 stream=False,
             )
             raw_content, p_tok, c_tok = _extract_completion_result(resp, prompt, default_completion_tokens=120)
             record_usage(settings.SYNTHESIS_MODEL, p_tok, c_tok)
             if raw_content is not None and raw_content.strip():
-                summary = raw_content.strip()
+                import re
+                cleaned = re.sub(r'<think>.*?</think>', '', raw_content, flags=re.DOTALL)
+                cleaned = re.sub(r'</?[a-zA-Z_][a-zA-Z0-9_.:-]*[^>]*>', '', cleaned)
+                cleaned = re.sub(r'</[a-zA-Z_][a-zA-Z0-9_.:-]*\.?$', '', cleaned).strip()
+                summary = cleaned or raw_content.strip()
             else:
                 summary = f"Multi-domain roadmap: {len(tasks)} tasks across {len(by_domain)} domains, {len(code_chunks)} code chunks, {len(cw_chunks)} coursework notes."
             return {

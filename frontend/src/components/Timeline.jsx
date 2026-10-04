@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState } from 'react'
 import {
   deleteTask,
   updateTask,
@@ -6,36 +6,32 @@ import {
   verifyAllDeadlines,
 } from '../api/client'
 import OnboardingTour from './OnboardingTour'
+import { getDomainMeta } from './timeline/domainMeta'
 import TaskCard from './timeline/TaskCard'
 import TaskDetailModal from './timeline/TaskDetailModal'
 import AddDeadlineModal from './timeline/AddDeadlineModal'
-import TimelineHeader from './timeline/TimelineHeader'
-import TimelineMetrics from './timeline/TimelineMetrics'
-import TimelineAiPlanner from './timeline/TimelineAiPlanner'
-import TimelineFilters from './timeline/TimelineFilters'
-import { Plus, Zap } from 'lucide-react'
 
 // Re-export for backward compatibility
 export { getDomainMeta } from './timeline/domainMeta'
 
 export default function Timeline({
   tasks = [],
+  allTasks = [],
   activeDomain,
   onSelectDomain,
   onTasksUpdated,
-  onOpenCompass,
+  onOpenNorthstar,
   onOpenTelemetry,
+  customDomains = [],
+  theme = 'light',
+  onToggleTheme,
 }) {
-  const handleOpenCompass = onOpenCompass
   const [selectedTask, setSelectedTask] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [seedingPersona, setSeedingPersona] = useState(false)
   const [seedSuccess, setSeedSuccess] = useState(false)
   const [verifyingDeadlines, setVerifyingDeadlines] = useState(false)
   const [verificationSummary, setVerificationSummary] = useState(null)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'open' | 'completed' | 'urgent'
-  const [quickAiPrompt, setQuickAiPrompt] = useState('')
 
   const handleVerifyAll = async () => {
     setVerifyingDeadlines(true)
@@ -95,216 +91,372 @@ export default function Timeline({
     }
   }
 
-  // Executive Metric Calculations
-  const metrics = useMemo(() => {
-    const total = tasks.length
-    const completed = tasks.filter(t => t.status === 'completed' || t.status === 'done').length
-    const open = total - completed
-    const progressPct = total > 0 ? Math.round((completed / total) * 100) : 0
-    const overdue = tasks.filter(t => (t.countdown || '').toLowerCase().includes('overdue')).length
-    const urgent = tasks.filter(t => {
-      const prio = String(t.priority || '').toLowerCase()
-      const cd = String(t.countdown || '').toLowerCase()
-      return prio === 'urgent' || cd.includes('today') || cd.includes('hour') || cd.includes('overdue')
-    }).length
-
-    const openTasks = tasks.filter(t => t.status !== 'completed' && t.status !== 'done')
-    const focusMinutes = openTasks.reduce((sum, t) => sum + (Number(t.duration_minutes) || 45), 0)
-    const focusHours = (focusMinutes / 60).toFixed(1)
-
-    return { total, completed, open, progressPct, overdue, urgent, focusHours }
-  }, [tasks])
-
-  // Multi-dimensional Filtering: Domain + Search Query + Status Filter
-  const filteredTasks = useMemo(() => {
-    return tasks.filter(t => {
-      // Domain filter
-      if (activeDomain !== 'all' && t.domain !== activeDomain) return false
-
-      // Status filter
-      const isComp = t.status === 'completed' || t.status === 'done'
-      if (statusFilter === 'open' && isComp) return false
-      if (statusFilter === 'completed' && !isComp) return false
-      if (statusFilter === 'urgent') {
-        const isUrg = String(t.priority || '').toLowerCase() === 'urgent' ||
-                      (t.countdown || '').toLowerCase().includes('overdue') ||
-                      (t.countdown || '').toLowerCase().includes('today')
-        if (!isUrg) return false
-      }
-
-      // Search Query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase()
-        const matchTitle = (t.title || '').toLowerCase().includes(q)
-        const matchDesc = (t.description || '').toLowerCase().includes(q)
-        const matchProj = (t.project || '').toLowerCase().includes(q)
-        const matchTags = Array.isArray(t.tags) && t.tags.some(tag => tag.toLowerCase().includes(q))
-        if (!matchTitle && !matchDesc && !matchProj && !matchTags) return false
-      }
-
-      return true
-    })
-  }, [tasks, activeDomain, statusFilter, searchQuery])
-
-  const today = new Date().toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'short',
-    day: 'numeric',
-  })
-
+  const filtered = activeDomain === 'all' ? tasks : tasks.filter(t => t.domain === activeDomain)
+  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
   const hasFallbackTasks = Array.isArray(tasks) && tasks.some(t => t.is_fallback)
 
-  const handleQuickAiSubmit = (e) => {
-    e.preventDefault()
-    if (!quickAiPrompt.trim()) return
-    if (handleOpenCompass) {
-      handleOpenCompass(quickAiPrompt)
-      setQuickAiPrompt('')
-    }
-  }
-
   return (
-    <div className="timeline-container" style={{ background: '#f8fafc', padding: '28px 32px' }}>
-      {/* Offline / Demo Warning if applicable */}
+    <div className="timeline-container" style={{ background: 'var(--bg-app)' }}>
       {hasFallbackTasks && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '10px 16px',
-            background: 'rgba(245, 158, 11, 0.1)',
-            border: '1px solid rgba(245, 158, 11, 0.3)',
-            borderRadius: '10px',
-            marginBottom: '20px',
-            fontSize: '12.5px',
-            color: '#b45309',
-          }}
-        >
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '10px 16px',
+          background: 'rgba(245, 158, 11, 0.1)',
+          border: '1px solid rgba(245, 158, 11, 0.3)',
+          borderRadius: '10px',
+          marginBottom: '18px',
+          fontSize: '12.5px',
+          color: '#fbbf24',
+        }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Zap size={16} color="#f59e0b" />
-            <span>
-              <strong>Demo Mode:</strong> Backend server is connecting. Displaying sample tasks.
-            </span>
+            <span style={{ fontSize: '15px' }}>⚡</span>
+            <span><strong>Demo / Offline Mode:</strong> Backend server is offline or starting up. Displaying sample tasks. Your local actions will sync once connected.</span>
           </div>
-          <span
-            style={{
-              fontSize: '11px',
-              background: 'rgba(245, 158, 11, 0.2)',
-              padding: '2px 8px',
-              borderRadius: '6px',
-              fontWeight: '700',
-            }}
-          >
-            Demo Context
-          </span>
+          <span style={{ fontSize: '11px', opacity: 0.9, background: 'rgba(245, 158, 11, 0.2)', padding: '2px 8px', borderRadius: '6px', fontWeight: '600' }}>Demo Data</span>
         </div>
       )}
 
-      {/* Top Header Bar */}
-      <TimelineHeader
-        today={today}
-        onOpenTelemetry={onOpenTelemetry}
-        onVerifyAll={handleVerifyAll}
-        verifyingDeadlines={verifyingDeadlines}
-        onSeedJudgePersona={handleSeedJudgePersona}
-        seedingPersona={seedingPersona}
-        seedSuccess={seedSuccess}
-        onOpenNewTask={() => setShowAddModal(true)}
-        verificationSummary={verificationSummary}
-        onClearVerificationSummary={() => setVerificationSummary(null)}
-      />
+      {/* Header with Direct Add Deadline Button */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '22px', gap: '16px', flexWrap: 'wrap' }}>
+        <div>
+          <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.4px', margin: 0 }}>
+            Timeline Feed <span className="serif-accent" style={{ color: 'var(--text-secondary)', fontWeight: '600' }}>— {today}</span>
+          </h2>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px', marginBottom: 0 }}>
+            What's happening across your workspace today
+          </p>
+        </div>
 
-      {/* Metric Cards Row */}
-      <TimelineMetrics metrics={metrics} />
-
-      {/* AI Planning & Copilot Quick Panel */}
-      <TimelineAiPlanner
-        quickAiPrompt={quickAiPrompt}
-        setQuickAiPrompt={setQuickAiPrompt}
-        onQuickAiSubmit={handleQuickAiSubmit}
-        onOpenCompass={handleOpenCompass}
-      />
-
-      {/* Onboarding Tour */}
-      <OnboardingTour
-        onVerifyDeadlines={handleVerifyAll}
-        onOpenTelemetry={onOpenTelemetry}
-        onOpenCompass={handleOpenCompass}
-        onOpenSeed={handleSeedJudgePersona}
-      />
-
-      {/* Filter and Search Bar */}
-      <TimelineFilters
-        tasks={tasks}
-        activeDomain={activeDomain}
-        onSelectDomain={onSelectDomain}
-        statusFilter={statusFilter}
-        setStatusFilter={setStatusFilter}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-      />
-
-      {/* Task Stream Feed */}
-      <div className="timeline-feed">
-        {filteredTasks.length === 0 ? (
-          <div
-            style={{
-              padding: '48px 20px',
-              textAlign: 'center',
-              background: '#ffffff',
-              borderRadius: '16px',
-              border: '1px dashed #cbd5e1',
-              color: '#64748b',
-              marginTop: '10px',
-              width: '100%',
-              boxSizing: 'border-box',
-            }}
-          >
-            <div style={{ fontSize: '36px', marginBottom: '12px' }}>📭</div>
-            <div style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
-              No tasks found
-            </div>
-            <div style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '18px', maxWidth: '420px', margin: '0 auto 18px auto' }}>
-              {searchQuery
-                ? `No tasks matched your search query "${searchQuery}". Try clearing search or resetting filters.`
-                : activeDomain === 'all'
-                ? 'Your task queue is completely clear. Add your first goal below or ask Compass to draft one.'
-                : `No active tasks found in the ${activeDomain.toUpperCase()} domain.`}
-            </div>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {onToggleTheme && (
             <button
-              id="btn-empty-add-deadline"
-              onClick={() => setShowAddModal(true)}
+              id="header-theme-toggle"
+              type="button"
+              role="switch"
+              aria-checked={theme === 'dark'}
+              aria-label={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+              title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+              onClick={onToggleTheme}
               style={{
-                display: 'inline-flex',
+                display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-                border: 'none',
-                color: '#ffffff',
-                padding: '9px 18px',
-                borderRadius: '8px',
+                background: 'var(--bg-card)',
+                color: 'var(--text-primary)',
+                border: '1px solid var(--border)',
+                padding: '9px 13px',
+                borderRadius: '10px',
                 fontSize: '13px',
                 fontWeight: '600',
                 cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
+                boxShadow: 'var(--shadow-sm)',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = 'var(--brand)'
+                e.currentTarget.style.transform = 'translateY(-1px)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = 'var(--border)'
+                e.currentTarget.style.transform = 'translateY(0)'
               }}
             >
-              <Plus size={15} />
-              <span>Create Task</span>
+              <span>{theme === 'dark' ? '🌙' : '☀️'}</span>
+              <span>{theme === 'dark' ? 'Dark' : 'Light'}</span>
             </button>
+          )}
+
+          {onOpenTelemetry && (
+            <button
+              id="btn-open-telemetry"
+              type="button"
+              onClick={onOpenTelemetry}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'rgba(245, 166, 35, 0.1)',
+                color: '#fbbf24',
+                border: '1px solid rgba(245, 166, 35, 0.35)',
+                padding: '9px 14px',
+                borderRadius: '10px',
+                fontSize: '13px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'rgba(245, 166, 35, 0.2)'
+                e.currentTarget.style.transform = 'translateY(-1px)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'rgba(245, 166, 35, 0.1)'
+                e.currentTarget.style.transform = 'translateY(0)'
+              }}
+              title="Inspect live Nebius Token Factory token consumption and NVIDIA model hierarchy"
+            >
+              <span>⚡</span>
+              <span>Nebius & NVIDIA Telemetry</span>
+            </button>
+          )}
+
+          <button
+            id="btn-verify-all-deadlines"
+            type="button"
+            onClick={handleVerifyAll}
+            disabled={verifyingDeadlines}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'rgba(56, 189, 248, 0.12)',
+              color: '#38bdf8',
+              border: '1px solid rgba(56, 189, 248, 0.35)',
+              padding: '9px 14px',
+              borderRadius: '10px',
+              fontSize: '13px',
+              fontWeight: '700',
+              cursor: verifyingDeadlines ? 'wait' : 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(56, 189, 248, 0.22)'
+              e.currentTarget.style.transform = 'translateY(-1px)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(56, 189, 248, 0.12)'
+              e.currentTarget.style.transform = 'translateY(0)'
+            }}
+            title="Proactively verify open deadlines across the live web using Tavily search"
+          >
+            <span>{verifyingDeadlines ? '⏳' : '🔍'}</span>
+            <span>{verifyingDeadlines ? 'Verifying with Tavily...' : 'Verify with Tavily'}</span>
+          </button>
+
+          <button
+            id="btn-seed-judge-persona"
+            type="button"
+            onClick={handleSeedJudgePersona}
+            disabled={seedingPersona}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: seedSuccess ? 'rgba(16, 185, 129, 0.15)' : 'rgba(96, 165, 250, 0.12)',
+              color: seedSuccess ? '#34d399' : '#60a5fa',
+              border: `1px solid ${seedSuccess ? 'rgba(16, 185, 129, 0.4)' : 'rgba(96, 165, 250, 0.35)'}`,
+              padding: '9px 14px',
+              borderRadius: '10px',
+              fontSize: '13px',
+              fontWeight: '700',
+              cursor: seedingPersona ? 'wait' : 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = seedSuccess ? 'rgba(16, 185, 129, 0.25)' : 'rgba(96, 165, 250, 0.22)'
+              e.currentTarget.style.transform = 'translateY(-1px)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = seedSuccess ? 'rgba(16, 185, 129, 0.15)' : 'rgba(96, 165, 250, 0.12)'
+              e.currentTarget.style.transform = 'translateY(0)'
+            }}
+            title="1-Click Demo: Populates sample multi-domain tasks and vector memory for hackathon judges"
+          >
+            <span>{seedSuccess ? '✓' : '🎯'}</span>
+            <span>{seedingPersona ? 'Loading...' : seedSuccess ? 'Demo Persona Loaded!' : 'Load Judge Persona'}</span>
+          </button>
+
+          <button
+            id="btn-add-deadline"
+            onClick={() => setShowAddModal(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+              color: '#ffffff',
+              border: 'none',
+              padding: '10px 18px',
+              borderRadius: '10px',
+              fontSize: '13.5px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
+              transition: 'all 0.15s ease',
+              flexShrink: 0
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.transform = 'translateY(-1px)'
+              e.currentTarget.style.boxShadow = '0 6px 18px rgba(37, 99, 235, 0.45)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.transform = 'translateY(0)'
+              e.currentTarget.style.boxShadow = '0 4px 14px rgba(37, 99, 235, 0.35)'
+            }}
+          >
+            <span style={{ fontSize: '16px', fontWeight: '700', lineHeight: 1 }}>+</span> Add deadline
+          </button>
+        </div>
+      </div>
+
+      {/* Verification Feedback Banner */}
+      {verificationSummary && (
+        <div style={{
+          background: verificationSummary.error ? 'rgba(239, 68, 68, 0.12)' : 'rgba(56, 189, 248, 0.12)',
+          border: `1px solid ${verificationSummary.error ? 'rgba(239, 68, 68, 0.35)' : 'rgba(56, 189, 248, 0.35)'}`,
+          color: verificationSummary.error ? '#fca5a5' : '#bae6fd',
+          padding: '12px 18px',
+          borderRadius: '12px',
+          marginBottom: '20px',
+          fontSize: '13px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '12px',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '16px' }}>{verificationSummary.error ? '⚠️' : '🔍'}</span>
+            <div>
+              <span style={{ fontWeight: '700' }}>
+                {verificationSummary.error
+                  ? 'Verification note: '
+                  : 'Schedules verified: '
+                }
+              </span>
+              <span>
+                {verificationSummary.error
+                  ? verificationSummary.error
+                  : `${verificationSummary.total} active deadline(s) checked. ${
+                      verificationSummary.drift > 0
+                        ? `⚠️ ${verificationSummary.drift} update(s) detected via live web search.`
+                        : 'All deadlines confirmed matching official dates.'
+                    }`
+                }
+              </span>
+            </div>
           </div>
-        ) : (
-          filteredTasks.map(task => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              onSelectTask={setSelectedTask}
-              onDeleteTask={handleDelete}
-              onToggleStatus={handleToggleStatus}
-            />
-          ))
-        )}
+          <button
+            onClick={() => setVerificationSummary(null)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#94a3b8',
+              cursor: 'pointer',
+              fontSize: '14px',
+              padding: '4px',
+            }}
+          >✕</button>
+        </div>
+      )}
+
+      {/* Judge Onboarding & Architectural Tour */}
+      <OnboardingTour
+        onVerifyDeadlines={handleVerifyAll}
+        onOpenTelemetry={onOpenTelemetry}
+        onOpenNorthstar={onOpenNorthstar}
+        onOpenSeed={handleSeedJudgePersona}
+      />
+
+      {/* Filter pills */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '22px', flexWrap: 'wrap' }}>
+        {(() => {
+          const basePills = ['all', 'hackathon', 'coursework', 'code', 'general', 'other']
+          const customPills = [
+            ...customDomains.map(d => d.key),
+            ...tasks.map(t => (t.domain || '').toLowerCase().trim()),
+            ...allTasks.map(t => (t.domain || '').toLowerCase().trim()),
+          ].filter(d => d && !basePills.includes(d))
+          const uniquePills = Array.from(new Set([...basePills, ...customPills]))
+
+          return uniquePills.map(dom => {
+            const pillMeta = dom === 'all' ? { label: 'All' } : getDomainMeta(dom)
+            return (
+              <button
+                key={dom}
+                id={`filter-pill-${dom}`}
+                onClick={() => onSelectDomain(dom)}
+                className={`filter-pill ${activeDomain === dom ? 'active' : ''}`}
+              >
+                {pillMeta.label}
+              </button>
+            )
+          })
+        })()}
+      </div>
+
+      {/* Task Stream Feed */}
+      <div className="timeline-feed">
+        {filtered.length === 0 ? (
+          <div style={{
+            padding: '48px 20px',
+            textAlign: 'center',
+            background: 'var(--bg-card)',
+            borderRadius: '16px',
+            border: '1px dashed var(--border)',
+            color: 'var(--text-secondary)',
+            marginTop: '10px',
+            width: '100%',
+            boxSizing: 'border-box'
+          }}>
+            {!localStorage.getItem('compass_demo_seeded') ? (
+              <>
+                <div style={{ fontSize: '32px', marginBottom: '12px' }}>🧭</div>
+                <div style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>
+                  Setting up your workspace...
+                </div>
+                <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
+                  Loading demo data with cross-domain tasks, code context, and hackathon deadlines.
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: '32px', marginBottom: '12px' }}>📭</div>
+                <div style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>
+                  {activeDomain === 'all' ? 'No deadlines yet' : 'Nothing here yet'}
+                </div>
+                <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '18px' }}>
+                  {activeDomain === 'all'
+                    ? 'Add one when you have something coming up.'
+                    : `No deadlines in ${getDomainMeta(activeDomain).label} yet. Add a deadline and it'll show up here.`}
+                </div>
+                <button
+                  id="btn-empty-add-deadline"
+                  onClick={() => setShowAddModal(true)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'var(--brand)',
+                    border: 'none',
+                    color: '#2a1a00',
+                    padding: '9px 18px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(245, 166, 35, 0.25)',
+                    transition: 'opacity 0.15s ease'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
+                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                >
+                  + Add deadline
+                </button>
+              </>
+            )}
+          </div>
+        ) : filtered.map(task => (
+          <TaskCard
+            key={task.id}
+            task={task}
+            onSelectTask={setSelectedTask}
+            onDeleteTask={handleDelete}
+            onToggleStatus={handleToggleStatus}
+          />
+        ))}
       </div>
 
       <TaskDetailModal
@@ -323,7 +475,8 @@ export default function Timeline({
         onCreated={onTasksUpdated}
         defaultDomain={activeDomain}
         tasks={tasks}
-        onOpenCompass={handleOpenCompass}
+        customDomains={customDomains}
+        onOpenNorthstar={onOpenNorthstar}
       />
     </div>
   )
