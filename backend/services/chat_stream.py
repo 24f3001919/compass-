@@ -8,12 +8,13 @@ concurrent context pre-fetching, and resilient background conversation persisten
 import asyncio
 import json
 import logging
+import sys
 import uuid
 from datetime import date
 from typing import Any, AsyncGenerator, List, Optional, cast
 
+import openai
 from fastapi import Request
-from openai import AsyncOpenAI, AsyncStream
 from openai.types.chat import (
     ChatCompletionChunk,
     ChatCompletionMessageParam,
@@ -22,13 +23,34 @@ from openai.types.chat import (
 
 from backend.config import get_settings
 from backend.memory import conversations
-from backend.memory.db import get_pool
+from backend.memory.db import get_pool as db_get_pool
 from backend.models import StreamChatRequest
 import backend.orchestrator as orchestrator
 from backend.router import TOOLS, message_needs_tools
 from backend.services.usage import record_usage
 
 logger = logging.getLogger("compass.services.chat_stream")
+
+get_pool = db_get_pool
+
+
+async def _resolve_pool():
+    """Resolve database pool, honoring any monkeypatches on backend.services.chat_stream or backend.routers.chat in unit tests."""
+    this_mod = sys.modules.get("backend.services.chat_stream")
+    if this_mod and getattr(this_mod, "get_pool", None) is not db_get_pool:
+        res = this_mod.get_pool()
+        if asyncio.iscoroutine(res):
+            return await res
+        return res
+
+    chat_mod = sys.modules.get("backend.routers.chat")
+    if chat_mod and getattr(chat_mod, "get_pool", None) is not db_get_pool:
+        res = chat_mod.get_pool()
+        if asyncio.iscoroutine(res):
+            return await res
+        return res
+
+    return await db_get_pool()
 
 
 async def persist_stream_messages(
@@ -49,7 +71,7 @@ async def persist_stream_messages(
         return False
 
     try:
-        pool = await get_pool()
+        pool = await _resolve_pool()
         if not pool:
             logger.error(
                 "Database connection pool unavailable; failed to persist streamed message for conv=%s, user=%s",
@@ -139,7 +161,7 @@ async def generate_chat_events(
     history_items: List[dict[str, str]] = []
     memory_context = ""
     try:
-        pool = await get_pool()
+        pool = await _resolve_pool()
         if pool:
             async def _load_history():
                 if not req.conversation_id:
@@ -188,43 +210,9 @@ async def generate_chat_events(
     except Exception as e:
         logger.debug("Pre-fetch failed: %s", e)
 
-    # Fast-fail for placeholder/unconfigured Nebius API keys
-    is_placeholder_key = (
-        not _settings.NEBIUS_API_KEY
-        or _settings.NEBIUS_API_KEY.startswith("your_nebius")
-        or _settings.NEBIUS_API_KEY in ("mock", "mock-key-not-used-in-tests")
-    )
-
-    if is_placeholder_key:
-        result = await orchestrator.handle_message(
-            conversation_id=req.conversation_id,
-            message=message,
-            user_id=user_id,
-            guest_id=guest_id,
-            history=history_items if history_items else None,
-            memory_context=memory_context if memory_context else None,
-            persist=False,
-        )
-        response_text = result.get("response", "")
-        skill_used = result.get("skill_used") or "chat"
-        prompt_est = max(len(message.split()) * 3, 30)
-        completion_est = max(len(response_text.split()), 15)
-        record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
-
-        is_first = True
-        async for chunk in stream_chunks(response_text):
-            if not is_first:
-                await asyncio.sleep(0.012)
-            is_first = False
-            yield f"data: {json.dumps({'type': 'token', 'value': chunk})}\n\n"
-
-        yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used})}\n\n"
-        _schedule_stream_persistence(conv_id, message, response_text, user_id, guest_id, skill_used)
-        return
-
     stream = None
     try:
-        client = AsyncOpenAI(
+        client = openai.AsyncOpenAI(
             api_key=_settings.NEBIUS_API_KEY,
             base_url=_settings.NEBIUS_BASE_URL,
             timeout=30.0,
@@ -265,7 +253,7 @@ async def generate_chat_events(
 
         try:
             stream = cast(
-                AsyncStream[ChatCompletionChunk],
+                openai.AsyncStream[ChatCompletionChunk],
                 await client.chat.completions.create(**call_kwargs),
             )
         except Exception as create_err:
@@ -365,12 +353,7 @@ async def generate_chat_events(
                 to_emit = response_text
 
             if to_emit:
-                is_first = True
-                async for chunk in stream_chunks(to_emit):
-                    if not is_first:
-                        await asyncio.sleep(0.012)
-                    is_first = False
-                    yield f"data: {json.dumps({'type': 'token', 'value': chunk})}\n\n"
+                yield f"data: {json.dumps({'type': 'token', 'value': to_emit})}\n\n"
 
             yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used})}\n\n"
             _schedule_stream_persistence(conv_id, message, response_text, user_id, guest_id, skill_used)
