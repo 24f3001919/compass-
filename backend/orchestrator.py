@@ -4,6 +4,7 @@ Compass — Skill Orchestrator.
 Coordinates routing via Nemotron-3 Nano and execution of structured database operations.
 """
 
+import re
 import time
 import uuid
 import logging
@@ -31,11 +32,24 @@ STATUS_MAP = {
 }
 
 
+def _strip_tags(text: str) -> str:
+    """Strip XML/markup tags or partial closing tags leaked by LLM."""
+    if not text:
+        return ""
+    cleaned = re.sub(r'</?[a-zA-Z_][a-zA-Z0-9_.:-]*[^>]*>', '', text)
+    cleaned = re.sub(r'</[a-zA-Z_][a-zA-Z0-9_.:-]*\.?$', '', cleaned)
+    return cleaned.strip()
+
+
 def _parse_iso_date(val: Optional[str]) -> Optional[date]:
     if not val:
         return None
     try:
-        parsed = datetime.strptime(val.strip(), "%Y-%m-%d").date()
+        val_clean = _strip_tags(str(val))
+        match = re.search(r'\b(\d{4}-\d{2}-\d{2})\b', val_clean)
+        if match:
+            val_clean = match.group(1)
+        parsed = datetime.strptime(val_clean.strip(), "%Y-%m-%d").date()
         today = date.today()
         # If the date was parsed with a past year (e.g. LLM defaulted to 2024/2025 instead of current year),
         # roll it forward to the current year or next occurrence.
@@ -303,9 +317,9 @@ async def handle_message(
                 "routing_latency_ms": latency_ms,
             }
 
-        # Build skill summary
-        due_info = f" with due date {due_str}" if due_str else ""
-        summary = f"Added task '{title}' under {domain.upper()} domain{due_info}."
+        # Build skill summary using parsed date
+        due_info = f" with due date {due_date.isoformat()}" if due_date else ""
+        summary = _strip_tags(f"Added task '{title}' under {domain.upper()} domain{due_info}.")
 
         # Persist conversation & messages
         try:
@@ -375,11 +389,12 @@ async def handle_message(
                 )
 
             succeeded = bool(skill_result.get("success", True))
-            summary = (
+            raw_summary = (
                 skill_result.get("summary")
                 or skill_result.get("response")
                 or ("Action completed." if succeeded else "")
             )
+            summary = _strip_tags(raw_summary)
             data = skill_result.get("data")
 
             if not succeeded:
@@ -420,6 +435,7 @@ async def handle_message(
                 "nothing was changed."
             )
 
+    text_reply = _strip_tags(text_reply)
     try:
         pool = await get_pool()
         async with pool.acquire() as conn:

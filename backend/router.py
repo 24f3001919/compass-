@@ -136,16 +136,18 @@ async def route_message(
     tools: Any = TOOLS
 
     try:
+        # Allow sufficient tokens for Nemotron's reasoning tokens + tool call generation
         response: Any = await client.chat.completions.create(
             model=settings.ROUTER_MODEL,
             messages=messages,
             tools=tools,
             tool_choice="auto",
-            max_tokens=1024,
+            max_tokens=4096,
             stream=False,
         )
 
         from backend.services.usage import record_usage
+        import re
         usage = getattr(response, "usage", None)
         p_tok = usage.prompt_tokens if usage else max(len(message.split()) * 2, 64)
         c_tok = usage.completion_tokens if usage else 50
@@ -154,6 +156,17 @@ async def route_message(
         choice = response.choices[0]
         msg_lower = message.lower()
         is_explicit_add_task = any(term in msg_lower for term in ("add a task", "add task", "new task", "create task"))
+
+        def _clean_val(v: Any) -> Any:
+            if isinstance(v, str):
+                cleaned = re.sub(r'</?[a-zA-Z_][a-zA-Z0-9_.:-]*[^>]*>', '', v)
+                cleaned = re.sub(r'</[a-zA-Z_][a-zA-Z0-9_.:-]*\.?$', '', cleaned)
+                return cleaned.strip()
+            elif isinstance(v, dict):
+                return {k: _clean_val(val) for k, val in v.items()}
+            elif isinstance(v, list):
+                return [_clean_val(item) for item in v]
+            return v
 
         if choice.message.tool_calls:
             tc: Any = choice.message.tool_calls[0]
@@ -166,6 +179,8 @@ async def route_message(
                 logger.warning(f"Failed to parse function arguments JSON ({e}): {raw_args}")
                 args = {"title": message}
 
+            args = _clean_val(args)
+
             # Guard against model misrouting an explicit task creation command to query_tasks
             if func_name == "query_tasks" and is_explicit_add_task:
                 fallback_args = _extract_task_creation_args(message)
@@ -177,15 +192,30 @@ async def route_message(
         else:
             # Fallback if model responded with conversational text to an explicit task creation command
             if is_explicit_add_task:
-                return "add_task", _extract_task_creation_args(message), ""
+                return "add_task", _clean_val(_extract_task_creation_args(message)), ""
 
-            reply = choice.message.content or "How can I help you today?"
+            reply = choice.message.content
+            if not reply or not reply.strip():
+                # Model produced no text content (e.g., spent tokens reasoning or length limit)
+                # Check for roadmap / synthesis requests
+                if any(term in msg_lower for term in ("roadmap", "cross-domain", "cross domain", "synthesize", "overview")):
+                    return "summarize_across_domains", {"date": date.today().isoformat()}, ""
+                if any(term in msg_lower for term in ("feasibility", "can i finish", "what to drop", "what should i drop", "triage", "overloaded")):
+                    return "assess_feasibility", {"days": 5, "hours_per_day": 4.0}, ""
+                if any(term in msg_lower for term in ("task", "due", "deadline", "deliverable")):
+                    return "query_tasks", {}, ""
+                if any(term in msg_lower for term in ("hi", "hello", "hey", "good morning", "good evening", "howdy")):
+                    reply = "Hey there! 👋 How can I help you today? Let me know if you'd like to dive into any tasks, deadlines, or planning."
+                else:
+                    reply = "I've reviewed your request. Let me know if you'd like me to query your tasks, schedule a deadline, or synthesize a roadmap."
             return None, None, reply
 
     except Exception as e:
         logger.error(f"Nebius router invocation failed: {e}")
         # Fallback keyword routing for robustness
         msg_lower = message.lower()
+        if any(term in msg_lower for term in ("roadmap", "cross-domain", "cross domain", "synthesize", "overview")):
+            return "summarize_across_domains", {"date": date.today().isoformat()}, ""
         if any(term in msg_lower for term in ("feasibility", "can i finish", "what to drop", "what should i drop", "what i drop", "triage", "overloaded", "overcommit", "adversarial")):
             import re
             days_match = re.search(r"\b([0-9]{1,4})\s*days?\b", msg_lower)

@@ -10,6 +10,17 @@ import uuid
 from datetime import date
 from typing import Any, List, Optional, cast
 
+# Pattern to strip XML-like tags that LLMs sometimes leak (e.g. </parameter>, <tool_call>, etc.)
+_XML_TAG_RE = re.compile(r'</?[a-zA-Z_][a-zA-Z0-9_.:-]*[^>]*>')
+
+
+def _sanitize_streamed_token(token: str) -> str:
+    """Remove XML/markup tags that the model may emit before switching to structured tool calls."""
+    if '<' not in token and '>' not in token:
+        return token  # fast path for the common case
+    cleaned = _XML_TAG_RE.sub('', token)
+    return cleaned
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
@@ -569,11 +580,13 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
                                 await stream.aclose()
                             break
 
-                        token = (delta.content if delta else None) or ""
-                        if token:
-                            full_text += token
-                            emitted_text += token
-                            yield f"data: {json.dumps({'type': 'token', 'value': token})}\n\n"
+                        raw_token = (delta.content if delta else None) or ""
+                        if raw_token:
+                            token = _sanitize_streamed_token(raw_token)
+                            full_text += raw_token  # keep raw for internal tracking
+                            if token:  # only emit non-empty sanitized tokens
+                                emitted_text += token
+                                yield f"data: {json.dumps({'type': 'token', 'value': token})}\n\n"
 
             except asyncio.CancelledError:
                 logger.info("Chat SSE stream cancelled; closing upstream model stream.")
@@ -588,7 +601,7 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
                 return
 
             if tool_call_detected:
-                # Execute tool via orchestrator. Emits zero duplicate text.
+                # Execute tool via orchestrator.
                 result = await orchestrator.handle_message(
                     conversation_id=req.conversation_id, message=message, user_id=user_id, guest_id=guest_id
                 )
@@ -598,16 +611,16 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
                 completion_est = max(len(response_text.split()), 15)
                 record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
 
-                # If text was somehow emitted before tool call, only emit un-emitted suffix to avoid duplication
-                if emitted_text and response_text.startswith(emitted_text):
-                    to_emit = response_text[len(emitted_text):]
-                elif not emitted_text:
-                    to_emit = response_text
+                # Any text emitted before the tool call was the model's internal
+                # reasoning/markup (often containing leaked XML tags).  Notify the
+                # client to replace it entirely with the clean orchestrator response.
+                if emitted_text:
+                    # Send a 'replace' event so the frontend discards the partial
+                    # streamed text and shows the clean response instead.
+                    yield f"data: {json.dumps({'type': 'replace', 'value': response_text})}\n\n"
                 else:
-                    to_emit = response_text
-
-                if to_emit:
-                    yield f"data: {json.dumps({'type': 'token', 'value': to_emit})}\n\n"
+                    if response_text:
+                        yield f"data: {json.dumps({'type': 'token', 'value': response_text})}\n\n"
                 yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used})}\n\n"
                 return
 

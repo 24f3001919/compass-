@@ -22,7 +22,7 @@ async def _init_connection(conn: asyncpg.Connection) -> None:
 
 async def _ensure_tables(pool: asyncpg.Pool) -> None:
     """Create agent_runs and agent_audit_log tables if they don't already exist."""
-    async with pool.acquire() as conn:
+    async with pool.acquire(timeout=5.0) as conn:
         await conn.execute("""
         CREATE TABLE IF NOT EXISTS agent_runs (
             id                 TEXT          PRIMARY KEY,
@@ -74,9 +74,12 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
             previous_state     JSONB,
             new_state          JSONB,
             approved_by        TEXT          NOT NULL DEFAULT 'user',
+            status             TEXT          NOT NULL DEFAULT 'executed',
+            is_reverted        BOOLEAN       NOT NULL DEFAULT FALSE,
             created_at         TIMESTAMPTZ   NOT NULL DEFAULT now()
         );
         ALTER TABLE agent_audit_log DROP CONSTRAINT IF EXISTS agent_audit_log_run_id_fkey;
+        ALTER TABLE agent_audit_log ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'executed';
         ALTER TABLE agent_audit_log ADD COLUMN IF NOT EXISTS is_reverted BOOLEAN NOT NULL DEFAULT FALSE;
         CREATE INDEX IF NOT EXISTS idx_agent_audit_log_run_id     ON agent_audit_log(run_id);
         CREATE INDEX IF NOT EXISTS idx_agent_audit_log_created_at ON agent_audit_log(created_at);
@@ -253,10 +256,12 @@ async def init_pool(dsn: str | None = None) -> asyncpg.Pool:
         dsn,
         min_size=2,
         max_size=10,
+        timeout=5.0,
+        command_timeout=10.0,
         init=_init_connection,  # register pgvector on every connection
     )
     try:
-        await _ensure_tables(_pool)
+        await asyncio.wait_for(_ensure_tables(_pool), timeout=10.0)
     except Exception as e:
         import logging
         logging.getLogger("compass.db").warning(f"Could not auto-create tables: {e}")

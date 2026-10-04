@@ -4,6 +4,7 @@ Compass — Admin, Health, and Usage Endpoints.
 
 import os
 import logging
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
@@ -16,20 +17,6 @@ logger = logging.getLogger("compass.routers.admin")
 router = APIRouter(tags=["admin"])
 
 
-@router.get("/api/admin/proxy-hops")
-async def get_proxy_hops_inspection(request: Request, _token: str = Depends(verify_token)):
-    """Admin-gated diagnostic route for inspecting proxy hops and raw XFF chain."""
-    xff = request.headers.get("x-forwarded-for")
-    parts = [p.strip() for p in xff.split(",") if p.strip()] if xff else []
-    return {
-        "x_forwarded_for_raw": xff,
-        "x_forwarded_for_parts": parts,
-        "hops_count": len(parts),
-        "x_real_ip": request.headers.get("x-real-ip"),
-        "client_host": request.client.host if request.client else None,
-        "cf_connecting_ip": request.headers.get("cf-connecting-ip"),
-        "user_agent": request.headers.get("user-agent"),
-    }
 
 
 @router.get("/", include_in_schema=False)
@@ -93,10 +80,11 @@ async def health_check():
     """Health check with SELECT 1 ping against the asyncpg connection pool."""
     db_status = "disconnected"
     try:
-        pool = await get_pool()
-        async with pool.acquire() as conn:
-            await conn.fetchval("SELECT 1")
-        db_status = "connected"
+        pool = await asyncio.wait_for(get_pool(), timeout=2.0)
+        if pool is not None:
+            async with pool.acquire(timeout=2.0) as conn:
+                await asyncio.wait_for(conn.fetchval("SELECT 1"), timeout=2.0)
+            db_status = "connected"
     except Exception:
         pass
 
