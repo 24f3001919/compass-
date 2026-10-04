@@ -91,23 +91,72 @@ def _extract_task_creation_args(message: str) -> dict:
 
 def message_needs_tools(message: str) -> bool:
     """Determine whether a user message requires tool registry evaluation.
-    Conversational queries (greetings, general help, Q&A) bypass tool routing,
-    saving thousands of prompt tokens and cutting latency.
+
+    Classification Logic:
+    1. Conversational Fast-Path: Simple chitchat, greetings, and general
+       identity queries (e.g. 'hi', 'who are you', 'what can you help with') that contain
+       no domain-specific verbs or entities bypass tool serialization.
+    2. Comprehensive Domain Keywords: Scans for task, coursework, calendar, code,
+       hackathon, search, memory, or feasibility triggers matching any of Compass's 23 tools.
+    3. Fail-Safe Default: Any message containing actionable requests or domain entities
+       triggers tool evaluation to ensure zero false negatives.
     """
     msg = message.lower().strip()
+    if not msg:
+        return False
+
+    # Pure chitchat triggers with no actionable domain intent
+    pure_conversational = {
+        "hi", "hello", "hey", "greetings", "good morning", "good evening",
+        "good afternoon", "how are you", "who are you", "what are you",
+        "what can you do", "what do you do", "help", "thank you", "thanks",
+        "bye", "goodbye", "tell me a joke", "what is compass", "who created you",
+        "what can you help with", "what can you help me with", "how are you doing",
+        "hey, what can you help with", "hey what can you help with",
+    }
+    cleaned = msg.strip("!?.,:; ")
+    if cleaned in pure_conversational:
+        return False
+
     tool_keywords = (
-        "task", "todo", "due", "deadline", "priority", "status",
-        "add", "create", "new", "schedule", "reschedule", "postpone", "delete", "remove", "edit", "update", "mark", "finish", "complete", "done",
-        "list", "show", "what are", "what do i have",
-        "coursework", "assignment", "homework", "syllabus", "notes", "lecture", "lab",
-        "hackathon", "devpost", "submission", "track", "prize",
-        "code", "repo", "repository", "snippet", "commit", "architecture",
-        "calendar", "event", "meeting", "sync", "availability", "conflict", "clash",
-        "search", "web", "lookup", "research", "verify", "tavily", "online", "url", "http",
-        "feasible", "feasibility", "finish in time", "what to drop", "triage", "overloaded", "capacity",
-        "specialist", "delegate", "planner"
+        # Tasks & Deliverables
+        "task", "tasks", "todo", "todos", "due", "deadline", "deadlines",
+        "backlog", "work on", "workload", "priority", "status", "pending", "upcoming",
+        # Actions & Lifecycle
+        "add", "create", "new", "schedule", "reschedule", "postpone", "delete",
+        "remove", "edit", "update", "mark", "finish", "complete", "done", "cancel",
+        "drop", "move", "push back", "assign", "defer",
+        # Queries & Agenda
+        "list", "show", "what are", "what do i have", "do i have", "what's on",
+        "whats on", "check", "agenda", "today", "tomorrow", "yesterday", "this week", "next week",
+        # Coursework & Academics
+        "coursework", "course", "assignment", "homework", "syllabus", "notes",
+        "lecture", "lab", "exam", "quiz", "test", "midterm", "final", "paper",
+        "essay", "study", "reading",
+        # Hackathons & Projects
+        "hackathon", "project", "projects", "devpost", "submission", "track",
+        "prize", "pitch", "demo",
+        # Code & Repository
+        "code", "repo", "repository", "snippet", "commit", "branch", "pr",
+        "pull request", "architecture", "git", "github", "issue", "issues", "bug", "bugs",
+        # Calendar & Availability
+        "calendar", "event", "events", "meeting", "meetings", "sync",
+        "availability", "available", "conflict", "conflicts", "clash", "free time", "busy", "slot", "slots",
+        # Research & Web
+        "search", "web", "lookup", "research", "verify", "tavily", "online",
+        "url", "http", "https", "find", "documentation", "doc", "docs",
+        # Feasibility & Triage
+        "feasible", "feasibility", "finish in time", "can i finish", "what to drop",
+        "what should i drop", "what i drop", "triage", "overload", "overloaded",
+        "overcommit", "capacity",
+        # Memory & Notes
+        "memory", "remember", "recall", "stored", "save", "log", "note", "notes",
+        "remind", "reminder",
+        # Specialists & Agent
+        "specialist", "delegate", "planner", "agent", "plan", "execute",
     )
     return any(k in msg for k in tool_keywords)
+
 
 
 def _fallback_route(message: str, history: Optional[list[dict[str, str]]] = None) -> Tuple[Optional[str], Optional[dict[str, Any]], str]:
