@@ -158,6 +158,8 @@ async def generate_chat_events(
     message = req.message.strip()
     yield ": ping\n\n"
 
+    needs_tools = message_needs_tools(message)
+
     history_items: List[dict[str, str]] = []
     memory_context = ""
     try:
@@ -176,6 +178,8 @@ async def generate_chat_events(
                     )
 
             async def _load_tasks():
+                if not needs_tools:
+                    return []
                 async with pool.acquire() as conn:
                     if user_id:
                         return await conn.fetch(
@@ -236,8 +240,47 @@ async def generate_chat_events(
             messages.extend(history_items)
         messages.append({"role": "user", "content": message})
 
-        needs_tools = message_needs_tools(message)
         tools: Any = cast(List[ChatCompletionToolParam], TOOLS) if needs_tools else None
+
+        # Detect test mocks vs unconfigured placeholder keys
+        is_mocked = (
+            hasattr(client, "_mock_return_value")
+            or hasattr(client, "_mock_wraps")
+            or isinstance(getattr(client, "chat", None), (object,))
+            and getattr(getattr(client, "chat", None), "completions", None).__class__.__name__ in ("MagicMock", "AsyncMock")
+        )
+        is_placeholder_key = (
+            not _settings.NEBIUS_API_KEY
+            or _settings.NEBIUS_API_KEY.startswith("your_nebius")
+            or _settings.NEBIUS_API_KEY in ("mock", "mock-key-not-used-in-tests")
+        )
+
+        if not is_mocked and is_placeholder_key:
+            result = await orchestrator.handle_message(
+                conversation_id=req.conversation_id,
+                message=message,
+                user_id=user_id,
+                guest_id=guest_id,
+                history=history_items if history_items else None,
+                memory_context=memory_context if memory_context else None,
+                persist=False,
+            )
+            response_text = result.get("response", "")
+            skill_used = result.get("skill_used") or "chat"
+            prompt_est = max(len(message.split()) * 3, 30)
+            completion_est = max(len(response_text.split()), 15)
+            record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
+
+            is_first = True
+            async for chunk in stream_chunks(response_text):
+                if not is_first:
+                    await asyncio.sleep(0.012)
+                is_first = False
+                yield f"data: {json.dumps({'type': 'token', 'value': chunk})}\n\n"
+
+            yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used})}\n\n"
+            _schedule_stream_persistence(conv_id, message, response_text, user_id, guest_id, skill_used)
+            return
 
         call_kwargs: dict[str, Any] = {
             "model": _settings.ROUTER_MODEL,

@@ -8,7 +8,7 @@ import httpx
 
 BASE_URL = "http://localhost:8000"
 AUTH_HEADER = {"Authorization": "Bearer dev-token", "Content-Type": "application/json"}
-RUNS = 5
+WARM_RUNS = 5
 
 
 async def single_stream_run(prompt: str) -> Dict[str, Any]:
@@ -93,40 +93,58 @@ def compute_stats(vals: List[float]) -> Dict[str, float]:
 
 async def benchmark_scenario(name: str, prompt: str, is_stream: bool) -> Dict[str, Any]:
     print("\n=======================================================")
-    print(f"BENCHMARK: {name} (N={RUNS} iterations)")
+    print(f"BENCHMARK: {name}")
     print(f"Prompt: \"{prompt}\"")
     print("=======================================================")
 
-    results = []
-    for i in range(1, RUNS + 1):
+    # 1. Isolated Cold Start run (Run 0)
+    if is_stream:
+        cold_res = await single_stream_run(prompt)
+        print(
+            f"  [Cold Start]: TTFT={cold_res['ttft_ms']:.1f}ms, Total={cold_res['total_ms']:.1f}ms, "
+            f"Connect={cold_res['connect_ms']:.1f}ms, Chunks={cold_res['tokens']}"
+        )
+    else:
+        cold_res = await single_sync_run(prompt)
+        print(f"  [Cold Start]: Total={cold_res['total_ms']:.1f}ms, Skill={cold_res['skill']}")
+
+    await asyncio.sleep(0.5)
+
+    # 2. Warm iterations (Runs 1 to WARM_RUNS)
+    warm_results = []
+    for i in range(1, WARM_RUNS + 1):
         if is_stream:
             res = await single_stream_run(prompt)
             print(
-                f"  Run {i}/{RUNS}: TTFT={res['ttft_ms']:.1f}ms, Total={res['total_ms']:.1f}ms, "
+                f"  Run {i}/{WARM_RUNS} (Warm): TTFT={res['ttft_ms']:.1f}ms, Total={res['total_ms']:.1f}ms, "
                 f"Connect={res['connect_ms']:.1f}ms, Skill={res['skill']}, Chunks={res['tokens']}"
             )
         else:
             res = await single_sync_run(prompt)
-            print(f"  Run {i}/{RUNS}: Total={res['total_ms']:.1f}ms, Skill={res['skill']}")
-        results.append(res)
-        await asyncio.sleep(0.5)
+            print(f"  Run {i}/{WARM_RUNS} (Warm): Total={res['total_ms']:.1f}ms, Skill={res['skill']}")
+        warm_results.append(res)
+        await asyncio.sleep(0.3)
 
-    total_stats = compute_stats([r["total_ms"] for r in results])
-    ttft_stats = compute_stats([r["ttft_ms"] for r in results]) if is_stream else None
-    connect_stats = compute_stats([r["connect_ms"] for r in results]) if is_stream else None
+    warm_total_stats = compute_stats([r["total_ms"] for r in warm_results])
+    warm_ttft_stats = compute_stats([r["ttft_ms"] for r in warm_results]) if is_stream else None
+    warm_connect_stats = compute_stats([r["connect_ms"] for r in warm_results]) if is_stream else None
+    avg_chunks = round(statistics.mean([r["tokens"] for r in warm_results])) if is_stream else 0
 
-    print(f"-> Summary for {name}:")
-    if ttft_stats:
-        print(f"   TTFT:  mean={ttft_stats['mean']}ms, stddev=±{ttft_stats['stddev']}ms, var={ttft_stats['var']}")
-    print(f"   Total: mean={total_stats['mean']}ms, stddev=±{total_stats['stddev']}ms, var={total_stats['var']}")
+    print(f"-> Summary for {name} (Warm State N={WARM_RUNS}):")
+    if warm_ttft_stats:
+        print(f"   TTFT:   mean={warm_ttft_stats['mean']}ms, stddev=±{warm_ttft_stats['stddev']}ms, var={warm_ttft_stats['var']}")
+    print(f"   Total:  mean={warm_total_stats['mean']}ms, stddev=±{warm_total_stats['stddev']}ms, var={warm_total_stats['var']}")
+    if is_stream:
+        print(f"   Chunks: average={avg_chunks} chunks per response")
 
     return {
         "name": name,
         "is_stream": is_stream,
-        "ttft": ttft_stats,
-        "connect": connect_stats,
-        "total": total_stats,
-        "sample": results[0],
+        "cold": cold_res,
+        "warm_ttft": warm_ttft_stats,
+        "warm_connect": warm_connect_stats,
+        "warm_total": warm_total_stats,
+        "chunks": avg_chunks,
     }
 
 
@@ -143,21 +161,23 @@ async def main():
         data = await benchmark_scenario(name, prompt, is_stream)
         all_data.append(data)
 
-    print("\n\n" + "=" * 70)
-    print("FINAL CONSOLIDATED MULTI-RUN BENCHMARK REPORT (N=5)")
-    print("=" * 70)
-    print("| Scenario | Mode | TTFT Mean (±StdDev) [Var] | Total Time Mean (±StdDev) [Var] | Connect Mean |")
-    print("| :--- | :--- | :--- | :--- | :--- |")
+    print("\n\n" + "=" * 80)
+    print("CONSOLIDATED MULTI-RUN BENCHMARK REPORT (WARM-STATE N=5 WITH SEPARATE COLD-START)")
+    print("=" * 80)
+    print("| Scenario | Mode | Cold Start (TTFT / Total) | Warm TTFT Mean (±StdDev) [Var] | Warm Total Mean (±StdDev) [Var] | Chunks |")
+    print("| :--- | :--- | :--- | :--- | :--- | :--- |")
     for d in all_data:
         mode = "Stream" if d["is_stream"] else "Sync"
         if d["is_stream"]:
-            ttft_str = f"**{d['ttft']['mean']} ms** (±{d['ttft']['stddev']} ms) [{d['ttft']['var']}]"
-            connect_str = f"{d['connect']['mean']} ms"
+            cold_str = f"{d['cold']['ttft_ms']:.1f}ms / {d['cold']['total_ms']:.1f}ms"
+            ttft_str = f"**{d['warm_ttft']['mean']} ms** (±{d['warm_ttft']['stddev']} ms) [{d['warm_ttft']['var']}]"
+            chunks_str = f"{d['chunks']} chunks"
         else:
+            cold_str = f"N/A / {d['cold']['total_ms']:.1f}ms"
             ttft_str = "N/A (Sync buffer)"
-            connect_str = "N/A"
-        tot_str = f"**{d['total']['mean']} ms** (±{d['total']['stddev']} ms) [{d['total']['var']}]"
-        print(f"| {d['name']} | {mode} | {ttft_str} | {tot_str} | {connect_str} |")
+            chunks_str = "1 (Monolithic)"
+        tot_str = f"**{d['warm_total']['mean']} ms** (±{d['warm_total']['stddev']} ms) [{d['warm_total']['var']}]"
+        print(f"| {d['name']} | {mode} | {cold_str} | {ttft_str} | {tot_str} | {chunks_str} |")
 
 
 if __name__ == "__main__":
