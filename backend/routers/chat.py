@@ -82,7 +82,7 @@ async def get_messages(
             is_admin = bool(ident and ident.is_admin)
 
             has_access, err = await conversations.check_conversation_access(
-                conn, conversation_id, user_id=user_id, guest_id=guest_id, is_admin=is_admin, allow_shared=True
+                conn, conversation_id, user_id=user_id, guest_id=guest_id, is_admin=is_admin, allow_shared=False
             )
             if not has_access:
                 status_code = 404 if err == "Conversation not found" else (400 if err == "Invalid conversation ID" else 403)
@@ -158,15 +158,14 @@ async def update_past_conversation(
                 status_code = 404 if err == "Conversation not found" else (400 if err == "Invalid conversation ID" else 403)
                 raise HTTPException(status_code=status_code, detail=err)
 
-            ok, share_token = await conversations.update_conversation(
+            ok, _ = await conversations.update_conversation(
                 conn,
                 conversation_id,
                 title=payload.title,
                 is_pinned=payload.is_pinned,
                 is_archived=payload.is_archived,
-                is_shared=payload.is_shared,
             )
-            return {"ok": ok, "share_token": share_token}
+            return {"ok": ok}
     except HTTPException:
         raise
     except Exception:
@@ -205,58 +204,6 @@ async def delete_past_conversation(conversation_id: str, request: Request):
         return {"ok": False, "error": "Failed to delete conversation"}
 
 
-# ---- GET /api/share/{share_token} -----------------------------------------
-@router.get("/api/share/{share_token}")
-async def get_shared_conversation(share_token: str, request: Request):
-    """Retrieve shared conversation details and its messages publicly via revocable unguessable share_token.
-
-    Zero owner PII (user_id, guest_id, email) is returned.
-    Conversation ID does NOT resolve a share.
-    """
-    clean_token = (share_token or "").strip()
-    # Validate token: alphanumeric, underscores, hyphens, min 16 chars
-    if not clean_token or len(clean_token) < 16 or len(clean_token) > 128 or not re.match(r"^[A-Za-z0-9_-]+$", clean_token):
-        raise HTTPException(status_code=404, detail="Shared conversation not found or access has been revoked.")
-
-    try:
-        pool = await get_pool()
-        if not pool:
-            raise HTTPException(status_code=503, detail="Database unavailable")
-        async with pool.acquire() as conn:
-            # Look up strictly by share_token WHERE is_shared = TRUE (Zero "OR id = $1")
-            conv_row = await conn.fetchrow(
-                """
-                SELECT id, started_at, last_active_at, COALESCE(title, 'Shared Chat') AS title
-                FROM conversations
-                WHERE share_token = $1 AND is_shared = TRUE
-                """,
-                clean_token,
-            )
-            if not conv_row:
-                raise HTTPException(status_code=404, detail="Shared conversation not found or access has been revoked.")
-
-            real_id = str(conv_row["id"])
-            rows = await conversations.get_recent_messages(conn, real_id, limit=100)
-            messages = [
-                {
-                    "role": r["role"],
-                    "content": r["content"],
-                    "skill_called": r.get("skill_called"),
-                    "created_at": r["created_at"].isoformat() if hasattr(r["created_at"], "isoformat") else str(r["created_at"]),
-                }
-                for r in rows
-            ]
-            return {
-                "title": conv_row["title"],
-                "started_at": conv_row["started_at"].isoformat() if hasattr(conv_row["started_at"], "isoformat") else str(conv_row["started_at"]),
-                "last_active_at": conv_row["last_active_at"].isoformat() if hasattr(conv_row["last_active_at"], "isoformat") else str(conv_row["last_active_at"]),
-                "messages": messages,
-            }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching shared conversation: {e}")
-        raise HTTPException(status_code=500, detail="Failed to load shared conversation")
 
 
 

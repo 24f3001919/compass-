@@ -99,7 +99,7 @@ export default function ConfirmationGate({
         </div>
         <div>
           <div style={{ fontSize: '15px', fontWeight: '800', color: '#0f172a', letterSpacing: '-0.3px' }}>
-            Specialist Confirmation Gate — {pendingActions.length} Pending Action{pendingActions.length !== 1 ? 's' : ''}
+            Action Confirmation Gate — {pendingActions.length} Pending Action{pendingActions.length !== 1 ? 's' : ''}
           </div>
           <div style={{ fontSize: '12.5px', color: '#64748b' }}>
             Zero-mutation safety protocol: AI proposed changes require your explicit authorization.

@@ -275,8 +275,6 @@ export default function App() {
             initialSubTab={
               activeTab === 'agent' || activeTab === 'planner'
                 ? 'planner'
-                : activeTab === 'specialist'
-                ? 'specialist'
                 : 'assistant'
             }
             messages={messages}

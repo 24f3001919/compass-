@@ -70,7 +70,7 @@ def test_message_needs_tools_battery():
         "log a new note about compiler design lecture",
         "check the latest commit on our github repo",
         "what should I triage or drop to meet the hackathon deadline?",
-        "delegate research on graph neural networks to specialist",
+        "research graph neural networks on the web",
         "remind me to submit the devpost pitch video",
         "how much free time do I have this afternoon?",
         "mark the math homework as complete",

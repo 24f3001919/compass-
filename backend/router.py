@@ -152,8 +152,8 @@ def message_needs_tools(message: str) -> bool:
         # Memory & Notes
         "memory", "remember", "recall", "stored", "save", "log", "note", "notes",
         "remind", "reminder",
-        # Specialists & Agent
-        "specialist", "delegate", "planner", "agent", "plan", "execute",
+        # Agent & Planner
+        "planner", "agent", "plan", "execute",
     )
     return any(k in msg for k in tool_keywords)
 

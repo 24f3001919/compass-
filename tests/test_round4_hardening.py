@@ -36,6 +36,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
+from httpx import AsyncClient
 from starlette.requests import Request
 
 from backend.config import get_settings
@@ -47,85 +48,28 @@ from backend.models import StreamChatRequest
 
 
 # ============================================================================
-# 1. SHARE LINKS
+# 1. SHARE ROUTE COMPLETE DELETION
 # ============================================================================
 
 @pytest.mark.asyncio
-async def test_share_link_conversation_id_does_not_resolve():
-    """Verify that a conversation UUID does NOT resolve a share link (token-only)."""
-    from backend.routers.chat import get_shared_conversation
-
-    conv_uuid = str(uuid.uuid4())
-    req = Request({"type": "http", "client": ("127.0.0.1", 1234), "headers": []})
-
-    mock_conn = AsyncMock()
-    mock_conn.fetchrow.return_value = None  # Query WHERE share_token = $1 AND is_shared = TRUE
-
-    mock_pool = MagicMock()
-    mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
-    mock_pool.acquire.return_value.__aexit__.return_value = None
-
-    with patch("backend.routers.chat.get_pool", return_value=mock_pool):
-        with pytest.raises(HTTPException) as exc:
-            await get_shared_conversation(conv_uuid, req)
-        assert exc.value.status_code == 404
+async def test_share_endpoint_is_completely_deleted_returns_404(client: AsyncClient):
+    """Verify that /api/share/{share_token} is completely deleted and returns 404."""
+    resp = await client.get("/api/share/any_valid_looking_token_123456789")
+    assert resp.status_code == 404
 
 
-@pytest.mark.asyncio
-async def test_share_link_revoked_token_returns_404():
-    """Verify that when a conversation is unshared, the share token is invalidated -> 404."""
-    from backend.routers.chat import get_shared_conversation
-
-    revoked_token = "revoked_token_abc123"
-    req = Request({"type": "http", "client": ("127.0.0.1", 1234), "headers": []})
-
-    mock_conn = AsyncMock()
-    mock_conn.fetchrow.return_value = None
-
-    mock_pool = MagicMock()
-    mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
-    mock_pool.acquire.return_value.__aexit__.return_value = None
-
-    with patch("backend.routers.chat.get_pool", return_value=mock_pool):
-        with pytest.raises(HTTPException) as exc:
-            await get_shared_conversation(revoked_token, req)
-        assert exc.value.status_code == 404
+def test_get_shared_conversation_symbol_does_not_exist():
+    """Verify get_shared_conversation was deleted from backend.routers.chat."""
+    import backend.routers.chat as chat_module
+    assert not hasattr(chat_module, "get_shared_conversation"), "get_shared_conversation must be deleted"
 
 
-@pytest.mark.asyncio
-async def test_share_link_no_owner_pii_in_response():
-    """Verify that shared conversation response contains NO owner PII (user_id, email)."""
-    from backend.routers.chat import get_shared_conversation
+def test_share_route_not_in_registered_app_routes():
+    """Verify that no /api/share route exists on the FastAPI application."""
+    from backend.main import app
+    route_paths = [r.path for r in app.routes if hasattr(r, "path")]
+    assert not any(p.startswith("/api/share") for p in route_paths), "No /api/share route should be registered"
 
-    valid_token = "valid_safe_token_xyz987"
-    req = Request({"type": "http", "client": ("127.0.0.1", 1234), "headers": []})
-
-    mock_row = {
-        "id": uuid.uuid4(),
-        "title": "Public Shared Chat",
-        "started_at": "2026-10-01T12:00:00Z",
-        "last_active_at": "2026-10-01T12:00:00Z",
-        "share_token": valid_token,
-        "is_shared": True,
-        "user_id": "secret_owner@example.com",
-    }
-    mock_conn = AsyncMock()
-    mock_conn.fetchrow.return_value = mock_row
-    mock_conn.fetch.return_value = [
-        {"role": "user", "content": "Hello", "created_at": "2026-10-01T12:00:00Z", "skill_called": None}
-    ]
-
-    mock_pool = MagicMock()
-    mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
-    mock_pool.acquire.return_value.__aexit__.return_value = None
-
-    with patch("backend.routers.chat.get_pool", return_value=mock_pool):
-        result = await get_shared_conversation(valid_token, req)
-        assert "user_id" not in result
-        assert "email" not in result
-        assert "owner" not in result
-        assert result["title"] == "Public Shared Chat"
-        assert len(result["messages"]) == 1
 
 
 # ============================================================================

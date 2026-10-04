@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import ChatPanel from './ChatPanel'
 import AgentPanel from './AgentPanel'
-import SpecialistPanel from './SpecialistPanel'
 
 export default function CompassPanel({
   initialSubTab = 'assistant',
@@ -102,29 +101,17 @@ export default function CompassPanel({
             }}>
             📋 Planner
           </button>
-          <button
-            id="compass-subtab-specialist"
-            onClick={() => setActiveSubTab('specialist')}
-            style={{
-              padding: '5px 14px',
-              borderRadius: '6px',
-              border: 'none',
-              background: activeSubTab === 'specialist' ? 'var(--bg-card)' : 'transparent',
-              color: activeSubTab === 'specialist' ? 'var(--text-primary)' : 'var(--text-secondary)',
-              boxShadow: activeSubTab === 'specialist' ? 'var(--shadow-sm)' : 'none',
-              fontSize: '12.5px',
-              fontWeight: activeSubTab === 'specialist' ? '700' : '500',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}>
-            🧠 Specialists
-          </button>
         </div>
       </div>
 
       {/* Main Unified View Area */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-        {activeSubTab === 'assistant' ? (
+        {activeSubTab === 'planner' ? (
+          <AgentPanel
+            onTaskMutated={onTaskMutated}
+            conversationId={conversationId}
+          />
+        ) : (
           <ChatPanel
             messages={messages}
             setMessages={setMessages}
@@ -138,16 +125,6 @@ export default function CompassPanel({
             initialPrompt={pendingPrompt}
             onClearInitialPrompt={onClearPendingPrompt}
             onOpenMigration={onOpenMigration}
-          />
-        ) : activeSubTab === 'planner' ? (
-          <AgentPanel
-            onTaskMutated={onTaskMutated}
-            conversationId={conversationId}
-          />
-        ) : (
-          <SpecialistPanel
-            onTaskMutated={onTaskMutated}
-            onSelectTab={onSelectTab}
           />
         )}
       </div>

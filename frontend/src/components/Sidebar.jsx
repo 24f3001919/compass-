@@ -163,7 +163,7 @@ export default function Sidebar({
 
         {NAV_ITEMS.map(item => {
           const Icon = item.icon
-          const isActive = activeTab === item.key || (item.key === 'compass' && (activeTab === 'agent' || activeTab === 'planner' || activeTab === 'specialist'))
+          const isActive = activeTab === item.key || (item.key === 'compass' && (activeTab === 'agent' || activeTab === 'planner'))
           return (
             <button
               key={item.key}

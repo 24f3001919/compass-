@@ -401,9 +401,6 @@ async def check_conversation_access(
     if not conv_row:
         return False, "Conversation not found"
 
-    if allow_shared and conv_row.get("is_shared"):
-        return True, None
-
     if is_admin:
         return True, None
 
