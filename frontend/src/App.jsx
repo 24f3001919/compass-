@@ -62,6 +62,51 @@ export default function App() {
   const [isTyping, setIsTyping] = useState(false)
   const [pendingPrompt, setPendingPrompt] = useState(null)
 
+  const [theme, setTheme] = useState(() => {
+    try {
+      const saved = localStorage.getItem('compass.theme')
+      if (saved === 'dark' || saved === 'light') return saved
+      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        return 'dark'
+      }
+    } catch {
+      /* ignore storage access error */
+    }
+    return 'light'
+  })
+
+  // Synchronize theme to document root and persist preference
+  useEffect(() => {
+    try {
+      localStorage.setItem('compass.theme', theme)
+    } catch {
+      /* ignore storage access error */
+    }
+    document.documentElement.setAttribute('data-theme', theme)
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+  }, [theme])
+
+  // Listen for system color-scheme changes only if user hasn't set an explicit preference
+  useEffect(() => {
+    const handler = (e) => {
+      try {
+        const saved = localStorage.getItem('compass.theme')
+        if (!saved) {
+          setTheme(e.matches ? 'dark' : 'light')
+        }
+      } catch {}
+    }
+    const mediaQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null
+    if (mediaQuery?.addEventListener) {
+      mediaQuery.addEventListener('change', handler)
+      return () => mediaQuery.removeEventListener('change', handler)
+    }
+  }, [])
+
+  const toggleTheme = useCallback(() => {
+    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'))
+  }, [])
+
   // Keep a ref to the latest tasks state for stable diffing without triggering interval re-creations
   const tasksRef = useRef([])
   tasksRef.current = tasks
@@ -292,6 +337,8 @@ export default function App() {
         onOpenTelemetry={() => setShowTelemetryModal(true)}
         customDomains={customDomains}
         onDomainCreated={handleDomainCreated}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-app)', minWidth: 0, overflow: 'hidden' }}>
@@ -302,6 +349,8 @@ export default function App() {
             activeDomain={selectedDomain}
             onSelectDomain={setSelectedDomain}
             customDomains={customDomains}
+            theme={theme}
+            onToggleTheme={toggleTheme}
             onTasksUpdated={() => {
               loadTasks(selectedDomain)
               refreshUsage()

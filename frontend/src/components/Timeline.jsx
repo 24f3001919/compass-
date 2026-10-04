@@ -23,6 +23,8 @@ export default function Timeline({
   onOpenNorthstar,
   onOpenTelemetry,
   customDomains = [],
+  theme = 'light',
+  onToggleTheme,
 }) {
   const [selectedTask, setSelectedTask] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
@@ -128,6 +130,44 @@ export default function Timeline({
         </div>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {onToggleTheme && (
+            <button
+              id="header-theme-toggle"
+              type="button"
+              role="switch"
+              aria-checked={theme === 'dark'}
+              aria-label={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+              title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+              onClick={onToggleTheme}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'var(--bg-card)',
+                color: 'var(--text-primary)',
+                border: '1px solid var(--border)',
+                padding: '9px 13px',
+                borderRadius: '10px',
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                boxShadow: 'var(--shadow-sm)',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = 'var(--brand)'
+                e.currentTarget.style.transform = 'translateY(-1px)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = 'var(--border)'
+                e.currentTarget.style.transform = 'translateY(0)'
+              }}
+            >
+              <span>{theme === 'dark' ? '🌙' : '☀️'}</span>
+              <span>{theme === 'dark' ? 'Dark' : 'Light'}</span>
+            </button>
+          )}
+
           {onOpenTelemetry && (
             <button
               id="btn-open-telemetry"
