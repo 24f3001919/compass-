@@ -31,7 +31,6 @@ from backend.skills.schemas import (
     PROPOSE_SCHEDULE_TOOL,
     COMMIT_SCHEDULE_TOOL,
     DETECT_SCHEDULE_CONFLICTS_TOOL,
-    DELEGATE_TO_SPECIALIST_TOOL,
     ASSESS_FEASIBILITY_TOOL,
     APPLY_TRIAGE_PLAN_TOOL,
     BASE_TOOL_DEFINITIONS,
@@ -76,7 +75,6 @@ from backend.skills.handlers import (
     handle_detect_schedule_conflicts,
     handle_assess_feasibility,
     handle_apply_triage_plan,
-    handle_delegate_to_specialist,
 )
 
 __all__ = [
@@ -106,7 +104,6 @@ __all__ = [
     "PROPOSE_SCHEDULE_TOOL",
     "COMMIT_SCHEDULE_TOOL",
     "DETECT_SCHEDULE_CONFLICTS_TOOL",
-    "DELEGATE_TO_SPECIALIST_TOOL",
     "ASSESS_FEASIBILITY_TOOL",
     "APPLY_TRIAGE_PLAN_TOOL",
     "BASE_TOOL_DEFINITIONS",
@@ -145,5 +142,4 @@ __all__ = [
     "handle_detect_schedule_conflicts",
     "handle_assess_feasibility",
     "handle_apply_triage_plan",
-    "handle_delegate_to_specialist",
 ]

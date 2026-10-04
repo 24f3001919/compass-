@@ -1,5 +1,5 @@
 """
-Compass — Specialist Multi-Agent and Feasibility Skill Handlers.
+Compass — Feasibility and Triage Skill Handlers.
 """
 
 from typing import Any, Dict
@@ -7,7 +7,7 @@ import logging
 
 from backend.skills.registry import register_skill
 
-logger = logging.getLogger("compass.skills.specialist")
+logger = logging.getLogger("compass.skills.feasibility")
 
 
 @register_skill("assess_feasibility")
@@ -74,23 +74,3 @@ async def handle_apply_triage_plan(args: Dict[str, Any], pool: Any) -> Dict[str,
         "error": None,
     }
 
-
-@register_skill("delegate_to_specialist")
-async def handle_delegate_to_specialist(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
-    """Delegate a specialized sub-task to the Specialist Multi-Agent System."""
-    from backend.agents.specialist import run_specialist_task
-
-    capability = args.get("capability") or "memory"
-    task_description = args.get("task_description") or args.get("goal") or "Specialized query"
-
-    specialist_res = await run_specialist_task(
-        capability=capability,
-        user_goal=task_description,
-        pool=pool,
-    )
-
-    summary = specialist_res.get("summary", "")
-    return {
-        "response": summary,
-        "data": specialist_res,
-    }

@@ -89,6 +89,105 @@ def _extract_task_creation_args(message: str) -> dict:
     return res
 
 
+def message_needs_tools(message: str) -> bool:
+    """Determine whether a user message requires tool registry evaluation.
+
+    Classification Logic:
+    1. Conversational Fast-Path: Simple chitchat, greetings, and general
+       identity queries (e.g. 'hi', 'who are you', 'what can you help with') that contain
+       no domain-specific verbs or entities bypass tool serialization.
+    2. Comprehensive Domain Keywords: Scans for task, coursework, calendar, code,
+       hackathon, search, memory, or feasibility triggers matching any of Compass's 23 tools.
+    3. Fail-Safe Default: Any message containing actionable requests or domain entities
+       triggers tool evaluation to ensure zero false negatives.
+    """
+    msg = message.lower().strip()
+    if not msg:
+        return False
+
+    # Pure chitchat triggers with no actionable domain intent
+    pure_conversational = {
+        "hi", "hello", "hey", "greetings", "good morning", "good evening",
+        "good afternoon", "how are you", "who are you", "what are you",
+        "what can you do", "what do you do", "help", "thank you", "thanks",
+        "bye", "goodbye", "tell me a joke", "what is compass", "who created you",
+        "what can you help with", "what can you help me with", "how are you doing",
+        "hey, what can you help with", "hey what can you help with",
+    }
+    cleaned = msg.strip("!?.,:; ")
+    if cleaned in pure_conversational:
+        return False
+
+    tool_keywords = (
+        # Tasks & Deliverables
+        "task", "tasks", "todo", "todos", "due", "deadline", "deadlines",
+        "backlog", "work on", "workload", "priority", "status", "pending", "upcoming",
+        # Actions & Lifecycle
+        "add", "create", "new", "schedule", "reschedule", "postpone", "delete",
+        "remove", "edit", "update", "mark", "finish", "complete", "done", "cancel",
+        "drop", "move", "push back", "assign", "defer",
+        # Queries & Agenda
+        "list", "show", "what are", "what do i have", "do i have", "what's on",
+        "whats on", "check", "agenda", "today", "tomorrow", "yesterday", "this week", "next week",
+        # Coursework & Academics
+        "coursework", "course", "assignment", "homework", "syllabus", "notes",
+        "lecture", "lab", "exam", "quiz", "test", "midterm", "final", "paper",
+        "essay", "study", "reading",
+        # Hackathons & Projects
+        "hackathon", "project", "projects", "devpost", "submission", "track",
+        "prize", "pitch", "demo",
+        # Code & Repository
+        "code", "repo", "repository", "snippet", "commit", "branch", "pr",
+        "pull request", "architecture", "git", "github", "issue", "issues", "bug", "bugs",
+        # Calendar & Availability
+        "calendar", "event", "events", "meeting", "meetings", "sync",
+        "availability", "available", "conflict", "conflicts", "clash", "free time", "busy", "slot", "slots",
+        # Research & Web
+        "search", "web", "lookup", "research", "verify", "tavily", "online",
+        "url", "http", "https", "find", "documentation", "doc", "docs",
+        # Feasibility & Triage
+        "feasible", "feasibility", "finish in time", "can i finish", "what to drop",
+        "what should i drop", "what i drop", "triage", "overload", "overloaded",
+        "overcommit", "capacity",
+        # Memory & Notes
+        "memory", "remember", "recall", "stored", "save", "log", "note", "notes",
+        "remind", "reminder",
+        # Agent & Planner
+        "planner", "agent", "plan", "execute",
+    )
+    return any(k in msg for k in tool_keywords)
+
+
+
+def _fallback_route(message: str, history: Optional[list[dict[str, str]]] = None) -> Tuple[Optional[str], Optional[dict[str, Any]], str]:
+    msg_lower = message.lower()
+    if any(term in msg_lower for term in ("feasibility", "can i finish", "what to drop", "what should i drop", "what i drop", "triage", "overloaded", "overcommit", "adversarial")):
+        import re
+        days_match = re.search(r"\b([0-9]{1,4})\s*days?\b", msg_lower)
+        hours_match = re.search(r"\b([0-9]{1,4}(?:\.[0-9]{1,2})?)\s*hours?\b", msg_lower)
+        f_days = int(days_match.group(1)) if days_match else 5
+        f_hours = float(hours_match.group(1)) if hours_match else 4.0
+        return "assess_feasibility", {"days": f_days, "hours_per_day": f_hours}, ""
+    if any(term in msg_lower for term in ("add a task", "add task", "new task", "create task")):
+        return "add_task", _extract_task_creation_args(message), ""
+    if history:
+        for h in reversed(history):
+            content = h.get("content", "")
+            if any(term in content.lower() for term in ("task", "deliverable", "due", "demo", "submit", "video")):
+                if any(term in msg_lower for term in ("due", "when", "deadline", "date")):
+                    return "query_tasks", {}, f"Checking your task due dates based on previous context: {content}"
+                return "query_tasks", {}, f"Referencing previous task: {content}"
+    if any(term in msg_lower for term in ("task", "due", "deliverable", "deadline", "coursework", "hackathon")):
+        return "query_tasks", {}, ""
+    if any(term in msg_lower for term in ("help", "what can you", "who are you", "what is compass", "hello", "hi", "hey", "greetings")):
+        return None, None, (
+            "I am Compass, your AI copilot with long-term memory across hackathons, coursework, "
+            "and code repositories. I can help you track tasks, manage deadlines, check schedule feasibility, "
+            "search web documentation, and prevent calendar conflicts. How can I help you today?"
+        )
+    return None, None, "How can I help you today? I'm here to help you manage tasks, coursework, and deadlines."
+
+
 async def route_message(
     message: str,
     history: Optional[list[dict[str, str]]] = None,
@@ -101,6 +200,14 @@ async def route_message(
         - If a tool was chosen: ('add_task', {'title': ...}, '')
         - If regular chat: (None, None, 'Assistant text response')
     """
+    is_placeholder_key = (
+        not settings.NEBIUS_API_KEY
+        or settings.NEBIUS_API_KEY.startswith("your_nebius")
+        or settings.NEBIUS_API_KEY in ("mock", "mock-key-not-used-in-tests")
+    )
+    if is_placeholder_key:
+        return _fallback_route(message, history)
+
     client = get_openai_client()
     today_iso = date.today().isoformat()
     system_prompt = (
@@ -133,17 +240,21 @@ async def route_message(
         messages.extend(history)
 
     messages.append({"role": "user", "content": message})
-    tools: Any = TOOLS
+    needs_tools = message_needs_tools(message)
+    tools: Any = TOOLS if needs_tools else None
 
     try:
-        response: Any = await client.chat.completions.create(
-            model=settings.ROUTER_MODEL,
-            messages=messages,
-            tools=tools,
-            tool_choice="auto",
-            max_tokens=1024,
-            stream=False,
-        )
+        call_kwargs: dict[str, Any] = {
+            "model": settings.ROUTER_MODEL,
+            "messages": messages,
+            "max_tokens": 1024,
+            "stream": False,
+        }
+        if tools:
+            call_kwargs["tools"] = tools
+            call_kwargs["tool_choice"] = "auto"
+
+        response: Any = await client.chat.completions.create(**call_kwargs)
 
         from backend.services.usage import record_usage
         usage = getattr(response, "usage", None)
@@ -184,24 +295,4 @@ async def route_message(
 
     except Exception as e:
         logger.error(f"Nebius router invocation failed: {e}")
-        # Fallback keyword routing for robustness
-        msg_lower = message.lower()
-        if any(term in msg_lower for term in ("feasibility", "can i finish", "what to drop", "what should i drop", "what i drop", "triage", "overloaded", "overcommit", "adversarial")):
-            import re
-            days_match = re.search(r"\b([0-9]{1,4})\s*days?\b", msg_lower)
-            hours_match = re.search(r"\b([0-9]{1,4}(?:\.[0-9]{1,2})?)\s*hours?\b", msg_lower)
-            f_days = int(days_match.group(1)) if days_match else 5
-            f_hours = float(hours_match.group(1)) if hours_match else 4.0
-            return "assess_feasibility", {"days": f_days, "hours_per_day": f_hours}, ""
-        if "add task" in msg_lower or "add a task" in msg_lower or "new task" in msg_lower:
-            return "add_task", {"title": message.replace("add a task:", "").replace("add task:", "").strip()}, ""
-        if history:
-            for h in reversed(history):
-                content = h.get("content", "")
-                if any(term in content.lower() for term in ("task", "deliverable", "due", "demo", "submit", "video")):
-                    if any(term in msg_lower for term in ("due", "when", "deadline", "date")):
-                        return "query_tasks", {}, f"Checking your task due dates based on previous context: {content}"
-                    return "query_tasks", {}, f"Referencing previous task: {content}"
-        if any(term in msg_lower for term in ("task", "due", "deliverable", "deadline")):
-            return "query_tasks", {}, ""
-        return None, None, "I'm having a moment — could you try that again? I'm here to help!"
+        return _fallback_route(message, history)

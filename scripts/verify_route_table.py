@@ -70,8 +70,6 @@ KNOWN_ROUTE_METADATA = {
     ("/api/schedule/conflicts", "GET"): ("_get_current_identity", "Checks schedule clashes for active user", "test_reactive_scheduling.py::test_conflicts"),
     ("/api/schedule/propose", "POST"): ("None / Stateless", "Deterministic schedule generation over tasks", "test_scheduling.py::test_propose_schedule"),
     ("/api/schedule/reactive-check", "POST"): ("None / Stateless", "Slipped task replanning algorithm", "test_reactive_scheduling.py::test_reactive_check"),
-    ("/api/share/{share_token}", "GET"): ("None (Public Token)", "WHERE share_token = $1 AND is_shared = TRUE (token-only)", "test_round4_hardening.py::test_share_link_conversation_id_does_not_resolve"),
-    ("/api/specialist/dispatch", "POST"): ("_get_current_identity", "Rate limited + budget checked specialist dispatch", "test_specialist.py::test_dispatch_specialist"),
     ("/api/tasks", "GET"): ("_get_current_identity", "WHERE user_id = $1", "test_direct_tasks.py::test_list_tasks"),
     ("/api/tasks", "POST"): ("_get_current_identity", "Bound to caller user_id / guest_id", "test_direct_tasks.py::test_create_task"),
     ("/api/tasks/verify-deadlines", "POST"): ("_get_current_identity", "Batch verification for caller tasks", "test_tavily_abstain.py::test_verify_deadlines_batch"),

@@ -130,28 +130,6 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
   }
 }
 
-/**
- * Dispatch a request to the Specialist Multi-Agent System backend.
- */
-export async function dispatchSpecialist({ capability, user_goal, relevant_context }) {
-  const res = await fetch(`${API_BASE}/api/specialist/dispatch`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...getAuthHeaders(),
-    },
-    body: JSON.stringify({
-      capability,
-      user_goal,
-      relevant_context,
-    }),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.detail || `Specialist dispatch failed (HTTP ${res.status})`)
-  }
-  return await res.json()
-}
 
 /**
  * Fetch previous chat conversations list.
@@ -241,19 +219,6 @@ export async function fetchMemoryOverview() {
   }
 }
 
-/**
- * Fetch a publicly shared conversation and its messages.
- */
-export async function fetchSharedConversation(conversationId) {
-  if (!conversationId) return null
-  try {
-    const res = await fetch(`${API_BASE}/api/share/${conversationId}`)
-    if (!res.ok) return null
-    return await res.json()
-  } catch {
-    return null
-  }
-}
 
 /**
  * Seed or refresh the Dual-Degree Hackathon Competitor demo persona for judges.

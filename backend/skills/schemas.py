@@ -459,29 +459,6 @@ DETECT_SCHEDULE_CONFLICTS_TOOL: Dict[str, Any] = {
     },
 }
 
-DELEGATE_TO_SPECIALIST_TOOL: Dict[str, Any] = {
-    "type": "function",
-    "function": {
-        "name": "delegate_to_specialist",
-        "description": "Delegate a specialized sub-task to the Specialist Multi-Agent System (coursework analysis, web research & verification, calendar free/busy scheduling, or memory retrieval).",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "capability": {
-                    "type": "string",
-                    "enum": ["coursework", "research", "calendar", "memory"],
-                    "description": "Target specialist domain",
-                },
-                "task_description": {
-                    "type": "string",
-                    "description": "Detailed goal or query for the specialist agent",
-                },
-            },
-            "required": ["capability", "task_description"],
-        },
-    },
-}
-
 ASSESS_FEASIBILITY_TOOL: Dict[str, Any] = {
     "type": "function",
     "function": {
@@ -546,7 +523,6 @@ BASE_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     PROPOSE_SCHEDULE_TOOL,
     COMMIT_SCHEDULE_TOOL,
     DETECT_SCHEDULE_CONFLICTS_TOOL,
-    DELEGATE_TO_SPECIALIST_TOOL,
     ASSESS_FEASIBILITY_TOOL,
     APPLY_TRIAGE_PLAN_TOOL,
 ]

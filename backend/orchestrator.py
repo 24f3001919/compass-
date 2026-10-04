@@ -57,83 +57,88 @@ async def handle_message(
     message: str,
     user_id: Optional[str] = None,
     guest_id: Optional[str] = None,
+    history: Optional[list] = None,
+    memory_context: Optional[str] = None,
+    persist: bool = True,
 ) -> Dict[str, Any]:
     """Process an incoming user message through router and skill handlers."""
     start_time = time.perf_counter()
     conv_id = conversation_id or str(uuid.uuid4())
 
-    # Fetch recent history if conversation exists
-    history = []
-    if conversation_id:
+    # Fetch recent history if conversation exists and not pre-provided
+    if history is None:
+        history = []
+        if conversation_id:
+            try:
+                pool = await get_pool()
+                async with pool.acquire() as conn:
+                    rows = await conversations.get_recent_messages(conn, conversation_id, limit=6)
+                    for r in rows:
+                        role = r.get("role", "user")
+                        content = r.get("content", "")
+                        if role in ("user", "assistant") and content:
+                            history.append({"role": role, "content": content})
+                logger.debug("Loaded history for %s: %s", conversation_id, history)
+            except Exception as e:
+                logger.debug(f"Could not load conversation history: {e}")
+
+    # Load long-term cross-session memory & active tasks if not pre-provided
+    if memory_context is None:
+        memory_context = ""
         try:
             pool = await get_pool()
             async with pool.acquire() as conn:
-                rows = await conversations.get_recent_messages(conn, conversation_id, limit=6)
-                for r in rows:
-                    role = r.get("role", "user")
-                    content = r.get("content", "")
-                    if role in ("user", "assistant") and content:
-                        history.append({"role": role, "content": content})
-            logger.debug("Loaded history for %s: %s", conversation_id, history)
+                prior_messages = await conversations.get_cross_conversation_memory(
+                    conn, exclude_conversation_id=conversation_id, limit=6, user_id=user_id, guest_id=guest_id
+                )
+                if user_id:
+                    active_tasks = await conn.fetch(
+                        """
+                        SELECT title, domain, due_date, status, priority, duration_minutes
+                        FROM tasks
+                        WHERE status != 'completed' AND (user_id IS NULL OR user_id = $1)
+                        ORDER BY due_date ASC NULLS LAST, priority DESC
+                        LIMIT 8
+                        """,
+                        user_id
+                    )
+                else:
+                    active_tasks = await conn.fetch(
+                        """
+                        SELECT title, domain, due_date, status, priority, duration_minutes
+                        FROM tasks
+                        WHERE status != 'completed'
+                        ORDER BY due_date ASC NULLS LAST, priority DESC
+                        LIMIT 8
+                        """
+                    )
+                recent_plans = await conn.fetch(
+                    """
+                    SELECT goal, status
+                    FROM agent_runs
+                    ORDER BY created_at DESC
+                    LIMIT 3
+                    """
+                )
+
+                sections = []
+                if prior_messages:
+                    prior_str = "\n".join([f"- [{m.get('role', 'user')}]: {m.get('content', '')[:120]}" for m in prior_messages])
+                    sections.append(f"Past Chats Recall:\n{prior_str}")
+                if active_tasks:
+                    task_str = "\n".join([
+                        f"- {t['title']} ({t['domain']}) | Due: {t['due_date'] or 'Unscheduled'} | {t['duration_minutes'] or 60}m | {t['priority']}"
+                        for t in active_tasks
+                    ])
+                    sections.append(f"Existing Tasks & Deadlines (Avoid schedule conflicts):\n{task_str}")
+                if recent_plans:
+                    plan_str = "\n".join([f"- Plan: {p['goal']} ({p['status']})" for p in recent_plans])
+                    sections.append(f"Recent Planner Goals:\n{plan_str}")
+
+                if sections:
+                    memory_context = "\n\n".join(sections)
         except Exception as e:
-            logger.debug(f"Could not load conversation history: {e}")
-
-    # Load long-term cross-session memory & active tasks to prevent schedule conflicts
-    memory_context = ""
-    try:
-        pool = await get_pool()
-        async with pool.acquire() as conn:
-            prior_messages = await conversations.get_cross_conversation_memory(
-                conn, exclude_conversation_id=conversation_id, limit=6, user_id=user_id, guest_id=guest_id
-            )
-            if user_id:
-                active_tasks = await conn.fetch(
-                    """
-                    SELECT title, domain, due_date, status, priority, duration_minutes
-                    FROM tasks
-                    WHERE status != 'completed' AND (user_id IS NULL OR user_id = $1)
-                    ORDER BY due_date ASC NULLS LAST, priority DESC
-                    LIMIT 8
-                    """,
-                    user_id
-                )
-            else:
-                active_tasks = await conn.fetch(
-                    """
-                    SELECT title, domain, due_date, status, priority, duration_minutes
-                    FROM tasks
-                    WHERE status != 'completed'
-                    ORDER BY due_date ASC NULLS LAST, priority DESC
-                    LIMIT 8
-                    """
-                )
-            recent_plans = await conn.fetch(
-                """
-                SELECT goal, status
-                FROM agent_runs
-                ORDER BY created_at DESC
-                LIMIT 3
-                """
-            )
-
-            sections = []
-            if prior_messages:
-                prior_str = "\n".join([f"- [{m.get('role', 'user')}]: {m.get('content', '')[:120]}" for m in prior_messages])
-                sections.append(f"Past Chats Recall:\n{prior_str}")
-            if active_tasks:
-                task_str = "\n".join([
-                    f"- {t['title']} ({t['domain']}) | Due: {t['due_date'] or 'Unscheduled'} | {t['duration_minutes'] or 60}m | {t['priority']}"
-                    for t in active_tasks
-                ])
-                sections.append(f"Existing Tasks & Deadlines (Avoid schedule conflicts):\n{task_str}")
-            if recent_plans:
-                plan_str = "\n".join([f"- Plan: {p['goal']} ({p['status']})" for p in recent_plans])
-                sections.append(f"Recent Planner Goals:\n{plan_str}")
-
-            if sections:
-                memory_context = "\n\n".join(sections)
-    except Exception as e:
-        logger.debug(f"Could not load cross-conversation memory: {e}")
+            logger.debug(f"Could not load cross-conversation memory: {e}")
 
     # 1. Route via Nemotron-3 Nano
     skill_name, args, text_reply = await route_message(
@@ -308,15 +313,16 @@ async def handle_message(
         summary = f"Added task '{title}' under {domain.upper()} domain{due_info}."
 
         # Persist conversation & messages
-        try:
-            pool = await get_pool()
-            async with pool.acquire() as conn:
-                real_cid = await conversations.get_or_create_conversation(conn, conv_id)
-                await conversations.add_message(conn, real_cid, role="user", content=message)
-                await conversations.add_message(conn, real_cid, role="assistant", content=summary, skill_called="add_task")
-                conv_id = real_cid
-        except Exception as e:
-            logger.debug(f"Could not persist message history: {e}")
+        if persist:
+            try:
+                pool = await get_pool()
+                async with pool.acquire() as conn:
+                    real_cid = await conversations.get_or_create_conversation(conn, conv_id)
+                    await conversations.add_message(conn, real_cid, role="user", content=message)
+                    await conversations.add_message(conn, real_cid, role="assistant", content=summary, skill_called="add_task")
+                    conv_id = real_cid
+            except Exception as e:
+                logger.debug(f"Could not persist message history: {e}")
 
         latency_ms = int((time.perf_counter() - start_time) * 1000)
         return {
@@ -336,18 +342,19 @@ async def handle_message(
             f"The action '{skill_name}' modifies data and requires approval. "
             f"Please run this request through the Agent Planner."
         )
-        try:
-            pool = await get_pool()
-            async with pool.acquire() as conn:
-                real_cid = await conversations.get_or_create_conversation(conn, conv_id)
-                await conversations.add_message(conn, real_cid, role="user", content=message)
-                await conversations.add_message(
-                    conn, real_cid, role="assistant",
-                    content=gate_msg, skill_called=skill_name,
-                )
-                conv_id = real_cid
-        except Exception as e:
-            logger.debug(f"Could not persist message history: {e}")
+        if persist:
+            try:
+                pool = await get_pool()
+                async with pool.acquire() as conn:
+                    real_cid = await conversations.get_or_create_conversation(conn, conv_id)
+                    await conversations.add_message(conn, real_cid, role="user", content=message)
+                    await conversations.add_message(
+                        conn, real_cid, role="assistant",
+                        content=gate_msg, skill_called=skill_name,
+                    )
+                    conv_id = real_cid
+            except Exception as e:
+                logger.debug(f"Could not persist message history: {e}")
 
         latency_ms = int((time.perf_counter() - start_time) * 1000)
         return {
@@ -387,19 +394,20 @@ async def handle_message(
                 logger.warning("Skill '%s' reported failure: %s", skill_name, err)
                 summary = summary or f"I couldn't complete that: {err}"
 
-            try:
-                async with pool.acquire() as conn:
-                    real_cid = await conversations.get_or_create_conversation(
-                        conn, conv_id, user_id=user_id, guest_id=guest_id
-                    )
-                    await conversations.add_message(conn, real_cid, role="user", content=message)
-                    await conversations.add_message(
-                        conn, real_cid, role="assistant",
-                        content=summary, skill_called=skill_name,
-                    )
-                    conv_id = real_cid
-            except Exception as e:
-                logger.debug(f"Could not persist message history: {e}")
+            if persist:
+                try:
+                    async with pool.acquire() as conn:
+                        real_cid = await conversations.get_or_create_conversation(
+                            conn, conv_id, user_id=user_id, guest_id=guest_id
+                        )
+                        await conversations.add_message(conn, real_cid, role="user", content=message)
+                        await conversations.add_message(
+                            conn, real_cid, role="assistant",
+                            content=summary, skill_called=skill_name,
+                        )
+                        conv_id = real_cid
+                except Exception as e:
+                    logger.debug(f"Could not persist message history: {e}")
 
             latency_ms = int((time.perf_counter() - start_time) * 1000)
             return {
@@ -420,17 +428,18 @@ async def handle_message(
                 "nothing was changed."
             )
 
-    try:
-        pool = await get_pool()
-        async with pool.acquire() as conn:
-            real_cid = await conversations.get_or_create_conversation(
-                conn, conv_id, user_id=user_id, guest_id=guest_id
-            )
-            await conversations.add_message(conn, real_cid, role="user", content=message)
-            await conversations.add_message(conn, real_cid, role="assistant", content=text_reply, skill_called="chat")
-            conv_id = real_cid
-    except Exception as e:
-        logger.debug(f"Could not persist message history: {e}")
+    if persist:
+        try:
+            pool = await get_pool()
+            async with pool.acquire() as conn:
+                real_cid = await conversations.get_or_create_conversation(
+                    conn, conv_id, user_id=user_id, guest_id=guest_id
+                )
+                await conversations.add_message(conn, real_cid, role="user", content=message)
+                await conversations.add_message(conn, real_cid, role="assistant", content=text_reply, skill_called="chat")
+                conv_id = real_cid
+        except Exception as e:
+            logger.debug(f"Could not persist message history: {e}")
 
     latency_ms = int((time.perf_counter() - start_time) * 1000)
     return {

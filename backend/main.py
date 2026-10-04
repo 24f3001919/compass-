@@ -75,7 +75,6 @@ from backend.routers import (
     agent_router,
     calendar_router,
     auth_router,
-    specialist_router,
     migration_router,
 )
 
@@ -154,6 +153,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Enforce standard security headers on all HTTP responses (SEC-01)."""
 
     async def dispatch(self, request: Request, call_next):
+        if not get_settings().is_development() and request.url.path in ("/docs", "/redoc", "/openapi.json"):
+            return Response(status_code=404, content="Not Found")
         response: Response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
@@ -217,6 +218,5 @@ app.include_router(chat_router)
 app.include_router(agent_router)
 app.include_router(calendar_router)
 app.include_router(auth_router)
-app.include_router(specialist_router)
 app.include_router(migration_router)
 

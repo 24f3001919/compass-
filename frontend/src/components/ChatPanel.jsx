@@ -7,7 +7,6 @@ import {
   fetchMigrationStatus,
   getCurrentUserId,
 } from '../api/client'
-import ShareModal from './ShareModal'
 import ChatHistoryDrawer from './chat/ChatHistoryDrawer'
 import ChatChatMessageList from './chat/ChatMessageList'
 import ChatInputBar from './chat/ChatInputBar'
@@ -28,7 +27,6 @@ export default function ChatPanel({
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [guestMigrationCount, setGuestMigrationCount] = useState(0)
   const [toast, setToast] = useState(null)
-  const [sharingConv, setSharingConv] = useState(null)
 
   const messagesEndRef = useRef(null)
   const streamTimerRef = useRef(null)
@@ -257,16 +255,6 @@ export default function ChatPanel({
     setTimeout(() => setToast(null), 2500)
   }
 
-  const handleShareChat = async (conv) => {
-    setSharingConv(conv)
-    const shareUrl = `${window.location.origin}/?share=${conv.id}`
-    try {
-      await navigator.clipboard.writeText(shareUrl)
-      showToast('Share link copied to clipboard! 🔗')
-    } catch {
-      showToast('Share link generated 🔗')
-    }
-  }
 
   const handleSelectPastPlan = (plan) => {
     setMessages(prev => [
@@ -388,7 +376,6 @@ export default function ChatPanel({
           onSelectPastChat={handleSelectPastChat}
           onNewChat={handleNewChat}
           onSelectPastPlan={handleSelectPastPlan}
-          onShareChat={handleShareChat}
           onCheckScheduleClashes={() => handleSend('Check for any schedule conflicts between my upcoming deadlines and past discussions')}
           showToast={showToast}
           tasks={tasks}
@@ -484,13 +471,6 @@ export default function ChatPanel({
           {toast}
         </div>
       )}
-
-      {/* Share Link Modal */}
-      <ShareModal
-        isOpen={Boolean(sharingConv)}
-        onClose={() => setSharingConv(null)}
-        conversation={sharingConv}
-      />
     </div>
   )
 }
