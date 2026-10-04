@@ -54,10 +54,11 @@ def _cache_key(query: str, domains: Optional[List[str]]) -> str:
 async def decompose_query(query: str) -> List[str]:
     """Decompose research objective into 2-3 focused sub-queries."""
     clean = query.strip()
-    # Simple deterministic sub-query derivation
     sub_queries = [clean]
     if "deadline" in clean.lower() or "due" in clean.lower():
         sub_queries.append(f"{clean} official schedule rules")
+    elif "hackathon" in clean.lower():
+        sub_queries.append(f"{clean} devpost rules submission deadline")
     elif "api" in clean.lower() or "documentation" in clean.lower():
         sub_queries.append(f"{clean} official reference guide")
     else:
@@ -107,9 +108,52 @@ async def execute_subqueries(
     return list(deduped.values()), credits_used
 
 
+def _parse_time_and_tz(text: str) -> Tuple[int, int, timezone]:
+    """Parse time and timezone from text, defaulting to 0, 0, UTC if absent."""
+    from datetime import timedelta
+    m = re.search(
+        r"\b(\d{1,2}):(\d{2})\s*(am|pm)?\s*(pdt|pst|pt|pacific(?:\s+time)?|edt|est|cdt|cst|mdt|mst|utc|gmt)?\b",
+        text,
+        re.IGNORECASE,
+    )
+    if not m:
+        return 0, 0, timezone.utc
+
+    hour = int(m.group(1))
+    minute = int(m.group(2))
+    ampm = (m.group(3) or "").lower()
+    tz_str = (m.group(4) or "").lower().strip()
+
+    if ampm == "pm" and hour < 12:
+        hour += 12
+    elif ampm == "am" and hour == 12:
+        hour = 0
+
+    if tz_str in ("pdt", "pt", "pacific", "pacific time"):
+        tz = timezone(timedelta(hours=-7))
+    elif tz_str == "pst":
+        tz = timezone(timedelta(hours=-8))
+    elif tz_str == "edt":
+        tz = timezone(timedelta(hours=-4))
+    elif tz_str == "est":
+        tz = timezone(timedelta(hours=-5))
+    elif tz_str in ("cdt", "central"):
+        tz = timezone(timedelta(hours=-5))
+    elif tz_str == "cst":
+        tz = timezone(timedelta(hours=-6))
+    elif tz_str == "mdt":
+        tz = timezone(timedelta(hours=-6))
+    elif tz_str == "mst":
+        tz = timezone(timedelta(hours=-7))
+    else:
+        tz = timezone.utc
+
+    return hour, minute, tz
+
+
 def _parse_explicit_year_date(date_str: Optional[str]) -> Tuple[Optional[datetime], str]:
     """Parse date string extracting date candidate and checking for explicit 4-digit year.
-    Returns (aware UTC datetime or None, 'explicit_in_quote' | 'inferred').
+    Returns (aware timezone datetime or None, 'explicit_in_quote' | 'inferred').
     """
     if not date_str or not isinstance(date_str, str):
         return None, "inferred"
@@ -129,9 +173,9 @@ def _parse_explicit_year_date(date_str: Optional[str]) -> Tuple[Optional[datetim
             candidates.append(parsed)
 
     if candidates:
-        # For deadline queries, select the closing / latest date candidate
         chosen = max(candidates)
-        return datetime(chosen.year, chosen.month, chosen.day, tzinfo=timezone.utc), year_provenance
+        hour, minute, tz = _parse_time_and_tz(date_str)
+        return datetime(chosen.year, chosen.month, chosen.day, hour, minute, 0, tzinfo=tz), year_provenance
 
     # Direct format attempts
     for fmt in (
@@ -269,7 +313,7 @@ def evaluate_deterministic_verdict(
             "source_url": source_url,
             "verbatim_quote": quote,
             "published_date": raw_date,
-            "parsed_date": parsed_dt.strftime("%Y-%m-%d") if parsed_dt else None,
+            "parsed_date": parsed_dt.isoformat() if parsed_dt else None,
             "year_provenance": year_provenance,
             "authority_tier": tier,
             "verdict": verdict,
@@ -297,19 +341,16 @@ def evaluate_deterministic_verdict(
     # Overall pipeline verdict rule
     if not evidence_items:
         overall = "NOT_FOUND"
-    elif all(v == "NOT_FOUND" for v in verdicts):
-        overall = "NOT_FOUND"
     elif any(v == "CONFLICTING" for v in verdicts):
         overall = "CONFLICTING"
-    elif any(v == "VERIFIED" for v in verdicts) and all(v in ("VERIFIED", "NOT_FOUND") for v in verdicts):
+    elif any(v == "VERIFIED" for v in verdicts):
         overall = "VERIFIED"
+    elif all(v == "NOT_FOUND" for v in verdicts):
+        overall = "NOT_FOUND"
     elif all(v == "STALE" for v in verdicts if v != "NOT_FOUND"):
         overall = "STALE"
     else:
         overall = "UNVERIFIED"
-        for item in evidence_items:
-            if item["verdict"] == "VERIFIED":
-                item["verdict"] = "UNVERIFIED"
 
     return overall, evidence_items
 

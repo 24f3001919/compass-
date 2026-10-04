@@ -2,7 +2,7 @@
 Compass — Tavily Domain Authority and Source Quality Classifier.
 
 Distinguishes official documentation, academic/government sources, reputable technical
-publications, and general web pages to prevent low-confidence sources from overwhelming
+publications, and general web pages to prevent unverified sources from overwhelming
 verified primary evidence.
 """
 

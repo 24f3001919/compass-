@@ -302,7 +302,7 @@ def get_client_ip(request: Request) -> str:
 
     # 1. Edge Signature Validation (Vercel Edge Middleware -> Backend)
     edge_sig = request.headers.get("x-compass-edge-sig") or request.headers.get("x-vercel-edge-sig")
-    edge_secret = getattr(settings, "EDGE_HMAC_SECRET", "") or getattr(settings, "VERCEL_EDGE_SECRET", "")
+    edge_secret = getattr(settings, "EDGE_HMAC_SECRET", "")
 
     if edge_sig and edge_secret:
         # Check signed client_ip format: client_ip|timestamp|signature
