@@ -213,7 +213,7 @@ export function getAuthHeaders(extraHeaders = {}) {
 export async function checkBackendHealth() {
   try {
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 4000)
+    const timeoutId = setTimeout(() => controller.abort(), 8000)
 
     const res = await fetch(`${API_BASE}/health`, {
       method: 'GET',
