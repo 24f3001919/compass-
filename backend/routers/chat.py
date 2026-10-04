@@ -418,7 +418,7 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
     from openai import AsyncOpenAI, AsyncStream
     from openai.types.chat import ChatCompletionChunk
     from backend.config import get_settings as _gs
-    from backend.router import TOOLS
+    from backend.router import TOOLS, message_needs_tools
     from backend.services.usage import record_usage
 
     _settings = _gs()
@@ -436,10 +436,118 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
                 if not has_access and err != "Conversation not found":
                     raise HTTPException(status_code=403, detail="Forbidden: conversation belongs to another user")
 
+    async def _stream_chunks(text: str):
+        if not text:
+            return
+        cursor = 0
+        while cursor < len(text):
+            next_space = text.find(" ", cursor)
+            if next_space != -1 and next_space - cursor <= 12:
+                take = next_space - cursor + 1
+            else:
+                take = min(8, len(text) - cursor)
+            yield text[cursor:cursor + take]
+            cursor += take
+
     async def event_generator():
         conv_id = req.conversation_id or str(uuid.uuid4())
         message = req.message.strip()
         yield ": ping\n\n"
+
+        history_items = []
+        memory_context = ""
+        try:
+            pool = await get_pool()
+            if pool:
+                async def _load_history():
+                    if not req.conversation_id:
+                        return []
+                    async with pool.acquire() as conn:
+                        return await conversations.get_recent_messages(conn, req.conversation_id, limit=6)
+
+                async def _load_prior():
+                    async with pool.acquire() as conn:
+                        return await conversations.get_cross_conversation_memory(
+                            conn, exclude_conversation_id=req.conversation_id, user_id=user_id, guest_id=guest_id, limit=6
+                        )
+
+                async def _load_tasks():
+                    async with pool.acquire() as conn:
+                        if user_id:
+                            return await conn.fetch(
+                                "SELECT title, domain, due_date, status, priority FROM tasks WHERE status != 'completed' AND (user_id IS NULL OR user_id = $1) ORDER BY due_date ASC NULLS LAST LIMIT 8",
+                                user_id,
+                            )
+                        else:
+                            return await conn.fetch(
+                                "SELECT title, domain, due_date, status, priority FROM tasks WHERE status != 'completed' ORDER BY due_date ASC NULLS LAST LIMIT 8"
+                            )
+
+                rows_h, prior, tasks_rows = await asyncio.gather(_load_history(), _load_prior(), _load_tasks(), return_exceptions=True)
+                if isinstance(rows_h, list):
+                    for r in rows_h:
+                        role = r.get("role", "user")
+                        content = r.get("content", "")
+                        if role in ("user", "assistant") and content:
+                            history_items.append({"role": role, "content": content})
+                mem_parts = []
+                if isinstance(prior, list) and prior:
+                    prior_text = "\n".join([f"- [{p.get('role', 'user')}]: {p.get('content', '')[:100]}" for p in prior])
+                    mem_parts.append(f"Past Chats Recall:\n{prior_text}")
+                if isinstance(tasks_rows, list) and tasks_rows:
+                    tasks_text = "\n".join([f"- {t['title']} ({t['domain']}) | Due: {t['due_date'] or 'None'} | {t['priority']}" for t in tasks_rows])
+                    mem_parts.append(f"Active Tasks & Deadlines (Prevent schedule clashes):\n{tasks_text}")
+                if mem_parts:
+                    memory_context = "\n\n".join(mem_parts)
+        except Exception as e:
+            logger.debug("Pre-fetch failed: %s", e)
+
+        # Fast-fail for placeholder/unconfigured Nebius API keys
+        is_placeholder_key = (
+            not _settings.NEBIUS_API_KEY
+            or _settings.NEBIUS_API_KEY.startswith("your_nebius")
+            or _settings.NEBIUS_API_KEY in ("mock", "mock-key-not-used-in-tests")
+        )
+
+        async def _persist_stream_messages(final_text: str, skill_label: str = "chat"):
+            try:
+                pool = await get_pool()
+                if pool and final_text:
+                    async with pool.acquire() as conn:
+                        real_cid = await conversations.get_or_create_conversation(
+                            conn, conv_id, user_id=user_id, guest_id=guest_id
+                        )
+                        await conversations.add_message(conn, real_cid, role="user", content=message)
+                        await conversations.add_message(conn, real_cid, role="assistant", content=final_text, skill_called=skill_label)
+            except Exception as save_err:
+                logger.warning(f"Could not persist streamed messages: {save_err}")
+
+        if is_placeholder_key:
+            result = await orchestrator.handle_message(
+                conversation_id=req.conversation_id,
+                message=message,
+                user_id=user_id,
+                guest_id=guest_id,
+                history=history_items if history_items else None,
+                memory_context=memory_context if memory_context else None,
+                persist=False,
+            )
+            response_text = result.get("response", "")
+            skill_used = result.get("skill_used") or "chat"
+            prompt_est = max(len(message.split()) * 3, 30)
+            completion_est = max(len(response_text.split()), 15)
+            record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
+
+            is_first = True
+            async for chunk in _stream_chunks(response_text):
+                if not is_first:
+                    await asyncio.sleep(0.012)
+                is_first = False
+                yield f"data: {json.dumps({'type': 'token', 'value': chunk})}\n\n"
+
+            yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used})}\n\n"
+            asyncio.create_task(_persist_stream_messages(response_text, skill_used))
+            return
 
         stream = None
         try:
@@ -448,50 +556,6 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
                 base_url=_settings.NEBIUS_BASE_URL,
                 timeout=30.0,
             )
-
-            history_items = []
-            if req.conversation_id:
-                try:
-                    pool = await get_pool()
-                    if pool:
-                        async with pool.acquire() as conn:
-                            rows = await conversations.get_recent_messages(conn, req.conversation_id, limit=6)
-                            for r in rows:
-                                role = r.get("role", "user")
-                                content = r.get("content", "")
-                                if role in ("user", "assistant") and content:
-                                    history_items.append({"role": role, "content": content})
-                except Exception:
-                    pass
-
-            memory_context = ""
-            try:
-                pool = await get_pool()
-                if pool:
-                    async with pool.acquire() as conn:
-                        prior = await conversations.get_cross_conversation_memory(
-                            conn, exclude_conversation_id=req.conversation_id, user_id=user_id, guest_id=guest_id, limit=6
-                        )
-                        if user_id:
-                            tasks_rows = await conn.fetch(
-                                "SELECT title, domain, due_date, status, priority FROM tasks WHERE status != 'completed' AND (user_id IS NULL OR user_id = $1) ORDER BY due_date ASC NULLS LAST LIMIT 8",
-                                user_id,
-                            )
-                        else:
-                            tasks_rows = await conn.fetch(
-                                "SELECT title, domain, due_date, status, priority FROM tasks WHERE status != 'completed' ORDER BY due_date ASC NULLS LAST LIMIT 8"
-                            )
-                        mem_parts = []
-                        if prior:
-                            prior_text = "\n".join([f"- [{p.get('role', 'user')}]: {p.get('content', '')[:100]}" for p in prior])
-                            mem_parts.append(f"Past Chats Recall:\n{prior_text}")
-                        if tasks_rows:
-                            tasks_text = "\n".join([f"- {t['title']} ({t['domain']}) | Due: {t['due_date'] or 'None'} | {t['priority']}" for t in tasks_rows])
-                            mem_parts.append(f"Active Tasks & Deadlines (Prevent schedule clashes):\n{tasks_text}")
-                        if mem_parts:
-                            memory_context = "\n\n".join(mem_parts)
-            except Exception:
-                pass
 
             today_iso = date.today().isoformat()
             sys_prompt = (
@@ -511,34 +575,52 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
                 messages.extend(history_items)
             messages.append({"role": "user", "content": message})
 
-            tools: List[ChatCompletionToolParam] = cast(List[ChatCompletionToolParam], TOOLS)
+            needs_tools = message_needs_tools(message)
+            tools: Any = cast(List[ChatCompletionToolParam], TOOLS) if needs_tools else None
+
+            call_kwargs: dict[str, Any] = {
+                "model": _settings.ROUTER_MODEL,
+                "messages": messages,
+                "max_tokens": 10000,
+                "temperature": 0.7,
+                "stream": True,
+                "stream_options": {"include_usage": True},
+            }
+            if tools:
+                call_kwargs["tools"] = tools
+                call_kwargs["tool_choice"] = "auto"
 
             try:
                 stream = cast(
                     AsyncStream[ChatCompletionChunk],
-                    await client.chat.completions.create(
-                        model=_settings.ROUTER_MODEL,
-                        messages=messages,
-                        tools=tools,
-                        tool_choice="auto",
-                        max_tokens=10000,
-                        temperature=0.7,
-                        stream=True,
-                        stream_options={"include_usage": True},
-                    ),
+                    await client.chat.completions.create(**call_kwargs),
                 )
             except Exception as create_err:
                 logger.warning(f"Upstream stream creation failed: {create_err}, falling back to orchestrator")
                 result = await orchestrator.handle_message(
-                    conversation_id=req.conversation_id, message=message, user_id=user_id, guest_id=guest_id
+                    conversation_id=req.conversation_id,
+                    message=message,
+                    user_id=user_id,
+                    guest_id=guest_id,
+                    history=history_items if history_items else None,
+                    memory_context=memory_context if memory_context else None,
+                    persist=False,
                 )
                 response_text = result.get("response", "")
                 skill_used = result.get("skill_used") or "chat"
                 prompt_est = max(len(message.split()) * 3, 30)
                 completion_est = max(len(response_text.split()), 15)
                 record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
-                yield f"data: {json.dumps({'type': 'token', 'value': response_text})}\n\n"
+
+                is_first = True
+                async for chunk in _stream_chunks(response_text):
+                    if not is_first:
+                        await asyncio.sleep(0.012)
+                    is_first = False
+                    yield f"data: {json.dumps({'type': 'token', 'value': chunk})}\n\n"
+
                 yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used})}\n\n"
+                asyncio.create_task(_persist_stream_messages(response_text, skill_used))
                 return
 
             full_text = ""
@@ -590,7 +672,13 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
             if tool_call_detected:
                 # Execute tool via orchestrator. Emits zero duplicate text.
                 result = await orchestrator.handle_message(
-                    conversation_id=req.conversation_id, message=message, user_id=user_id, guest_id=guest_id
+                    conversation_id=req.conversation_id,
+                    message=message,
+                    user_id=user_id,
+                    guest_id=guest_id,
+                    history=history_items if history_items else None,
+                    memory_context=memory_context if memory_context else None,
+                    persist=False,
                 )
                 response_text = result.get("response", "")
                 skill_used = result.get("skill_used") or "agent"
@@ -607,34 +695,45 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
                     to_emit = response_text
 
                 if to_emit:
-                    yield f"data: {json.dumps({'type': 'token', 'value': to_emit})}\n\n"
+                    is_first = True
+                    async for chunk in _stream_chunks(to_emit):
+                        if not is_first:
+                            await asyncio.sleep(0.012)
+                        is_first = False
+                        yield f"data: {json.dumps({'type': 'token', 'value': chunk})}\n\n"
+
                 yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used})}\n\n"
+                asyncio.create_task(_persist_stream_messages(response_text, skill_used))
                 return
 
             if not full_text.strip():
                 result = await orchestrator.handle_message(
-                    conversation_id=req.conversation_id, message=message, user_id=user_id, guest_id=guest_id
+                    conversation_id=req.conversation_id,
+                    message=message,
+                    user_id=user_id,
+                    guest_id=guest_id,
+                    history=history_items if history_items else None,
+                    memory_context=memory_context if memory_context else None,
+                    persist=False,
                 )
                 response_text = result.get("response", "")
                 skill_used = result.get("skill_used") or "chat"
                 prompt_est = max(len(message.split()) * 3, 30)
                 completion_est = max(len(response_text.split()), 15)
                 record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
-                yield f"data: {json.dumps({'type': 'token', 'value': response_text})}\n\n"
+
+                is_first = True
+                async for chunk in _stream_chunks(response_text):
+                    if not is_first:
+                        await asyncio.sleep(0.012)
+                    is_first = False
+                    yield f"data: {json.dumps({'type': 'token', 'value': chunk})}\n\n"
+
                 yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used})}\n\n"
+                asyncio.create_task(_persist_stream_messages(response_text, skill_used))
                 return
 
-            try:
-                pool = await get_pool()
-                if pool and full_text:
-                    async with pool.acquire() as conn:
-                        real_cid = await conversations.get_or_create_conversation(
-                            conn, conv_id, user_id=user_id, guest_id=guest_id
-                        )
-                        await conversations.add_message(conn, real_cid, role="user", content=message)
-                        await conversations.add_message(conn, real_cid, role="assistant", content=full_text, skill_called="chat")
-            except Exception as save_err:
-                logger.warning(f"Could not persist streamed messages: {save_err}")
+            asyncio.create_task(_persist_stream_messages(full_text, "chat"))
 
             # Always count call toward caps regardless of provider usage return
             if usage_data:
