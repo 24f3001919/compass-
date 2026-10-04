@@ -16,11 +16,13 @@ export { getDomainMeta } from './timeline/domainMeta'
 
 export default function Timeline({
   tasks = [],
+  allTasks = [],
   activeDomain,
   onSelectDomain,
   onTasksUpdated,
   onOpenNorthstar,
   onOpenTelemetry,
+  customDomains = [],
 }) {
   const [selectedTask, setSelectedTask] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
@@ -254,7 +256,7 @@ export default function Timeline({
               e.currentTarget.style.boxShadow = '0 4px 14px rgba(37, 99, 235, 0.35)'
             }}
           >
-            <span style={{ fontSize: '16px', fontWeight: '700', lineHeight: 1 }}>+</span> Add Deadline
+            <span style={{ fontSize: '16px', fontWeight: '700', lineHeight: 1 }}>+</span> Add deadline
           </button>
         </div>
       </div>
@@ -280,17 +282,17 @@ export default function Timeline({
             <div>
               <span style={{ fontWeight: '700' }}>
                 {verificationSummary.error
-                  ? 'Tavily Verification Failed: '
-                  : 'Tavily Web Verification Complete: '
+                  ? 'Verification note: '
+                  : 'Schedules verified: '
                 }
               </span>
               <span>
                 {verificationSummary.error
                   ? verificationSummary.error
-                  : `Checked ${verificationSummary.total} active deadline(s). ${
+                  : `${verificationSummary.total} active deadline(s) checked. ${
                       verificationSummary.drift > 0
-                        ? `⚠️ ${verificationSummary.drift} schedule drift(s) detected via live web search!`
-                        : 'Stored deadlines confirmed matching official sources.'
+                        ? `⚠️ ${verificationSummary.drift} update(s) detected via live web search.`
+                        : 'All deadlines confirmed matching official dates.'
                     }`
                 }
               </span>
@@ -322,9 +324,11 @@ export default function Timeline({
       <div style={{ display: 'flex', gap: '8px', marginBottom: '22px', flexWrap: 'wrap' }}>
         {(() => {
           const basePills = ['all', 'hackathon', 'coursework', 'code', 'general', 'other']
-          const customPills = tasks
-            .map(t => (t.domain || '').toLowerCase().trim())
-            .filter(d => d && !basePills.includes(d))
+          const customPills = [
+            ...customDomains.map(d => d.key),
+            ...tasks.map(t => (t.domain || '').toLowerCase().trim()),
+            ...allTasks.map(t => (t.domain || '').toLowerCase().trim()),
+          ].filter(d => d && !basePills.includes(d))
           const uniquePills = Array.from(new Set([...basePills, ...customPills]))
 
           return uniquePills.map(dom => {
@@ -371,12 +375,12 @@ export default function Timeline({
               <>
                 <div style={{ fontSize: '32px', marginBottom: '12px' }}>📭</div>
                 <div style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>
-                  No deadlines found
+                  {activeDomain === 'all' ? 'No deadlines yet' : 'Nothing here yet'}
                 </div>
                 <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '18px' }}>
                   {activeDomain === 'all'
-                    ? "Your memory stream is clear. You can add deadlines directly below without needing AI chat."
-                    : `No active deadlines found under ${activeDomain.toUpperCase()} domain.`}
+                    ? 'Add one when you have something coming up.'
+                    : `No deadlines in ${getDomainMeta(activeDomain).label} yet. Add a deadline and it'll show up here.`}
                 </div>
                 <button
                   id="btn-empty-add-deadline"
@@ -385,18 +389,21 @@ export default function Timeline({
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '6px',
-                    background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                    background: 'var(--brand)',
                     border: 'none',
-                    color: '#ffffff',
+                    color: '#2a1a00',
                     padding: '9px 18px',
                     borderRadius: '8px',
                     fontSize: '13px',
-                    fontWeight: '600',
+                    fontWeight: '700',
                     cursor: 'pointer',
-                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)'
+                    boxShadow: '0 4px 12px rgba(245, 166, 35, 0.25)',
+                    transition: 'opacity 0.15s ease'
                   }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
+                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}
                 >
-                  + Add Your First Deadline
+                  + Add deadline
                 </button>
               </>
             )}
@@ -428,6 +435,7 @@ export default function Timeline({
         onCreated={onTasksUpdated}
         defaultDomain={activeDomain}
         tasks={tasks}
+        customDomains={customDomains}
         onOpenNorthstar={onOpenNorthstar}
       />
     </div>

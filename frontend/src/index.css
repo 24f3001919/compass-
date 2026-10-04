@@ -404,3 +404,23 @@ code, pre, .mono {
 ::-webkit-scrollbar-thumb:hover {
   background: #334155;
 }
+
+/* Sidebar Collapse & Expand Transitions */
+.compass-sidebar {
+  transition: width 200ms ease, min-width 200ms ease, max-width 200ms ease, padding 200ms ease;
+}
+
+@media (min-width: 769px) {
+  aside.sidebar-collapsed {
+    width: 68px !important;
+    min-width: 68px !important;
+    max-width: 68px !important;
+    padding: 20px 8px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  #sidebar-collapse-toggle {
+    display: none !important;
+  }
+}

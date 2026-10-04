@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { createTask, updateTask } from '../../api/client'
 import { DOMAIN_META } from './domainMeta'
 
-export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain, tasks = [], onOpenNorthstar }) {
+export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain, tasks = [], customDomains = [], onOpenNorthstar }) {
   const [title, setTitle] = useState('')
   const [domain, setDomain] = useState('general')
   const [customDomain, setCustomDomain] = useState('')
@@ -191,10 +191,10 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <div>
             <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.3px' }}>
-              ➕ Add New Deadline
+              Add a deadline
             </h3>
             <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', margin: '4px 0 0' }}>
-              Create a standalone deadline, or ask Northstar to look into schedules & resolve conflicts
+              Set a due date or let Northstar organize your schedule.
             </p>
           </div>
           <button
@@ -237,21 +237,34 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
             <label style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)', fontWeight: '700', marginBottom: '8px' }}>
               Domain / Category
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
-              {Object.entries(DOMAIN_META).map(([domKey, meta]) => {
-                const isSelected = domain === domKey
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(78px, 1fr))', gap: '6px' }}>
+              {[
+                ...Object.entries(DOMAIN_META).map(([domKey, meta]) => ({
+                  key: domKey,
+                  label: meta.label,
+                  icon: meta.icon,
+                  color: meta.color,
+                })),
+                ...customDomains.filter(cd => !DOMAIN_META[cd.key]).map(cd => ({
+                  key: cd.key,
+                  label: cd.label,
+                  icon: cd.icon || '🎯',
+                  color: cd.color || '#c084fc',
+                }))
+              ].map((opt) => {
+                const isSelected = domain === opt.key
                 return (
                   <button
-                    key={domKey}
-                    id={`btn-select-domain-${domKey}`}
+                    key={opt.key}
+                    id={`btn-select-domain-${opt.key}`}
                     type="button"
-                    onClick={() => setDomain(domKey)}
+                    onClick={() => setDomain(opt.key)}
                     style={{
                       padding: '8px 4px',
                       borderRadius: '8px',
-                      border: isSelected ? `1.5px solid ${meta.color}` : '1px solid var(--border)',
+                      border: isSelected ? `1.5px solid ${opt.color}` : '1px solid var(--border)',
                       background: isSelected ? 'var(--bg-card-soft)' : 'var(--bg-app)',
-                      color: isSelected ? meta.color : 'var(--text-secondary)',
+                      color: isSelected ? opt.color : 'var(--text-secondary)',
                       fontSize: '11.5px',
                       fontWeight: isSelected ? '700' : '500',
                       cursor: 'pointer',
@@ -262,8 +275,8 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
                       transition: 'all 0.15s ease'
                     }}
                   >
-                    <span style={{ fontSize: '15px' }}>{meta.icon}</span>
-                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{meta.label}</span>
+                    <span style={{ fontSize: '15px' }}>{opt.icon}</span>
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '70px' }}>{opt.label}</span>
                   </button>
                 )
               })}
@@ -649,7 +662,7 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
                   gap: '8px'
                 }}
               >
-                {loading ? 'Creating...' : exactMatch ? 'Duplicate Blocked' : '+ Create Deadline'}
+                {loading ? 'Creating…' : exactMatch ? 'Duplicate Blocked' : 'Create deadline'}
               </button>
             </div>
           </div>

@@ -1,10 +1,10 @@
 import React from 'react'
 
 const QUICK_PROMPTS = [
-  { icon: '⚠️', text: 'Check my weekend schedule for conflicts across hackathon and coursework' },
-  { icon: '🧠', text: 'Why did we choose 768-dim Matryoshka embeddings for pgvector?' },
-  { icon: '🌐', text: 'Verify the Nebius hackathon deadline on Devpost' },
-  { icon: '⚡', text: "Prioritize today's deliverables and run multi-domain triage" },
+  { icon: '⚠️', text: 'Check my schedule for conflicts between hackathon and coursework' },
+  { icon: '🎯', text: 'What should I prioritize today across all projects?' },
+  { icon: '🗓️', text: 'Summarize my commitments for this week' },
+  { icon: '🔍', text: 'Verify upcoming deadlines against official sources' },
 ]
 
 export default function ChatInputBar({

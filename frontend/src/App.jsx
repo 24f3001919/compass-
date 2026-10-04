@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import Sidebar from './components/Sidebar'
 import Timeline from './components/Timeline'
 import CalendarView from './components/CalendarView'
@@ -7,6 +7,7 @@ import AuthModal from './components/AuthModal'
 import MigrationModal from './components/MigrationModal'
 import SharedChatView from './components/SharedChatView'
 import NebiusTelemetryModal from './components/NebiusTelemetryModal'
+import { getCustomDomains } from './components/timeline/domainMeta'
 import {
   checkBackendHealth,
   fetchTasks,
@@ -20,6 +21,8 @@ import {
 
 export default function App() {
   const [tasks, setTasks] = useState([])
+  const [allTasks, setAllTasks] = useState([])
+  const [customDomains, setCustomDomains] = useState(() => getCustomDomains())
   const [activeTab, setActiveTab] = useState('timeline')
   const [selectedDomain, setSelectedDomain] = useState('all')
   const [backendStatus, setBackendStatus] = useState('Connecting...')
@@ -78,13 +81,22 @@ export default function App() {
       if (!Array.isArray(incomingTasks)) return
 
       const currentTasks = tasksRef.current
+      const wasFallback = currentTasks.some(t => t.is_fallback)
+      const isIncomingFallback = incomingTasks.some(t => t.is_fallback)
       const hasLengthChanged = incomingTasks.length !== currentTasks.length
       const hasContentChanged = incomingTasks.some((task, i) => {
         const cur = currentTasks[i]
-        return !cur || cur.id !== task.id || cur.title !== task.title || cur.countdown !== task.countdown
+        return !cur || cur.id !== task.id || cur.title !== task.title || cur.countdown !== task.countdown || Boolean(cur.is_fallback) !== Boolean(task.is_fallback)
       })
-      if (hasLengthChanged || hasContentChanged) {
+      if (wasFallback !== isIncomingFallback || hasLengthChanged || hasContentChanged) {
         setTasks(incomingTasks)
+      }
+      if (!domain || domain === 'all') {
+        setAllTasks(incomingTasks)
+      } else {
+        fetchTasks('all').then(total => {
+          if (Array.isArray(total)) setAllTasks(total)
+        }).catch(() => {})
       }
     } catch {
       // Silently preserve current view during transient connection blips
@@ -199,17 +211,32 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const domainCounts = tasks.reduce((acc, t) => {
-    const dom = (t.domain || 'general').toLowerCase().trim()
-    acc[dom] = (acc[dom] || 0) + 1
-    return acc
-  }, {
-    hackathon: 0,
-    coursework: 0,
-    code: 0,
-    general: 0,
-    other: 0,
-  })
+  const domainCounts = useMemo(() => {
+    const counts = {
+      hackathon: 0,
+      coursework: 0,
+      code: 0,
+      general: 0,
+      other: 0,
+    }
+    customDomains.forEach(d => {
+      counts[d.key] = 0
+    })
+    const source = allTasks.length > 0 ? allTasks : tasks
+    source.forEach(t => {
+      const dom = (t.domain || 'general').toLowerCase().trim()
+      counts[dom] = (counts[dom] || 0) + 1
+    })
+    return counts
+  }, [allTasks, tasks, customDomains])
+
+  const handleDomainCreated = useCallback((newDomain) => {
+    setCustomDomains(prev => {
+      const filtered = prev.filter(d => d.key !== newDomain.key)
+      return [...filtered, newDomain]
+    })
+    setSelectedDomain(newDomain.key)
+  }, [])
 
   const handleSendMessage = async (userText) => {
     setIsTyping(true)
@@ -263,14 +290,18 @@ export default function App() {
         currentUser={currentUser}
         onOpenAuth={() => setShowAuthModal(true)}
         onOpenTelemetry={() => setShowTelemetryModal(true)}
+        customDomains={customDomains}
+        onDomainCreated={handleDomainCreated}
       />
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-app)', minWidth: 0, overflow: 'hidden' }}>
         {activeTab === 'timeline' ? (
           <Timeline
             tasks={tasks}
+            allTasks={allTasks}
             activeDomain={selectedDomain}
             onSelectDomain={setSelectedDomain}
+            customDomains={customDomains}
             onTasksUpdated={() => {
               loadTasks(selectedDomain)
               refreshUsage()
