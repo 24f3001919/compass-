@@ -178,15 +178,34 @@ export default function ChatPanel({
           console.warn('[SSE Stream Error — falling back to non-streaming chat]', err)
           setIsStreaming(false)
           setStreamingText('')
-          if (onSendMessage) {
-            const reply = await onSendMessage(text)
-            if (reply) {
-              streamAssistantResponse(reply)
-            } else {
-              isSendingRef.current = false
+          try {
+            if (onSendMessage) {
+              const reply = await onSendMessage(text)
+              if (reply) {
+                streamAssistantResponse(reply)
+                return
+              }
             }
-          } else {
+            setMessages(prev => [
+              ...prev,
+              {
+                role: 'assistant',
+                text: "I encountered an issue connecting to Compass. Please verify the service is running and try again.",
+              },
+            ])
+          } catch (fallbackErr) {
+            console.error('[Chat Fallback Error]', fallbackErr)
+            setMessages(prev => [
+              ...prev,
+              {
+                role: 'assistant',
+                text: "I encountered an issue connecting to Compass. Please verify the service is running and try again.",
+              },
+            ])
+          } finally {
             isSendingRef.current = false
+            setIsStreaming(false)
+            setStreamingText('')
           }
         }
       })
@@ -194,15 +213,34 @@ export default function ChatPanel({
       console.warn('[SSE Stream Failed — falling back to non-streaming chat]', err)
       setIsStreaming(false)
       setStreamingText('')
-      if (onSendMessage) {
-        const reply = await onSendMessage(text)
-        if (reply) {
-          streamAssistantResponse(reply)
-        } else {
-          isSendingRef.current = false
+      try {
+        if (onSendMessage) {
+          const reply = await onSendMessage(text)
+          if (reply) {
+            streamAssistantResponse(reply)
+            return
+          }
         }
-      } else {
+        setMessages(prev => [
+          ...prev,
+          {
+            role: 'assistant',
+            text: "I encountered an issue connecting to Compass. Please verify the service is running and try again.",
+          },
+        ])
+      } catch (fallbackErr) {
+        console.error('[Chat Fallback Error]', fallbackErr)
+        setMessages(prev => [
+          ...prev,
+          {
+            role: 'assistant',
+            text: "I encountered an issue connecting to Compass. Please verify the service is running and try again.",
+          },
+        ])
+      } finally {
         isSendingRef.current = false
+        setIsStreaming(false)
+        setStreamingText('')
       }
     }
   }
@@ -274,12 +312,24 @@ export default function ChatPanel({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100%', minWidth: 0, background: 'var(--bg-app)', position: 'relative' }}>
       {/* Sleek Context & Control Sub-bar */}
-      <div style={{
-        padding: '10px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-card)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, gap: '12px'
-      }}>
+      <div
+        className="chat-control-bar"
+        style={{
+          padding: '8px 16px',
+          borderBottom: '1px solid var(--border)',
+          background: 'var(--bg-card)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexShrink: 0,
+          gap: '10px',
+          overflowX: 'auto',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+        }}
+      >
         {/* Left: History drawer toggle & Live connection indicator */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
           <button
             id="btn-toggle-history-drawer"
             onClick={() => setShowHistoryDrawer(v => !v)}
