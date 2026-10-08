@@ -12,6 +12,25 @@ from pydantic import BaseModel
 class ChatRequest(BaseModel):
     message: str
     conversation_id: Optional[str] = None
+    tone: Optional[str] = None
+    mode: Optional[str] = None
+    specialist_id: Optional[str] = None
+    specialistId: Optional[str] = None
+
+    def get_specialist_id(self) -> Optional[str]:
+        return self.specialist_id or self.specialistId
+
+
+class PublicChatRequest(BaseModel):
+    message: str
+    domain: Optional[str] = None
+    project: Optional[str] = None
+    conversation_id: Optional[str] = None
+    specialist_id: Optional[str] = None
+    specialistId: Optional[str] = None
+
+    def get_specialist_id(self) -> Optional[str]:
+        return self.specialist_id or self.specialistId
 
 
 class ChatResponse(BaseModel):
@@ -19,6 +38,15 @@ class ChatResponse(BaseModel):
     response: str
     skill_used: Optional[str] = None
     data: Optional[Any] = None
+
+
+class ChatRecapRequest(BaseModel):
+    conversation_id: Optional[str] = None
+
+
+class ChatRecapResponse(BaseModel):
+    conversation_id: Optional[str] = None
+    recap: str
 
 
 class MessageOut(BaseModel):
@@ -121,6 +149,7 @@ class HealthResponse(BaseModel):
     database: str
     db_connected: bool = False
     commit: str = "unknown"
+    config_ok: bool = True
 
 
 class ConversationUpdate(BaseModel):
@@ -197,12 +226,6 @@ class UpdateTaskRequest(BaseModel):
     is_fixed: Optional[bool] = None
 
 
-class PublicChatRequest(BaseModel):
-    message: str
-    domain: Optional[str] = None
-    project: Optional[str] = None
-    conversation_id: Optional[str] = None
-
 
 class PublicChatResponse(BaseModel):
     response: str
@@ -223,6 +246,13 @@ class StreamChatRequest(BaseModel):
     message: str
     conversation_id: Optional[str] = None
     domain: Optional[str] = None
+    tone: Optional[str] = None
+    mode: Optional[str] = None
+    specialist_id: Optional[str] = None
+    specialistId: Optional[str] = None
+
+    def get_specialist_id(self) -> Optional[str]:
+        return self.specialist_id or self.specialistId
 
 
 class AgentRequest(BaseModel):
