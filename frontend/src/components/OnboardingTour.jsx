@@ -38,8 +38,8 @@ export default function OnboardingTour({
           id="btn-reopen-tour"
           onClick={handleReopen}
           style={{
-            background: 'rgba(255, 255, 255, 0.04)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
+            background: 'var(--guide-close-bg)',
+            border: '1px solid var(--guide-close-border)',
             color: 'var(--text-secondary)',
             fontSize: '11.5px',
             fontWeight: '600',
@@ -52,11 +52,11 @@ export default function OnboardingTour({
             transition: 'all 0.15s ease',
           }}
           onMouseEnter={e => {
-            e.currentTarget.style.borderColor = 'rgba(96, 165, 250, 0.4)'
-            e.currentTarget.style.color = '#93c5fd'
+            e.currentTarget.style.borderColor = 'var(--brand)'
+            e.currentTarget.style.color = 'var(--text-primary)'
           }}
           onMouseLeave={e => {
-            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+            e.currentTarget.style.borderColor = 'var(--guide-close-border)'
             e.currentTarget.style.color = 'var(--text-secondary)'
           }}
           title="Re-open Hackathon Judge Tour"
@@ -72,9 +72,9 @@ export default function OnboardingTour({
     <div
       id="judge-onboarding-tour"
       style={{
-        background: 'linear-gradient(135deg, rgba(20, 24, 39, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%)',
-        border: '1px solid rgba(96, 165, 250, 0.25)',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.35)',
+        background: 'var(--guide-bg)',
+        border: '1px solid var(--guide-border)',
+        boxShadow: 'var(--guide-shadow)',
         borderRadius: '16px',
         padding: isCollapsed ? '12px 18px' : '20px 22px',
         marginBottom: '22px',
@@ -89,15 +89,15 @@ export default function OnboardingTour({
           <span style={{ fontSize: '20px' }}>🧭</span>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '14.5px', fontWeight: '800', color: '#f8fafc', letterSpacing: '-0.2px' }}>
+              <span style={{ fontSize: '14.5px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.2px' }}>
                 Compass Architecture & Evaluation Guide
               </span>
               <span style={{
                 fontSize: '10.5px',
                 fontWeight: '700',
-                background: 'rgba(59, 130, 246, 0.2)',
-                color: '#60a5fa',
-                border: '1px solid rgba(59, 130, 246, 0.4)',
+                background: 'var(--guide-badge-bg)',
+                color: 'var(--guide-badge-text)',
+                border: '1px solid var(--guide-badge-border)',
                 padding: '2px 8px',
                 borderRadius: '12px',
                 textTransform: 'uppercase',
@@ -107,7 +107,7 @@ export default function OnboardingTour({
               </span>
             </div>
             {!isCollapsed && (
-              <p style={{ fontSize: '12px', color: '#94a3b8', margin: '3px 0 0 0' }}>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '3px 0 0 0' }}>
                 Persistent multi-domain copilot combining 3-tier Nemotron MoE, Tavily schedule drift detection, and pgvector HNSW memory.
               </p>
             )}
@@ -120,7 +120,7 @@ export default function OnboardingTour({
             style={{
               background: 'transparent',
               border: 'none',
-              color: '#94a3b8',
+              color: 'var(--text-secondary)',
               cursor: 'pointer',
               fontSize: '12px',
               padding: '4px 8px',
@@ -133,9 +133,9 @@ export default function OnboardingTour({
           <button
             onClick={handleDismiss}
             style={{
-              background: 'rgba(255, 255, 255, 0.06)',
-              border: '1px solid rgba(255, 255, 255, 0.12)',
-              color: '#94a3b8',
+              background: 'var(--guide-close-bg)',
+              border: '1px solid var(--guide-close-border)',
+              color: 'var(--text-secondary)',
               cursor: 'pointer',
               fontSize: '13px',
               width: '24px',
@@ -165,72 +165,72 @@ export default function OnboardingTour({
           }}>
             {/* Pillar 1: NVIDIA Architecture */}
             <div style={{
-              background: 'rgba(15, 23, 42, 0.65)',
-              border: '1px solid rgba(245, 166, 35, 0.25)',
+              background: 'var(--guide-pillar-bg)',
+              border: '1px solid var(--guide-amber-border)',
               borderRadius: '12px',
               padding: '14px',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
                 <span style={{ fontSize: '15px' }}>⚡</span>
-                <span style={{ fontSize: '12.5px', fontWeight: '700', color: '#fbbf24' }}>
+                <span style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--guide-amber-text)' }}>
                   3-Tier NVIDIA MoE
                 </span>
               </div>
-              <p style={{ fontSize: '11.5px', color: '#cbd5e1', lineHeight: '1.45', margin: 0 }}>
-                <strong>Nemotron-3 Nano</strong> (30B, intent routing) → <strong>Super</strong> (120B, ReAct planning) → <strong>Ultra</strong> (550B, cross-domain synthesis) on Nebius Token Factory.
+              <p style={{ fontSize: '11.5px', color: 'var(--text-secondary)', lineHeight: '1.45', margin: 0 }}>
+                <strong style={{ color: 'var(--text-primary)', fontWeight: '700' }}>Nemotron-3 Nano</strong> (30B, intent routing) → <strong style={{ color: 'var(--text-primary)', fontWeight: '700' }}>Super</strong> (120B, ReAct planning) → <strong style={{ color: 'var(--text-primary)', fontWeight: '700' }}>Ultra</strong> (550B, cross-domain synthesis) on Nebius Token Factory.
               </p>
             </div>
 
             {/* Pillar 2: Tavily Drift Detection */}
             <div style={{
-              background: 'rgba(15, 23, 42, 0.65)',
-              border: '1px solid rgba(56, 189, 248, 0.25)',
+              background: 'var(--guide-pillar-bg)',
+              border: '1px solid var(--guide-cyan-border)',
               borderRadius: '12px',
               padding: '14px',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
                 <span style={{ fontSize: '15px' }}>🔍</span>
-                <span style={{ fontSize: '12.5px', fontWeight: '700', color: '#38bdf8' }}>
+                <span style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--guide-cyan-text)' }}>
                   Tavily Live Web Drift
                 </span>
               </div>
-              <p style={{ fontSize: '11.5px', color: '#cbd5e1', lineHeight: '1.45', margin: 0 }}>
+              <p style={{ fontSize: '11.5px', color: 'var(--text-secondary)', lineHeight: '1.45', margin: 0 }}>
                 Proactively scrapes official hackathon/coursework portals using Tavily to detect schedule postponements and warn before deadlines slip.
               </p>
             </div>
 
             {/* Pillar 3: Matryoshka Vector Memory */}
             <div style={{
-              background: 'rgba(15, 23, 42, 0.65)',
-              border: '1px solid rgba(52, 211, 153, 0.25)',
+              background: 'var(--guide-pillar-bg)',
+              border: '1px solid var(--guide-green-border)',
               borderRadius: '12px',
               padding: '14px',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
                 <span style={{ fontSize: '15px' }}>🧠</span>
-                <span style={{ fontSize: '12.5px', fontWeight: '700', color: '#34d399' }}>
+                <span style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--guide-green-text)' }}>
                   Domain-Isolated Recall
                 </span>
               </div>
-              <p style={{ fontSize: '11.5px', color: '#cbd5e1', lineHeight: '1.45', margin: 0 }}>
-                Neon pgvector HNSW with <strong>768-dim Matryoshka</strong> embeddings. Keeps hackathon, coursework, and code contexts strictly isolated.
+              <p style={{ fontSize: '11.5px', color: 'var(--text-secondary)', lineHeight: '1.45', margin: 0 }}>
+                Neon pgvector HNSW with <strong style={{ color: 'var(--text-primary)', fontWeight: '700' }}>768-dim Matryoshka</strong> embeddings. Keeps hackathon, coursework, and code contexts strictly isolated.
               </p>
             </div>
 
             {/* Pillar 4: Feasibility & Safety */}
             <div style={{
-              background: 'rgba(15, 23, 42, 0.65)',
-              border: '1px solid rgba(167, 139, 250, 0.25)',
+              background: 'var(--guide-pillar-bg)',
+              border: '1px solid var(--guide-purple-border)',
               borderRadius: '12px',
               padding: '14px',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
                 <span style={{ fontSize: '15px' }}>🛡️</span>
-                <span style={{ fontSize: '12.5px', fontWeight: '700', color: '#a78bfa' }}>
+                <span style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--guide-purple-text)' }}>
                   Feasibility & Trust
                 </span>
               </div>
-              <p style={{ fontSize: '11.5px', color: '#cbd5e1', lineHeight: '1.45', margin: 0 }}>
+              <p style={{ fontSize: '11.5px', color: 'var(--text-secondary)', lineHeight: '1.45', margin: 0 }}>
                 Mathematical capacity load calculations flag impossible schedules; epistemic abstention says <em>"I don't know"</em> instead of hallucinating.
               </p>
             </div>
@@ -243,11 +243,11 @@ export default function OnboardingTour({
             justifyContent: 'space-between',
             flexWrap: 'wrap',
             gap: '10px',
-            borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+            borderTop: '1px solid var(--guide-divider)',
             paddingTop: '12px',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Try 1-Click Tests:
               </span>
 
@@ -257,8 +257,8 @@ export default function OnboardingTour({
                   onClick={onVerifyDeadlines}
                   style={{
                     background: 'rgba(56, 189, 248, 0.12)',
-                    border: '1px solid rgba(56, 189, 248, 0.35)',
-                    color: '#38bdf8',
+                    border: '1px solid var(--guide-cyan-border)',
+                    color: 'var(--guide-cyan-text)',
                     padding: '6px 12px',
                     borderRadius: '8px',
                     fontSize: '12px',
@@ -267,6 +267,15 @@ export default function OnboardingTour({
                     display: 'flex',
                     alignItems: 'center',
                     gap: '5px',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = 'rgba(56, 189, 248, 0.22)'
+                    e.currentTarget.style.transform = 'translateY(-1px)'
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'rgba(56, 189, 248, 0.12)'
+                    e.currentTarget.style.transform = 'translateY(0)'
                   }}
                   title="Run proactive Tavily web search against tasks to detect schedule drift"
                 >
@@ -281,8 +290,8 @@ export default function OnboardingTour({
                   onClick={onOpenTelemetry}
                   style={{
                     background: 'rgba(245, 166, 35, 0.12)',
-                    border: '1px solid rgba(245, 166, 35, 0.35)',
-                    color: '#fbbf24',
+                    border: '1px solid var(--guide-amber-border)',
+                    color: 'var(--guide-amber-text)',
                     padding: '6px 12px',
                     borderRadius: '8px',
                     fontSize: '12px',
@@ -291,6 +300,15 @@ export default function OnboardingTour({
                     display: 'flex',
                     alignItems: 'center',
                     gap: '5px',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = 'rgba(245, 166, 35, 0.22)'
+                    e.currentTarget.style.transform = 'translateY(-1px)'
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'rgba(245, 166, 35, 0.12)'
+                    e.currentTarget.style.transform = 'translateY(0)'
                   }}
                   title="Open live token accounting and GPU inference breakdown"
                 >
@@ -305,8 +323,8 @@ export default function OnboardingTour({
                   onClick={() => handleOpenCompass("Synthesize a realistic cross-domain roadmap for this weekend")}
                   style={{
                     background: 'rgba(167, 139, 250, 0.12)',
-                    border: '1px solid rgba(167, 139, 250, 0.35)',
-                    color: '#c084fc',
+                    border: '1px solid var(--guide-purple-border)',
+                    color: 'var(--guide-purple-text)',
                     padding: '6px 12px',
                     borderRadius: '8px',
                     fontSize: '12px',
@@ -315,6 +333,15 @@ export default function OnboardingTour({
                     display: 'flex',
                     alignItems: 'center',
                     gap: '5px',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = 'rgba(167, 139, 250, 0.22)'
+                    e.currentTarget.style.transform = 'translateY(-1px)'
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'rgba(167, 139, 250, 0.12)'
+                    e.currentTarget.style.transform = 'translateY(0)'
                   }}
                   title="Test Nemotron Ultra cross-domain roadmap synthesis"
                 >
@@ -329,7 +356,7 @@ export default function OnboardingTour({
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: '#64748b',
+                color: 'var(--guide-link)',
                 fontSize: '11.5px',
                 cursor: 'pointer',
                 textDecoration: 'underline',
