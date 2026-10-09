@@ -52,7 +52,26 @@
   --scrollbar-track: #f1ede3;
   --scrollbar-thumb: #d8d2c2;
   --scrollbar-thumb-hover: #bfb8a3;
-  --fill-ghost-hover: rgba(31, 27, 46, 0.06);
+  /* Guide / Architecture Tour tokens */
+  --guide-bg: var(--bg-card);
+  --guide-border: var(--border);
+  --guide-shadow: var(--shadow-md);
+  --guide-badge-bg: rgba(59, 130, 246, 0.10);
+  --guide-badge-border: rgba(59, 130, 246, 0.25);
+  --guide-badge-text: #1d4ed8;
+  --guide-close-bg: var(--bg-card-soft);
+  --guide-close-border: var(--border);
+  --guide-pillar-bg: var(--bg-card-soft);
+  --guide-divider: var(--border);
+  --guide-amber-text: #b45309;
+  --guide-amber-border: rgba(245, 166, 35, 0.35);
+  --guide-cyan-text: #0369a1;
+  --guide-cyan-border: rgba(56, 189, 248, 0.35);
+  --guide-green-text: #047857;
+  --guide-green-border: rgba(52, 211, 153, 0.35);
+  --guide-purple-text: #6d28d9;
+  --guide-purple-border: rgba(167, 139, 250, 0.35);
+  --guide-link: #64748b;
 }
 
 :root[data-theme="dark"], html.dark {
@@ -104,6 +123,27 @@
   --scrollbar-thumb: #25233d;
   --scrollbar-thumb-hover: #373357;
   --fill-ghost-hover: rgba(255, 255, 255, 0.08);
+
+  /* Guide / Architecture Tour tokens */
+  --guide-bg: linear-gradient(135deg, rgba(20, 24, 39, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%);
+  --guide-border: rgba(96, 165, 250, 0.25);
+  --guide-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  --guide-badge-bg: rgba(59, 130, 246, 0.20);
+  --guide-badge-border: rgba(59, 130, 246, 0.40);
+  --guide-badge-text: #60a5fa;
+  --guide-close-bg: rgba(255, 255, 255, 0.06);
+  --guide-close-border: rgba(255, 255, 255, 0.12);
+  --guide-pillar-bg: rgba(15, 23, 42, 0.65);
+  --guide-divider: rgba(255, 255, 255, 0.08);
+  --guide-amber-text: #fbbf24;
+  --guide-amber-border: rgba(245, 166, 35, 0.25);
+  --guide-cyan-text: #38bdf8;
+  --guide-cyan-border: rgba(56, 189, 248, 0.25);
+  --guide-green-text: #34d399;
+  --guide-green-border: rgba(52, 211, 153, 0.25);
+  --guide-purple-text: #a78bfa;
+  --guide-purple-border: rgba(167, 139, 250, 0.25);
+  --guide-link: #64748b;
 }
 
 html, body {
@@ -652,5 +692,3 @@ code, pre, .mono {
 .mode-quick-btn:active {
   transform: translateY(0);
 }
-
-
