@@ -341,16 +341,20 @@ async def init_pool(dsn: str | None = None) -> asyncpg.Pool:
                 await asyncio.sleep(backoff)
             else:
                 raise last_err
+    pool = _pool
+    if pool is None:
+        raise RuntimeError("Database connection pool failed to initialize.")
+
     if not _tables_ensured:
         try:
-            await asyncio.wait_for(_ensure_tables(_pool), timeout=15.0)
+            await asyncio.wait_for(_ensure_tables(pool), timeout=15.0)
         except Exception as e:
             import logging
             logging.getLogger("compass.db").warning(f"Could not auto-create tables: {e}")
 
         # Verify critical tables exist; never silently degrade
         try:
-            async with _pool.acquire(timeout=10.0) as check_conn:
+            async with pool.acquire(timeout=10.0) as check_conn:
                 existing_tables = await check_conn.fetch(
                     "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('user_profile_facts', 'parked_thoughts')"
                 )
@@ -365,7 +369,8 @@ async def init_pool(dsn: str | None = None) -> asyncpg.Pool:
             logging.getLogger("compass.db").warning(f"Could not verify table existence at startup: {e}")
         _tables_ensured = True
 
-    return _pool  # type: ignore[return-value]
+    return pool
+
 
 
 async def get_pool() -> asyncpg.Pool:

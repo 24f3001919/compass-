@@ -6,6 +6,7 @@ conversational token streaming, message_needs_tools classification battery,
 and resilient background stream persistence error handling.
 """
 
+import asyncio
 import json
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
