@@ -344,10 +344,11 @@ def evaluate_deterministic_verdict(
             else bool(normalized_quote and normalized_quote in normalized_raw)
         )
 
-        is_independent = bool(in_own_text and quote not in seen_quotes)
+        is_independent = in_own_text and (quote not in seen_quotes)
         if in_own_text and quote:
             seen_quotes.add(quote)
-        verbatim_match = bool(in_own_text)
+        verbatim_match = in_own_text
+
 
         tier = url_tier_map.get(source_url, AuthorityTier.TIER_3_GENERAL.value)
         parsed_dt, year_provenance = _parse_explicit_year_date(raw_date or claim_text)
