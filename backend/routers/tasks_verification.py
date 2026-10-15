@@ -272,7 +272,10 @@ async def verify_all_deadlines_endpoint(request: Request):
         from backend.skills.handlers.web import handle_verify_deadline
         async with pool.acquire() as conn:
             all_open_tasks = await structured.list_tasks(conn, status="open", user_id=user_id)
-            open_tasks = all_open_tasks[:5]
+            if user_id:
+                open_tasks = [t for t in all_open_tasks if t.get("user_id") == user_id][:5]
+            else:
+                open_tasks = [t for t in all_open_tasks if not t.get("user_id")][:5]
 
         verifications = []
         for t in open_tasks:

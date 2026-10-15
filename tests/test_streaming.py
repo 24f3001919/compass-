@@ -18,8 +18,38 @@ from backend.services.chat_stream import persist_stream_messages
 
 
 @pytest.mark.asyncio
-async def test_streaming_tool_call(client: AsyncClient):
+async def test_streaming_tool_call(client: AsyncClient, monkeypatch):
     """Test that a task-creation message over SSE triggers tool calling and executes add_task."""
+    class DummyDelta:
+        content = None
+        tool_calls = [MagicMock()]
+
+    class DummyChoice:
+        delta = DummyDelta()
+        finish_reason = "tool_calls"
+
+    class DummyChunk:
+        choices = [DummyChoice()]
+        usage = None
+
+    class MockStream:
+        def __aiter__(self):
+            return self._gen()
+
+        async def _gen(self):
+            yield DummyChunk()
+
+        async def aclose(self):
+            pass
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=MockStream())
+    monkeypatch.setattr("backend.services.chat_stream.openai.AsyncOpenAI", lambda **kwargs: mock_client)
+    monkeypatch.setattr(
+        "backend.orchestrator.route_message",
+        AsyncMock(return_value=("add_task", {"title": "Complete pyright streaming verification", "domain": "coursework"}, None)),
+    )
+
     payload = {
         "message": "add a task: Complete pyright streaming verification, domain coursework",
     }
@@ -40,8 +70,36 @@ async def test_streaming_tool_call(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_sse_disconnect_cleanup(client: AsyncClient):
+async def test_sse_disconnect_cleanup(client: AsyncClient, monkeypatch):
     """Test that premature client disconnect from SSE stream triggers clean resource termination."""
+    class DummyDelta:
+        content = "Once upon a time in deep space..."
+        tool_calls = None
+
+    class DummyChoice:
+        delta = DummyDelta()
+        finish_reason = None
+
+    class DummyChunk:
+        choices = [DummyChoice()]
+        usage = None
+
+    class MockStream:
+        def __aiter__(self):
+            return self._gen()
+
+        async def _gen(self):
+            for _ in range(10):
+                yield DummyChunk()
+                await asyncio.sleep(0.01)
+
+        async def aclose(self):
+            pass
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=MockStream())
+    monkeypatch.setattr("backend.services.chat_stream.openai.AsyncOpenAI", lambda **kwargs: mock_client)
+
     payload = {"message": "Tell me a long story about space exploration."}
     async with client.stream("POST", "/api/chat/stream", json=payload, timeout=15.0) as resp:
         assert resp.status_code == 200

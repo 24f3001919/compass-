@@ -11,10 +11,19 @@ from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_multiturn_task_followup_resolution(client: AsyncClient, auth_headers: dict):
+async def test_multiturn_task_followup_resolution(client: AsyncClient, auth_headers: dict, monkeypatch):
     """Test that a task creation followed by a contextual query correctly links context."""
     suffix = uuid.uuid4().hex[:6]
     task_title = f"submit final demo video {suffix}"
+
+    async def mock_router(msg, history=None, memory_context=None):
+        if "add a task" in msg:
+            return ("add_task", {"title": task_title, "domain": "hackathon"}, None)
+        if history and any(task_title in m.get("content", "") for m in history):
+            return ("query_tasks", {"domain": "hackathon"}, None)
+        return ("chat", {}, "No context")
+
+    monkeypatch.setattr("backend.orchestrator.route_message", mock_router)
 
     # Turn 1: Add a task without due date
     msg1 = f"add a task: {task_title}, domain hackathon"

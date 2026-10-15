@@ -23,6 +23,9 @@ async def _init_connection(conn: asyncpg.Connection) -> None:
 
 async def _ensure_tables(pool: asyncpg.Pool) -> None:
     """Create agent_runs and agent_audit_log tables if they don't already exist."""
+    global _tables_ensured
+    if _tables_ensured:
+        return
     async with pool.acquire(timeout=5.0) as conn:
         await conn.execute("""
         CREATE TABLE IF NOT EXISTS agent_runs (
@@ -282,6 +285,7 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_user_trusted_urls_user ON user_trusted_urls(user_id);
         """)
+    _tables_ensured = True
 
 
 async def init_pool(dsn: str | None = None) -> asyncpg.Pool:
@@ -319,7 +323,7 @@ async def init_pool(dsn: str | None = None) -> asyncpg.Pool:
         try:
             _pool = await asyncpg.create_pool(
                 dsn,
-                min_size=2,
+                min_size=1,
                 max_size=10,
                 timeout=30.0,
                 command_timeout=30.0,

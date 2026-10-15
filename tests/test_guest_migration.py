@@ -21,13 +21,23 @@ Validates:
 """
 
 import uuid
+from unittest.mock import AsyncMock
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient
 
 from backend.dependencies import (
     generate_guest_token,
     verify_guest_token,
 )
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def mock_migration_llm(monkeypatch):
+    monkeypatch.setattr(
+        "backend.orchestrator.route_message",
+        AsyncMock(return_value=("chat", {}, "Simulated response")),
+    )
 
 
 # ---------------------------------------------------------------------------
