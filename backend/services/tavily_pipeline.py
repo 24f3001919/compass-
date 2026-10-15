@@ -351,9 +351,10 @@ def evaluate_deterministic_verdict(
 
         tier = url_tier_map.get(source_url, AuthorityTier.TIER_3_GENERAL.value)
         parsed_dt, year_provenance = _parse_explicit_year_date(raw_date or claim_text)
-        is_verified_quote = bool(
+        is_verified_quote = (
             verbatim_match and entity_matched and is_independent and (parsed_dt is not None if raw_date else True)
         )
+
 
         if not entity_matched:
             verdict = "NOT_FOUND"
