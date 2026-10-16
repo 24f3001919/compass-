@@ -136,13 +136,19 @@ def is_google_oauth_configured() -> bool:
 import time
 
 
+def _compute_state_sig(user_id: str, ts: int) -> str:
+    """Compute HMAC-SHA256 signature for user ID and timestamp."""
+    key = _get_encryption_key()
+    msg = f"{user_id.lower()}:{ts}".encode("utf-8")
+    return hmac.new(key, msg, digestmod=hashlib.sha256).hexdigest()
+
+
 def generate_oauth_state(user_id: str) -> str:
     """Generate cryptographically HMAC-signed OAuth state bound to user_id and timestamp."""
-    secret = _get_encryption_key()
+    clean_user = (user_id or "guest").lower()
     ts = int(time.time())
-    payload = f"{user_id}:{ts}".encode("utf-8")
-    sig = hmac.new(secret, payload, digestmod=hashlib.sha256).hexdigest()
-    raw = f"{user_id}:{ts}:{sig}"
+    sig = _compute_state_sig(clean_user, ts)
+    raw = f"{clean_user}:{ts}:{sig}"
     return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("utf-8")
 
 
@@ -155,16 +161,15 @@ def verify_oauth_state(state: str, expected_user_id: str, max_age_seconds: int =
         parts = raw.split(":")
         if len(parts) != 3:
             return False
-        user_id, ts_str, sig = parts
-        if user_id.lower() != expected_user_id.lower():
+        user_id_part, ts_str, sig = parts
+        clean_expected = (expected_user_id or "guest").lower()
+        if user_id_part.lower() != clean_expected:
             return False
         ts = int(ts_str)
         now = int(time.time())
         if abs(now - ts) > max_age_seconds:
             return False
-        secret = _get_encryption_key()
-        payload = f"{user_id}:{ts}".encode("utf-8")
-        expected_sig = hmac.new(secret, payload, digestmod=hashlib.sha256).hexdigest()
+        expected_sig = _compute_state_sig(clean_expected, ts)
         return hmac.compare_digest(sig, expected_sig)
     except Exception:
         return False
