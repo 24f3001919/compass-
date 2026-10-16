@@ -1,0 +1,230 @@
+"""
+Compass — Career Copilot Resume File Extraction Service.
+
+Extracts structured resume data from uploaded PDF, TXT, and Markdown files.
+Safely handles malformed, encrypted, empty, and image-only documents.
+Never silently saves or overwrites the master resume without explicit user confirmation.
+"""
+from __future__ import annotations
+
+import io
+import logging
+from typing import Optional, Tuple
+from pydantic import BaseModel
+
+from backend.models_career import ResumeContent
+from backend.services.career_resume import parse_uploaded_resume_text
+
+logger = logging.getLogger(__name__)
+
+# Maximum file size: 5 MB
+MAX_RESUME_FILE_SIZE = 5 * 1024 * 1024
+
+SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".md"}
+
+
+class ResumeParseResult(BaseModel):
+    success: bool
+    filename: str
+    file_type: str
+    raw_text: str = ""
+    extracted_content: Optional[ResumeContent] = None
+    page_count: Optional[int] = None
+    confidence_warning: Optional[str] = None
+    error_message: Optional[str] = None
+    requires_user_review: bool = True
+
+
+def is_pdf_parser_available() -> bool:
+    """Check if pypdf is installed and functional."""
+    try:
+        import pypdf
+        return True
+    except ImportError:
+        return False
+
+
+def extract_resume_from_file_bytes(
+    file_bytes: bytes,
+    filename: str,
+    content_type: Optional[str] = None,
+) -> ResumeParseResult:
+    """
+    Safely extract and parse text from a resume file.
+
+    Guarantees:
+    - Validates size <= 5MB
+    - Rejects unsupported binary formats (.docx, images, etc.) with explicit explanation
+    - Handles malformed, corrupt, encrypted, empty, and image-only PDFs
+    - Does NOT save or overwrite master resume; returns structured result for review
+    """
+    if not file_bytes:
+        return ResumeParseResult(
+            success=False,
+            filename=filename,
+            file_type="unknown",
+            error_message="Uploaded file is empty (0 bytes).",
+        )
+
+    if len(file_bytes) > MAX_RESUME_FILE_SIZE:
+        return ResumeParseResult(
+            success=False,
+            filename=filename,
+            file_type="unknown",
+            error_message=f"File exceeds maximum allowed size of 5 MB ({len(file_bytes)} bytes).",
+        )
+
+    # Determine extension
+    ext = ""
+    if "." in filename:
+        ext = "." + filename.rsplit(".", 1)[-1].lower()
+
+    if ext not in SUPPORTED_EXTENSIONS:
+        return ResumeParseResult(
+            success=False,
+            filename=filename,
+            file_type=ext or "unknown",
+            error_message=(
+                f"Unsupported file format '{ext}'. Supported formats are: PDF (.pdf), Plain Text (.txt), Markdown (.md). "
+                "Word (.docx) files require export to PDF first. Scanned image files require OCR."
+            ),
+        )
+
+    # 1. Plain Text and Markdown
+    if ext in {".txt", ".md"}:
+        try:
+            text = file_bytes.decode("utf-8", errors="replace").strip()
+            if not text:
+                return ResumeParseResult(
+                    success=False,
+                    filename=filename,
+                    file_type=ext,
+                    error_message="File contains no readable text content.",
+                )
+            parsed_content = parse_uploaded_resume_text(text)
+            warning = None
+            if not parsed_content.skills and not parsed_content.education and not parsed_content.projects:
+                warning = "No standard skills, education, or projects sections were detected. Please review and fill in fields manually."
+
+            return ResumeParseResult(
+                success=True,
+                filename=filename,
+                file_type=ext,
+                raw_text=text[:2000],  # preview
+                extracted_content=parsed_content,
+                page_count=1,
+                confidence_warning=warning,
+                requires_user_review=True,
+            )
+        except Exception as e:
+            return ResumeParseResult(
+                success=False,
+                filename=filename,
+                file_type=ext,
+                error_message=f"Failed to read text file: {e}",
+            )
+
+    # 2. PDF Parsing via pypdf
+    if ext == ".pdf":
+        if not is_pdf_parser_available():
+            return ResumeParseResult(
+                success=False,
+                filename=filename,
+                file_type=".pdf",
+                error_message="PDF parser (pypdf) is not installed in the environment.",
+            )
+
+        import pypdf
+
+        try:
+            stream = io.BytesIO(file_bytes)
+            reader = pypdf.PdfReader(stream)
+
+            # Check encryption
+            if reader.is_encrypted:
+                return ResumeParseResult(
+                    success=False,
+                    filename=filename,
+                    file_type=".pdf",
+                    error_message="PDF is password-protected or encrypted. Please upload an unprotected PDF.",
+                )
+
+            total_pages = len(reader.pages)
+            if total_pages == 0:
+                return ResumeParseResult(
+                    success=False,
+                    filename=filename,
+                    file_type=".pdf",
+                    error_message="PDF contains zero pages.",
+                    page_count=0,
+                )
+
+            extracted_chunks = []
+            has_images = False
+
+            for idx, page in enumerate(reader.pages):
+                try:
+                    p_text = page.extract_text() or ""
+                    if p_text.strip():
+                        extracted_chunks.append(p_text.strip())
+                    if hasattr(page, "images") and len(page.images) > 0:
+                        has_images = True
+                except Exception as page_err:
+                    logger.warning("Error reading PDF page %d: %s", idx, page_err)
+
+            full_text = "\n\n".join(extracted_chunks).strip()
+
+            # Detect image-only / scanned PDF
+            if not full_text or len(full_text) < 20:
+                if has_images:
+                    return ResumeParseResult(
+                        success=False,
+                        filename=filename,
+                        file_type=".pdf",
+                        page_count=total_pages,
+                        error_message=(
+                            "PDF appears to be a scanned or image-only document. "
+                            "Text could not be extracted without optical character recognition (OCR). "
+                            "Please upload a text-based PDF or paste raw resume text."
+                        ),
+                    )
+                return ResumeParseResult(
+                    success=False,
+                    filename=filename,
+                    file_type=".pdf",
+                    page_count=total_pages,
+                    error_message="PDF contains no extractable text. Please ensure the file contains selectable text.",
+                )
+
+            # Parse structured content truthfully
+            parsed_content = parse_uploaded_resume_text(full_text)
+
+            warning = None
+            if not parsed_content.skills and not parsed_content.education:
+                warning = "Standard skills or education sections were not clearly identified. Please review the extracted data."
+
+            return ResumeParseResult(
+                success=True,
+                filename=filename,
+                file_type=".pdf",
+                page_count=total_pages,
+                raw_text=full_text[:3000],  # preview
+                extracted_content=parsed_content,
+                confidence_warning=warning,
+                requires_user_review=True,
+            )
+
+        except pypdf.errors.PdfReadError as pre:
+            return ResumeParseResult(
+                success=False,
+                filename=filename,
+                file_type=".pdf",
+                error_message=f"Malformed or corrupted PDF file: {pre}",
+            )
+        except Exception as e:
+            return ResumeParseResult(
+                success=False,
+                filename=filename,
+                file_type=".pdf",
+                error_message=f"Unexpected error parsing PDF file: {e}",
+            )

@@ -1,0 +1,652 @@
+"""
+Compass — Career Copilot Database Access Repository.
+
+Manages persistence for Resume Studio (master resumes, tailored variants, validation reports)
+and Application Center (applications, batches, submission audit logs).
+Features graceful in-memory fallback with cooldown retry for resilient PostgreSQL connectivity,
+material modification invalidation for approved applications/batches, and explicit persistence status.
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import time
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+import asyncpg
+
+from backend.memory.db import get_pool as _raw_get_pool
+from backend.models_career import (
+    CareerApplicationOut,
+    CareerApplicationStatus,
+    ResumeContent,
+    ResumeOut,
+    ResumeValidationReport,
+    ResumeValidationStatus,
+    SubmissionMethod,
+)
+
+logger = logging.getLogger("compass.memory.career")
+
+_in_memory_resumes: Dict[int, Dict[str, Any]] = {}
+_in_memory_applications: Dict[int, Dict[str, Any]] = {}
+_in_memory_batches: Dict[str, Dict[str, Any]] = {}
+_in_memory_events: List[Dict[str, Any]] = []
+_resume_id_seq = 2000
+_app_id_seq = 3000
+
+_db_pool_available: bool = True
+_last_db_failure_time: float = 0.0
+_DB_RETRY_INTERVAL_SEC: float = 10.0
+
+
+async def get_pool() -> Optional[asyncpg.Pool]:
+    """Return database pool with cooldown retry instead of permanent latch."""
+    global _db_pool_available, _last_db_failure_time
+    now = time.monotonic()
+    if not _db_pool_available:
+        if now - _last_db_failure_time < _DB_RETRY_INTERVAL_SEC:
+            return None
+        _db_pool_available = True
+    try:
+        pool = await asyncio.wait_for(_raw_get_pool(), timeout=1.5)
+        if pool is not None:
+            _db_pool_available = True
+            return pool
+        else:
+            _db_pool_available = False
+            _last_db_failure_time = now
+            return None
+    except Exception as e:
+        _db_pool_available = False
+        _last_db_failure_time = now
+        logger.info(f"Database pool unavailable ({e}); switching Career Copilot to in-memory storage (retry in {_DB_RETRY_INTERVAL_SEC}s).")
+        return None
+
+
+def _parse_resume_row(row: Dict[str, Any], is_persisted: bool = True) -> ResumeOut:
+    content_raw = row["content"] if isinstance(row["content"], dict) else json.loads(row["content"] or "{}")
+    report_raw = row["validation_report"] if isinstance(row["validation_report"], dict) else json.loads(row["validation_report"] or "{}")
+    return ResumeOut(
+        id=row["id"],
+        user_id=row["user_id"],
+        opportunity_id=row.get("opportunity_id"),
+        is_master=bool(row.get("is_master", False)),
+        title=row["title"],
+        version=row.get("version", 1),
+        content=ResumeContent(**content_raw),
+        cover_letter=row.get("cover_letter"),
+        validation_status=ResumeValidationStatus(row.get("validation_status", "DRAFT")),
+        validation_report=ResumeValidationReport(**report_raw),
+        is_persisted=is_persisted,
+        created_at=row.get("created_at"),
+        updated_at=row.get("updated_at"),
+    )
+
+
+def _parse_app_row(row: Dict[str, Any], is_persisted: bool = True) -> CareerApplicationOut:
+    form_answers = row["form_answers"] if isinstance(row["form_answers"], dict) else json.loads(row["form_answers"] or "{}")
+    sub_payload = row["submission_payload"] if isinstance(row["submission_payload"], dict) else json.loads(row["submission_payload"] or "{}")
+    sub_result = row["submission_result"] if isinstance(row["submission_result"], dict) else json.loads(row["submission_result"] or "{}")
+
+    return CareerApplicationOut(
+        id=row["id"],
+        user_id=row["user_id"],
+        opportunity_id=row["opportunity_id"],
+        resume_id=row.get("resume_id"),
+        cover_letter=row.get("cover_letter"),
+        status=CareerApplicationStatus(row.get("status", "SAVED")),
+        submission_method=SubmissionMethod(row.get("submission_method", "manual_handoff")),
+        form_answers=form_answers,
+        submission_payload=sub_payload,
+        submission_result=sub_result,
+        batch_id=row.get("batch_id"),
+        approved_at=row.get("approved_at"),
+        submitted_at=row.get("submitted_at"),
+        target_deadline=row.get("target_deadline"),
+        private_notes=row.get("private_notes"),
+        is_persisted=is_persisted,
+        created_at=row.get("created_at"),
+        updated_at=row.get("updated_at"),
+    )
+
+
+# ===========================================================================
+# 1. Resume Studio Persistence
+# ===========================================================================
+
+async def get_master_resume(user_id: str) -> Optional[ResumeOut]:
+    pool = await get_pool()
+    if not pool:
+        for r in _in_memory_resumes.values():
+            if r["user_id"] == user_id and r.get("is_master"):
+                return _parse_resume_row(r, is_persisted=False)
+        return None
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM resumes WHERE user_id = $1 AND is_master IS TRUE LIMIT 1",
+            user_id,
+        )
+        return _parse_resume_row(dict(row), is_persisted=True) if row else None
+
+
+async def upsert_master_resume(user_id: str, content: ResumeContent, title: str = "Master Resume") -> ResumeOut:
+    global _resume_id_seq
+    pool = await get_pool()
+    content_dict = content.model_dump()
+
+    if not pool:
+        for r in _in_memory_resumes.values():
+            if r["user_id"] == user_id and r.get("is_master"):
+                r["title"] = title
+                r["content"] = content_dict
+                r["version"] = r.get("version", 1) + 1
+                r["updated_at"] = datetime.now(timezone.utc)
+                return _parse_resume_row(r, is_persisted=False)
+        _resume_id_seq += 1
+        record = {
+            "id": _resume_id_seq,
+            "user_id": user_id,
+            "opportunity_id": None,
+            "is_master": True,
+            "title": title,
+            "version": 1,
+            "content": content_dict,
+            "validation_status": "APPROVED",
+            "validation_report": {"is_valid": True, "passed_checks": ["Master resume verified"]},
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        }
+        _in_memory_resumes[_resume_id_seq] = record
+        return _parse_resume_row(record, is_persisted=False)
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO resumes (user_id, is_master, title, version, content, validation_status, validation_report, created_at, updated_at)
+            VALUES ($1, TRUE, $2, 1, $3::jsonb, 'APPROVED', '{"is_valid": true}'::jsonb, now(), now())
+            ON CONFLICT (id) DO UPDATE SET
+                title = EXCLUDED.title,
+                content = EXCLUDED.content,
+                version = resumes.version + 1,
+                updated_at = now()
+            RETURNING *;
+            """,
+            user_id,
+            title,
+            json.dumps(content_dict),
+        )
+        return _parse_resume_row(dict(row), is_persisted=True)
+
+
+async def create_tailored_resume(
+    user_id: str,
+    opportunity_id: int,
+    title: str,
+    content: ResumeContent,
+    validation_report: ResumeValidationReport,
+    validation_status: ResumeValidationStatus,
+    cover_letter: Optional[str] = None,
+) -> ResumeOut:
+    global _resume_id_seq
+    pool = await get_pool()
+    content_dict = content.model_dump()
+    report_dict = validation_report.model_dump()
+
+    if not pool:
+        _resume_id_seq += 1
+        record = {
+            "id": _resume_id_seq,
+            "user_id": user_id,
+            "opportunity_id": opportunity_id,
+            "is_master": False,
+            "title": title,
+            "version": 1,
+            "content": content_dict,
+            "cover_letter": cover_letter,
+            "validation_status": validation_status.value,
+            "validation_report": report_dict,
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        }
+        _in_memory_resumes[_resume_id_seq] = record
+        return _parse_resume_row(record, is_persisted=False)
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO resumes (
+                user_id, opportunity_id, is_master, title, version, content, cover_letter, validation_status, validation_report, created_at, updated_at
+            ) VALUES ($1, $2, FALSE, $3, 1, $4::jsonb, $5, $6, $7::jsonb, now(), now())
+            RETURNING *;
+            """,
+            user_id,
+            opportunity_id,
+            title,
+            json.dumps(content_dict),
+            cover_letter,
+            validation_status.value,
+            json.dumps(report_dict),
+        )
+        return _parse_resume_row(dict(row), is_persisted=True)
+
+
+async def get_resume_by_id(resume_id: int, user_id: str) -> Optional[ResumeOut]:
+    pool = await get_pool()
+    if not pool:
+        record = _in_memory_resumes.get(resume_id)
+        if record and record["user_id"] == user_id:
+            return _parse_resume_row(record, is_persisted=False)
+        return None
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM resumes WHERE id = $1 AND user_id = $2", resume_id, user_id)
+        return _parse_resume_row(dict(row), is_persisted=True) if row else None
+
+
+async def list_resumes(user_id: str) -> List[ResumeOut]:
+    pool = await get_pool()
+    if not pool:
+        return [
+            _parse_resume_row(r, is_persisted=False)
+            for r in _in_memory_resumes.values()
+            if r["user_id"] == user_id
+        ]
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM resumes WHERE user_id = $1 ORDER BY is_master DESC, updated_at DESC",
+            user_id,
+        )
+        return [_parse_resume_row(dict(r), is_persisted=True) for r in rows]
+
+
+async def update_resume(resume_id: int, user_id: str, updates: Dict[str, Any]) -> Optional[ResumeOut]:
+    pool = await get_pool()
+    if not pool:
+        record = _in_memory_resumes.get(resume_id)
+        if record and record["user_id"] == user_id:
+            record.update(updates)
+            record["updated_at"] = datetime.now(timezone.utc)
+            return _parse_resume_row(record, is_persisted=False)
+        return None
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE resumes SET
+                title = COALESCE($3, title),
+                content = COALESCE($4::jsonb, content),
+                validation_status = COALESCE($5, validation_status),
+                validation_report = COALESCE($6::jsonb, validation_report),
+                updated_at = now()
+            WHERE id = $1 AND user_id = $2
+            RETURNING *;
+            """,
+            resume_id,
+            user_id,
+            updates.get("title"),
+            json.dumps(updates["content"].model_dump()) if "content" in updates else None,
+            updates.get("validation_status"),
+            json.dumps(updates["validation_report"].model_dump()) if "validation_report" in updates else None,
+        )
+        return _parse_resume_row(dict(row), is_persisted=True) if row else None
+
+
+# ===========================================================================
+# 2. Application Center Persistence
+# ===========================================================================
+
+async def get_or_create_career_application(user_id: str, opportunity_id: int) -> CareerApplicationOut:
+    global _app_id_seq
+    pool = await get_pool()
+    if not pool:
+        for a in _in_memory_applications.values():
+            if a["user_id"] == user_id and a["opportunity_id"] == opportunity_id:
+                return _parse_app_row(a, is_persisted=False)
+        _app_id_seq += 1
+        record = {
+            "id": _app_id_seq,
+            "user_id": user_id,
+            "opportunity_id": opportunity_id,
+            "resume_id": None,
+            "status": CareerApplicationStatus.SAVED.value,
+            "submission_method": SubmissionMethod.MANUAL_HANDOFF.value,
+            "form_answers": {},
+            "submission_payload": {},
+            "submission_result": {},
+            "batch_id": None,
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        }
+        _in_memory_applications[_app_id_seq] = record
+        return _parse_app_row(record, is_persisted=False)
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO career_applications (user_id, opportunity_id, status, created_at, updated_at)
+            VALUES ($1, $2, 'SAVED', now(), now())
+            ON CONFLICT (user_id, opportunity_id) DO UPDATE SET updated_at = now()
+            RETURNING *;
+            """,
+            user_id,
+            opportunity_id,
+        )
+        return _parse_app_row(dict(row), is_persisted=True)
+
+
+async def get_career_application_by_id(app_id: int, user_id: str) -> Optional[CareerApplicationOut]:
+    pool = await get_pool()
+    if not pool:
+        record = _in_memory_applications.get(app_id)
+        if record and record["user_id"] == user_id:
+            return _parse_app_row(record, is_persisted=False)
+        return None
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM career_applications WHERE id = $1 AND user_id = $2", app_id, user_id)
+        return _parse_app_row(dict(row), is_persisted=True) if row else None
+
+
+async def list_career_applications(user_id: str, status: Optional[str] = None) -> List[CareerApplicationOut]:
+    pool = await get_pool()
+    if not pool:
+        items = [a for a in _in_memory_applications.values() if a["user_id"] == user_id]
+        if status:
+            items = [a for a in items if a.get("status") == status]
+        return [_parse_app_row(a, is_persisted=False) for a in items]
+
+    async with pool.acquire() as conn:
+        if status:
+            rows = await conn.fetch(
+                "SELECT * FROM career_applications WHERE user_id = $1 AND status = $2 ORDER BY updated_at DESC",
+                user_id,
+                status,
+            )
+        else:
+            rows = await conn.fetch(
+                "SELECT * FROM career_applications WHERE user_id = $1 ORDER BY updated_at DESC",
+                user_id,
+            )
+        return [_parse_app_row(dict(r), is_persisted=True) for r in rows]
+
+
+async def update_career_application(app_id: int, user_id: str, updates: Dict[str, Any]) -> Optional[CareerApplicationOut]:
+    pool = await get_pool()
+
+    # Material modification detection: if reviewed content is modified, invalidate previous approval
+    material_content_keys = {"cover_letter", "form_answers", "resume_id"}
+    content_modified = any(k in updates for k in material_content_keys)
+
+    if not pool:
+        record = _in_memory_applications.get(app_id)
+        if record and record["user_id"] == user_id:
+            # If application was approved and content is modified, reset status to READY_FOR_REVIEW
+            if content_modified and record.get("status") == CareerApplicationStatus.APPROVED_FOR_SUBMISSION.value:
+                if "status" not in updates:
+                    updates["status"] = CareerApplicationStatus.READY_FOR_REVIEW.value
+                updates["approved_at"] = None
+
+                # Invalidate associated batch if any
+                batch_id = record.get("batch_id")
+                if batch_id and batch_id in _in_memory_batches:
+                    _in_memory_batches[batch_id]["status"] = "DRAFT"
+                    _in_memory_batches[batch_id]["approval_token"] = None
+                    _in_memory_batches[batch_id]["approved_at"] = None
+                    _in_memory_batches[batch_id]["updated_at"] = datetime.now(timezone.utc)
+
+            record.update(updates)
+            record["updated_at"] = datetime.now(timezone.utc)
+            return _parse_app_row(record, is_persisted=False)
+        return None
+
+    async with pool.acquire() as conn:
+        # Check current status if content modified
+        if content_modified:
+            curr = await conn.fetchrow(
+                "SELECT status, batch_id FROM career_applications WHERE id = $1 AND user_id = $2",
+                app_id,
+                user_id,
+            )
+            if curr and curr["status"] == CareerApplicationStatus.APPROVED_FOR_SUBMISSION.value:
+                if "status" not in updates:
+                    updates["status"] = CareerApplicationStatus.READY_FOR_REVIEW.value
+                updates["approved_at"] = None
+
+                batch_id = curr["batch_id"]
+                if batch_id:
+                    await conn.execute(
+                        "UPDATE application_batches SET status = 'DRAFT', approval_token = NULL, approved_at = NULL, updated_at = now() WHERE id = $1 AND user_id = $2",
+                        batch_id,
+                        user_id,
+                    )
+
+        row = await conn.fetchrow(
+            """
+            UPDATE career_applications SET
+                status = COALESCE($3, status),
+                resume_id = COALESCE($4, resume_id),
+                submission_method = COALESCE($5, submission_method),
+                form_answers = COALESCE($6::jsonb, form_answers),
+                submission_payload = COALESCE($7::jsonb, submission_payload),
+                submission_result = COALESCE($8::jsonb, submission_result),
+                batch_id = COALESCE($9, batch_id),
+                approved_at = COALESCE($10, approved_at),
+                submitted_at = COALESCE($11, submitted_at),
+                target_deadline = COALESCE($12, target_deadline),
+                private_notes = COALESCE($13, private_notes),
+                cover_letter = COALESCE($14, cover_letter),
+                updated_at = now()
+            WHERE id = $1 AND user_id = $2
+            RETURNING *;
+            """,
+            app_id,
+            user_id,
+            updates.get("status"),
+            updates.get("resume_id"),
+            updates.get("submission_method"),
+            json.dumps(updates["form_answers"]) if "form_answers" in updates else None,
+            json.dumps(updates["submission_payload"]) if "submission_payload" in updates else None,
+            json.dumps(updates["submission_result"]) if "submission_result" in updates else None,
+            updates.get("batch_id"),
+            updates.get("approved_at"),
+            updates.get("submitted_at"),
+            updates.get("target_deadline"),
+            updates.get("private_notes"),
+            updates.get("cover_letter"),
+        )
+        return _parse_app_row(dict(row), is_persisted=True) if row else None
+
+
+# ===========================================================================
+# 3. Batch Review & Explicit Approval
+# ===========================================================================
+
+async def create_application_batch(user_id: str, app_ids: List[int]) -> str:
+    batch_id = f"batch_{uuid.uuid4().hex[:10]}"
+    pool = await get_pool()
+
+    if not pool:
+        _in_memory_batches[batch_id] = {
+            "id": batch_id,
+            "user_id": user_id,
+            "application_ids": app_ids,
+            "status": "DRAFT",
+            "approval_token": None,
+            "approved_at": None,
+            "results": [],
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        }
+        for aid in app_ids:
+            if aid in _in_memory_applications and _in_memory_applications[aid]["user_id"] == user_id:
+                _in_memory_applications[aid]["batch_id"] = batch_id
+        return batch_id
+
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO application_batches (id, user_id, application_ids, status, created_at, updated_at)
+            VALUES ($1, $2, $3, 'DRAFT', now(), now());
+            """,
+            batch_id,
+            user_id,
+            app_ids,
+        )
+        await conn.execute(
+            "UPDATE career_applications SET batch_id = $1 WHERE id = ANY($2::int[]) AND user_id = $3",
+            batch_id,
+            app_ids,
+            user_id,
+        )
+        return batch_id
+
+
+async def get_application_batch(batch_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+    pool = await get_pool()
+    if not pool:
+        b = _in_memory_batches.get(batch_id)
+        if b and b["user_id"] == user_id:
+            res = dict(b)
+            res["is_persisted"] = False
+            return res
+        return None
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM application_batches WHERE id = $1 AND user_id = $2", batch_id, user_id)
+        if row:
+            res = dict(row)
+            res["is_persisted"] = True
+            return res
+        return None
+
+
+async def approve_application_batch(batch_id: str, user_id: str, token: str) -> bool:
+    pool = await get_pool()
+    now_ts = datetime.now(timezone.utc)
+    if not pool:
+        b = _in_memory_batches.get(batch_id)
+        if b and b["user_id"] == user_id:
+            b["status"] = "APPROVED"
+            b["approval_token"] = token
+            b["approved_at"] = now_ts
+            b["updated_at"] = now_ts
+            for aid in b["application_ids"]:
+                if aid in _in_memory_applications and _in_memory_applications[aid]["user_id"] == user_id:
+                    _in_memory_applications[aid]["status"] = CareerApplicationStatus.APPROVED_FOR_SUBMISSION.value
+                    _in_memory_applications[aid]["approved_at"] = now_ts
+                    _in_memory_applications[aid]["updated_at"] = now_ts
+            return True
+        return False
+
+    async with pool.acquire() as conn:
+        batch_row = await conn.fetchrow(
+            """
+            UPDATE application_batches SET
+                status = 'APPROVED',
+                approval_token = $3,
+                approved_at = now(),
+                updated_at = now()
+            WHERE id = $1 AND user_id = $2
+            RETURNING application_ids;
+            """,
+            batch_id,
+            user_id,
+            token,
+        )
+        if not batch_row:
+            return False
+
+        app_ids = batch_row["application_ids"]
+        await conn.execute(
+            """
+            UPDATE career_applications SET
+                status = 'APPROVED_FOR_SUBMISSION',
+                approved_at = now(),
+                updated_at = now()
+            WHERE id = ANY($1::int[]) AND user_id = $2
+            """,
+            app_ids,
+            user_id,
+        )
+        return True
+
+
+async def update_application_batch_status(batch_id: str, user_id: str, status: str) -> bool:
+    """Updates batch status atomically (e.g. SUBMITTING, SUBMITTED)."""
+    pool = await get_pool()
+    if not pool:
+        b = _in_memory_batches.get(batch_id)
+        if b and b["user_id"] == user_id:
+            b["status"] = status
+            b["updated_at"] = datetime.now(timezone.utc)
+            return True
+        return False
+
+    async with pool.acquire() as conn:
+        res = await conn.execute(
+            "UPDATE application_batches SET status = $1, updated_at = now() WHERE id = $2 AND user_id = $3",
+            status,
+            batch_id,
+            user_id,
+        )
+        return "UPDATE 1" in res
+
+
+async def finish_application_batch(batch_id: str, user_id: str, results: List[Dict[str, Any]]) -> str:
+    all_manual = all(r.get("status") == CareerApplicationStatus.MANUAL_SUBMISSION_REQUIRED.value for r in results) if results else False
+    any_submitted = any(r.get("status") == CareerApplicationStatus.SUBMITTED.value for r in results)
+    any_uncertain = any(r.get("status") == CareerApplicationStatus.SUBMISSION_OUTCOME_UNKNOWN.value for r in results)
+    any_failed = any(r.get("status") in {"FAILED", "BLOCKED", CareerApplicationStatus.SUBMISSION_FAILED.value} for r in results)
+
+    if all_manual:
+        final_status = "MANUAL_HANDOFF_GENERATED"
+    elif any_submitted and not any_failed and not any_uncertain:
+        final_status = "SUBMITTED"
+    elif any_uncertain or any_failed:
+        final_status = "PARTIALLY_SUBMITTED"
+    else:
+        final_status = "COMPLETED"
+
+    pool = await get_pool()
+    if not pool:
+        if batch_id in _in_memory_batches:
+            _in_memory_batches[batch_id]["results"] = results
+            _in_memory_batches[batch_id]["status"] = final_status
+            _in_memory_batches[batch_id]["updated_at"] = datetime.now(timezone.utc)
+        return final_status
+
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE application_batches SET results = $1::jsonb, status = $2, updated_at = now() WHERE id = $3 AND user_id = $4",
+            json.dumps(results),
+            final_status,
+            batch_id,
+            user_id,
+        )
+    return final_status
+
+
+async def log_application_event(application_id: int, event_type: str, details: Dict[str, Any]) -> None:
+    pool = await get_pool()
+    if not pool:
+        _in_memory_events.append({
+            "application_id": application_id,
+            "event_type": event_type,
+            "details": details,
+            "created_at": datetime.now(timezone.utc),
+        })
+        return
+
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO application_events (application_id, event_type, details, created_at) VALUES ($1, $2, $3::jsonb, now())",
+            application_id,
+            event_type,
+            json.dumps(details),
+        )

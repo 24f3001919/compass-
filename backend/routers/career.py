@@ -1,0 +1,628 @@
+"""
+Compass — Career Copilot API Router.
+
+Provides authenticated endpoints for:
+1. Resume Studio: Master resumes, role-specific tailoring, factual validation reports, HTML/PDF export.
+2. Application Center: Application tracking, structured answers, batch preparation, explicit approval, submission execution.
+3. Submission Adapters: Available capabilities and prerequisites.
+"""
+from __future__ import annotations
+
+import logging
+import uuid
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, File, HTTPException, Query, Request, Response, UploadFile
+from fastapi.responses import HTMLResponse
+
+from backend.services.career_file_parser import extract_resume_from_file_bytes, ResumeParseResult
+
+from backend.dependencies import _get_or_create_user_id
+from backend.memory.career import (
+    approve_application_batch,
+    create_application_batch,
+    create_tailored_resume,
+    finish_application_batch,
+    get_application_batch,
+    get_career_application_by_id,
+    get_master_resume,
+    get_resume_by_id,
+    list_career_applications,
+    list_resumes,
+    log_application_event,
+    update_career_application,
+    update_resume,
+    upsert_master_resume,
+)
+from backend.memory.radar import get_opportunity_by_id, get_user_opportunity_profile
+from backend.models_career import (
+    BatchApproveRequest,
+    BatchPrepareRequest,
+    BatchReviewOut,
+    BatchSubmitRequest,
+    BatchSubmitResultOut,
+    CareerApplicationOut,
+    CareerApplicationStatus,
+    CoverLetterOut,
+    DraftCoverLetterRequest,
+    ResumeContent,
+    ResumeOut,
+    ResumeParseUploadRequest,
+    ResumeValidationReport,
+    ResumeValidationStatus,
+    SaveResumeRequest,
+    SubmissionAdapterCapability,
+    SubmissionMethod,
+    TailorResumeRequest,
+    UpdateApplicationStatusRequest,
+)
+from backend.services.career_resume import (
+    build_default_master_from_profile,
+    draft_truthful_cover_letter,
+    generate_resume_html,
+    parse_uploaded_resume_text,
+    tailor_resume_for_opportunity,
+    validate_resume_against_master,
+)
+from backend.services.career_submission import (
+    SUPPORTED_ADAPTERS,
+    compute_batch_content_hash,
+    execute_batch_submission,
+    generate_batch_approval_token,
+    get_batch_lock,
+    submit_single_application,
+    verify_batch_approval_token,
+)
+
+logger = logging.getLogger("compass.routers.career")
+
+router = APIRouter(prefix="/api/career", tags=["career_copilot"])
+
+
+# ===========================================================================
+# 1. Resume Studio Endpoints
+# ===========================================================================
+
+@router.get("/resumes/master", response_model=ResumeOut)
+async def get_master_resume_endpoint(request: Request):
+    """Retrieve the candidate's master resume, auto-creating a truthful draft from profile if missing."""
+    user_id = _get_or_create_user_id(request)
+    master = await get_master_resume(user_id)
+    if not master:
+        profile = await get_user_opportunity_profile(user_id)
+        if not profile:
+            from backend.models_radar import UserOpportunityProfileIn
+            profile = UserOpportunityProfileIn()
+        default_content = build_default_master_from_profile(profile, user_name="Compass Candidate")
+        master = await upsert_master_resume(user_id, default_content, "Master Resume")
+    return master
+
+
+@router.put("/resumes/master", response_model=ResumeOut)
+async def update_master_resume_endpoint(body: ResumeContent, request: Request):
+    """Update master resume content with verified candidate information."""
+    user_id = _get_or_create_user_id(request)
+    return await upsert_master_resume(user_id, body, "Master Resume")
+
+
+@router.get("/resumes", response_model=List[ResumeOut])
+async def list_resumes_endpoint(request: Request):
+    """List all master and tailored resume versions for the user."""
+    user_id = _get_or_create_user_id(request)
+    return await list_resumes(user_id)
+
+
+@router.post("/resumes/tailor", response_model=ResumeOut)
+async def tailor_resume_endpoint(body: TailorResumeRequest, request: Request):
+    """
+    Generate a tailored resume variant for a target opportunity.
+    Strictly aligns verified master skills and projects without hallucination.
+    """
+    user_id = _get_or_create_user_id(request)
+    opp = await get_opportunity_by_id(body.opportunity_id, user_id)
+    if not opp:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+
+    master = await get_master_resume(user_id)
+    if not master:
+        profile = await get_user_opportunity_profile(user_id)
+        if not profile:
+            from backend.models_radar import UserOpportunityProfileIn
+            profile = UserOpportunityProfileIn()
+        default_content = build_default_master_from_profile(profile, user_name="Compass Candidate")
+        master = await upsert_master_resume(user_id, default_content, "Master Resume")
+
+    tailored_content, report, status = tailor_resume_for_opportunity(
+        master=master.content,
+        opportunity=opp,
+        custom_title=body.custom_title,
+        skills_emphasis=body.target_skills_emphasis,
+    )
+
+    title = body.custom_title or f"{opp.company_name} — {opp.role_title} Tailored"
+    return await create_tailored_resume(
+        user_id=user_id,
+        opportunity_id=opp.id,
+        title=title,
+        content=tailored_content,
+        validation_report=report,
+        validation_status=status,
+    )
+
+
+@router.get("/resumes/{resume_id}", response_model=ResumeOut)
+async def get_resume_endpoint(resume_id: int, request: Request):
+    """Retrieve a single resume by ID."""
+    user_id = _get_or_create_user_id(request)
+    res = await get_resume_by_id(resume_id, user_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    return res
+
+
+@router.post("/resumes/{resume_id}/validate", response_model=ResumeValidationReport)
+async def validate_resume_endpoint(resume_id: int, request: Request):
+    """Run strict factual integrity and completeness audit on a resume."""
+    user_id = _get_or_create_user_id(request)
+    res = await get_resume_by_id(resume_id, user_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    master = await get_master_resume(user_id)
+    master_content = master.content if master else res.content
+
+    opp = None
+    if res.opportunity_id:
+        opp = await get_opportunity_by_id(res.opportunity_id, user_id)
+
+    report = validate_resume_against_master(res.content, master_content, opp)
+    new_status = ResumeValidationStatus.READY_FOR_REVIEW if report.is_valid else ResumeValidationStatus.VALIDATION_FAILED
+
+    await update_resume(resume_id, user_id, {
+        "validation_status": new_status.value,
+        "validation_report": report,
+    })
+    return report
+
+
+@router.get("/resumes/{resume_id}/export", response_class=HTMLResponse)
+@router.get("/resumes/{resume_id}/export/html", response_class=HTMLResponse)
+async def export_resume_html_endpoint(resume_id: int, request: Request):
+    """Export clean, ATS-formatted printable HTML for PDF generation."""
+    user_id = _get_or_create_user_id(request)
+    res = await get_resume_by_id(resume_id, user_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    opp = None
+    if res.opportunity_id:
+        opp = await get_opportunity_by_id(res.opportunity_id, user_id)
+
+    html = generate_resume_html(res, opp)
+    return HTMLResponse(content=html, status_code=200)
+
+
+@router.post("/resumes/parse-upload", response_model=ResumeContent)
+async def parse_resume_upload_endpoint(body: ResumeParseUploadRequest, request: Request):
+    """
+    Extract structured candidate data from uploaded resume text.
+    Strictly preserves factual information without hallucination.
+    """
+    _get_or_create_user_id(request)
+    return parse_uploaded_resume_text(body.raw_text)
+
+
+@router.post("/resumes/parse-file", response_model=ResumeParseResult)
+async def parse_resume_file_endpoint(
+    request: Request,
+    file: UploadFile = File(...),
+):
+    """
+    Safely extract and parse structured resume data from uploaded PDF, TXT, or MD file.
+    Does NOT automatically save or overwrite the master resume.
+    Returns structured content and status for explicit candidate review and confirmation.
+    """
+    _get_or_create_user_id(request)
+    content = await file.read()
+    result = extract_resume_from_file_bytes(
+        content,
+        filename=file.filename or "uploaded_resume.pdf",
+        content_type=file.content_type,
+    )
+    if not result.success:
+        raise HTTPException(
+            status_code=400,
+            detail=result.error_message or "Failed to extract text from resume file.",
+        )
+    return result
+
+
+@router.post("/cover-letters/draft", response_model=CoverLetterOut)
+async def draft_cover_letter_endpoint(body: DraftCoverLetterRequest, request: Request):
+    """
+    Draft a truthful, verified cover letter for a specific opportunity.
+    Strictly references verified projects and master skills.
+    """
+    user_id = _get_or_create_user_id(request)
+    opp = await get_opportunity_by_id(body.opportunity_id, user_id)
+    if not opp:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+
+    master = await get_master_resume(user_id)
+    if not master:
+        profile = await get_user_opportunity_profile(user_id)
+        if not profile:
+            from backend.models_radar import UserOpportunityProfileIn
+            profile = UserOpportunityProfileIn()
+        default_content = build_default_master_from_profile(profile, user_name="Compass Candidate")
+        master = await upsert_master_resume(user_id, default_content, "Master Resume")
+
+    letter_text, verified_projs, verified_skls = draft_truthful_cover_letter(
+        master=master.content,
+        opportunity=opp,
+        emphasis_projects=body.emphasis_projects,
+    )
+
+    from datetime import datetime, timezone
+    return CoverLetterOut(
+        opportunity_id=opp.id,
+        company_name=opp.company_name,
+        role_title=opp.role_title,
+        content=letter_text,
+        verified_projects_referenced=verified_projs,
+        verified_skills_referenced=verified_skls,
+        created_at=datetime.now(timezone.utc),
+    )
+
+
+# ===========================================================================
+# 2. Application Center Endpoints
+# ===========================================================================
+
+@router.get("/applications", response_model=List[CareerApplicationOut])
+async def list_applications_endpoint(request: Request, status: Optional[str] = Query(None)):
+    """List tracked applications with opportunities and resumes attached."""
+    user_id = _get_or_create_user_id(request)
+    apps = await list_career_applications(user_id, status)
+    # Enrich with opportunity data
+    enriched: List[CareerApplicationOut] = []
+    for app in apps:
+        opp = await get_opportunity_by_id(app.opportunity_id, user_id)
+        resume = await get_resume_by_id(app.resume_id, user_id) if app.resume_id else None
+        app.opportunity = opp
+        app.resume = resume
+        enriched.append(app)
+    return enriched
+
+
+@router.post("/applications/prepare", response_model=CareerApplicationOut)
+@router.post("/applications/{opportunity_id}", response_model=CareerApplicationOut)
+async def prepare_application_endpoint(request: Request, opportunity_id: Optional[int] = None):
+    """Prepare an application record with tailored resume, truthful cover letter, and prefilled answers."""
+    user_id = _get_or_create_user_id(request)
+    opp_id = opportunity_id
+    if opp_id is None:
+        q_id = request.query_params.get("opportunity_id")
+        if q_id:
+            try:
+                opp_id = int(q_id)
+            except ValueError:
+                pass
+    if not opp_id:
+        raise HTTPException(status_code=400, detail="opportunity_id is required")
+
+    opp = await get_opportunity_by_id(opp_id, user_id)
+    if not opp:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+
+    from backend.memory.career import get_or_create_career_application
+    app = await get_or_create_career_application(user_id, opp_id)
+
+    master = await get_master_resume(user_id)
+    if not master:
+        profile = await get_user_opportunity_profile(user_id)
+        if not profile:
+            from backend.models_radar import UserOpportunityProfileIn
+            profile = UserOpportunityProfileIn()
+        master = await upsert_master_resume(user_id, build_default_master_from_profile(profile), "Master Resume")
+
+    # Check or auto-tailor resume if not yet attached
+    if not app.resume_id:
+        tailored_content, report, val_status = tailor_resume_for_opportunity(master.content, opp)
+        tailored = await create_tailored_resume(
+            user_id=user_id,
+            opportunity_id=opp.id,
+            title=f"{opp.company_name} Tailored Resume",
+            content=tailored_content,
+            validation_report=report,
+            validation_status=val_status,
+        )
+        app = await update_career_application(app.id, user_id, {
+            "resume_id": tailored.id,
+            "status": CareerApplicationStatus.READY_FOR_REVIEW.value,
+        })
+        app.resume = tailored
+
+    # Draft truthful cover letter if not present
+    if not app.cover_letter and master:
+        letter_text, _, _ = draft_truthful_cover_letter(master.content, opp)
+        app = await update_career_application(app.id, user_id, {
+            "cover_letter": letter_text,
+        })
+
+    app.opportunity = opp
+    if app.resume_id and not app.resume:
+        app.resume = await get_resume_by_id(app.resume_id, user_id)
+
+    # Compute missing fields
+    missing = []
+    res_content = app.resume.content if app.resume else master.content
+    if not res_content.email:
+        missing.append("Email address")
+    if not res_content.phone:
+        missing.append("Phone number")
+    if not res_content.education:
+        missing.append("Education history")
+    app.missing_fields = missing
+
+    await log_application_event(app.id, "prepared", {"opportunity_id": opp.id})
+    return app
+
+
+@router.post("/applications/{app_id}/cover-letter", response_model=CareerApplicationOut)
+async def set_application_cover_letter_endpoint(app_id: int, body: Dict[str, Any], request: Request):
+    """Attach or update the cover letter for a career application."""
+    user_id = _get_or_create_user_id(request)
+    cover_letter = body.get("cover_letter", "")
+    app = await update_career_application(app_id, user_id, {"cover_letter": cover_letter})
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+    opp = await get_opportunity_by_id(app.opportunity_id, user_id)
+    resume = await get_resume_by_id(app.resume_id, user_id) if app.resume_id else None
+    app.opportunity = opp
+    app.resume = resume
+    await log_application_event(app.id, "cover_letter_attached", {"length": len(cover_letter)})
+    return app
+
+
+@router.patch("/applications/{app_id}", response_model=CareerApplicationOut)
+async def update_application_endpoint(app_id: int, body: UpdateApplicationStatusRequest, request: Request):
+    """Update application status, answers, or private notes."""
+    user_id = _get_or_create_user_id(request)
+    updates: Dict[str, Any] = {}
+    if body.status:
+        updates["status"] = body.status.value
+    if body.submission_method:
+        updates["submission_method"] = body.submission_method.value
+    if body.form_answers is not None:
+        updates["form_answers"] = body.form_answers
+    if body.target_deadline is not None:
+        updates["target_deadline"] = body.target_deadline
+    if body.private_notes is not None:
+        updates["private_notes"] = body.private_notes
+
+    app = await update_career_application(app_id, user_id, updates)
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    opp = await get_opportunity_by_id(app.opportunity_id, user_id)
+    app.opportunity = opp
+    await log_application_event(app.id, "updated", updates)
+    return app
+
+
+# ===========================================================================
+# 3. Batch Review & Explicit Approval
+# ===========================================================================
+
+@router.post("/applications/batch/prepare", response_model=BatchReviewOut)
+@router.post("/batches/prepare", response_model=BatchReviewOut)
+async def prepare_batch_endpoint(body: BatchPrepareRequest, request: Request):
+    """Freeze a batch of applications for user review."""
+    user_id = _get_or_create_user_id(request)
+    if not body.opportunity_ids:
+        raise HTTPException(status_code=400, detail="At least one opportunity is required for a batch")
+
+    from backend.memory.career import get_or_create_career_application
+    app_ids = []
+    apps_list = []
+    for opp_id in body.opportunity_ids:
+        app = await get_or_create_career_application(user_id, opp_id)
+        opp = await get_opportunity_by_id(opp_id, user_id)
+        resume = await get_resume_by_id(app.resume_id, user_id) if app.resume_id else None
+        app.opportunity = opp
+        app.resume = resume
+        app_ids.append(app.id)
+        apps_list.append(app)
+
+    batch_id = await create_application_batch(user_id, app_ids)
+    ready = sum(1 for a in apps_list if a.status in {CareerApplicationStatus.READY_FOR_REVIEW, CareerApplicationStatus.READY_FOR_APPROVAL})
+
+    from datetime import datetime, timezone
+    return BatchReviewOut(
+        batch_id=batch_id,
+        applications=apps_list,
+        total_count=len(apps_list),
+        ready_count=ready,
+        blocked_count=len(apps_list) - ready,
+        created_at=datetime.now(timezone.utc),
+    )
+
+
+@router.get("/applications/batch/{batch_id}", response_model=BatchReviewOut)
+@router.get("/batches/{batch_id}", response_model=BatchReviewOut)
+async def get_batch_endpoint(batch_id: str, request: Request):
+    """Retrieve frozen batch details."""
+    user_id = _get_or_create_user_id(request)
+    batch = await get_application_batch(batch_id, user_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+
+    apps_list = []
+    for aid in batch.get("application_ids", []):
+        app = await get_career_application_by_id(aid, user_id)
+        if app:
+            opp = await get_opportunity_by_id(app.opportunity_id, user_id)
+            resume = await get_resume_by_id(app.resume_id, user_id) if app.resume_id else None
+            app.opportunity = opp
+            app.resume = resume
+            apps_list.append(app)
+
+    ready = sum(1 for a in apps_list if a.status in {CareerApplicationStatus.READY_FOR_REVIEW, CareerApplicationStatus.READY_FOR_APPROVAL, CareerApplicationStatus.APPROVED_FOR_SUBMISSION})
+    return BatchReviewOut(
+        batch_id=batch_id,
+        applications=apps_list,
+        total_count=len(apps_list),
+        ready_count=ready,
+        blocked_count=len(apps_list) - ready,
+        status=batch.get("status", "DRAFT"),
+        approval_token=batch.get("approval_token"),
+        is_persisted=batch.get("is_persisted", True),
+        created_at=batch["created_at"],
+    )
+
+
+@router.post("/applications/batch/{batch_id}/approve")
+@router.post("/batches/{batch_id}/approve")
+async def approve_batch_endpoint(batch_id: str, body: BatchApproveRequest, request: Request):
+    """
+    Explicit user approval gate.
+    Requires confirmed attestations. Generates a signed, content-bound approval token.
+    """
+    user_id = _get_or_create_user_id(request)
+    batch = await get_application_batch(batch_id, user_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found or unauthorized")
+
+    if not body.attestation_confirmed or not body.work_auth_confirmed or not body.legal_statements_accepted:
+        raise HTTPException(
+            status_code=400,
+            detail="Explicit user confirmation of accuracy, work authorization, and legal acceptance is strictly required before submission approval.",
+        )
+
+    # Compute current reviewed content hash across all applications in batch
+    apps_data = []
+    for aid in batch.get("application_ids", []):
+        app_rec = await get_career_application_by_id(aid, user_id)
+        if app_rec:
+            apps_data.append(app_rec.model_dump())
+    content_hash = compute_batch_content_hash(apps_data)
+
+    approval_token = generate_batch_approval_token(
+        user_id=user_id,
+        batch_id=batch_id,
+        application_ids=batch.get("application_ids", []),
+        content_hash=content_hash,
+        expires_in_seconds=3600,
+    )
+
+    ok = await approve_application_batch(batch_id, user_id, approval_token)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Batch not found or unauthorized")
+
+    return {
+        "status": "APPROVED",
+        "batch_id": batch_id,
+        "approval_token": approval_token,
+        "message": "Batch successfully approved for submission.",
+    }
+
+
+@router.post("/applications/batch/{batch_id}/submit", response_model=BatchSubmitResultOut)
+@router.post("/batches/{batch_id}/submit", response_model=BatchSubmitResultOut)
+async def submit_batch_endpoint(batch_id: str, body: BatchSubmitRequest, request: Request):
+    """
+    Executes submission across the approved batch using supported adapters.
+    Guarantees no unapproved, modified, or duplicate applications are processed.
+    """
+    user_id = _get_or_create_user_id(request)
+    batch = await get_application_batch(batch_id, user_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+
+    if batch.get("status") in {"SUBMITTED", "MANUAL_HANDOFF_GENERATED", "COMPLETED"}:
+        raise HTTPException(
+            status_code=409,
+            detail="Duplicate submission rejected: This batch has already been processed.",
+        )
+    if batch.get("status") == "SUBMITTING":
+        raise HTTPException(
+            status_code=409,
+            detail="Concurrent submission rejected: This batch is currently processing.",
+        )
+    if batch.get("status") != "APPROVED":
+        raise HTTPException(
+            status_code=403,
+            detail="Batch submission rejected: Batch has not passed explicit user approval or was invalidated by content changes.",
+        )
+
+    lock = get_batch_lock(batch_id)
+    if lock.locked():
+        raise HTTPException(
+            status_code=409,
+            detail="Concurrent submission rejected: A submission is already running for this batch.",
+        )
+
+    async with lock:
+        # Re-fetch after acquiring lock to guarantee atomic state
+        batch = await get_application_batch(batch_id, user_id)
+        if not batch or batch.get("status") != "APPROVED":
+            raise HTTPException(
+                status_code=409,
+                detail="Batch is no longer in APPROVED status.",
+            )
+
+        # Content integrity and token verification
+        apps_data = []
+        for aid in batch.get("application_ids", []):
+            app_rec = await get_career_application_by_id(aid, user_id)
+            if app_rec:
+                apps_data.append(app_rec.model_dump())
+        current_content_hash = compute_batch_content_hash(apps_data)
+
+        stored_token = batch.get("approval_token")
+        token_to_verify = body.approval_token or stored_token
+
+        if not token_to_verify:
+            raise HTTPException(
+                status_code=403,
+                detail="Submission blocked: Missing approval token. Batch must be re-approved.",
+            )
+
+        is_valid, reason = verify_batch_approval_token(token_to_verify, user_id, batch_id, current_content_hash)
+        if not is_valid:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Submission blocked: {reason}",
+            )
+
+        from backend.memory.career import update_application_batch_status
+        await update_application_batch_status(batch_id, user_id, "SUBMITTING")
+
+        results = await execute_batch_submission(user_id, batch, body.preferred_method)
+        await finish_application_batch(batch_id, user_id, [r.model_dump() for r in results])
+
+    success_cnt = sum(1 for r in results if r.status in {"SUBMITTED", "APPROVED"})
+    manual_cnt = sum(1 for r in results if r.status == CareerApplicationStatus.MANUAL_SUBMISSION_REQUIRED.value)
+    fail_cnt = sum(1 for r in results if r.status in {"FAILED", "BLOCKED", CareerApplicationStatus.SUBMISSION_FAILED.value})
+    uncertain_cnt = sum(1 for r in results if r.status == CareerApplicationStatus.SUBMISSION_OUTCOME_UNKNOWN.value)
+
+    return BatchSubmitResultOut(
+        batch_id=batch_id,
+        total_processed=len(results),
+        successful_count=success_cnt,
+        manual_count=manual_cnt,
+        failed_count=fail_cnt,
+        uncertain_count=uncertain_cnt,
+        results=results,
+    )
+
+
+# ===========================================================================
+# 4. Adapters & Capabilities
+# ===========================================================================
+
+@router.get("/adapters", response_model=List[SubmissionAdapterCapability])
+async def list_adapters_endpoint():
+    """List available submission adapters with their capability declarations."""
+    return SUPPORTED_ADAPTERS
