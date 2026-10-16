@@ -77,39 +77,47 @@ def test_parse_natural_date_never_past_year():
 
 def test_extract_task_creation_args_complete():
     """Test full extraction across representative user inputs."""
-    # 1. Screenshot command
-    args1 = _extract_task_creation_args("add a deadline on 10th of October 23:59 with the name complete python programming")
-    assert args1["title"].lower() == "complete python programming"
-    assert "2026-10-10" in args1["due_date"]
-    assert "23:59" in args1["due_date"]
-    assert args1["time_str"] == "11:59 PM" or "11:59" in args1["time_str"]
-    
-    # 2. Named parameter syntax
-    args2 = _extract_task_creation_args("add a deadline on 10th October at 23:59 named Complete Python Programming")
-    assert args2["title"] == "Complete Python Programming"
-    assert "2026-10-10" in args2["due_date"]
-    
-    # 3. Remind me to ...
-    args3 = _extract_task_creation_args("remind me to finish Python by October 10")
-    assert "finish python" in args3["title"].lower()
-    assert "2026-10-10" in args3["due_date"]
-    
-    # 4. Domain inference: coursework
-    args4 = _extract_task_creation_args("add a task: study for algorithms exam due 2026-10-15 domain coursework")
-    assert "study for algorithms exam" in args4["title"].lower()
-    assert args4["domain"] == "coursework"
-    assert "2026-10-15" in args4["due_date"]
+    with patch("backend.router.date") as mock_date:
+        mock_date.today.return_value = date(2026, 10, 7)
+        mock_date.side_effect = lambda *args, **kw: date(*args, **kw)
+
+        # 1. Screenshot command
+        args1 = _extract_task_creation_args("add a deadline on 10th of October 23:59 with the name complete python programming")
+        assert args1["title"].lower() == "complete python programming"
+        assert "2026-10-10" in args1["due_date"]
+        assert "23:59" in args1["due_date"]
+        assert args1["time_str"] == "11:59 PM" or "11:59" in args1["time_str"]
+        
+        # 2. Named parameter syntax
+        args2 = _extract_task_creation_args("add a deadline on 10th October at 23:59 named Complete Python Programming")
+        assert args2["title"] == "Complete Python Programming"
+        assert "2026-10-10" in args2["due_date"]
+        
+        # 3. Remind me to ...
+        args3 = _extract_task_creation_args("remind me to finish Python by October 10")
+        assert "finish python" in args3["title"].lower()
+        assert "2026-10-10" in args3["due_date"]
+        
+        # 4. Domain inference: coursework
+        args4 = _extract_task_creation_args("add a task: study for algorithms exam due 2026-10-15 domain coursework")
+        assert "study for algorithms exam" in args4["title"].lower()
+        assert args4["domain"] == "coursework"
+        assert "2026-10-15" in args4["due_date"]
 
 
 @pytest.mark.asyncio
 async def test_route_message_task_creation_flow():
     """Verify route_message routes natural-language task creation commands to add_task."""
-    # Test screenshot command
-    skill, args, text = await route_message("add a deadline on 10th of October 23:59 with the name complete python programming")
-    assert skill == "add_task"
-    assert args["title"].lower() == "complete python programming"
-    assert "2026-10-10" in args["due_date"]
-    assert text == ""
+    with patch("backend.router.date") as mock_date:
+        mock_date.today.return_value = date(2026, 10, 7)
+        mock_date.side_effect = lambda *args, **kw: date(*args, **kw)
+
+        # Test screenshot command
+        skill, args, text = await route_message("add a deadline on 10th of October 23:59 with the name complete python programming")
+        assert skill == "add_task"
+        assert args["title"].lower() == "complete python programming"
+        assert "2026-10-10" in args["due_date"]
+        assert text == ""
 
 
 @pytest.mark.asyncio
