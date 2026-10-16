@@ -93,6 +93,10 @@ class Settings(BaseSettings):
         """Check if explicitly running in development mode."""
         return self.ENVIRONMENT.lower() == "development"
 
+    def is_test(self) -> bool:
+        """Check if running in test environment."""
+        return self.ENVIRONMENT.lower() in ("test", "testing")
+
     def is_production(self) -> bool:
         """Check if running in production mode."""
         return self.ENVIRONMENT.lower() in ("production", "prod")

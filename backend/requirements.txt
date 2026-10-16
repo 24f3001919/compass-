@@ -10,3 +10,4 @@ python-dotenv>=1.2.4
 numpy>=2.5.4
 tavily-python>=0.8.5
 cryptography>=50.0.2
+pypdf>=6.21.0

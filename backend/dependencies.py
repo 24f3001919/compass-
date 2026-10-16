@@ -327,7 +327,7 @@ def _get_current_identity(request: Request) -> Optional[Identity]:
         dev_candidate = (user_header and user_header.strip()) or (cookie_user and cookie_user.strip())
         if dev_candidate:
             target = dev_candidate.strip().lower()
-            if settings.is_development() or "@" in target:
+            if settings.is_development() or settings.is_test() or "@" in target:
                 return Identity(id=target, is_admin=(target == "admin"), is_guest=False, user_id=target, guest_id=verified_guest)
 
     # 4. Verified guest token

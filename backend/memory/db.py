@@ -284,6 +284,221 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
             UNIQUE(user_id, url)
         );
         CREATE INDEX IF NOT EXISTS idx_user_trusted_urls_user ON user_trusted_urls(user_id);
+
+        -- ============================================================
+        -- Internship Radar Tables
+        -- ============================================================
+        CREATE TABLE IF NOT EXISTS opportunities (
+            id                          SERIAL        PRIMARY KEY,
+            company_name                TEXT          NOT NULL,
+            normalized_company          TEXT          NOT NULL,
+            role_title                  TEXT          NOT NULL,
+            opportunity_type            TEXT          NOT NULL DEFAULT 'internship',
+            category                    TEXT          NOT NULL DEFAULT 'general',
+            location                    TEXT,
+            work_arrangement            TEXT          NOT NULL DEFAULT 'unknown',
+            country                     TEXT          NOT NULL DEFAULT 'India',
+            is_india_eligible           BOOLEAN       NOT NULL DEFAULT TRUE,
+            compensation                TEXT,
+            duration                    TEXT,
+            official_application_url    TEXT,
+            canonical_url               TEXT          UNIQUE NOT NULL,
+            current_status              TEXT          NOT NULL DEFAULT 'DISCOVERED',
+            confirmed_open_date         DATE,
+            confirmed_close_date        DATE,
+            description                 TEXT,
+            last_verified_at            TIMESTAMPTZ,
+            created_at                  TIMESTAMPTZ   NOT NULL DEFAULT now(),
+            updated_at                  TIMESTAMPTZ   NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_opportunities_status ON opportunities(current_status);
+        CREATE INDEX IF NOT EXISTS idx_opportunities_category ON opportunities(category);
+        CREATE INDEX IF NOT EXISTS idx_opportunities_company ON opportunities(normalized_company);
+        CREATE INDEX IF NOT EXISTS idx_opportunities_india ON opportunities(is_india_eligible);
+        CREATE INDEX IF NOT EXISTS idx_opportunities_dates ON opportunities(confirmed_close_date, confirmed_open_date);
+
+        CREATE TABLE IF NOT EXISTS opportunity_sources (
+            id                  SERIAL        PRIMARY KEY,
+            opportunity_id      INTEGER       NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
+            source_name         TEXT          NOT NULL,
+            source_type         TEXT          NOT NULL,
+            source_url          TEXT          NOT NULL,
+            source_authority    TEXT          NOT NULL DEFAULT 'tier_2',
+            content_hash        TEXT,
+            raw_data            JSONB         DEFAULT '{}'::jsonb,
+            discovered_at       TIMESTAMPTZ   NOT NULL DEFAULT now(),
+            last_checked_at     TIMESTAMPTZ   NOT NULL DEFAULT now(),
+            verification_result TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_opp_sources_opp_id ON opportunity_sources(opportunity_id);
+        CREATE INDEX IF NOT EXISTS idx_opp_sources_type ON opportunity_sources(source_type);
+
+        CREATE TABLE IF NOT EXISTS opportunity_requirements (
+            id                           SERIAL        PRIMARY KEY,
+            opportunity_id               INTEGER       NOT NULL UNIQUE REFERENCES opportunities(id) ON DELETE CASCADE,
+            eligible_degree_types        TEXT[]        DEFAULT ARRAY[]::TEXT[],
+            eligible_academic_years      INT[]         DEFAULT ARRAY[]::INT[],
+            eligible_graduation_years    INT[]         DEFAULT ARRAY[]::INT[],
+            eligible_countries           TEXT[]        DEFAULT ARRAY[]::TEXT[],
+            work_auth_required           BOOLEAN,
+            sponsorship_available        BOOLEAN,
+            required_skills              TEXT[]        DEFAULT ARRAY[]::TEXT[],
+            min_gpa                      NUMERIC(3, 2),
+            other_mandatory_requirements TEXT,
+            unknown_requirements         TEXT[]        DEFAULT ARRAY[]::TEXT[],
+            last_updated_at              TIMESTAMPTZ   NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_opp_req_opp_id ON opportunity_requirements(opportunity_id);
+
+        CREATE TABLE IF NOT EXISTS opportunity_cycles (
+            id                  SERIAL        PRIMARY KEY,
+            opportunity_id      INTEGER       NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
+            cycle_year          INTEGER       NOT NULL,
+            observed_open_date  DATE,
+            observed_close_date DATE,
+            date_precision      TEXT          NOT NULL DEFAULT 'day',
+            verification_status TEXT          NOT NULL DEFAULT 'verified',
+            observation_type    TEXT          NOT NULL DEFAULT 'confirmed',
+            notes               TEXT,
+            created_at          TIMESTAMPTZ   NOT NULL DEFAULT now(),
+            UNIQUE(opportunity_id, cycle_year)
+        );
+        CREATE INDEX IF NOT EXISTS idx_opp_cycles_opp ON opportunity_cycles(opportunity_id);
+        CREATE INDEX IF NOT EXISTS idx_opp_cycles_year ON opportunity_cycles(cycle_year);
+
+        CREATE TABLE IF NOT EXISTS user_opportunity_profiles (
+            id                          SERIAL        PRIMARY KEY,
+            user_id                     TEXT          NOT NULL UNIQUE,
+            degree                      TEXT,
+            degree_specialization       TEXT,
+            university                  TEXT,
+            academic_year               INT,
+            grad_month                  INT           DEFAULT 6,
+            grad_year                   INT,
+            country_of_study            TEXT          DEFAULT 'India',
+            country_of_residence        TEXT          DEFAULT 'India',
+            preferred_locations         TEXT[]        DEFAULT ARRAY['India', 'Remote']::TEXT[],
+            preferred_work_arrangements TEXT[]        DEFAULT ARRAY['remote', 'hybrid', 'onsite']::TEXT[],
+            preferred_roles             TEXT[]        DEFAULT ARRAY[]::TEXT[],
+            skills                      TEXT[]        DEFAULT ARRAY[]::TEXT[],
+            min_compensation            TEXT,
+            resume_url                  TEXT,
+            created_at                  TIMESTAMPTZ   NOT NULL DEFAULT now(),
+            updated_at                  TIMESTAMPTZ   NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_opp_prof_user ON user_opportunity_profiles(user_id);
+
+        CREATE TABLE IF NOT EXISTS user_opportunities (
+            id                          SERIAL        PRIMARY KEY,
+            user_id                     TEXT          NOT NULL,
+            opportunity_id              INTEGER       NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
+            is_saved                    BOOLEAN       NOT NULL DEFAULT FALSE,
+            is_dismissed                BOOLEAN       NOT NULL DEFAULT FALSE,
+            application_status          TEXT          NOT NULL DEFAULT 'interested',
+            eligibility_classification  TEXT          NOT NULL DEFAULT 'INSUFFICIENT_INFORMATION',
+            eligibility_reasons         JSONB         NOT NULL DEFAULT '[]'::jsonb,
+            application_date            DATE,
+            personal_deadline           DATE,
+            interview_date              DATE,
+            follow_up_date              DATE,
+            private_notes               TEXT,
+            created_at                  TIMESTAMPTZ   NOT NULL DEFAULT now(),
+            updated_at                  TIMESTAMPTZ   NOT NULL DEFAULT now(),
+            UNIQUE(user_id, opportunity_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_opp_user ON user_opportunities(user_id);
+        CREATE INDEX IF NOT EXISTS idx_user_opp_saved ON user_opportunities(user_id, is_saved);
+        CREATE INDEX IF NOT EXISTS idx_user_opp_status ON user_opportunities(user_id, application_status);
+
+        CREATE TABLE IF NOT EXISTS opportunity_status_history (
+            id                  SERIAL        PRIMARY KEY,
+            opportunity_id      INTEGER       NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
+            previous_status     TEXT,
+            new_status          TEXT          NOT NULL,
+            evidence_source     TEXT,
+            reason_for_change   TEXT,
+            observed_at         TIMESTAMPTZ   NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_opp_hist_opp ON opportunity_status_history(opportunity_id);
+
+        CREATE TABLE IF NOT EXISTS opportunity_sync_runs (
+            id                    SERIAL        PRIMARY KEY,
+            source_id             TEXT          NOT NULL,
+            source_type           TEXT          NOT NULL,
+            status                TEXT          NOT NULL DEFAULT 'running',
+            records_discovered    INT           DEFAULT 0,
+            records_updated       INT           DEFAULT 0,
+            records_skipped       INT           DEFAULT 0,
+            verification_failures INT           DEFAULT 0,
+            error_summary         TEXT,
+            run_started_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),
+            run_completed_at      TIMESTAMPTZ
+        );
+        CREATE INDEX IF NOT EXISTS idx_opp_sync_source ON opportunity_sync_runs(source_id, run_started_at DESC);
+
+        CREATE TABLE IF NOT EXISTS resumes (
+            id                  SERIAL        PRIMARY KEY,
+            user_id             TEXT          NOT NULL,
+            opportunity_id      INTEGER       REFERENCES opportunities(id) ON DELETE SET NULL,
+            is_master           BOOLEAN       NOT NULL DEFAULT FALSE,
+            title               TEXT          NOT NULL,
+            version             INT           NOT NULL DEFAULT 1,
+            content             JSONB         NOT NULL DEFAULT '{}'::jsonb,
+            validation_status   TEXT          NOT NULL DEFAULT 'DRAFT',
+            validation_report   JSONB         NOT NULL DEFAULT '{}'::jsonb,
+            created_at          TIMESTAMPTZ   NOT NULL DEFAULT now(),
+            updated_at          TIMESTAMPTZ   NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_resumes_user ON resumes(user_id);
+        CREATE INDEX IF NOT EXISTS idx_resumes_opp ON resumes(opportunity_id);
+        CREATE INDEX IF NOT EXISTS idx_resumes_master ON resumes(user_id, is_master);
+        ALTER TABLE resumes ADD COLUMN IF NOT EXISTS cover_letter TEXT;
+
+        CREATE TABLE IF NOT EXISTS career_applications (
+            id                  SERIAL        PRIMARY KEY,
+            user_id             TEXT          NOT NULL,
+            opportunity_id      INTEGER       NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
+            resume_id           INTEGER       REFERENCES resumes(id) ON DELETE SET NULL,
+            status              TEXT          NOT NULL DEFAULT 'SAVED',
+            submission_method   TEXT          NOT NULL DEFAULT 'manual_handoff',
+            form_answers        JSONB         NOT NULL DEFAULT '{}'::jsonb,
+            submission_payload  JSONB         NOT NULL DEFAULT '{}'::jsonb,
+            submission_result   JSONB         NOT NULL DEFAULT '{}'::jsonb,
+            batch_id            TEXT,
+            approved_at         TIMESTAMPTZ,
+            submitted_at        TIMESTAMPTZ,
+            target_deadline     DATE,
+            private_notes       TEXT,
+            created_at          TIMESTAMPTZ   NOT NULL DEFAULT now(),
+            updated_at          TIMESTAMPTZ   NOT NULL DEFAULT now(),
+            UNIQUE(user_id, opportunity_id)
+        );
+        ALTER TABLE career_applications ADD COLUMN IF NOT EXISTS cover_letter TEXT;
+        CREATE INDEX IF NOT EXISTS idx_career_app_user ON career_applications(user_id);
+        CREATE INDEX IF NOT EXISTS idx_career_app_status ON career_applications(user_id, status);
+        CREATE INDEX IF NOT EXISTS idx_career_app_batch ON career_applications(batch_id);
+
+        CREATE TABLE IF NOT EXISTS application_batches (
+            id                  TEXT          PRIMARY KEY,
+            user_id             TEXT          NOT NULL,
+            application_ids     INTEGER[]     NOT NULL DEFAULT ARRAY[]::INTEGER[],
+            status              TEXT          NOT NULL DEFAULT 'DRAFT',
+            approval_token      TEXT,
+            approved_at         TIMESTAMPTZ,
+            results             JSONB         NOT NULL DEFAULT '[]'::jsonb,
+            created_at          TIMESTAMPTZ   NOT NULL DEFAULT now(),
+            updated_at          TIMESTAMPTZ   NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_app_batches_user ON application_batches(user_id);
+
+        CREATE TABLE IF NOT EXISTS application_events (
+            id                  SERIAL        PRIMARY KEY,
+            application_id      INTEGER       NOT NULL REFERENCES career_applications(id) ON DELETE CASCADE,
+            event_type          TEXT          NOT NULL,
+            details             JSONB         NOT NULL DEFAULT '{}'::jsonb,
+            created_at          TIMESTAMPTZ   NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_app_events_app ON application_events(application_id);
         """)
     _tables_ensured = True
 
