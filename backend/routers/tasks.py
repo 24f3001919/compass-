@@ -272,7 +272,7 @@ async def get_frontend_tasks(request: Request, domain: Optional[str] = Query(Non
     """Public frontend endpoint matching frontend/src/api/client.js format with per-account isolation."""
     try:
         ident = _get_current_identity(request)
-        user_id = ident.id if ident else None
+        user_id = ident.id if ident else _get_or_create_user_id(request)
         pool = await get_pool()
         async with pool.acquire() as conn:
             raw_tasks = await structured.list_tasks(conn, domain=domain, user_id=user_id)

@@ -18,6 +18,7 @@ export async function fetchTasks(domain) {
 
     const res = await fetch(url, {
       headers: getAuthHeaders(),
+      credentials: 'include',
       signal: controller.signal
     })
     clearTimeout(timeoutId)

@@ -281,6 +281,7 @@ export async function seedJudgeDemoPersona() {
     const res = await fetch(`${API_BASE}/api/demo/seed`, {
       method: 'POST',
       headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      credentials: 'include',
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))

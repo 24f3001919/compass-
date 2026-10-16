@@ -66,10 +66,7 @@ async def seed_demo_persona_endpoint(request: Request):
     Writes seeded tasks and memories strictly bound to the caller's identity.
     """
     ident = _get_current_identity(request)
-    if not ident:
-        raise HTTPException(status_code=401, detail="Authentication required: active session or guest token required to seed demo data.")
-
-    user_id = ident.id
+    user_id = ident.id if ident else _get_or_create_user_id(request)
     pool = await get_pool()
     if not pool:
         raise HTTPException(status_code=500, detail="Database unavailable")
@@ -155,7 +152,7 @@ async def seed_demo_persona_endpoint(request: Request):
         seeded_task_ids = []
         for t in demo_tasks:
             existing = await conn.fetchrow(
-                "SELECT id FROM tasks WHERE title = $1 AND (user_id = $2 OR user_id IS NULL)",
+                "SELECT id FROM tasks WHERE title = $1 AND user_id = $2",
                 t["title"], user_id,
             )
             if existing:
@@ -236,6 +233,8 @@ async def seed_demo_persona_endpoint(request: Request):
         "persona": "Dual-Degree Hackathon Competitor",
         "tasks_seeded": len(seeded_task_ids),
         "memories_seeded": seeded_mem_count,
+        "task_ids": seeded_task_ids,
+        "user_id": user_id,
     }
 
 

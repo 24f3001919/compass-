@@ -202,8 +202,9 @@ export function setCurrentUserId(userId) {
 
 export function getAuthHeaders(extraHeaders = {}) {
   const headers = { ...extraHeaders }
+  const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   const uid = getCurrentUserId()
-  if (uid) {
+  if (uid && isDev) {
     headers['x-user-id'] = uid
   }
   const guestToken = getGuestToken()
@@ -214,7 +215,7 @@ export function getAuthHeaders(extraHeaders = {}) {
   if (guestId) {
     headers['x-guest-id'] = guestId
   }
-  const token = localStorage.getItem('compass_auth_token') || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'dev-token' : '')
+  const token = localStorage.getItem('compass_auth_token') || (isDev ? 'dev-token' : '')
   if (token && !headers['Authorization']) {
     headers['Authorization'] = `Bearer ${token}`
   }

@@ -284,7 +284,7 @@ def _get_current_identity(request: Request) -> Optional[Identity]:
 
     settings = get_settings()
 
-    user_header = request.headers.get("x-user-id") or request.cookies.get("compass_user_id")
+    user_header = request.headers.get("x-user-id")
     if user_header and user_header.strip():
         if settings.is_production():
             raise HTTPException(
@@ -322,10 +322,13 @@ def _get_current_identity(request: Request) -> Optional[Identity]:
         return Identity(id="admin", is_admin=True, is_guest=False, user_id="admin", guest_id=verified_guest)
 
     # 3. Development / testing quick identity header or cookie
-    if user_header and user_header.strip():
-        target = user_header.strip().lower()
-        if settings.is_development() or "@" in target:
-            return Identity(id=target, is_admin=(target == "admin"), is_guest=False, user_id=target, guest_id=verified_guest)
+    if not settings.is_production():
+        cookie_user = request.cookies.get("compass_user_id")
+        dev_candidate = (user_header and user_header.strip()) or (cookie_user and cookie_user.strip())
+        if dev_candidate:
+            target = dev_candidate.strip().lower()
+            if settings.is_development() or "@" in target:
+                return Identity(id=target, is_admin=(target == "admin"), is_guest=False, user_id=target, guest_id=verified_guest)
 
     # 4. Verified guest token
     if verified_guest:

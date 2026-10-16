@@ -355,6 +355,30 @@ def test_x_user_id_impersonation_forbidden_in_production():
 
 
 @pytest.mark.asyncio
+async def test_compass_user_id_cookie_not_blocked_as_impersonation_in_production():
+    """Verify that in production environment, compass_user_id cookie does NOT raise 403."""
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "headers": [
+            (b"cookie", b"compass_user_id=student@vit.ac.in"),
+        ],
+        "path": "/api/tasks",
+    }
+    req = Request(scope)
+
+    with patch("backend.dependencies.get_settings") as mock_settings:
+        mock_settings.return_value.AUTH_TOKEN = "test-secret-token"
+        mock_settings.return_value.ENVIRONMENT = "production"
+        mock_settings.return_value.is_production.return_value = True
+        mock_settings.return_value.is_development.return_value = False
+
+        # Does not raise HTTPException(403)
+        ident = _get_current_identity(req)
+        assert ident is None
+
+
+@pytest.mark.asyncio
 async def test_verify_and_claim_action_uses_identity_is_admin():
     """Verify that verify_and_claim_action allows admin override ONLY via is_admin=True, NOT string comparison."""
     mock_conn = AsyncMock()

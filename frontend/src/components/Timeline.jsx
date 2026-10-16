@@ -67,7 +67,7 @@ export default function Timeline({
       await seedJudgeDemoPersona()
       setSeedSuccess(true)
       setTimeout(() => setSeedSuccess(false), 3000)
-      if (onTasksUpdated) onTasksUpdated()
+      if (onTasksUpdated) await onTasksUpdated()
     } catch (err) {
       alert(`Could not load judge persona: ${err.message}`)
     } finally {
