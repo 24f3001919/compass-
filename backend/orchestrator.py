@@ -471,6 +471,68 @@ async def handle_message(
             "routing_latency_ms": latency_ms,
         }
 
+    # 2c. Skill Execution: agent (Multi-step autonomous reasoning & scheduling)
+    if skill_name == "agent":
+        from backend.agent import run_agent
+        pool = await get_pool()
+        goal = (args.get("goal") if isinstance(args, dict) else None) or message
+        thoughts = []
+        synth_text = ""
+        agent_succeeded = True
+        err_msg = None
+        try:
+            async for step in run_agent(
+                goal=goal,
+                pool=pool,
+                user_id=user_id,
+                conversation_id=conv_id,
+            ):
+                if step.type in ("think", "act", "observe", "critic"):
+                    content = step.content or ""
+                    if step.type == "act" and step.tool_name:
+                        content = f"Tool: `{step.tool_name}`({step.tool_args or ''})"
+                    if content:
+                        thoughts.append(content)
+                elif step.type == "synthesize":
+                    synth_text = step.content
+                elif step.type == "error":
+                    agent_succeeded = False
+                    err_msg = step.content
+        except Exception as e:
+            logger.error("Error executing agent: %s", e, exc_info=True)
+            agent_succeeded = False
+            err_msg = str(e)
+
+        reply_content = synth_text or (f"I encountered an error while processing your request: {err_msg}" if err_msg else "")
+        if not reply_content:
+            agent_succeeded = False
+            reply_content = "Unable to complete request. Please retry."
+
+        if persist and pool:
+            try:
+                async with pool.acquire() as conn:
+                    real_cid = await conversations.get_or_create_conversation(conn, conv_id, user_id=user_id, guest_id=guest_id)
+                    await conversations.add_message(conn, real_cid, role="user", content=message)
+                    await conversations.add_message(conn, real_cid, role="assistant", content=reply_content, skill_called="agent")
+                    conv_id = real_cid
+            except Exception as e:
+                logger.debug("Could not persist agent conversation: %s", e)
+
+        latency_ms = int((time.perf_counter() - start_time) * 1000)
+        return {
+            "conversation_id": conv_id,
+            "response": reply_content,
+            "message": reply_content,
+            "skill_used": "agent",
+            "success": agent_succeeded,
+            "error": err_msg if not agent_succeeded else None,
+            "data": {
+                "thought": "\n\n".join(thoughts) if thoughts else None,
+                "can_retry": not agent_succeeded,
+            },
+            "routing_latency_ms": latency_ms,
+        }
+
     # 3. Dynamic Skill Execution via SKILL_REGISTRY
     from backend.skills import SKILL_REGISTRY, MUTATING_TOOLS
 
@@ -565,7 +627,24 @@ async def handle_message(
                 "nothing was changed."
             )
 
-    if persist:
+    from backend.router_helpers import is_greeting_intent
+    is_empty_reply = not (text_reply or "").strip()
+    is_greeting = is_greeting_intent(message)
+    chat_success = True
+    chat_error = None
+
+    if is_empty_reply:
+        if is_greeting:
+            text_reply = (
+                "I am Compass, your AI copilot with long-term memory across hackathons, coursework, "
+                "and code repositories. How can I help you today?"
+            )
+        else:
+            chat_success = False
+            chat_error = "empty_model_response"
+            text_reply = "I encountered an empty response from the model. Please retry."
+
+    if persist and chat_success:
         try:
             pool = await get_pool()
             async with pool.acquire() as conn:
@@ -584,7 +663,9 @@ async def handle_message(
         "response": text_reply,
         "message": text_reply,
         "skill_used": "chat",
-        "data": None,
+        "success": chat_success,
+        "error": chat_error,
+        "data": {"can_retry": not chat_success} if not chat_success else None,
         "routing_latency_ms": latency_ms,
     }
 

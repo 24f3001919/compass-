@@ -40,12 +40,25 @@ DAYS_OF_WEEK = {
 }
 
 
+def _current_today() -> date:
+    try:
+        import sys
+        mod = sys.modules.get("backend.router")
+        if mod and hasattr(mod, "date"):
+            cand = mod.date.today()
+            if hasattr(cand, "year"):
+                return cand
+    except Exception:
+        pass
+    return date.today()
+
+
 def parse_natural_due_date(text: str) -> Tuple[Optional[str], str]:
     """Parse natural dates like '12th october', '12 oct', '2026-10-12', 'october 12th' from text.
     Returns (iso_date_string, cleaned_text).
     """
     text_lower = text.lower()
-    today = date.today()
+    today = _current_today()
 
     if "tomorrow" in text_lower:
         d = today + timedelta(days=1)
@@ -190,7 +203,7 @@ def _parse_time(text: str) -> Tuple[Optional[str], Optional[str]]:
 def _parse_natural_date(text: str, today: Optional[date] = None) -> Tuple[Optional[date], Optional[str], Optional[str]]:
     """Extract (target_date, time_24, time_12) from text."""
     if today is None:
-        today = date.today()
+        today = _current_today()
 
     msg = text.lower()
     time_24, time_12 = _parse_time(msg)
@@ -403,7 +416,7 @@ def _extract_task_creation_args(message: str) -> dict:
     if time_12:
         res["time_str"] = time_12
     has_explicit_year = bool(re.search(r"\b20\d{2}\b", msg))
-    if parsed_date and not has_explicit_year and parsed_date.year > date.today().year:
+    if parsed_date and not has_explicit_year and parsed_date.year > _current_today().year:
         res["roll_forward_note"] = f"(Note: {parsed_date.strftime('%B %d')} has passed this year; scheduled for {parsed_date.year})"
     return res
 
@@ -455,6 +468,77 @@ def message_needs_tools(message: str) -> bool:
         "planner", "agent", "plan", "execute",
     )
     return any(k in msg for k in tool_keywords)
+
+
+def is_greeting_intent(message: str) -> bool:
+    """Determine whether message is strictly a greeting or orientation inquiry.
+    Must NEVER match actionable task, calendar, schedule, conflict, or domain queries.
+    """
+    if not message or not message.strip():
+        return True
+
+    msg_lower = message.lower().strip()
+    clean_msg = re.sub(r"^[^\w]+|[^\w]+$", "", msg_lower).strip()
+
+    # Domain / Action guard: if it mentions tasks, schedule, code, etc. it is NEVER a greeting
+    action_words = (
+        "task", "tasks", "todo", "todos", "deadline", "deadlines", "due",
+        "schedule", "scheduling", "calendar", "conflict", "conflicts", "clash", "clashes",
+        "propose", "plan", "planning", "review", "focus", "weekend", "week",
+        "coursework", "hackathon", "devpost", "repo", "code", "bug", "pr", "commit",
+        "feasibility", "triage", "overload", "capacity", "remember", "forget", "park",
+    )
+    if any(w in clean_msg for w in action_words):
+        return False
+
+    exact_greetings = {
+        "hi", "hello", "hey", "howdy", "greetings", "good morning", "good afternoon",
+        "good evening", "good day", "morning", "evening", "afternoon",
+        "help", "help me", "start", "getting started",
+        "hello compass", "hi compass", "hey compass",
+        "hey there", "hello there", "hi there",
+    }
+    if clean_msg in exact_greetings:
+        return True
+
+    greeting_phrases = (
+        "who are you", "what are you", "what is compass", "what can you do",
+        "what can compass do", "how does this work", "how do you work",
+        "how can you help", "tell me about yourself",
+    )
+    return any(p in clean_msg for p in greeting_phrases)
+
+
+def is_schedule_or_agent_intent(message: str) -> bool:
+    """Determine whether message is an autonomous schedule, task review, or planning intent."""
+    if not message or not message.strip():
+        return False
+
+    msg_lower = message.lower()
+    schedule_phrases = (
+        "propose a focus schedule", "propose schedule", "focus schedule",
+        "propose a schedule", "propose my schedule", "suggest a schedule",
+        "check my weekend schedule", "weekend schedule", "schedule for conflicts",
+        "check schedule conflicts", "schedule conflicts", "calendar conflicts",
+        "deadline conflicts", "conflict across", "conflicts across",
+        "calendar clash", "calendar clashes", "schedule clash", "schedule clashes",
+        "review my upcoming tasks", "review upcoming tasks", "review tasks and projects",
+        "review my schedule", "plan my week", "plan my weekend", "plan this week",
+        "focus schedule for this week", "schedule for this week", "schedule for tomorrow",
+        "what is my schedule", "check my schedule",
+    )
+    if any(phrase in msg_lower for phrase in schedule_phrases):
+        return True
+
+    # Check for schedule + conflict combination or planning
+    if "schedule" in msg_lower and any(w in msg_lower for w in ("conflict", "conflicts", "clash", "clashes", "propose", "plan", "review", "tomorrow", "today", "weekend", "week", "suggest", "check")):
+        return True
+
+    # Check for review + tasks/projects
+    if "review" in msg_lower and any(w in msg_lower for w in ("task", "tasks", "project", "projects", "deadline", "deadlines")):
+        return True
+
+    return False
 
 
 def _fallback_route(message: str, history: Optional[list[dict[str, str]]] = None) -> Tuple[Optional[str], Optional[dict[str, Any]], str]:
@@ -542,6 +626,10 @@ def _fallback_route(message: str, history: Optional[list[dict[str, str]]] = None
                         break
         return "park_thought", {"text": park_text[:200]}, ""
 
+    # 5. Schedule & Task Autonomous Intent Detection
+    if is_schedule_or_agent_intent(message):
+        return "agent", {"goal": message}, ""
+
     if any(term in msg_lower for term in ("feasibility", "can i finish", "what to drop", "what should i drop", "what i drop", "triage", "overloaded", "overcommit", "adversarial")):
         days_match = re.search(r"\b([0-9]{1,4})\s*days?\b", msg_lower)
         hours_match = re.search(r"\b([0-9]{1,4}(?:\.[0-9]{1,2})?)\s*hours?\b", msg_lower)
@@ -564,10 +652,10 @@ def _fallback_route(message: str, history: Optional[list[dict[str, str]]] = None
                 return "query_tasks", {}, f"Referencing previous task: {content}"
     if any(term in msg_lower for term in ("task", "due", "deliverable", "deadline", "coursework", "hackathon")):
         return "query_tasks", {}, ""
-    if any(term in msg_lower for term in ("help", "what can you", "who are you", "what is compass", "hello", "hi", "hey", "greetings")):
+    if is_greeting_intent(message):
         return None, None, (
             "I am Compass, your AI copilot with long-term memory across hackathons, coursework, "
             "and code repositories. I can help you track tasks, manage deadlines, check schedule feasibility, "
             "search web documentation, and prevent calendar conflicts. How can I help you today?"
         )
-    return None, None, "How can I help you today? I'm here to help you manage tasks, coursework, and deadlines."
+    return None, None, ""

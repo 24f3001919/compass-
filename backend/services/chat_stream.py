@@ -27,6 +27,7 @@ from backend.memory.db import get_pool as db_get_pool
 from backend.models import StreamChatRequest
 import backend.orchestrator as orchestrator
 from backend.router import TOOLS, message_needs_tools
+from backend.router_helpers import is_greeting_intent, is_schedule_or_agent_intent
 from backend.services.usage import record_usage
 
 logger = logging.getLogger("compass.services.chat_stream")
@@ -376,7 +377,7 @@ async def generate_chat_events(
             or _settings.NEBIUS_API_KEY in ("mock", "mock-key-not-used-in-tests")
         )
 
-        if not is_mocked and is_placeholder_key:
+        if (not is_mocked and is_placeholder_key) or is_schedule_or_agent_intent(message):
             result = await orchestrator.handle_message(
                 conversation_id=req.conversation_id,
                 message=message,
@@ -387,7 +388,18 @@ async def generate_chat_events(
                 persist=False,
             )
             response_text = result.get("response", "")
-            skill_used = result.get("skill_used") or "chat"
+            skill_used = result.get("skill_used") or "agent"
+            thought = (result.get("data") or {}).get("thought") if isinstance(result.get("data"), dict) else None
+
+            if thought:
+                yield f"data: {json.dumps({'type': 'thought', 'value': thought})}\n\n"
+
+            if not response_text.strip():
+                if not is_greeting_intent(message):
+                    yield f"data: {json.dumps({'type': 'error', 'detail': result.get('error') or 'The model returned an empty response. Please retry.', 'can_retry': True})}\n\n"
+                    return
+                response_text = "How can I help you today?"
+
             prompt_est = max(len(message.split()) * 3, 30)
             completion_est = max(len(response_text.split()), 15)
             record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
@@ -477,6 +489,11 @@ async def generate_chat_events(
                             await stream.aclose()
                         break
 
+                    reasoning_val = getattr(delta, "reasoning", None) or getattr(delta, "reasoning_content", None)
+                    reasoning_token = reasoning_val if isinstance(reasoning_val, str) else ""
+                    if reasoning_token:
+                        yield f"data: {json.dumps({'type': 'thought', 'value': reasoning_token})}\n\n"
+
                     # Strip reasoning_content and <think> blocks from user SSE token output
                     token = (delta.content if delta else None) or ""
                     if token:
@@ -510,6 +527,16 @@ async def generate_chat_events(
             )
             response_text = result.get("response", "")
             skill_used = result.get("skill_used") or "agent"
+            thought = (result.get("data") or {}).get("thought") if isinstance(result.get("data"), dict) else None
+            if thought:
+                yield f"data: {json.dumps({'type': 'thought', 'value': thought})}\n\n"
+
+            if not response_text.strip():
+                if not is_greeting_intent(message):
+                    yield f"data: {json.dumps({'type': 'error', 'detail': result.get('error') or 'The model returned an empty response. Please retry.', 'can_retry': True})}\n\n"
+                    return
+                response_text = "How can I help you today?"
+
             prompt_est = max(len(message.split()) * 3, 30)
             completion_est = max(len(response_text.split()), 15)
             record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
@@ -549,6 +576,16 @@ async def generate_chat_events(
             )
             response_text = result.get("response", "")
             skill_used = result.get("skill_used") or "chat"
+            thought = (result.get("data") or {}).get("thought") if isinstance(result.get("data"), dict) else None
+            if thought:
+                yield f"data: {json.dumps({'type': 'thought', 'value': thought})}\n\n"
+
+            if not response_text.strip():
+                if not is_greeting_intent(message):
+                    yield f"data: {json.dumps({'type': 'error', 'detail': result.get('error') or 'The model returned an empty response. Please retry.', 'can_retry': True})}\n\n"
+                    return
+                response_text = "How can I help you today?"
+
             prompt_est = max(len(message.split()) * 3, 30)
             completion_est = max(len(response_text.split()), 15)
             record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)

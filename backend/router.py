@@ -24,6 +24,8 @@ from backend.router_helpers import (
     _parse_natural_date,
     _extract_task_creation_args,
     message_needs_tools,
+    is_greeting_intent,
+    is_schedule_or_agent_intent,
     _fallback_route,
 )
 
@@ -47,13 +49,15 @@ def get_openai_client() -> AsyncOpenAI:
             base_url=settings.NEBIUS_BASE_URL,
             timeout=15.0,
         )
-    if _cached_openai_client is None:
-        _cached_openai_client = openai.AsyncOpenAI(
+    client = _cached_openai_client
+    if client is None:
+        client = openai.AsyncOpenAI(
             api_key=settings.NEBIUS_API_KEY,
             base_url=settings.NEBIUS_BASE_URL,
             timeout=15.0,
         )
-    return _cached_openai_client
+        _cached_openai_client = client
+    return client
 
 
 async def route_message(
@@ -73,6 +77,8 @@ async def route_message(
         if not extracted.get("title"):
             return None, None, "What would you like to name this task? Please provide a title or description."
         return "add_task", extracted, ""
+    if is_schedule_or_agent_intent(message):
+        return "agent", {"goal": message}, ""
 
     is_placeholder_key = (
         not settings.NEBIUS_API_KEY
@@ -179,11 +185,20 @@ async def route_message(
                     return None, None, "What would you like to name this task? Please provide a title or description."
                 return "add_task", extracted, ""
 
-            reply = choice.message.content or "How can I help you today?"
+            reply = (choice.message.content or "").strip()
+            if not reply:
+                if is_greeting_intent(message):
+                    return None, None, "How can I help you today? I'm here to help you manage tasks, coursework, and deadlines."
+                if is_schedule_or_agent_intent(message):
+                    return "agent", {"goal": message}, ""
+                return _fallback_route(message, history)
+
             return None, None, reply
 
     except Exception as e:
         logger.error(f"Nebius router invocation failed: {e}")
         if is_task_mutation_request(message) or is_explicit_task_creation(message):
             return "add_task", _extract_task_creation_args(message), ""
+        if is_schedule_or_agent_intent(message):
+            return "agent", {"goal": message}, ""
         return _fallback_route(message, history)
