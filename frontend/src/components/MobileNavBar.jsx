@@ -15,6 +15,7 @@ export default function MobileNavBar({
   onOpenMenu,
   _activeDomain = 'all',
 }) {
+  const isDashboardActive = activeTab === 'dashboard'
   const isTimelineActive = activeTab === 'timeline'
   const isCompassActive = activeTab === 'compass' || activeTab === 'assistant' || activeTab === 'planner' || activeTab === 'agent'
   const isCalendarActive = activeTab === 'calendar'
@@ -42,6 +43,55 @@ export default function MobileNavBar({
         userSelect: 'none',
       }}
     >
+      {/* 1. Dashboard */}
+      <button
+        id="mobile-tab-dashboard"
+        type="button"
+        onClick={() => onSelectTab('dashboard')}
+        className={`mobile-nav-item ${isDashboardActive ? 'active' : ''}`}
+        aria-label="Dashboard overview"
+        aria-current={isDashboardActive ? 'page' : undefined}
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          padding: '6px 0',
+          gap: '3px',
+          color: isDashboardActive ? 'var(--brand)' : 'var(--text-muted)',
+          transition: 'color 0.15s ease, transform 0.1s ease',
+          minHeight: '48px',
+        }}
+      >
+        <span
+          style={{
+            fontSize: '18px',
+            lineHeight: 1,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '28px',
+            height: '24px',
+            borderRadius: '6px',
+            background: isDashboardActive ? 'rgba(245, 166, 35, 0.15)' : 'transparent',
+          }}
+        >
+          📊
+        </span>
+        <span
+          style={{
+            fontSize: '10.5px',
+            fontWeight: isDashboardActive ? '700' : '500',
+            letterSpacing: '0.01em',
+          }}
+        >
+          Dashboard
+        </span>
+      </button>
       {/* 1. Timeline */}
       <button
         id="mobile-tab-timeline"
