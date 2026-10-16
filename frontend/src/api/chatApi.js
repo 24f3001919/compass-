@@ -74,7 +74,7 @@ export function sanitizeModesMarker(text) {
  * Dispatches incremental tokens via onToken, completion metadata via onComplete,
  * and errors via onError.
  */
-export async function streamQueryFromAssistant(prompt, conversationId, { onToken, onComplete, onError, tone = null, mode = null, specialistId = null } = {}) {
+export async function streamQueryFromAssistant(prompt, conversationId, { onToken, onThought, onComplete, onError, tone = null, mode = null, specialistId = null } = {}) {
   try {
     const body = { message: prompt }
     if (conversationId) {
@@ -136,7 +136,9 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
           continue
         }
 
-        if (evt.type === 'token') {
+        if (evt.type === 'thought') {
+          if (onThought) onThought(evt.value)
+        } else if (evt.type === 'token') {
           fullResponse += evt.value
           if (onToken) onToken(evt.value, sanitizeModesMarker(fullResponse))
         } else if (evt.type === 'replace') {
@@ -149,7 +151,9 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
           if (evt.skill_used) lastSkill = evt.skill_used
         } else if (evt.type === 'error') {
           const errMsg = evt.detail || evt.message || 'Stream error'
-          throw new Error(errMsg)
+          const errObj = new Error(errMsg)
+          if (evt.can_retry !== undefined) errObj.can_retry = evt.can_retry
+          throw errObj
         }
       }
     }
