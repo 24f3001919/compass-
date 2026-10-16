@@ -141,7 +141,7 @@ def generate_oauth_state(user_id: str) -> str:
     secret = _get_encryption_key()
     ts = int(time.time())
     payload = f"{user_id}:{ts}".encode("utf-8")
-    sig = hmac.new(secret, payload, digestmod="sha256").hexdigest()[:16]
+    sig = hmac.new(secret, payload, digestmod="sha256").hexdigest()[:32]
     raw = f"{user_id}:{ts}:{sig}"
     return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("utf-8")
 
@@ -164,7 +164,7 @@ def verify_oauth_state(state: str, expected_user_id: str, max_age_seconds: int =
             return False
         secret = _get_encryption_key()
         payload = f"{user_id}:{ts}".encode("utf-8")
-        expected_sig = hmac.new(secret, payload, digestmod="sha256").hexdigest()[:16]
+        expected_sig = hmac.new(secret, payload, digestmod="sha256").hexdigest()[:32]
         return hmac.compare_digest(sig, expected_sig)
     except Exception:
         return False

@@ -329,7 +329,7 @@ def _extract_task_creation_args(message: str) -> dict:
         m_named = re.search(pattern, msg, re.IGNORECASE)
         if m_named:
             cand = m_named.group(1)
-            m_stop = re.search(r"\s+(?:on|at|due|by|for|in)(?!\w)", cand, re.IGNORECASE)
+            m_stop = re.search(r"\s(?:on|at|due|by|for|in)(?!\w)", cand, re.IGNORECASE)
             if m_stop:
                 cand = cand[:m_stop.start()]
             cand = cand.strip(" .!?:;'\"")
@@ -478,7 +478,7 @@ def is_greeting_intent(message: str) -> bool:
         return True
 
     msg_lower = message.lower().strip()
-    clean_msg = re.sub(r"^[^\w]+|[^\w]+$", "", msg_lower).strip()
+    clean_msg = msg_lower.strip("!@#$%^&*()-_=+[]{}|;:'\",.<>?/`~ \t\n\r")
 
     # Domain / Action guard: if it mentions tasks, schedule, code, etc. it is NEVER a greeting
     action_words = (
@@ -629,6 +629,43 @@ def _fallback_route(message: str, history: Optional[list[dict[str, str]]] = None
     # 5. Schedule & Task Autonomous Intent Detection
     if is_schedule_or_agent_intent(message):
         return "agent", {"goal": message}, ""
+
+    # 6. Career Copilot & Resume Studio Intent Detection
+    if any(term in msg_lower for term in ("cover letter", "draft a cover letter", "draft cover letter", "write a cover letter", "application response")):
+        return "draft_cover_letter", {"target_company": message}, ""
+
+    if any(term in msg_lower for term in ("tailor resume", "tailor my resume", "tailor cv", "tailor my cv", "prepare my resume", "prepare resume")):
+        return "tailor_resume", {"target_company": message}, ""
+
+    if any(term in msg_lower for term in ("prepare application", "prepare my application", "prepare job application")):
+        return "prepare_application", {"opportunity_id": 1001}, ""
+
+    if any(term in msg_lower for term in ("submit approved", "submit batch", "submit my applications", "submit approved applications")):
+        return "submit_approved_application_batch", {"batch_id": "latest"}, ""
+
+    if any(term in msg_lower for term in (
+        "application deadline", "application deadlines", "which deadlines are approaching",
+        "deadlines approaching", "closing soon", "upcoming application deadlines",
+        "internship deadlines", "radar deadlines"
+    )):
+        return "check_application_deadlines", {"days_ahead": 30}, ""
+
+    if any(term in msg_lower for term in ("already submitted", "have i submitted", "i have submitted")):
+        return "track_career_applications", {"status": "SUBMITTED"}, ""
+
+    if any(term in msg_lower for term in ("need my review", "needs review", "ready for review")):
+        return "track_career_applications", {"status": "READY_FOR_REVIEW"}, ""
+
+    if any(term in msg_lower for term in ("my applications", "track applications", "application status", "tracked applications", "applications pending")):
+        return "track_career_applications", {}, ""
+
+    # 7. Internship Radar Intent Detection
+    if any(term in msg_lower for term in ("internship", "internships", "research fellowship", "research program", "early-career program", "step intern", "radar", "eligible for", "am i eligible", "eligibility", "academic year")):
+        category = "ai_ml" if any(k in msg_lower for k in ("ai", "ml", "machine learning", "deep learning")) else (
+            "research" if "research" in msg_lower else None
+        )
+        status = "OPEN_CONFIRMED" if any(k in msg_lower for k in ("open", "today", "now", "apply now", "currently")) else None
+        return "query_internship_radar", {"query": message, "category": category, "status": status, "india_only": True}, ""
 
     if any(term in msg_lower for term in ("feasibility", "can i finish", "what to drop", "what should i drop", "what i drop", "triage", "overloaded", "overcommit", "adversarial")):
         days_match = re.search(r"\b([0-9]{1,4})\s*days?\b", msg_lower)

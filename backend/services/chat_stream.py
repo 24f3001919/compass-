@@ -512,7 +512,7 @@ async def generate_chat_events(
             logger.error("Mid-stream failure reading model chunks: %s", stream_err, exc_info=True)
             if stream and hasattr(stream, "aclose"):
                 await stream.aclose()
-            yield f"data: {json.dumps({'type': 'error', 'detail': f'Stream error: {stream_err}', 'terminal': True})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'detail': 'An internal error occurred while processing the stream.', 'terminal': True})}\n\n"
             return
 
         if tool_call_detected:
