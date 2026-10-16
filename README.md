@@ -4,298 +4,154 @@
 
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![React 18](https://img.shields.io/badge/React-18-61DAFB.svg?logo=react&logoColor=black)](https://react.dev/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.142%2B-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React 19](https://img.shields.io/badge/React-19-61DAFB.svg?logo=react&logoColor=black)](https://react.dev/)
+[![Vite 8](https://img.shields.io/badge/Vite-8-646CFF.svg?logo=vite&logoColor=white)](https://vitejs.dev/)
 [![CI](https://github.com/Ratnesh-101/compass/actions/workflows/ci.yml/badge.svg)](https://github.com/Ratnesh-101/compass/actions/workflows/ci.yml)
 [![NVIDIA Nemotron-3](https://img.shields.io/badge/NVIDIA-Nemotron--3-76B900.svg?logo=nvidia&logoColor=white)](https://build.nvidia.com/)
 [![Neon pgvector](https://img.shields.io/badge/Neon-pgvector%20HNSW-336791.svg?logo=postgresql&logoColor=white)](https://neon.tech/)
 [![Tavily](https://img.shields.io/badge/Tavily-Web%20Intelligence-4A90E2.svg)](https://tavily.com/)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-compass--farmlytics.vercel.app-success.svg?logo=vercel&logoColor=white)](https://compass-farmlytics.vercel.app)
 
-Compass is a persistent-memory AI copilot that connects your tasks, hackathon deadlines, coursework, code context, and conversations into one agent-driven workspace. It reasons across all of them — and asks before changing anything.
+Compass is a persistent-memory AI copilot that bridges your tasks, hackathon deadlines, coursework, code context, and career pipeline into one unified, agent-driven workspace. Instead of serving as a stateless chat prompt, Compass reasons across all your work domains, queries live web sources, validates candidate eligibility, tailors verifiable resumes, and halts at strict human confirmation gates before mutating data or submitting applications.
 
-**[🌐 Live Dashboard](https://compass-farmlytics.vercel.app)** · **[🔌 API Health](https://compass-backend-qryu.onrender.com/health)** · **[🎥 Demo Video Script](./SUBMISSION_KIT.md#video-script)**
+**[🌐 Live Web Application](https://compass-farmlytics.vercel.app)** · **[🔌 API Health Endpoint](https://compass-backend-qryu.onrender.com/health)** · **[🎥 Demo Video Walkthrough Script](docs/demo_script.md)**
 
 ---
 
 ## Why Compass?
 
-Most tools solve one context well. None of them talk to each other.
+Modern developers and students work across fragmented environments that do not communicate with each other:
 
-| Tool | What it handles | What it misses |
-|------|----------------|----------------|
-| ChatGPT / Claude | Current conversation | Remembers nothing next session |
-| Notion / Linear | Tasks and projects | Can't reason across domains or run autonomously |
-| Google Calendar | Time | No understanding of technical load or code context |
-| GitHub | Code history | Unaware of your deadlines or coursework |
+| Environment | What It Handles | What It Misses |
+| :--- | :--- | :--- |
+| **Standard LLM Chat** | Ephemeral question answering | Zero persistence; forgotten context on every new session |
+| **Notion / Linear** | Static task lists & tickets | Incapable of reasoning across domains, estimating cognitive feasibility, or executing multi-step agent actions |
+| **Google Calendar** | Hourly time slots | Unaware of code context, technical backlog, or real task complexity |
+| **Job Boards / ATS** | Public listings & applications | Detached from candidate verified skills, factual projects, and academic eligibility |
 
-**Compass connects these contexts through persistent memory and an autonomous agent.** When you ask *"What should I work on tonight given my hackathon deadline and unfinished deployment?"*, Compass queries your tasks, recalls relevant code context, checks calendar capacity, and reasons across all of it — without you switching tabs or copying context.
-
----
-
-## What Compass Does
-
-### Example Workflow
-
-You have a hackathon submission on Friday, a DLD assignment tomorrow, and your backend still needs deployment. You ask:
-
-> *"I have 5 days and 4 hours a day. Go through everything I have open across the hackathon, my coursework, and my code debt, and tell me honestly whether I can finish it."*
-
-Compass:
-1. Queries all open tasks across `hackathon`, `coursework`, and `code` domains
-2. Retrieves relevant code context from vector memory (architecture decisions, deployment notes)
-3. Runs the **feasibility engine** — computes demand vs. effective capacity with a configurable safety margin
-4. Returns: *"Infeasible. Demand: 31.4h, Effective Capacity: 4.0h (80% safety margin on 5.0h nominal). Here's a triage plan: keep 2 critical items, defer 8, drop 2."*
-5. Proposes a replan — and **does not touch the database until you approve**
+**Compass connects these contexts through persistent memory, model routing, and an autonomous agent.** When you ask *"What should I focus on tonight given my hackathon submission on Friday and my pending coursework?"*, Compass queries your structured database, recalls relevant vector code context, calculates calendar feasibility, and produces an actionable plan — asking for your approval before modifying any record.
 
 ---
 
-## See It In Action
+## System Architecture
 
-| Timeline Feed | Compass Workspace |
-|:---:|:---:|
-| ![Timeline](verification/browser_01_initial_timeline.png) | ![Compass](verification/browser_04_agent_panel.png) |
+Compass pairs a high-performance FastAPI backend with a React 19 frontend, persistent Neon PostgreSQL database with `pgvector`, a cost-optimized 3-tier model hierarchy on Nebius Token Factory, and Tavily real-time web intelligence:
 
-| Chat Copilot with Memory | Specialist Agents |
-|:---:|:---:|
-| ![Chat](verification/browser_03_chat_and_counter.png) | ![Specialists](verification/browser_05_specialist_agents.png) |
+```mermaid
+graph TD
+    User["User (React 19 Web App / Typer Terminal CLI)"] -->|Vercel Edge HMAC Proxy| Router["FastAPI Backend (Nebius Nemotron-3 Nano 30B Router)"]
+    
+    Router -->|Conversational Tasks| ReAct["Autonomous ReAct Agent Loop"]
+    Router -->|Domain Specialists| Specialists["Specialist Team (Coursework, Research, Calendar, Memory)"]
+    Router -->|Career Copilot| Career["Career Copilot Engine (Radar, Resume Studio, Application Center)"]
 
-| Agent Confirmation Gate — Pending | Agent Confirmation Gate — After Approval |
-|:---:|:---:|
-| ![Confirm Pending](verification/browser_agent_reject.png) | ![Confirmed](verification/browser_agent_approve.png) |
-
----
-
-## Key Features
-
-| | Feature | What it does |
-|--|---------|-------------|
-| 🧠 | **Persistent Cross-Domain Memory** | Tasks, conversations, code context, and web research stored in PostgreSQL + pgvector and recalled across sessions |
-| 🤖 | **Autonomous ReAct Agent** | Multi-step planning loop that reasons, calls tools, and synthesizes results — stopping at a confirmation gate before any database write |
-| 🧩 | **Specialist Delegation** | Four domain agents (Coursework, Research, Calendar, Memory) that Compass delegates to for focused analysis |
-| 🌐 | **Live Web Intelligence** | Three Tavily-powered tools: `search_web` (grounded answers), `ingest_url` (confirm-gated web-to-memory ingestion), `verify_deadline` (staleness detection against live sources) |
-| 📊 | **Feasibility Engine** | Deterministic capacity arithmetic — computes demand vs. available hours and produces a triage plan without trusting the LLM to do the math |
-| 📅 | **Calendar Integration** | Google Calendar OAuth sync, deterministic slot allocation, ICS generation, conflict detection |
-| 💬 | **Chat Session Management** | Auto-named chats, pin/archive/rename, cross-session memory continuity, 1-click public share links |
-| ↩️ | **Audit & Undo** | Every agent mutation logged to `agent_audit_log` with per-action 1-click rollback |
-| 💻 | **Terminal CLI** | Full `compass` CLI built with Typer + Rich — `status`, `ask`, `agent`, `add`, `log`, and more |
-| 🔒 | **Human Confirmation Gates** | State-mutating tools (`add_task`, `edit_task`, `delete_task`, `apply_triage_plan`, `ingest_url`) halt and request explicit approval before execution |
-
----
-
-## Architecture
-
-```
-User (Web or CLI)
-        │
-        ▼
-Compass (Assistant / Goal Planner / Specialist Agents)
-        │
-        ▼
-Nemotron-3 Nano 30B — intent routing & tool selection
-        │
-    ┌───┴──────────────────┐
-    │                       │
-    ▼                       ▼
-Skill Handlers        Specialist Team
-(tasks, memory,       (Coursework, Research,
- web, calendar)        Calendar, Memory)
-    │
-    ▼
-Nemotron-3 Super 120B — complex reasoning
-    │
-    ▼
-Confirmation Gate ← Human approves/rejects
-    │
-    ▼
-Database Write + Audit Log
-    │
-    ▼
-Nemotron-3 Ultra 550B — cross-domain synthesis
-(invoked only for summarize_across_domains)
+    ReAct -->|Multi-Step Reasoning| Super["Nemotron-3 Super 120B"]
+    ReAct -->|Deep Web Research| Tavily["Tavily Async Intelligence (Search, Extract, Authority Check)"]
+    ReAct -->|Capacity Arithmetic| Feasibility["Deterministic Feasibility Engine"]
+    
+    ReAct -->|State Mutation| ConfirmGate{"Human Confirmation Gate"}
+    ConfirmGate -->|User Rejects| Abort["Cancel Mutation & Preserve State"]
+    ConfirmGate -->|User Approves| DBWrite[("Neon Cloud PostgreSQL 16 + pgvector HNSW")]
+    
+    Career -->|Deterministic Rules| Eligibility["Eligibility & Cycle Prediction Engine"]
+    Career -->|Factual Audit| Validator["Resume Factual Integrity Auditor"]
+    Career -->|Explicit User Approval| Submissions["Submission Adapters (Manual Handoff / ATS / Browser-Assisted)"]
+    
+    DBWrite --> AuditLog["Immutable Audit Log & 1-Click Rollback (/api/agent/undo)"]
+    DBWrite --> VectorStore["768-dim Dense Vectors (Qwen3-Embedding-8B)"]
 ```
 
-For the full system diagram, request flow, memory schema, and deployment details: **[docs/architecture.md](docs/architecture.md)**
+### End-to-End Request Flow
+1. **Request Intake & Verification**: The user interacts through the web workspace or CLI. Requests forwarded via Vercel edge reverse proxy are verified using HMAC edge signatures (`x-compass-edge-sig`) before backend processing.
+2. **Intent Routing**: Nemotron-3 Nano 30B classifies user intent and extracts validated tool parameters using native OpenAI function schemas.
+3. **Contextual Retrieval**: Structured database records (tasks, schedules, candidate profile, applications) and semantically similar vector memory chunks (code snippets, ingested web research) are retrieved.
+4. **Agent Reasoning & Grounded Research**: The ReAct agent executes reasoning steps. If external data is needed or the model emits an epistemic `[ABSTAIN]`, Tavily performs authoritative search with prompt-injection sanitization.
+5. **Confirmation & Factual Integrity Gates**: Any state mutation (adding/editing tasks, applying triage plans, preparing application batches) halts at a human confirmation gate. For career applications, submissions require an explicit cryptographic approval token with legal attestations.
+6. **Execution & Reversible Logging**: Approved mutations write to Neon PostgreSQL and record a snapshot in `agent_audit_log`, enabling one-click undo and complete auditability.
 
 ---
 
-## AI Model Architecture
+## Core Capabilities
 
-Compass routes every request through a cost-efficient 3-tier model hierarchy on **Nebius Token Factory**:
+### 1. 🤖 Autonomous ReAct Agent & Confirmation Gates
+- **Multi-Step Execution**: Runs bounded ReAct reasoning loops that plan, call tools, inspect responses, and synthesize answers using real backend state.
+- **Human-in-the-Loop Safeguards**: State-mutating tools (`add_task`, `edit_task`, `delete_task`, `apply_triage_plan`, `commit_schedule`, `ingest_url`) halt execution and present color-coded action proposals for explicit user approval.
+- **Audit & Undo Engine**: Every mutation is logged with previous and next state snapshots, allowing immediate rollback via `/api/agent/undo` or the UI.
+- **Specialist Multi-Agent Team**: Dedicated specialist agents (`coursework`, `research`, `calendar`, `memory`, and `auto-dispatcher`) for focused, in-depth analysis.
 
-| Model | Role | When invoked |
-|-------|------|-------------|
-| `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | Intent router & tool parameter extraction | Every message — selects tool or chat |
-| `nvidia/Nemotron-3_5-Lightning` | Rapid conversational drafting | Proactive briefing, chat streaming |
-| `nvidia/nemotron-3-super-120b-a12b` | Skill reasoning & plan critic | Multi-step tasks, agent ReAct loops |
-| `nvidia/Nemotron-3-Ultra-550b-a55b` | Cross-domain strategic synthesis | `summarize_across_domains` only |
-| `Qwen/Qwen3-Embedding-8B` | 768-dim dense vector embeddings | Code, notes, ingested web docs |
+### 2. 🧠 Persistent Cross-Domain Memory
+- **Unified Knowledge Stores**: Combines relational task data, project milestones, conversation history, and technical code context.
+- **Semantic Vector Memory**: Notes, code decisions, and external documentation are chunked, embedded into 768-dimensional dense vectors using `Qwen3-Embedding-8B`, and indexed with HNSW indexes in Neon `pgvector`.
+- **Session Continuity**: Multi-turn chat persistence supporting pinned conversations, custom renaming, guest-to-account migration, and public shareable links.
 
-**Token Economics** (measured across 106 internal evaluation turns): total spend was $0.019 on Nebius Token Factory. Over 85% of queries were resolved by Nano and direct PostgreSQL queries without escalating to larger models.
+### 3. 🌐 Web Intelligence & Deep Research (Tavily)
+- **Epistemic Abstention (`search_web`)**: When internal memory lacks verified facts, the agent emits `[ABSTAIN]`, triggering targeted Tavily searches instead of hallucinating.
+- **Indirect Prompt Injection Fencing**: Retrieved web content is enclosed in `<untrusted_web_content>` boundaries and parsed with toolless JSON extractors to prevent adversarial webpage instructions from hijacking the agent.
+- **Confirm-Gated Web Ingestion (`ingest_url`)**: Authoritative web documentation can be scraped, chunked, embedded, and added to vector memory — only after explicit user confirmation.
+- **Proactive Staleness & Deadline Verification (`verify_deadline`)**: Cross-references stored hackathon or project deadlines against live contest websites to detect schedule drift without corrupting database state.
 
-> Note: Model cost rates are from Nebius Token Factory pricing. The $0.019 measurement reflects internal testing volume, not a production-scale benchmark.
+### 4. 📊 Feasibility Engine & Dynamic Scheduling
+- **Deterministic Capacity Arithmetic**: Analyzes demand hours versus effective availability across a configurable safety margin (e.g. 80% nominal capacity) without delegating arithmetic to LLM guesswork.
+- **Automated Triage Generation**: When work is mathematically infeasible, produces a triage proposal categorizing tasks into *Keep*, *Defer*, or *Drop*.
+- **Google Calendar Sync**: Bidirectional slot allocation, ICS feed generation, and conflict detection between technical sprints and academic meetings.
 
----
+### 5. 🎯 Career Copilot (5th Navigation Tab)
+A comprehensive system for internship discovery, verified eligibility analysis, truthful resume tailoring, and controlled application submission:
 
-## Web Intelligence (Tavily)
+#### A. Internship Radar (`/career` → Radar)
+- **Multi-Source Sourced Opportunities**: Curates verified openings across AI/ML, Software Engineering, Backend, Systems, and Data Science.
+- **Deterministic Eligibility Classification**: Rigorously evaluates candidate university degree, academic year (e.g., 2nd or 3rd-year B.Tech), expected graduation year, country, and work authorization against published job requirements. Produces explainable outcomes: `ELIGIBLE`, `POTENTIAL_MATCH`, `INELIGIBLE`, or `INSUFFICIENT_INFORMATION`.
+- **Hiring Cycle Forecasting**: Distinguishes **Open Confirmed**, **Upcoming Confirmed**, and **Predicted** recruitment cycles based on empirical historical data, preventing statistical forecasts from masquerading as open applications.
 
-Three specialized Tavily tools, each with distinct behavior:
+#### B. Resume Studio (`/career` → Resume Studio)
+- **Master Resume Repository**: Central single-source-of-truth candidate profile capturing verified education, skills, technical projects, work experience, certifications, and achievements.
+- **Truthful Role Tailoring**: Emphasizes and reorders existing verified skills and relevant projects to match job descriptions. **Strict rule:** Never manufactures qualifications, invents projects, or inflates credentials. Genuine skill gaps are surfaced explicitly.
+- **Factual Integrity Report Card**: Tailored drafts are compared against the master profile. Any claim, skill, or project not found in verified candidate data is flagged as an `unsupported_claim`, failing validation and blocking the resume from being marked application-ready.
+- **Printable ATS Export**: Generates clean, accessible, and ATS-compliant HTML/PDF-ready export documents.
 
-**`search_web`** — Real-time grounded answers. When Compass has no memory coverage, the model emits `[ABSTAIN]` instead of hallucinating. The agent loop intercepts this, forces a Tavily search, and fences the web content in `<untrusted_web_content>` tags before passing it to the model — preventing indirect prompt injection.
-
-**`ingest_url`** — Confirm-gated web-to-memory pipeline. Tavily Extract fetches and cleans the page, content is chunked (~1,200 chars), embedded via Qwen3-Embedding-8B into 768-dim vectors, and stored in Neon pgvector. Requires explicit user confirmation before any write. Fully reversible via `/api/agent/undo`.
-
-**`verify_deadline`** — Proactive staleness detection. Cross-references stored task deadlines against live contest/course websites to detect drift. Does not modify the database.
-
----
-
-## Interfaces
-
-### Web Dashboard
-
-Live at [compass-farmlytics.vercel.app](https://compass-farmlytics.vercel.app) — anonymous demo access, no login required.
-
-- **Timeline** — task and deadline feed across all domains, filterable by Hackathon / Coursework / Code / General
-- **Compass** — primary workspace with Assistant, Goal Planner, and Specialist Agents tabs
-- **Schedule** — calendar view with Google Calendar sync
-- Real-time SSE streaming for agent execution traces
-- Color-coded step cards: `THINK`, `TOOL CALL`, `RESULT`, `CONFIRMATION REQUIRED`, `SYNTHESIS`
-- One-click Approve / Reject on mutation proposals
-
-### Terminal CLI
-
-```bash
-pip install -e ./cli
-
-# Dashboard overview
-compass status
-
-# Ask a question
-compass ask "What are my open hackathon tasks due this week?"
-
-# Add a task
-compass add "Finalize backend deployment" --domain hackathon --due 2026-10-30 --priority urgent
-
-# Log code context (gets embedded into vector memory)
-compass log "Switched to 768-dim Matryoshka truncation for pgvector HNSW" --domain code
-
-# Launch the autonomous planning agent
-compass agent "Plan my week given all deadlines and coursework"
-
-# View token usage and estimated API costs
-compass admin usage
-```
+#### C. Application Center (`/career` → Application Center)
+- **Pipeline Tracking**: End-to-end lifecycle management from `SAVED` to `READY_FOR_REVIEW`, `READY_FOR_APPROVAL`, `SUBMITTED`, `INTERVIEW`, and `OFFER_RECEIVED`.
+- **Structured Answer Prefill**: Frequently requested application responses (degree, university, graduation year, work authorization declarations) are populated strictly from verified candidate profile data with provenance.
+- **Frozen Batch Review & Explicit User Approval Gate**:
+  - Applications are snapshotted into immutable batches for unified candidate review.
+  - Submissions are hard-blocked at the backend unless the candidate explicitly verifies: (1) factual accuracy attestation, (2) work-authorization confirmation, and (3) legal declarations acceptance.
+  - Generates verifiable approval tokens.
+- **Modular Submission Adapters**:
+  - `ManualHandoffAdapter`: Produces a complete one-click application kit (pre-filled answers, tailored resume, direct official portal URL, step-by-step checklist) for standard job boards and custom portals.
+  - `AtsEndpointAdapter`: Declarative capabilities for Greenhouse and Lever job board APIs (with automated fallback to manual handoff when applicant enterprise API keys are absent).
+  - `BrowserAssistedAdapter`: Pre-fills verified application fields while keeping final submission execution in user hands.
 
 ---
 
-## Tech Stack
+## AI Model Architecture & Routing
 
-| Layer | Technology | Host |
-|-------|-----------|------|
-| Frontend | React 18 + Vite + Vanilla CSS | Vercel |
-| Reverse Proxy | Vercel edge rewrites | Vercel |
-| Backend API | FastAPI + Uvicorn, Python 3.12 | Render |
-| Database | PostgreSQL 16 + pgvector (HNSW) | Neon Cloud |
-| Intent Routing | Nemotron-3 Nano 30B | Nebius Token Factory |
-| Skill Reasoning | Nemotron-3 Super 120B | Nebius Token Factory |
-| Cross-Domain Synthesis | Nemotron-3 Ultra 550B | Nebius Token Factory |
-| Vector Embeddings | Qwen3-Embedding-8B (768-dim) | Nebius Token Factory |
-| Web Intelligence | Tavily Async API | Tavily |
-| Streaming | Server-Sent Events (SSE) | FastAPI StreamingResponse |
-| Cloud Manifests | Serverless Endpoint + Cron Job | Nebius AI Cloud (deploy-ready) |
+Compass routes requests across a 3-tier model hierarchy on **Nebius Token Factory**, optimizing for latency, reasoning depth, and cost efficiency:
+
+| Model ID | Role | Responsibilities | When Invoked |
+| :--- | :--- | :--- | :--- |
+| `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | **Intent Router & Parameter Extractor** | Lightweight routing, skill parameter parsing, and greeting triage | Every incoming user turn |
+| `nvidia/nemotron-3-super-120b-a12b` | **Skill Reasoning & Plan Critic** | ReAct agent steps, specialist agent execution, and structured reasoning | Multi-step agent workflows & specialist queries |
+| `nvidia/Nemotron-3-Ultra-550b-a55b` | **Cross-Domain Strategic Synthesis** | Complex multi-domain summaries and trade-off evaluations | `summarize_across_domains` tool |
+| `Qwen/Qwen3-Embedding-8B` | **Dense Vector Embeddings** | 768-dimensional dense embeddings for semantic search | Code context, notes, and ingested web documents |
+
+### Token Economics
+By resolving over 85% of standard interactions via Nemotron-3 Nano and direct PostgreSQL queries, Compass eliminates unnecessary large-model invocations. Multi-step reasoning is escalated to Super 120B only when required, and Ultra 550B is reserved strictly for high-context cross-domain synthesis.
 
 ---
 
-## Quick Start
+## Technology Stack
 
-### Prerequisites
-
-- Python 3.12+
-- Node.js 18+ and npm
-- PostgreSQL 16 with `pgvector` (or a free [Neon](https://neon.tech) connection string)
-- [Nebius Token Factory](https://nebius.com/) API key
-- [Tavily](https://tavily.com/) API key (optional — disables web tools if omitted)
-
-### Setup
-
-```bash
-git clone https://github.com/Ratnesh-101/compass.git
-cd compass
-
-# Copy and fill in your environment variables
-cp .env.example .env
-# Edit .env: set NEBIUS_API_KEY, AUTH_TOKEN, DATABASE_URL
-
-# Install backend dependencies
-pip install -r backend/requirements.txt
-
-# Install CLI
-pip install -e ./cli
-```
-
-### Run
-
-**One-command launch:**
-
-```bash
-# Windows
-run_local.bat
-
-# Linux / macOS
-chmod +x run_local.sh && ./run_local.sh
-
-# Docker Compose (full stack with local PostgreSQL + pgvector)
-docker compose up
-```
-
-**Manual (two terminals):**
-
-```bash
-# Terminal 1 — Backend
-python -m uvicorn backend.main:app --port 8000 --reload
-
-# Terminal 2 — Frontend
-cd frontend && npm install && npm run dev
-```
-
-Open [http://localhost:5173](http://localhost:5173). All visitors receive an isolated anonymous workspace.
-
----
-
-## Testing
-
-Compass has **195 automated tests** (verified by pytest collection across 20 test suites including security hardening) against a live PostgreSQL + pgvector instance.
-
-```bash
-# Set a test database first
-export TEST_DATABASE_URL="postgresql://..."
-python -m pytest tests -v
-```
-
-Tests cover: agent execution, API endpoints, authentication, memory, scheduling, calendar OAuth, Tavily/web research, CLI, SSE streaming, user isolation, specialist agents, feasibility engine, and end-to-end flows.
-
-See **[docs/testing.md](docs/testing.md)** for per-file breakdown and test infrastructure notes.
-
----
-
-## Deployment
-
-Compass uses GitHub Actions for continuous integration and provider-native continuous delivery. Merges to the `main` branch target automated deployment via Vercel (frontend) and Render (backend), with post-deployment health verification performed via `scripts/verify_deployment.py`.
-
-### Deploy Checklist
-
-Before launching or triggering production deployments, ensure the following environment variables are securely configured with distinct values (e.g. generated via `openssl rand -hex 32`):
-
-1. **Render Dashboard (Backend Service Environment):**
-   - `AUTH_TOKEN`: Master administrative API token.
-   - `TOKEN_ENCRYPTION_KEY`: 32-byte key for encrypting user tokens and secrets in the database.
-   - `GUEST_SIGNING_SECRET`: Secret used to cryptographically sign anonymous guest JWTs.
-   - `EDGE_HMAC_SECRET`: Shared secret used to verify requests forwarded by the Vercel edge reverse proxy.
-2. **Vercel Dashboard (Frontend Project Environment Variables):**
-   - `EDGE_HMAC_SECRET`: Must match the exact value set on Render. Used by `frontend/middleware.js` to sign forwarded client IP and timestamp headers (`x-compass-edge-sig`).
-   - *Note on `VERCEL_EDGE_SECRET`:* Compass supports `VERCEL_EDGE_SECRET` as a documented backward-compatible alias for `EDGE_HMAC_SECRET`. If `EDGE_HMAC_SECRET` is not set, Compass automatically falls back to `VERCEL_EDGE_SECRET`.
-
-See **[docs/deployment.md](docs/deployment.md)** for full architecture, environment variables, verification, and rollback runbooks.
+| Layer | Technologies | Role in System |
+| :--- | :--- | :--- |
+| **Frontend UI** | React 19 (`^19.3.0`), Vite 8 (`^8.3.3`), Lucide Icons, Vanilla CSS | Responsive client with dark/light themes, real-time SSE streaming, and mobile navigation |
+| **Edge Reverse Proxy** | Vercel Edge Middleware (`@vercel/edge`) | Same-origin API rewrites and HMAC request signature enforcement |
+| **Backend API** | FastAPI (`>=0.142.2`), Python 3.12+, Uvicorn, Pydantic 2 | Asynchronous REST API, ReAct agent loop, and WebSocket/SSE streaming endpoints |
+| **Database** | PostgreSQL 16, `pgvector`, HNSW Indexing on **Neon Cloud** | Relational state storage, vector semantic search, and audit trail tables |
+| **Model Hosting** | **Nebius Token Factory** | OpenAI-compatible inference endpoints for Nemotron-3 and Qwen embedding models |
+| **Web Research** | **Tavily Async API** (`tavily-python`) | Authoritative domain searching, full-page extraction, and deadline staleness detection |
+| **Terminal Client** | Python Typer (`cli/assistant_cli.py`), Rich | Interactive terminal REPL, task logging, and CLI agent control |
+| **Security & Auth** | Python `cryptography`, HMAC-SHA256, JWT | OAuth token encryption, session hashing, guest session minting, and SSRF filtering |
 
 ---
 
@@ -304,54 +160,280 @@ See **[docs/deployment.md](docs/deployment.md)** for full architecture, environm
 ```
 compass/
 ├── backend/
-│   ├── agent.py          # ReAct agent loop
-│   ├── orchestrator.py   # Skill dispatch and execution
-│   ├── router.py         # Nemotron-3 Nano intent routing
+│   ├── main.py                  # FastAPI application entrypoint & lifespan management
+│   ├── config.py                # Environment settings & production secret validation
+│   ├── router.py                # Nemotron-3 Nano intent router & OpenAI function dispatcher
+│   ├── agent.py                 # Multi-step ReAct agent loop & confirmation gating
+│   ├── models_career.py         # Career Copilot schemas (resumes, applications, batches)
+│   ├── models_radar.py          # Internship Radar schemas (opportunities, eligibility, cycles)
 │   ├── agents/
-│   │   ├── specialist.py # Specialist multi-agent system
-│   │   └── feasibility.py# Deterministic capacity engine
+│   │   ├── specialist.py        # Specialist multi-agent system (Coursework, Research, Calendar, Memory)
+│   │   └── feasibility.py       # Deterministic capacity & triage calculation engine
 │   ├── memory/
-│   │   ├── db.py         # Pool lifecycle + auto-migration
-│   │   ├── structured.py # SQL task/conversation queries
-│   │   ├── vector.py     # pgvector HNSW search
-│   │   └── schema.sql    # Full database schema
+│   │   ├── db.py                # Database pool lifecycle & schema migrations
+│   │   ├── career.py            # Career Copilot persistence with non-blocking in-memory fallbacks
+│   │   ├── radar.py             # Opportunity index, watchlist, and candidate profile storage
+│   │   ├── structured.py        # Relational task, project, and session SQL operations
+│   │   └── vector.py            # pgvector HNSW similarity search
+│   ├── routers/
+│   │   ├── career.py            # Resume Studio & Application Center API endpoints
+│   │   ├── radar.py             # Internship Radar search, filters, & watchlist endpoints
+│   │   ├── tasks.py             # Structured task CRUD & domain filtering
+│   │   ├── chat.py              # Conversational chat & SSE streaming
+│   │   └── calendar.py          # Google Calendar sync & ICS export
 │   ├── services/
-│   │   ├── tavily.py     # Tavily integration
-│   │   ├── calendar.py   # Google Calendar service
-│   │   ├── embeddings.py # Qwen embedding calls
-│   │   └── scheduler.py  # Slot allocation engine
-│   └── skills/           # Tool definitions and handlers
-├── frontend/src/
-│   ├── components/
-│   │   ├── ChatPanel.jsx      # Chat Copilot UI
-│   │   ├── AgentPanel.jsx     # Goal Planner / agent trace
-│   │   ├── SpecialistPanel.jsx# Specialist Agents UI
-│   │   ├── Timeline.jsx       # Task/deadline feed
-│   │   └── CalendarView.jsx   # Schedule + Google sync
-│   └── App.jsx
+│   │   ├── career_resume.py     # Truthful resume tailoring & strict factual integrity auditor
+│   │   ├── career_submission.py # Submission adapter router, explicit approval gate, & manual handoff kit
+│   │   ├── radar_eligibility.py # Deterministic eligibility evaluation engine
+│   │   ├── radar_prediction.py  # Historical hiring cycle forecasting
+│   │   ├── radar_verifier.py   # HTTP & Tavily live verification with prompt-injection fencing
+│   │   └── tavily_pipeline.py   # Deep research pipeline, query decomposition, & evidence ledger
+│   └── skills/                  # Registered tool schemas and execution handlers
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── CareerCopilot.jsx     # Master coordinator for Radar, Resumes, Applications, & Profile
+│   │   │   ├── InternshipRadar.jsx   # Opportunity search, multi-facet filters, & prediction badges
+│   │   │   ├── career/
+│   │   │   │   ├── ResumeStudio.jsx      # Master editor, factual audit report cards, & ATS HTML export
+│   │   │   │   └── ApplicationCenter.jsx # Pipeline tracker, batch approval modal, & handoff kits
+│   │   │   ├── Dashboard.jsx         # System overview & telemetry stats
+│   │   │   ├── Timeline.jsx          # Multi-domain chronologically sorted task feed
+│   │   │   ├── CalendarView.jsx      # Schedule & calendar availability interface
+│   │   │   └── CompassPanel.jsx      # AI Assistant chat & agent planner traces
+│   │   ├── api/
+│   │   │   ├── careerApi.js          # Client SDK for Career Copilot endpoints
+│   │   │   ├── radarApi.js           # Client SDK for Internship Radar endpoints
+│   │   │   └── client.js             # General API client for tasks, memory, and chat
+│   │   └── App.jsx                   # Root layout, navigation, and mobile drawer handling
+│   ├── package.json
+│   └── vite.config.js
 ├── cli/
-│   └── assistant_cli.py  # Typer + Rich terminal interface
-├── tests/                # 195 automated tests (pytest-asyncio)
-├── deploy/               # Nebius AI Cloud manifests
-├── docs/                 # Architecture and testing docs
-├── docker-compose.yml
-├── vercel.json           # Same-origin proxy rewrites
-└── .env.example
+│   └── assistant_cli.py         # Typer + Rich terminal client
+├── tests/                       # 472 automated tests across 50 test suites
+│   ├── test_career_copilot.py   # Resume validation, batch gates, & career endpoints
+│   ├── test_internship_radar.py # Eligibility rules, cycle forecasting, & radar endpoints
+│   ├── test_security_hardening.py# SSRF defenses, HMAC signatures, & IDOR boundaries
+│   └── test_demo_flow.py        # End-to-end task, timeline, and persona workflows
+├── docs/                        # In-depth architectural & deployment documentation
+├── verification/                # Verified browser UI execution screenshots
+├── run_local.bat                # Windows one-click local dev launcher
+├── run_local.sh                 # Linux / macOS local dev launcher
+└── docker-compose.yml           # Full stack local containerization
 ```
 
 ---
 
-## Documentation
+## Quick Start
 
-- **[Architecture](docs/architecture.md)** — System diagram, request flow, memory schema, deployment, security notes
-- **[Deployment](docs/deployment.md)** — CI/CD architecture, environment matrix, verification script, and rollback procedures
-- **[Security](docs/security.md)** — Threat model, security controls, SSRF protections, and IDOR isolation
-- **[Testing](docs/testing.md)** — Test coverage breakdown, infrastructure, and how to run
-- **[API Contract](docs/api_contract.md)** — Endpoint reference
-- **[Demo Script](docs/demo_script.md)** — Video walkthrough script and recording checklist
-- **[Contributing](CONTRIBUTING.md)** — Development setup, CLI instructions, and coding standards
+### Prerequisites
+- **Python 3.12+**
+- **Node.js 18+** and `npm`
+- **PostgreSQL 16** with `pgvector` extension (or a free cloud database from [Neon](https://neon.tech))
+- **Nebius Token Factory API Key** ([nebius.com](https://nebius.com/))
+- **Tavily API Key** ([tavily.com](https://tavily.com/)) *(Optional — web search tools gracefully abstain if omitted)*
+
+### 1. Clone & Configure Environment
+```bash
+git clone https://github.com/Ratnesh-101/compass.git
+cd compass
+
+# Copy environment template
+cp .env.example .env
+```
+Edit `.env` to configure your `NEBIUS_API_KEY`, `AUTH_TOKEN`, and `DATABASE_URL`.
+
+### 2. Install Backend & CLI
+```bash
+# Create and activate a virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install backend dependencies
+pip install -r backend/requirements.txt
+
+# Install terminal CLI in editable mode
+pip install -e ./cli
+```
+
+### 3. Install Frontend Dependencies
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+### 4. Run Locally
+
+**Option A — Automated Launch Scripts:**
+```bash
+# Windows
+run_local.bat
+
+# Linux / macOS
+chmod +x run_local.sh && ./run_local.sh
+
+# Docker Compose (Backend + Frontend + local PostgreSQL with pgvector)
+docker compose up
+```
+
+**Option B — Manual Launch (Separate Terminals):**
+```bash
+# Terminal 1: Backend API (port 8000)
+python -m uvicorn backend.main:app --port 8000 --reload
+
+# Terminal 2: Frontend Client (port 5173)
+cd frontend
+npm run dev
+```
+
+Visit **[http://localhost:5173](http://localhost:5173)** in your browser. All visitors receive an isolated anonymous guest session with no initial login required.
+
+### 5. Using the Terminal CLI
+```bash
+# Check dashboard overview & pending tasks
+compass status
+
+# Ask a grounded question
+compass ask "What hackathon milestones are due within the next 48 hours?"
+
+# Add a task with domain tag and due date
+compass add "Finalize transformer benchmark" --domain code --due 2026-10-30 --priority high
+
+# Log code context into vector memory
+compass log "Integrated 768-dim Qwen dense embeddings into Neon pgvector" --domain code
+
+# Run the autonomous planning agent
+compass agent "Propose a triage schedule for coursework and hackathons"
+```
+
+---
+
+## Environment Variables Reference
+
+| Variable | Required? | Scope | Purpose | Example / Guidance |
+| :--- | :---: | :---: | :--- | :--- |
+| `NEBIUS_API_KEY` | **Yes** | Backend | Authenticates inference requests to Nebius Token Factory | `your_nebius_api_key_here` |
+| `AUTH_TOKEN` | **Yes** | Backend | Master administrative bearer token | `generate_secure_random_token_here` |
+| `DATABASE_URL` | **Yes** | Backend | Neon PostgreSQL connection URI with SSL mode | `postgresql://user:pass@host/db?sslmode=require` |
+| `NEBIUS_BASE_URL` | No | Backend | Nebius Token Factory base API endpoint | `https://api.tokenfactory.nebius.com/v1/` |
+| `ROUTER_MODEL` | No | Backend | Model identifier for intent routing | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` |
+| `SKILL_MODEL` | No | Backend | Model identifier for ReAct & specialist reasoning | `nvidia/nemotron-3-super-120b-a12b` |
+| `SYNTHESIS_MODEL` | No | Backend | Model identifier for multi-domain synthesis | `nvidia/Nemotron-3-Ultra-550b-a55b` |
+| `EMBEDDING_MODEL` | No | Backend | Model identifier for dense vector embeddings | `Qwen/Qwen3-Embedding-8B` |
+| `EMBEDDING_DIMENSION` | No | Backend | Dimensionality of embeddings in pgvector table | `768` |
+| `TAVILY_API_KEY` | Optional | Backend | API key for Tavily live web intelligence | `tvly-your_key_here` |
+| `TAVILY_ENABLED` | Optional | Backend | Master flag to toggle Tavily search tools | `true` or `false` |
+| `EDGE_HMAC_SECRET` | Production | Both | Shared HMAC secret between Vercel edge proxy and Render | Generate via `openssl rand -hex 32` |
+| `TOKEN_ENCRYPTION_KEY` | Production | Backend | 32-byte key for AES encryption of stored OAuth secrets | Generate via `openssl rand -hex 32` |
+| `GUEST_SIGNING_SECRET` | Production | Backend | Cryptographic secret for signing guest session JWTs | Generate via `openssl rand -hex 32` |
+| `GOOGLE_CLIENT_ID` | Optional | Backend | Google OAuth Client ID for Calendar integration | `your_client_id.apps.googleusercontent.com` |
+| `GOOGLE_CLIENT_SECRET`| Optional | Backend | Google OAuth Client Secret for Calendar integration | `your_client_secret_here` |
+
+> 🔒 **Security Notice:** All API keys and secrets belong exclusively in backend environment configuration. Secrets are never exposed to the Vite browser bundle.
+
+---
+
+## Conversational Career Workflows
+
+Compass's ReAct agent natively orchestrates Career Copilot operations from natural language within the `/compass` assistant chat:
+
+```
+User: "Find open AI/ML internships in India that accept 2nd or 3rd-year B.Tech students."
+Compass: Calls `query_internship_radar` with category='ai_ml', country='India', academic_year=2.
+         Returns confirmed openings, verified deadlines, and explains eligibility matches.
+
+User: "Tailor my resume for the Anthropic ML Research Intern role."
+Compass: Calls `tailor_resume` with opportunity_id=101.
+         Reorders verified candidate skills and projects to match job requirements.
+         Flags any unverified requirements as skill gaps without fabricating claims.
+         Produces a structured validation report and ATS-ready export link.
+
+User: "Prepare applications for my top three saved internships."
+Compass: Calls `prepare_application` for each listing.
+         Prefills university, degree, and work-authorization declarations from verified profile data.
+         Attaches tailored resume versions and transitions applications to READY_FOR_REVIEW.
+
+User: "Submit the approved application batch."
+Compass: Calls `submit_approved_application_batch`.
+         Verifies explicit user approval token and attestations.
+         Executes verified manual handoff packages or API submissions and reports confirmation results.
+```
+
+---
+
+## Testing & Quality Assurance
+
+Compass features **472 automated tests** across 50 dedicated test suites covering unit logic, integration paths, security hardening, and end-to-end user workflows:
+
+```bash
+# Run the complete test suite
+pytest -v
+
+# Run Career Copilot & Internship Radar tests (fast, ~3.5s)
+pytest tests/test_career_copilot.py tests/test_internship_radar.py -v
+
+# Run Security Hardening tests (SSRF, HMAC signatures, IDOR isolation)
+pytest tests/test_security_hardening.py -v
+
+# Run Tavily Deep Research & Epistemic Abstention tests
+pytest tests/test_tavily.py tests/test_tavily_deep.py tests/test_tavily_abstain.py -v
+
+# Run End-to-End Demo Workflows & Model Check tests
+pytest tests/test_demo_flow.py tests/test_model_check.py -v
+```
+
+### Frontend Compilation Check
+```bash
+cd frontend
+npm run build
+```
+*Compiles all 1,953 application modules cleanly with Vite in under 1 second.*
+
+---
+
+## Production Deployment
+
+Compass is deployed using continuous integration and deployment pipelines targeting provider-native cloud environments:
+
+- **Frontend (Vercel)**: Deployed as a high-performance single-page application at [compass-farmlytics.vercel.app](https://compass-farmlytics.vercel.app). Employs edge middleware to sign forwarded client IP headers with `EDGE_HMAC_SECRET` and proxies `/api/*` traffic to the backend.
+- **Backend API (Render)**: Deployed as a Dockerized web service on Render with health checks at `/health`. Enforces strict production fail-closed security for database connections and API secret validation.
+- **Database (Neon Cloud)**: Serverless PostgreSQL 16 with `pgvector` extension and automated schema migrations managed in `backend/memory/db.py`.
+
+For comprehensive deployment topologies, zero-downtime database migration procedures, and rollback runbooks, see **[docs/deployment.md](docs/deployment.md)**.
+
+---
+
+## Security Model & User Controls
+
+1. **Human Confirmation Gates**: State-mutating actions halt and request explicit user confirmation before touching the database.
+2. **Strict Factual Resume Integrity**: Resume Studio enforces factual consistency against the candidate's master profile. It will never invent jobs, fabricate skills, or forge numerical achievements.
+3. **Explicit Batch Submission Gating**: No external application can be submitted without an immutable batch snapshot, verified candidate attestations, and a cryptographically generated approval token.
+4. **SSRF & Network Fencing**: Internal IP ranges (e.g. `127.0.0.1`, `169.254.169.254`, `10.0.0.0/8`, IPv6 local loopbacks) and unsafe URL protocols are blocked from web scraping tools.
+5. **Multi-Tenant User Isolation**: Every database query and cache lookup enforces strict `user_id` scoping to prevent Insecure Direct Object References (IDOR).
+6. **Graceful Degradation**: If external APIs or database pools experience transient downtime, non-blocking in-memory layers maintain core application availability without hanging.
+
+---
+
+## Known Limitations
+
+- **ATS Enterprise Key Requirement**: Public job board integrations (e.g., Greenhouse, Lever) permit open listing discovery and detail ingestion. Direct programmatic application submission requires enterprise employer API keys; for candidate submissions, Compass safely generates complete one-click manual handoff packages.
+- **Anti-Bot & CAPTCHA Boundaries**: Compass respects destination access restrictions and anti-bot protections. Portals utilizing interactive CAPTCHAs are handled via browser-assisted form pre-fill rather than fragile automated bypasses.
+- **Predictive Cycle Estimation**: Upcoming hiring cycle projections are statistical estimates derived from historical announcement dates and are explicitly labeled as predictions rather than confirmed openings.
+
+---
+
+## Documentation Index
+
+- **[Architecture & Memory Schema](docs/architecture.md)** — Deep dive into request routing, vector memory, and database schemas
+- **[Deployment & Production Runbooks](docs/deployment.md)** — CI/CD architecture, edge HMAC configurations, and rollback guides
+- **[Security Architecture & Threat Model](docs/security.md)** — SSRF defenses, audit logs, and IDOR isolation policies
+- **[Testing & Test Suite Breakdown](docs/testing.md)** — Test runner configurations and suite coverage
+- **[API Contract & Specifications](docs/api_contract.md)** — OpenAPI endpoint specifications
+- **[Walkthrough & Demo Script](docs/demo_script.md)** — Step-by-step video recording guide
+- **[Contributing Guidelines](CONTRIBUTING.md)** — Local development setup and coding standards
 - **[Nebius Platform Feedback](NEBIUS_PLATFORM_FEEDBACK.md)** — In-depth developer experience feedback and benchmarks
-- **[Submission Kit](SUBMISSION_KIT.md)** — Hackathon submission details, Tavily justification, benchmarks
+- **[Hackathon Submission Kit](SUBMISSION_KIT.md)** — Submission details, Tavily integration justification, and benchmark logs
 
 ---
 
@@ -359,25 +441,23 @@ compass/
 
 **Track**: Best Apps and Agents — Nebius × NVIDIA Global AI Hackathon 2026
 
-**Bonus categories**:
-- *Best Use of Tavily ($3,000)* — three specialized tools with principled epistemic abstention, injection fencing, and confirm-gated persistent memory
-- *Most Valuable Feedback Award* — developer experience feedback in `SUBMISSION_KIT.md`
-
-**Timeline**: Repository created September 4, 2026 (after August 26, 2026 launch). Full submission details: [SUBMISSION_KIT.md](SUBMISSION_KIT.md)
+**Special Category Highlights**:
+- *Best Use of Tavily ($3,000)* — Grounded epistemic abstention, multi-query evidence ledger, deadline staleness verification, and prompt-injection fencing.
+- *Most Valuable Feedback Award* — Exhaustive developer experience feedback and model performance benchmarks documented in [NEBIUS_PLATFORM_FEEDBACK.md](NEBIUS_PLATFORM_FEEDBACK.md).
 
 ---
 
 ## Team
 
-| Member | Role |
-|--------|------|
-| **Rhythm** | Backend architecture, database schema, Nebius Token Factory tool registration |
-| **Nandani** | Frontend web dashboard, real-time context stream UI, chat interface |
-| **Kunal** | Frontend UI contributions (timeline modernization, UI components) |
-| **Ratnesh Singh** | System integration, deployment engineering (Render, Vercel, Nebius manifests), terminal CLI |
+| Member | Role | Primary Contributions |
+| :--- | :--- | :--- |
+| **Rhythm** | Backend Architecture | Database schemas, SQL migrations, Nebius Token Factory model integration |
+| **Nandani** | Frontend Engineering | Web dashboard, real-time context streaming UI, and conversational chat interfaces |
+| **Kunal** | Frontend Design | Timeline feed styling, mobile responsiveness, and shared design tokens |
+| **Ratnesh Singh** | Full-Stack & System Integration | Career Copilot implementation, deployment engineering (Render, Vercel, Neon), ReAct agent, and terminal CLI |
 
 ---
 
 ## License
 
-[MIT](LICENSE)
+This project is licensed under the [MIT License](LICENSE).
