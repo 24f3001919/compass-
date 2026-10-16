@@ -49,6 +49,7 @@ export default function ChatPanel({
     }
   })
   const [convMode, setConvMode] = useState(null)
+  const [streamingThought, setStreamingThought] = useState('')
 
   const handleToneChange = (newTone) => {
     setTone(newTone)
@@ -245,14 +246,21 @@ export default function ChatPanel({
     setMessages(prev => [...prev, { role: 'user', text: userMsgText }])
     setIsStreaming(true)
     setStreamingText('')
+    setStreamingThought('')
 
     let receivedTokens = ''
+    let receivedThought = ''
 
     try {
       await streamQueryFromAssistant(text, conversationId, {
         tone,
         mode: activeMode,
         specialistId: specialistIdToUse,
+        onThought: (thoughtChunk) => {
+          receivedThought = receivedThought ? (receivedThought + '\n' + thoughtChunk) : thoughtChunk
+          setStreamingThought(receivedThought)
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        },
         onToken: (token, full) => {
           receivedTokens = full
           setStreamingText(full)
@@ -261,10 +269,11 @@ export default function ChatPanel({
         onComplete: async (doneData) => {
           setIsStreaming(false)
           setStreamingText('')
+          setStreamingThought('')
           isSendingRef.current = false
           const finalText = doneData?.response || receivedTokens
           if (finalText && finalText.trim()) {
-            setMessages(prev => [...prev, { role: 'assistant', text: finalText }])
+            setMessages(prev => [...prev, { role: 'assistant', text: finalText, thought: receivedThought || null }])
           } else if (onSendMessage) {
             const reply = await onSendMessage(text, tone, specialistIdToUse)
             if (reply) {
@@ -280,66 +289,41 @@ export default function ChatPanel({
           messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
         },
         onError: async (err) => {
-          console.warn('[SSE Stream Error — falling back to non-streaming chat]', err)
+          console.warn('[SSE Stream Error]', err)
           setIsStreaming(false)
           setStreamingText('')
-          try {
-            if (onSendMessage) {
-              const reply = await onSendMessage(text, tone, specialistIdToUse)
-              if (reply) {
-                streamAssistantResponse(reply)
-                return
-              }
-            }
-            setMessages(prev => [
-              ...prev,
-              {
-                role: 'assistant',
-                text: "I encountered an issue connecting to Compass. Please verify the service is running and try again.",
-              },
-            ])
-          } catch (fallbackErr) {
-            console.error('[Chat Fallback Error]', fallbackErr)
-            setMessages(prev => [
-              ...prev,
-              {
-                role: 'assistant',
-                text: "I encountered an issue connecting to Compass. Please verify the service is running and try again.",
-              },
-            ])
-          } finally {
-            isSendingRef.current = false
-            setIsStreaming(false)
-            setStreamingText('')
-          }
+          setStreamingThought('')
+          isSendingRef.current = false
+          const errMsg = err?.message || "I encountered an issue connecting to Compass. Please verify the service is running and try again."
+          setMessages(prev => [
+            ...prev,
+            {
+              role: 'assistant',
+              text: '',
+              error: errMsg,
+              canRetry: true,
+              retryPrompt: text,
+              thought: receivedThought || null,
+            },
+          ])
         }
       })
     } catch (err) {
-      console.warn('[SSE Stream Failed — falling back to non-streaming chat]', err)
+      console.warn('[SSE Stream Failed]', err)
       setIsStreaming(false)
       setStreamingText('')
-      try {
-        if (onSendMessage) {
-          const reply = await onSendMessage(text, tone, specialistIdToUse)
-          if (reply) {
-            streamAssistantResponse(reply)
-            return
-          }
-        }
-      } catch (fallbackErr) {
-        console.error('[Chat Fallback Error]', fallbackErr)
-        setMessages(prev => [
-          ...prev,
-          {
-            role: 'assistant',
-            text: "I encountered an issue connecting to Compass. Please verify the service is running and try again.",
-          },
-        ])
-      } finally {
-        isSendingRef.current = false
-        setIsStreaming(false)
-        setStreamingText('')
-      }
+      setStreamingThought('')
+      isSendingRef.current = false
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          text: '',
+          error: err?.message || "I encountered an issue connecting to Compass. Please verify the service is running and try again.",
+          canRetry: true,
+          retryPrompt: text,
+        },
+      ])
     }
   }
 
@@ -486,6 +470,7 @@ export default function ChatPanel({
             messages={messages}
             isStreaming={isStreaming}
             streamingText={streamingText}
+            streamingThought={streamingThought}
             isTyping={isTyping}
             messagesEndRef={messagesEndRef}
             profileFacts={profileFacts}

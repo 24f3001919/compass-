@@ -1,5 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react'
 import EvidenceCard from './EvidenceCard'
+import ThinkingBlock from './ThinkingBlock'
+import MarkdownRenderer from './MarkdownRenderer'
 import { fetchPersonaPhrases } from '../../api/chatApi'
 
 const DEFAULT_STARTING_PHRASES = [
@@ -167,6 +169,7 @@ export default function ChatMessageList({
   messages,
   isStreaming,
   streamingText,
+  streamingThought = '',
   isTyping,
   messagesEndRef,
   profileFacts = {},
@@ -312,7 +315,44 @@ export default function ChatMessageList({
                       border: msg.role === 'user' ? 'none' : '1px solid var(--border)',
                       boxShadow: 'var(--shadow-sm)'
                     }}>
-                      {msg.role === 'user' ? msg.text : renderFormattedMessage(msg.text)}
+                      {msg.role === 'assistant' && msg.thought && (
+                        <ThinkingBlock thought={msg.thought} />
+                      )}
+                      {msg.role === 'user' ? (
+                        msg.text
+                      ) : msg.error ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--danger, #ef4444)', fontSize: '13px' }}>
+                            <span>⚠️</span>
+                            <span>{msg.error}</span>
+                          </div>
+                          {msg.canRetry && msg.retryPrompt && (
+                            <button
+                              type="button"
+                              onClick={() => onSendMessage && onSendMessage(msg.retryPrompt)}
+                              style={{
+                                alignSelf: 'flex-start',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '5px 12px',
+                                borderRadius: '6px',
+                                background: 'var(--bg-card-soft, rgba(0,0,0,0.05))',
+                                border: '1px solid var(--border)',
+                                color: 'var(--text-primary)',
+                                fontSize: '12px',
+                                cursor: 'pointer',
+                                fontWeight: '500',
+                              }}
+                            >
+                              <span>🔄</span>
+                              <span>Retry</span>
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <MarkdownRenderer content={msg.text} />
+                      )}
                       {msg.role === 'assistant' && msg.evidence && (
                         <EvidenceCard evidence={msg.evidence} />
                       )}
@@ -373,7 +413,10 @@ export default function ChatMessageList({
                   border: '1px solid var(--border)',
                   boxShadow: 'var(--shadow-md)'
                 }}>
-                  {renderFormattedMessage(streamingText)}
+                  {streamingThought && (
+                    <ThinkingBlock thought={streamingThought} isLive={true} />
+                  )}
+                  <MarkdownRenderer content={streamingText} />
                   <span className="streaming-caret" style={{ background: 'var(--coursework)' }} />
                 </div>
               </div>

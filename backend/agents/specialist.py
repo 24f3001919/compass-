@@ -56,6 +56,7 @@ async def _synthesize_specialist_response(
     try:
         from openai import AsyncOpenAI
         from backend.config import get_settings
+        from backend.agent_types import _extract_content_from_response, _clean_synthesis_text
 
         settings = get_settings()
         if not settings.NEBIUS_API_KEY:
@@ -112,8 +113,10 @@ async def _synthesize_specialist_response(
             ],
             max_tokens=1000,
             temperature=0.5,
+            stream=False,
         )
-        content = resp.choices[0].message.content if resp.choices else ""
+        raw_content = await _extract_content_from_response(resp)
+        content = _clean_synthesis_text(raw_content) if raw_content else ""
         if content and content.strip():
             return content.strip()
     except Exception as e:
