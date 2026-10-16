@@ -19,6 +19,7 @@ export default function MobileNavBar({
   const isTimelineActive = activeTab === 'timeline'
   const isCompassActive = activeTab === 'compass' || activeTab === 'assistant' || activeTab === 'planner' || activeTab === 'agent'
   const isCalendarActive = activeTab === 'calendar'
+  const isCareerActive = activeTab === 'career' || activeTab === 'radar'
 
   return (
     <nav
@@ -242,7 +243,57 @@ export default function MobileNavBar({
         </span>
       </button>
 
-      {/* 4. More (Domains, Account, Telemetry) */}
+      {/* 4. Career Copilot */}
+      <button
+        id="mobile-tab-career"
+        type="button"
+        onClick={() => onSelectTab('career')}
+        className={`mobile-nav-item ${isCareerActive ? 'active' : ''}`}
+        aria-label="Career Copilot"
+        aria-current={isCareerActive ? 'page' : undefined}
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          padding: '6px 0',
+          gap: '3px',
+          color: isCareerActive ? 'var(--brand)' : 'var(--text-muted)',
+          transition: 'color 0.15s ease, transform 0.1s ease',
+          minHeight: '48px',
+        }}
+      >
+        <span
+          style={{
+            fontSize: '18px',
+            lineHeight: 1,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '28px',
+            height: '24px',
+            borderRadius: '6px',
+            background: isCareerActive ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
+          }}
+        >
+          🎯
+        </span>
+        <span
+          style={{
+            fontSize: '10.5px',
+            fontWeight: isCareerActive ? '700' : '500',
+            letterSpacing: '0.01em',
+          }}
+        >
+          Career
+        </span>
+      </button>
+
+      {/* 5. More (Domains, Account, Telemetry) */}
       <button
         id="mobile-tab-more"
         type="button"

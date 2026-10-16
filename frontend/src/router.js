@@ -26,6 +26,9 @@ export function parseLocation(pathname = window.location.pathname, search = wind
   if (queryTab === 'schedule' || queryTab === 'calendar') {
     return { tab: 'calendar', domain: 'all' }
   }
+  if (queryTab === 'career' || queryTab === 'copilot' || queryTab === 'radar' || queryTab === 'internships') {
+    return { tab: 'career', domain: 'all' }
+  }
   if (queryTab === 'timeline') {
     return { tab: 'timeline', domain: queryDomain ? queryDomain.toLowerCase().trim() : 'all' }
   }
@@ -48,6 +51,11 @@ export function parseLocation(pathname = window.location.pathname, search = wind
   // Pathname routing: Schedule
   if (cleanPath === '/schedule' || cleanPath === '/calendar') {
     return { tab: 'calendar', domain: 'all' }
+  }
+
+  // Pathname routing: Career Copilot & Internship Radar
+  if (cleanPath === '/career' || cleanPath === '/radar' || cleanPath === '/internships') {
+    return { tab: 'career', domain: 'all' }
   }
 
   // Pathname routing: Timeline explicit
@@ -92,6 +100,9 @@ export function buildUrl(tab, domain) {
   }
   if (tab === 'calendar') {
     return '/schedule'
+  }
+  if (tab === 'career' || tab === 'radar') {
+    return '/career'
   }
   // Timeline tab
   if (domain && domain !== 'all') {

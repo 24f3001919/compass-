@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { key: 'timeline', icon: '▦', label: 'Timeline', sub: 'Tasks & deadlines' },
   { key: 'compass', icon: '🧭', label: 'Compass', sub: 'Assistant & planner' },
   { key: 'calendar', icon: '🗓️', label: 'Schedule', sub: 'Calendar & Google sync' },
+  { key: 'career', icon: '🎯', label: 'Career Copilot', sub: 'Radar, Resumes & Apps' },
 ]
 
 export default function Sidebar({

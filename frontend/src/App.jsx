@@ -5,6 +5,8 @@ import MobileNavBar from './components/MobileNavBar'
 import Timeline from './components/Timeline'
 import CalendarView from './components/CalendarView'
 import CompassPanel from './components/CompassPanel'
+import InternshipRadar from './components/InternshipRadar'
+import CareerCopilot from './components/CareerCopilot'
 import AuthModal from './components/AuthModal'
 import MigrationModal from './components/MigrationModal'
 import NebiusTelemetryModal from './components/NebiusTelemetryModal'
@@ -461,6 +463,8 @@ export default function App() {
                 ? '🧭'
                 : activeTab === 'calendar'
                 ? '🗓️'
+                : (activeTab === 'career' || activeTab === 'radar')
+                ? '🎯'
                 : currentDomainMeta.icon}
             </span>
             <span style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -470,6 +474,8 @@ export default function App() {
                 ? 'Compass Assistant'
                 : activeTab === 'calendar'
                 ? 'Schedule'
+                : (activeTab === 'career' || activeTab === 'radar')
+                ? 'Career Copilot'
                 : selectedDomain === 'all'
                 ? 'Timeline Feed'
                 : `${currentDomainMeta.label} Domain`}
@@ -547,6 +553,8 @@ export default function App() {
             }}
             onOpenTelemetry={() => setShowTelemetryModal(true)}
           />
+        ) : (activeTab === 'career' || activeTab === 'radar') ? (
+          <CareerCopilot />
         ) : activeTab === 'calendar' ? (
           <CalendarView
             tasks={tasks}
