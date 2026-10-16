@@ -619,6 +619,169 @@ DELEGATE_TO_SPECIALIST_TOOL: Dict[str, Any] = {
     },
 }
 
+QUERY_INTERNSHIP_RADAR_TOOL: Dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "query_internship_radar",
+        "description": "Discover, filter, and check eligibility for verified internships, research positions, AI/ML programs, and early-career opportunities.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search keyword or company name (e.g. 'Google', 'AI research', 'remote')",
+                },
+                "category": {
+                    "type": "string",
+                    "enum": ["ai_ml", "swe", "backend", "data", "research", "cloud", "open_source", "general"],
+                    "description": "Opportunity domain category",
+                },
+                "status": {
+                    "type": "string",
+                    "enum": ["OPEN_CONFIRMED", "UPCOMING_CONFIRMED", "ANNOUNCED"],
+                    "description": "Opportunity status",
+                },
+                "india_only": {
+                    "type": "boolean",
+                    "description": "Whether to restrict results to opportunities in India or remote accepting Indian students",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Number of results to return (default 10)",
+                },
+            },
+        },
+    },
+}
+
+TAILOR_RESUME_TOOL: Dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "tailor_resume",
+        "description": "Tailor candidate master resume for a specific internship opportunity without fabricating qualifications. Aligns verified skills and projects.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "opportunity_id": {
+                    "type": "integer",
+                    "description": "ID of the verified opportunity to tailor for",
+                },
+                "target_company": {
+                    "type": "string",
+                    "description": "Target company name if opportunity_id is unknown",
+                },
+                "skills_emphasis": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional list of verified candidate skills to prioritize",
+                },
+            },
+            "required": [],
+        },
+    },
+}
+
+PREPARE_APPLICATION_TOOL: Dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "prepare_application",
+        "description": "Prepare a complete job application package with tailored resume and structured answers for a target opportunity.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "opportunity_id": {
+                    "type": "integer",
+                    "description": "ID of the opportunity to prepare application for",
+                },
+            },
+            "required": ["opportunity_id"],
+        },
+    },
+}
+
+SUBMIT_APPROVED_APPLICATION_BATCH_TOOL: Dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "submit_approved_application_batch",
+        "description": "Submit a batch of applications that have been explicitly approved by the user. Enforces approval gate before processing.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "batch_id": {
+                    "type": "string",
+                    "description": "ID of the approved application batch",
+                },
+                "preferred_method": {
+                    "type": "string",
+                    "enum": ["manual_handoff", "ats_endpoint", "browser_assisted"],
+                    "description": "Preferred submission delivery method",
+                },
+            },
+            "required": ["batch_id"],
+        },
+    },
+}
+
+TRACK_CAREER_APPLICATIONS_TOOL: Dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "track_career_applications",
+        "description": "List, query, or check status of user's active internship applications across pipeline states.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "description": "Filter by status: e.g. SAVED, READY_FOR_REVIEW, SUBMITTED, INTERVIEW, OFFER_RECEIVED",
+                },
+            },
+        },
+    },
+}
+
+DRAFT_COVER_LETTER_TOOL: Dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "draft_cover_letter",
+        "description": "Draft a truthful, verified cover letter for an internship or job opportunity, strictly grounded in the candidate's real master resume projects and skills without inventing achievements.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "opportunity_id": {
+                    "type": "integer",
+                    "description": "ID of the target opportunity from Internship Radar",
+                },
+                "target_company": {
+                    "type": "string",
+                    "description": "Company name if opportunity_id is not known",
+                },
+                "emphasis_projects": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Titles or keywords of real projects from master resume to highlight",
+                },
+            },
+        },
+    },
+}
+
+CHECK_APPLICATION_DEADLINES_TOOL: Dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "check_application_deadlines",
+        "description": "Check upcoming internship application deadlines, closing dates, and recruitment windows across tracked applications and verified Radar opportunities.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "days_ahead": {
+                    "type": "integer",
+                    "description": "Number of days ahead to look for closing dates (defaults to 30)",
+                },
+            },
+        },
+    },
+}
+
 # Registered tools exposed to the Nemotron router
 BASE_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     ADD_TASK_TOOL,
@@ -649,6 +812,13 @@ BASE_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     LIST_PARKED_TOOL,
     RESOLVE_PARKED_TOOL,
     DELEGATE_TO_SPECIALIST_TOOL,
+    QUERY_INTERNSHIP_RADAR_TOOL,
+    TAILOR_RESUME_TOOL,
+    PREPARE_APPLICATION_TOOL,
+    SUBMIT_APPROVED_APPLICATION_BATCH_TOOL,
+    TRACK_CAREER_APPLICATIONS_TOOL,
+    DRAFT_COVER_LETTER_TOOL,
+    CHECK_APPLICATION_DEADLINES_TOOL,
 ]
 
 

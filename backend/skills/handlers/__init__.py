@@ -53,6 +53,17 @@ from backend.skills.handlers.parked import (
 from backend.skills.handlers.specialist import (
     handle_delegate_to_specialist,
 )
+from backend.skills.handlers.radar import (
+    handle_query_internship_radar,
+)
+from backend.skills.handlers.career import (
+    handle_tailor_resume,
+    handle_prepare_application,
+    handle_submit_approved_application_batch,
+    handle_track_career_applications,
+    handle_draft_cover_letter,
+    handle_check_application_deadlines,
+)
 
 __all__ = [
     "handle_search_web",
@@ -87,4 +98,11 @@ __all__ = [
     "handle_park_thought",
     "handle_list_parked",
     "handle_resolve_parked",
+    "handle_query_internship_radar",
+    "handle_tailor_resume",
+    "handle_prepare_application",
+    "handle_submit_approved_application_batch",
+    "handle_track_career_applications",
+    "handle_draft_cover_letter",
+    "handle_check_application_deadlines",
 ]

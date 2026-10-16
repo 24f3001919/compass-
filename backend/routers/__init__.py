@@ -13,6 +13,8 @@ from backend.routers.profile import router as profile_router
 from backend.routers.persona import router as persona_router
 from backend.routers.parked import router as parked_router
 from backend.routers.specialist import router as specialist_router
+from backend.routers.radar import router as radar_router
+from backend.routers.career import router as career_router
 
 __all__ = [
     "admin_router",
@@ -26,6 +28,8 @@ __all__ = [
     "persona_router",
     "parked_router",
     "specialist_router",
+    "radar_router",
+    "career_router",
 ]
 
 

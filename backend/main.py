@@ -82,6 +82,8 @@ from backend.routers import (
     persona_router,
     parked_router,
     specialist_router,
+    radar_router,
+    career_router,
 )
 
 # ---------------------------------------------------------------------------
@@ -146,6 +148,13 @@ async def lifespan(app: FastAPI):
                 fail_loudly=settings.is_production(),
                 routed_roles=routed_roles,
             )
+        # Background startup seed for Internship Radar (in development/production only)
+        if settings.ENVIRONMENT != "test":
+            try:
+                from backend.services.radar_sync import run_radar_sync
+                asyncio.create_task(run_radar_sync("all"))
+            except Exception as seed_err:
+                logger.warning(f"Could not trigger startup radar sync: {seed_err}")
     except Exception as e:
         logger.warning(f"⚠️  Database pool init failed (stubs will still work): {e}")
 
@@ -237,6 +246,8 @@ app.include_router(profile_router)
 app.include_router(persona_router)
 app.include_router(parked_router)
 app.include_router(specialist_router)
+app.include_router(radar_router)
+app.include_router(career_router)
 
 
 @app.get("/")
