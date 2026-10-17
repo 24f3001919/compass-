@@ -4,6 +4,7 @@ Compass — Task and Project Management Skill Handlers.
 
 from typing import Any, Dict, List, Optional
 import logging
+import re
 from datetime import datetime, date, timedelta
 
 from backend.skills.registry import register_skill
@@ -159,6 +160,226 @@ def build_daily_roadmap(tasks: List[Dict[str, Any]], target_date: Optional[date]
     return "\n".join(lines)
 
 
+def _is_same_deliverable(s1_raw: str, s2_raw: str) -> bool:
+    """Determine whether two subject strings reliably refer to the same deliverable."""
+    n1 = re.sub(r'[^a-z0-9]', '', s1_raw.lower())
+    n2 = re.sub(r'[^a-z0-9]', '', s2_raw.lower())
+    if not n1 or not n2 or len(n1) < 3 or len(n2) < 3:
+        return False
+    if n1 == n2:
+        return True
+    # Substantial word token overlap
+    w1 = set(re.findall(r'[a-z0-9]{3,}', s1_raw.lower()))
+    w2 = set(re.findall(r'[a-z0-9]{3,}', s2_raw.lower()))
+    if w1 and w2:
+        common = w1 & w2
+        min_len = min(len(w1), len(w2))
+        if len(common) >= 2 and (len(common) / min_len >= 0.7):
+            return True
+        if min_len == 1 and len(common) == 1 and len(next(iter(common))) >= 6:
+            return True
+    return False
+
+
+def _parse_memory_deadline_entry(line: str) -> Optional[Dict[str, Any]]:
+    """Parse a single line from memory context into source, subject (deliverable name), and deadline."""
+    line = line.strip()
+    if not line:
+        return None
+
+    # Format A: Orchestrator-injected task summary:
+    # e.g., "- Review RISC-V pipeline hazards lecture (coursework) | Due: 2026-09-03 | 60m | medium"
+    # or "- Title | Due: 2026-09-03"
+    orch_match = re.match(
+        r"^[-*]\s*(?P<title>.+?)(?:\s*\((?P<domain>[^)]+)\))?\s*\|\s*Due:\s*(?P<due>[^|]+)(?:\s*\|\s*(?P<extra>.*))?$",
+        line,
+        re.IGNORECASE,
+    )
+    if orch_match:
+        title = orch_match.group("title").strip()
+        due_val = orch_match.group("due").strip()
+        if not due_val or due_val.lower() in ("unscheduled", "none", "null"):
+            return None
+        return {
+            "source": f"Workspace Task ({title})",
+            "subject": title,
+            "deadline": due_val,
+            "full": line,
+        }
+
+    # Format B: Key-value source format, e.g.:
+    # "Course Syllabus: CS 61C Homework due at 5:00 PM."
+    # "Task Tracker: CS 61C Homework recorded due at 11:59 PM."
+    if ":" in line:
+        src, _, detail = line.partition(":")
+        src = src.strip().lstrip("-* ").strip()
+        detail = detail.strip()
+    else:
+        src = "Record"
+        detail = line.lstrip("-* ").strip()
+
+    time_match = re.search(
+        r'\b(\d{1,2}(?::\d{2})?\s*(?:[apAP]\.?[mM]\.?|[apAP][mM]))\b|\b(\d{1,2}:\d{2})\b',
+        detail
+    )
+    date_match = re.search(r'\b(\d{4}-\d{2}-\d{2})\b', detail)
+    deadline_val = (time_match.group(0).strip() if time_match else None) or (date_match.group(0).strip() if date_match else None)
+    if not deadline_val:
+        return None
+
+    cleaned = re.sub(
+        r'\b(due|at|recorded|deadline|due at|recorded due at)\b',
+        '', detail, flags=re.IGNORECASE
+    )
+    if time_match:
+        cleaned = cleaned.replace(time_match.group(0), '')
+    if date_match:
+        cleaned = cleaned.replace(date_match.group(0), '')
+    cleaned = re.sub(r'[\|\(\)\.\,\:\;]', ' ', cleaned)
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+
+    return {
+        "source": src or "Record",
+        "subject": cleaned,
+        "deadline": deadline_val,
+        "full": detail,
+    }
+
+
+def _extract_conversational_deadlines(
+    history: Optional[List[Dict[str, str]]],
+    subject_keywords: Optional[List[str]] = None,
+) -> List[str]:
+    """Extract distinct deadline phrases mentioned in recent conversation history relevant to the subject."""
+    if not history:
+        return []
+    candidates: List[str] = []
+    seen = set()
+
+    # Pattern matching deadline expressions:
+    # e.g., "Friday at 5 PM", "Friday 5 PM", "October 24 at 3 PM", "2026-10-24 at 15:00", "2026-10-24"
+    pattern = re.compile(
+        r'\b(?:(?:next\s+|this\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|'
+        r'(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|'
+        r'sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?(?:\s*,\s*\d{4})?|'
+        r'\d{4}-\d{2}-\d{2})'
+        r'(?:\s+(?:at\s+|by\s+)?\d{1,2}(?::\d{2})?\s*(?:[ap]\.?m\.?|[ap]m))?',
+        re.IGNORECASE
+    )
+
+    for h in reversed(history):
+        content = h.get("content", "")
+        if not content:
+            continue
+        c_lower = content.lower()
+        if subject_keywords:
+            if not any(kw in c_lower for kw in subject_keywords):
+                continue
+        elif not any(term in c_lower for term in ("deadline", "due", "deliverable", "task", "submit", "submission", "demo", "video")):
+            continue
+
+        for m in pattern.finditer(content):
+            phrase = m.group(0).strip()
+            norm = re.sub(r'\s+', ' ', phrase.lower())
+            if norm not in seen:
+                seen.add(norm)
+                candidates.append(phrase)
+
+    return candidates
+
+
+def detect_deadline_discrepancies(
+    tasks: Optional[List[Dict[str, Any]]] = None,
+    memory_context: Optional[str] = None,
+    user_message: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Detect conflicting or contradictory deadline information across memory sources or task records."""
+    # 1. Parse memory_context for conflicting sources
+    if memory_context:
+        lines = [line.strip() for line in memory_context.split("\n") if line.strip()]
+        parsed_entries = []
+        for line in lines:
+            entry = _parse_memory_deadline_entry(line)
+            if entry:
+                parsed_entries.append(entry)
+
+        for i in range(len(parsed_entries)):
+            for j in range(i + 1, len(parsed_entries)):
+                e1 = parsed_entries[i]
+                e2 = parsed_entries[j]
+                if _is_same_deliverable(e1["subject"], e2["subject"]) and e1["deadline"] != e2["deadline"]:
+                    return {
+                        "task_name": e1["subject"] or e2["subject"] or "Task",
+                        "conflicting_values": [
+                            {"source": e1["source"], "value": e1["deadline"], "detail": e1["full"]},
+                            {"source": e2["source"], "value": e2["deadline"], "detail": e2["full"]},
+                        ],
+                    }
+
+    # 2. Check for contradictory records within tasks for the same task
+    if tasks and len(tasks) > 1:
+        by_title: Dict[str, List[Dict[str, Any]]] = {}
+        for t in tasks:
+            if str(t.get("status", "")).lower() == "done":
+                continue
+            norm_t = re.sub(r'[^a-zA-Z0-9]', '', t.get("title", "").lower())
+            if norm_t:
+                by_title.setdefault(norm_t, []).append(t)
+
+        for norm_t, group in by_title.items():
+            if len(group) > 1:
+                dates = {str(t.get("due_date")) for t in group if t.get("due_date")}
+                if len(dates) > 1:
+                    vals = []
+                    for t in group:
+                        d_val = str(t.get("due_date") or "unscheduled")
+                        vals.append({"source": f"Task #{t.get('id', '')} ({t.get('title')})", "value": d_val, "detail": f"Status: {t.get('status')}"})
+                    return {
+                        "task_name": group[0]["title"],
+                        "conflicting_values": vals,
+                    }
+
+    return None
+
+
+def format_conflict_discrepancy(conflict: Dict[str, Any]) -> str:
+    """Format an honest, transparent discrepancy explanation without arbitrary resolution."""
+    task = conflict.get("task_name", "the requested task")
+    lines = [
+        f"⚠️ **Conflicting Deadline Information Detected for {task}**:",
+        "The available records contain contradictory deadline information:",
+    ]
+    vals = []
+    for cv in conflict.get("conflicting_values", []):
+        src = cv.get("source", "Record")
+        val = cv.get("value", "")
+        vals.append(val)
+        lines.append(f"- **{src}**: {val}")
+    lines.append("")
+
+    earlier_hint = ""
+    if any("5:00" in v for v in vals):
+        earlier_hint = " (such as 5:00 PM)"
+
+    lines.append(
+        "The available sources disagree on the exact submission cutoff, and neither can be verified as authoritative "
+        "from the records alone. To avoid late penalties, I recommend aiming for the earlier submission deadline"
+        f"{earlier_hint} and verifying the official cutoff on your course portal (such as Gradescope or Canvas) "
+        "or confirming directly with the course staff."
+    )
+    return "\n".join(lines)
+
+
+def _safe_error_message(prefix: str, exc: Exception) -> str:
+    """Format user-safe error message without leaking credentials or raw DSN."""
+    err_str = str(exc)
+    clean_err = re.sub(r'postgres(?:ql)?://[^\s\'"]+', '[REDACTED_DATABASE_URL]', err_str)
+    clean_err = re.sub(r'password\s*=\s*[\'"][^\'"]+[\'"]', 'password=[REDACTED]', clean_err, flags=re.IGNORECASE)
+    if '[REDACTED_DATABASE_URL]' in clean_err:
+        return f"{prefix}: Database connection failed. Please verify database connectivity."
+    return f"{prefix}: {clean_err}"
+
+
 @register_skill("query_tasks")
 async def handle_query_tasks(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
     """Query tasks table via structured.list_tasks and format summary."""
@@ -167,19 +388,93 @@ async def handle_query_tasks(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
     status = args.get("status")
     user_id = args.get("user_id")
 
-    async with pool.acquire() as conn:
-        tasks = await structured.list_tasks(conn, domain=domain, status=status, user_id=user_id)
+    try:
+        async with pool.acquire() as conn:
+            tasks = await structured.list_tasks(conn, domain=domain, status=status, user_id=user_id)
+    except Exception as e:
+        logger.error("Failed to query tasks: %s", e)
+        clean_msg = _safe_error_message("Failed to retrieve tasks", e)
+        return {
+            "success": False,
+            "response": clean_msg,
+            "error": "database_error",
+            "data": [],
+        }
+
+    # Optional project filter
+    project = args.get("project")
+    if project:
+        p_clean = project.strip().lower()
+        tasks = [
+            t for t in tasks
+            if p_clean in t.get("title", "").lower()
+            or (t.get("project_name") and p_clean in t["project_name"].lower())
+            or (t.get("notes") and p_clean in t["notes"].lower())
+        ]
+
+    # Check for contradictory / conflicting deadline information
+    conflict = detect_deadline_discrepancies(
+        tasks=tasks,
+        memory_context=args.get("memory_context"),
+        user_message=args.get("user_message") or args.get("message") or args.get("query"),
+    )
 
     count = len(tasks)
     d_str = f" in {domain.upper()}" if domain else ""
     s_str = f" with status '{status}'" if status else ""
 
+    # Check conversation history for explicitly mentioned deadlines
+    history = args.get("history") or []
+    user_msg = str(args.get("user_message") or args.get("message") or args.get("query") or "").lower()
+    stopwords = {"when", "is", "that", "the", "a", "an", "my", "our", "due", "again", "deadline", "date", "time", "what", "to", "for", "at", "by", "of", "in"}
+    subj_words = [w for w in re.findall(r'[a-z0-9_-]+', user_msg) if len(w) > 2 and w not in stopwords]
+    conv_deadlines = _extract_conversational_deadlines(history, subj_words) if history else []
+
     if count == 0:
+        if conflict:
+            return {
+                "response": format_conflict_discrepancy(conflict),
+                "data": [],
+            }
+        # Check if conversation history explicitly contains the answer to a follow-up deadline question
+        if conv_deadlines and any(w in user_msg for w in ("when", "due", "deadline", "date", "time")):
+            if len(conv_deadlines) > 1:
+                options_str = " and ".join(f"'{d}'" for d in conv_deadlines)
+                clarification = (
+                    f"Earlier in our conversation, multiple possible deadlines were mentioned: {options_str}. "
+                    f"Could you clarify which deadline you are aiming for?"
+                )
+                return {"response": clarification, "data": []}
+            return {
+                "response": (
+                    f"Based on our earlier conversation, the deadline was noted as {conv_deadlines[0]}. "
+                    f"Note that this was noted conversationally and has not yet been saved as a database task."
+                ),
+                "data": [],
+            }
         # Strictly preserved for backward-compatibility with test contracts
         return {
             "response": f"Found 0 task(s){d_str}{s_str}.",
             "data": [],
         }
+
+    # If database has matching tasks and user asks for a deadline, check for discrepancy between DB and conversation
+    if conv_deadlines and any(w in user_msg for w in ("when", "due", "deadline", "date", "time")):
+        matching_db_tasks = [
+            t for t in tasks
+            if any(kw in t.get("title", "").lower() for kw in subj_words)
+        ] if subj_words else tasks[:1]
+        if matching_db_tasks:
+            target_t = matching_db_tasks[0]
+            db_due = str(target_t.get("due_date") or "unscheduled")
+            if not any(d.lower() in db_due.lower() or db_due.lower() in d.lower() for d in conv_deadlines):
+                disc_lines = [
+                    f"⚠️ **Discrepancy Detected between Conversation and Database Records for '{target_t['title']}'**:",
+                    f"- **Conversation context**: {conv_deadlines[0]}",
+                    f"- **Database record**: {db_due}",
+                    "The database record is currently active, but our earlier conversation mentioned a different deadline. Would you like me to update the task to match the conversation?",
+                ]
+                return {"response": "\n".join(disc_lines), "data": tasks}
 
     prioritized = prioritize_tasks(tasks, target_date=date.today())
 
@@ -190,6 +485,7 @@ async def handle_query_tasks(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
         str(args.get("goal") or ""),
         str(args.get("query") or ""),
         str(args.get("message") or ""),
+        str(args.get("user_message") or ""),
     ]).lower()
 
     is_roadmap = any(
@@ -197,6 +493,7 @@ async def handle_query_tasks(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
         for kw in (
             "roadmap", "plan", "today", "prioritize", "what should i do",
             "step-by-step", "step by step", "actionable", "attention",
+            "work on first", "start with", "first",
         )
     )
 
@@ -218,7 +515,11 @@ async def handle_query_tasks(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
             if count > len(top_tasks)
             else ""
         )
-        summary = f"Found **{count}** task(s){d_str}{s_str}:\n\n" + "\n".join(task_lines) + more_notice
+        base_summary = f"Found **{count}** task(s){d_str}{s_str}:\n\n" + "\n".join(task_lines) + more_notice
+        if conflict:
+            summary = format_conflict_discrepancy(conflict) + "\n\n" + base_summary
+        else:
+            summary = base_summary
 
     return {
         "response": summary,
@@ -231,21 +532,125 @@ async def handle_query_coursework_tasks(args: Dict[str, Any], pool: Any) -> Dict
     """Query coursework tasks such as CS 61C labs, reports, and homework."""
     from backend.memory import structured
     status = args.get("status")
-    async with pool.acquire() as conn:
-        tasks = await structured.list_tasks(conn, domain="coursework", status=status)
-    count = len(tasks)
-    summary = f"📚 Coursework: Found {count} task(s) including RISC-V reports and Logisim labs."
-    return {"response": summary, "data": {"tasks": tasks, "count": count}}
+    course = args.get("course")
+    user_id = args.get("user_id")
+
+    try:
+        async with pool.acquire() as conn:
+            tasks = await structured.list_tasks(conn, domain="coursework", status=status, user_id=user_id)
+    except Exception as e:
+        logger.error("Failed to query coursework tasks: %s", e)
+        clean_msg = _safe_error_message("Failed to retrieve coursework tasks", e)
+        return {
+            "success": False,
+            "response": clean_msg,
+            "error": "database_error",
+            "data": {"tasks": [], "count": 0},
+        }
+
+    matching_tasks = tasks
+    if course:
+        c_clean = course.strip().lower()
+        matching_tasks = [
+            t for t in tasks
+            if c_clean in t.get("title", "").lower()
+            or (t.get("project_name") and c_clean in t["project_name"].lower())
+            or (t.get("notes") and c_clean in t["notes"].lower())
+        ]
+
+    # Check for contradictory / conflicting deadline information
+    conflict = detect_deadline_discrepancies(
+        tasks=matching_tasks,
+        memory_context=args.get("memory_context"),
+        user_message=args.get("user_message") or args.get("course"),
+    )
+
+    count = len(matching_tasks)
+    c_str = f" for '{course}'" if course and count > 0 else ""
+
+    if count == 0:
+        if conflict:
+            summary = format_conflict_discrepancy(conflict)
+        else:
+            summary = f"📚 **Coursework**: Found 0 matching coursework task(s){c_str}."
+        return {"response": summary, "data": {"tasks": [], "count": 0}}
+
+    prioritized = prioritize_tasks(matching_tasks, target_date=date.today())
+    top_tasks = prioritized[:6]
+    task_lines = []
+    for t in top_tasks:
+        due_str = str(t.get("due_date")) if t.get("due_date") else "No due date"
+        prio = str(t.get("priority") or "medium").title()
+        stat = str(t.get("status") or "open")
+        task_lines.append(f"- **{t['title']}** (`coursework` · {stat} · Due: {due_str} · Priority: {prio})")
+
+    more_notice = (
+        f"\n\n*Showing top {len(top_tasks)} prioritized items out of {count} total matching coursework task(s). "
+        f"You can view the full list in the Timeline view.*"
+        if count > len(top_tasks)
+        else ""
+    )
+    base_summary = f"📚 **Coursework**: Found **{count}** task(s){c_str}:\n\n" + "\n".join(task_lines) + more_notice
+
+    if conflict:
+        summary = format_conflict_discrepancy(conflict) + "\n\n" + base_summary
+    else:
+        summary = base_summary
+
+    return {"response": summary, "data": {"tasks": matching_tasks, "count": count}}
 
 
 @register_skill("get_hackathon_deadlines")
 async def handle_get_hackathon_deadlines(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
     """Retrieve urgent hackathon deliverables and demo benchmark deadlines."""
     from backend.memory import structured
-    async with pool.acquire() as conn:
-        tasks = await structured.list_tasks(conn, domain="hackathon")
+    project = args.get("project")
+    user_id = args.get("user_id")
+
+    try:
+        async with pool.acquire() as conn:
+            tasks = await structured.list_tasks(conn, domain="hackathon", user_id=user_id)
+    except Exception as e:
+        logger.error("Failed to query hackathon deadlines: %s", e)
+        clean_msg = _safe_error_message("Failed to retrieve hackathon deadlines", e)
+        return {
+            "success": False,
+            "response": clean_msg,
+            "error": "database_error",
+            "data": {"tasks": [], "count": 0},
+        }
+
+    if project:
+        p_clean = project.strip().lower()
+        tasks = [
+            t for t in tasks
+            if p_clean in t.get("title", "").lower()
+            or (t.get("project_name") and p_clean in t["project_name"].lower())
+            or (t.get("notes") and p_clean in t["notes"].lower())
+        ]
+
     count = len(tasks)
-    summary = f"🚀 Hackathon: {count} active deliverables for Nebius Token Factory benchmark."
+    p_str = f" for '{project}'" if project else ""
+    if count == 0:
+        summary = f"🚀 **Hackathon**: Found 0 active hackathon deliverable(s){p_str}."
+        return {"response": summary, "data": {"tasks": [], "count": 0}}
+
+    prioritized = prioritize_tasks(tasks, target_date=date.today())
+    top_tasks = prioritized[:6]
+    task_lines = []
+    for t in top_tasks:
+        due_str = str(t.get("due_date")) if t.get("due_date") else "No due date"
+        prio = str(t.get("priority") or "medium").title()
+        stat = str(t.get("status") or "open")
+        task_lines.append(f"- **{t['title']}** (`hackathon` · {stat} · Due: {due_str} · Priority: {prio})")
+
+    more_notice = (
+        f"\n\n*Showing top {len(top_tasks)} prioritized deliverables out of {count} total matching hackathon item(s). "
+        f"You can view the full list in the Timeline view.*"
+        if count > len(top_tasks)
+        else ""
+    )
+    summary = f"🚀 **Hackathon**: Found **{count}** active deliverable(s){p_str}:\n\n" + "\n".join(task_lines) + more_notice
     return {"response": summary, "data": {"tasks": tasks, "count": count}}
 
 

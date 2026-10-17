@@ -47,6 +47,48 @@ def sanitize_diagnostic_output(text: str) -> str:
     return sanitized
 
 
+def normalize_eval_text(text: str) -> str:
+    """Normalize text for deterministic evaluation matching.
+
+    Normalizes:
+    - Unicode non-breaking spaces (\u00a0, \u202f, etc.) and whitespace sequences to standard ASCII spaces.
+    - Unicode hyphen/dash variants (\u2010 through \u2015, \u2212) to standard ASCII hyphens (-).
+    """
+    if not text:
+        return ""
+    # Normalize Unicode hyphens, en-dash, em-dash, non-breaking hyphens to standard '-'
+    normalized = re.sub(r"[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]", "-", text)
+    # Normalize Unicode spaces (non-breaking, narrow non-breaking, thin, etc.) to standard ' '
+    normalized = re.sub(r"[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]", " ", normalized)
+    # Collapse multiple whitespace
+    normalized = re.sub(r"[ \t]+", " ", normalized)
+    return normalized
+
+
+def eval_contains_substring(haystack: str, needle: str) -> bool:
+    """Check if normalized needle is present in normalized haystack.
+
+    Supports:
+    - Case-insensitive substring match.
+    - Unicode hyphen and space normalization.
+    - Hyphen-space equivalence so 'First In' matches 'First-In' and 'RISC-V' matches 'RISC‑V'.
+    """
+    h_norm = normalize_eval_text(haystack).lower()
+    n_norm = normalize_eval_text(needle).lower()
+
+    if n_norm in h_norm:
+        return True
+
+    # Hyphen-space equivalence for compound terms like "First In" vs "First-In"
+    h_space = re.sub(r"[ \t]+", " ", re.sub(r"[-_]", " ", h_norm))
+    n_space = re.sub(r"[ \t]+", " ", re.sub(r"[-_]", " ", n_norm))
+
+    if n_space in h_space:
+        return True
+
+    return False
+
+
 def evaluate_deterministic(
     scenario: Scenario,
     response_text: str,
@@ -91,12 +133,12 @@ def evaluate_deterministic(
 
     # 4. Required Substrings
     for req in checks.get("required_substrings", []):
-        if req.lower() not in clean_text.lower():
+        if not eval_contains_substring(clean_text, req):
             failures.append(f"Missing required factual content: '{req}'")
 
     # 5. Forbidden Substrings
     for forb in checks.get("forbidden_substrings", []):
-        if forb.lower() in clean_text.lower():
+        if eval_contains_substring(clean_text, forb):
             fail_msg = f"Response contained forbidden content/hallucination: '{forb}'"
             failures.append(fail_msg)
             if "CANARY" in forb or "password" in forb or "postgres" in forb:

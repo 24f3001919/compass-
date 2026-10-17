@@ -510,7 +510,7 @@ def is_greeting_intent(message: str) -> bool:
 
 
 def is_schedule_or_agent_intent(message: str) -> bool:
-    """Determine whether message is an autonomous schedule, task review, or planning intent."""
+    """Determine whether message is an autonomous calendar schedule, slot allocation, or conflict rebalancing intent."""
     if not message or not message.strip():
         return False
 
@@ -522,31 +522,15 @@ def is_schedule_or_agent_intent(message: str) -> bool:
         "check schedule conflicts", "schedule conflicts", "calendar conflicts",
         "deadline conflicts", "conflict across", "conflicts across",
         "calendar clash", "calendar clashes", "schedule clash", "schedule clashes",
-        "review my upcoming tasks", "review upcoming tasks", "review tasks and projects",
-        "review my schedule", "plan my week", "plan my weekend", "plan this week",
+        "plan my week", "plan my weekend", "plan this week",
         "focus schedule for this week", "schedule for this week", "schedule for tomorrow",
         "what is my schedule", "check my schedule",
-        "roadmap", "daily roadmap", "step-by-step roadmap", "optimal roadmap",
-        "plan today", "plan my day", "plan for today", "daily plan", "plan out my day",
-        "prioritize my tasks", "prioritize tasks", "prioritize deadlines",
-        "what should i do today", "what should i work on today", "where should i start",
-        "tasks needing attention", "analyze my deadlines", "analyze deadlines",
     )
     if any(phrase in msg_lower for phrase in schedule_phrases):
         return True
 
-    # Check for schedule + conflict combination or planning
-    if "schedule" in msg_lower and any(w in msg_lower for w in ("conflict", "conflicts", "clash", "clashes", "propose", "plan", "review", "tomorrow", "today", "weekend", "week", "suggest", "check")):
-        return True
-
-    # Check for review + tasks/projects
-    if "review" in msg_lower and any(w in msg_lower for w in ("task", "tasks", "project", "projects", "deadline", "deadlines")):
-        return True
-
-    # Check for planning + today or prioritization
-    if any(w in msg_lower for w in ("roadmap", "prioritize", "prioritization")):
-        return True
-    if "today" in msg_lower and any(w in msg_lower for w in ("plan", "roadmap", "prioritize", "attention", "step-by-step", "step by step", "roadmap")):
+    # Check for calendar/schedule + conflict combination or slot allocation
+    if "schedule" in msg_lower and any(w in msg_lower for w in ("conflict", "conflicts", "clash", "clashes", "propose", "rebalance", "tomorrow", "weekend", "week", "allocation")):
         return True
 
     return False
@@ -695,12 +679,10 @@ def _fallback_route(message: str, history: Optional[list[dict[str, str]]] = None
         for h in reversed(history):
             content = h.get("content", "")
             if any(term in content.lower() for term in ("task", "deliverable", "due", "demo", "submit", "video")):
-                if any(term in msg_lower for term in ("due", "when", "deadline", "date")):
-                    return "query_tasks", {}, f"Checking your task due dates based on previous context: {content}"
-                return "query_tasks", {}, f"Referencing previous task: {content}"
-    if any(term in msg_lower for term in ("task", "due", "deliverable", "deadline", "coursework", "hackathon")):
-        query_args: dict[str, Any] = {"query": message}
-        if any(w in msg_lower for w in ("roadmap", "plan", "today", "prioritize", "attention", "step-by-step", "step by step")):
+                return "query_tasks", {"user_message": message, "query": message}, ""
+    if any(term in msg_lower for term in ("task", "tasks", "due", "deliverable", "deadline", "coursework", "hackathon", "work on", "start with", "first", "roadmap", "prioritize")):
+        query_args: dict[str, Any] = {"query": message, "user_message": message}
+        if any(w in msg_lower for w in ("roadmap", "plan", "today", "prioritize", "attention", "step-by-step", "step by step", "first", "work on first")):
             query_args["intent"] = "roadmap"
         return "query_tasks", query_args, ""
     if is_greeting_intent(message):

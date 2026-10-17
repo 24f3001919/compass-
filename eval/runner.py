@@ -76,7 +76,18 @@ async def execute_scenario_pipeline(
         else:
             mock_tasks = fixtures["tasks"]
             mock_conn = AsyncMock()
-            mock_conn.fetch = AsyncMock(return_value=mock_tasks)
+
+            async def _mock_fetch(query, *args, **kwargs):
+                q = str(query).lower()
+                if "task_dependencies" in q:
+                    return fixtures.get("task_dependencies", [])
+                if "agent_runs" in q:
+                    return fixtures.get("agent_runs", [])
+                if "user_trusted_urls" in q:
+                    return fixtures.get("user_trusted_urls", [])
+                return fixtures.get("tasks", [])
+
+            mock_conn.fetch = AsyncMock(side_effect=_mock_fetch)
             mock_conn.fetchrow = AsyncMock(return_value=None)
             mock_conn.execute = AsyncMock(return_value=None)
             mock_pool = MagicMock()

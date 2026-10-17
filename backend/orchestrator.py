@@ -173,6 +173,12 @@ async def handle_message(
         args["tone"] = tone
     if conv_mode and isinstance(args, dict):
         args["conv_mode"] = conv_mode
+    if memory_context and isinstance(args, dict) and "memory_context" not in args:
+        args["memory_context"] = memory_context
+    if message and isinstance(args, dict) and "user_message" not in args:
+        args["user_message"] = message
+    if history and isinstance(args, dict) and "history" not in args:
+        args["history"] = history
 
     # 2a. Skill Execution: undo
     if skill_name == "undo":
