@@ -525,7 +525,16 @@ async def calendar_callback(
             status_code=400,
         )
 
-    email = tokens.get("email") or tokens.get("account_email") or "scholar.authenticated@gmail.com"
+    email = tokens.get("email") or tokens.get("account_email")
+    if not email or "@" not in str(email):
+        return HTMLResponse(
+            f"<html><body style='font-family:sans-serif;padding:40px;background:#0f172a;color:#f87171;'>"
+            f"<h3>Google Calendar Authorization Error</h3>"
+            f"<p style='color:#fca5a5;'>Failed to retrieve a verified email address from Google.</p>"
+            f"<p><a style='color:#38bdf8;' href='{frontend_origin}/'>Return to Compass</a></p>"
+            f"</body></html>",
+            status_code=400,
+        )
 
     pool = await get_pool()
     if pool:
