@@ -10,7 +10,27 @@ Tests:
 """
 
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
+
+from backend.main import app
+
+
+@pytest.fixture(autouse=True)
+def _authenticate_test_client(client: AsyncClient):
+    """Authenticate client with test user identity header for direct task management tests."""
+    client.headers["x-user-id"] = "test_direct_user"
+    yield
+    client.headers.pop("x-user-id", None)
+
+
+@pytest.mark.asyncio
+async def test_direct_tasks_unauthenticated_rejected():
+    """Requests to /api/tasks without authentication must be rejected with 401."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as unauth_client:
+        res = await unauth_client.post("/api/tasks", json={"title": "Unauthorized Task", "domain": "code"})
+        assert res.status_code == 401
+        assert "authentication" in res.json()["detail"].lower()
 
 
 @pytest.mark.asyncio
