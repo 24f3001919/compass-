@@ -105,7 +105,7 @@ def _clean_agent_rate_limits():
 
 
 @pytest.mark.asyncio
-async def test_agent_endpoint_returns_sse(client: AsyncClient, monkeypatch):
+async def test_agent_endpoint_returns_sse(client: AsyncClient, monkeypatch, auth_headers):
     """POST /api/agent/run should return text/event-stream content type."""
     mock_comp = _create_mock_completion(content="Tasks listed.")
     mock_client = MagicMock()
@@ -115,6 +115,7 @@ async def test_agent_endpoint_returns_sse(client: AsyncClient, monkeypatch):
     resp = await client.post(
         "/api/agent/run",
         json={"goal": "List my open tasks", "max_steps": 3, "enable_critic": False},
+        headers=auth_headers,
     )
     assert resp.status_code == 200
     assert "text/event-stream" in resp.headers.get("content-type", "")
@@ -141,7 +142,7 @@ async def test_agent_capabilities_endpoint(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_agent_produces_steps(client: AsyncClient, monkeypatch):
+async def test_agent_produces_steps(client: AsyncClient, monkeypatch, auth_headers):
     """Agent should produce at least one step."""
     mock_comp = _create_mock_completion(content="Here are your tasks.")
     mock_client = MagicMock()
@@ -151,6 +152,7 @@ async def test_agent_produces_steps(client: AsyncClient, monkeypatch):
     resp = await client.post(
         "/api/agent/run",
         json={"goal": "What open tasks do I have?", "max_steps": 4, "enable_critic": False},
+        headers=auth_headers,
     )
     assert resp.status_code == 200
     events = _parse_sse_events(resp.text)
@@ -160,7 +162,7 @@ async def test_agent_produces_steps(client: AsyncClient, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_agent_ends_with_done(client: AsyncClient, monkeypatch):
+async def test_agent_ends_with_done(client: AsyncClient, monkeypatch, auth_headers):
     """Agent trace should end with a 'done' event."""
     mock_comp = _create_mock_completion(content="All tasks summarized.")
     mock_client = MagicMock()
@@ -170,6 +172,7 @@ async def test_agent_ends_with_done(client: AsyncClient, monkeypatch):
     resp = await client.post(
         "/api/agent/run",
         json={"goal": "Summarize my tasks", "max_steps": 4, "enable_critic": False},
+        headers=auth_headers,
     )
     assert resp.status_code == 200
     events = _parse_sse_events(resp.text)
@@ -178,7 +181,7 @@ async def test_agent_ends_with_done(client: AsyncClient, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_agent_max_steps_respected(client: AsyncClient, monkeypatch):
+async def test_agent_max_steps_respected(client: AsyncClient, monkeypatch, auth_headers):
     """Agent should not produce more steps than max_steps allows."""
     mock_comp = _create_mock_completion(tool_name="query_tasks", tool_args={"domain": "general"})
     mock_client = MagicMock()
@@ -189,6 +192,7 @@ async def test_agent_max_steps_respected(client: AsyncClient, monkeypatch):
     resp = await client.post(
         "/api/agent/run",
         json={"goal": "Do a comprehensive analysis", "max_steps": max_steps, "enable_critic": False},
+        headers=auth_headers,
     )
     assert resp.status_code == 200
     events = _parse_sse_events(resp.text)
@@ -196,7 +200,7 @@ async def test_agent_max_steps_respected(client: AsyncClient, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_agent_sse_event_format(client: AsyncClient, monkeypatch):
+async def test_agent_sse_event_format(client: AsyncClient, monkeypatch, auth_headers):
     """Each SSE event should be valid JSON with required fields."""
     mock_comp = _create_mock_completion(content="Hello there!")
     mock_client = MagicMock()
@@ -206,6 +210,7 @@ async def test_agent_sse_event_format(client: AsyncClient, monkeypatch):
     resp = await client.post(
         "/api/agent/run",
         json={"goal": "Hello", "max_steps": 2, "enable_critic": False},
+        headers=auth_headers,
     )
     assert resp.status_code == 200
     events = _parse_sse_events(resp.text)
