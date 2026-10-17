@@ -130,10 +130,12 @@ async def handle_prepare_application(args: Dict[str, Any], pool: Any = None) -> 
             validation_report=report,
             validation_status=val_status,
         )
-        app = await update_career_application(app.id, user_id, {
+        updated = await update_career_application(app.id, user_id, {
             "resume_id": tailored.id,
             "status": CareerApplicationStatus.READY_FOR_REVIEW.value,
         })
+        if updated:
+            app = updated
 
     return {
         "success": True,
@@ -288,7 +290,7 @@ async def handle_check_application_deadlines(args: Dict[str, Any], pool: Any = N
     apps = await list_career_applications(user_id)
     open_opps, _ = await get_all_opportunities(user_id=user_id, status="OPEN", page=1, page_size=25)
 
-    upcoming = []
+    upcoming: list[dict[str, Any]] = []
 
     # 1. Tracked application target deadlines
     for a in apps:
@@ -320,8 +322,16 @@ async def handle_check_application_deadlines(args: Dict[str, Any], pool: Any = N
                 "portal_url": opp.official_application_url or opp.canonical_url,
             })
 
+    def _get_days_left(item: dict[str, Any]) -> int:
+        val = item.get("days_left")
+        if isinstance(val, int):
+            return val
+        if isinstance(val, str) and val.isdigit():
+            return int(val)
+        return 0
+
     # Sort by days_left ascending
-    upcoming.sort(key=lambda x: x["days_left"])
+    upcoming.sort(key=_get_days_left)
 
     if not upcoming:
         msg = f"No deadlines found within the next {days_ahead} days. You can continue discovering opportunities on Internship Radar."
