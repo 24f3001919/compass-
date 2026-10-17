@@ -167,8 +167,9 @@ async def handle_message(
         history=history if history else None,
         memory_context=memory_context if memory_context else None,
     )
-    if user_id and isinstance(args, dict):
-        args["user_id"] = user_id
+    effective_user_id = user_id or guest_id
+    if effective_user_id and isinstance(args, dict):
+        args["user_id"] = effective_user_id
     if tone and isinstance(args, dict):
         args["tone"] = tone
     if conv_mode and isinstance(args, dict):
