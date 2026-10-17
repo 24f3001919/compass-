@@ -324,7 +324,8 @@ async def test_sse_mid_stream_failure_emits_terminal_error():
         error_events = [e for e in events if '"type": "error"' in e]
         assert len(error_events) == 1
         assert '"terminal": true' in error_events[0]
-        assert "upstream timeout" in error_events[0]
+        assert "An internal error occurred while processing the stream." in error_events[0]
+        assert "upstream timeout" not in error_events[0]
 
 
 # ============================================================================
@@ -347,16 +348,20 @@ def test_x_user_id_impersonation_forbidden_in_production():
     with patch("backend.dependencies.get_settings") as mock_settings:
         mock_settings.return_value.AUTH_TOKEN = "test-secret-token"
         mock_settings.return_value.ENVIRONMENT = "production"
+        mock_settings.return_value.is_production.return_value = True
+        mock_settings.return_value.is_development.return_value = False
+        mock_settings.return_value.is_test.return_value = False
 
         with pytest.raises(HTTPException) as exc:
             _get_current_identity(req)
         assert exc.value.status_code == 403
-        assert "x-user-id impersonation is forbidden" in exc.value.detail
+        assert "x-user-id" in exc.value.detail and "forbidden" in exc.value.detail
 
 
 @pytest.mark.asyncio
 async def test_compass_user_id_cookie_not_blocked_as_impersonation_in_production():
-    """Verify that in production environment, compass_user_id cookie does NOT raise 403."""
+    """Verify that in production environment, unverified compass_user_id cookie raises 403 impersonation error, while valid session cookies continue to work."""
+    # 1. Unverified compass_user_id cookie in production raises 403
     scope = {
         "type": "http",
         "method": "GET",
@@ -372,10 +377,34 @@ async def test_compass_user_id_cookie_not_blocked_as_impersonation_in_production
         mock_settings.return_value.ENVIRONMENT = "production"
         mock_settings.return_value.is_production.return_value = True
         mock_settings.return_value.is_development.return_value = False
+        mock_settings.return_value.is_test.return_value = False
 
-        # Does not raise HTTPException(403)
-        ident = _get_current_identity(req)
-        assert ident is None
+        with pytest.raises(HTTPException) as exc:
+            _get_current_identity(req)
+        assert exc.value.status_code == 403
+        assert "forbidden" in exc.value.detail
+
+    # 2. Valid identity cookie (compass_session) continues to work as intended
+    scope_valid = {
+        "type": "http",
+        "method": "GET",
+        "headers": [
+            (b"cookie", b"compass_session=valid-session-123"),
+        ],
+        "path": "/api/tasks",
+    }
+    req_valid = Request(scope_valid)
+    with patch("backend.dependencies.get_settings") as mock_settings:
+        mock_settings.return_value.AUTH_TOKEN = "test-secret-token"
+        mock_settings.return_value.ENVIRONMENT = "production"
+        mock_settings.return_value.is_production.return_value = True
+        mock_settings.return_value.is_development.return_value = False
+        mock_settings.return_value.is_test.return_value = False
+
+        with patch("backend.routers.auth.get_user_from_session", return_value="student@vit.ac.in"):
+            ident = _get_current_identity(req_valid)
+            assert ident is not None
+            assert ident.user_id == "student@vit.ac.in"
 
 
 @pytest.mark.asyncio
