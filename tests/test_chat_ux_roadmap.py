@@ -127,6 +127,12 @@ def test_roadmap_intent_detection_and_fallback():
     assert is_schedule_or_agent_intent("Suggest a step-by-step roadmap") is True
     assert is_schedule_or_agent_intent("What should I do today?") is True
     assert is_schedule_or_agent_intent("Prioritize my tasks for today") is True
+    assert is_schedule_or_agent_intent("roadmap") is True
+
+    # Negative tests: informational questions should not trigger agent/schedule intent
+    assert is_schedule_or_agent_intent("What is a product roadmap?") is False
+    assert is_schedule_or_agent_intent("Explain what a roadmap is") is False
+    assert is_schedule_or_agent_intent("Define roadmap") is False
 
     skill, args, text = _fallback_route(repro_user_query)
     assert skill == "agent"
