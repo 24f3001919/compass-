@@ -163,10 +163,12 @@ async def handle_summarize_day(args: Dict[str, Any], pool: Any) -> Dict[str, Any
                 f"- [{t['domain'].upper()}] {t['title']} (Due: {t.get('due_date') or 'No date'}, Priority: {t.get('priority', 'medium')})"
                 for t in tasks[:15]
             )
+            total_tasks_count = len(tasks)
             client = AsyncOpenAI(api_key=settings.NEBIUS_API_KEY, base_url=settings.NEBIUS_BASE_URL, timeout=15.0)
             prompt = (
-                "Synthesize the following active tasks into a concise, high-impact 2-3 sentence daily briefing. "
-                "Highlight the nearest deadlines across hackathon, coursework, and code:\n\n"
+                f"The user has {total_tasks_count} total open task(s) in their workspace. "
+                "Synthesize the following top active tasks into a concise, high-impact 2-3 sentence daily briefing. "
+                f"Explicitly acknowledge the total count of {total_tasks_count} tasks and highlight the nearest pressing deadlines:\n\n"
                 f"{task_list_str}"
             )
             resp: Any = await client.chat.completions.create(
@@ -182,11 +184,13 @@ async def handle_summarize_day(args: Dict[str, Any], pool: Any) -> Dict[str, Any
             record_usage(settings.SYNTHESIS_MODEL, p_tok, c_tok)
             if raw_content is not None and raw_content.strip():
                 summary = raw_content.strip()
+                if str(total_tasks_count) not in summary:
+                    summary = f"You have **{total_tasks_count}** open task(s) across your workspace.\n\n" + summary
             else:
-                summary = f"Daily summary: {len(tasks)} total open task(s)."
+                summary = f"Daily summary: {total_tasks_count} total open task(s)."
             return {
                 "response": summary,
-                "data": {"open_tasks_by_domain": by_domain, "total": len(tasks), "model": settings.SYNTHESIS_MODEL},
+                "data": {"open_tasks_by_domain": by_domain, "total": total_tasks_count, "model": settings.SYNTHESIS_MODEL},
             }
         except Exception as llm_err:
             logger.warning(f"SYNTHESIS_MODEL daily summary failed: {llm_err}")

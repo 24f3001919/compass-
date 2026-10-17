@@ -421,53 +421,63 @@ def _extract_task_creation_args(message: str) -> dict:
     return res
 
 
+_PURE_CONVERSATIONAL = {
+    "hi", "hello", "hey", "greetings", "good morning", "good evening",
+    "good afternoon", "how are you", "who are you", "what are you",
+    "what can you do", "what do you do", "help", "thank you", "thanks",
+    "bye", "goodbye", "tell me a joke", "what is compass", "who created you",
+    "what can you help with", "what can you help me with", "how are you doing",
+    "hey, what can you help with", "hey what can you help with",
+}
+
+_TOOL_KEYWORDS = (
+    "task", "tasks", "todo", "todos", "due", "deadline", "deadlines",
+    "backlog", "work on", "workload", "priority", "status", "pending", "upcoming",
+    "add", "create", "new", "schedule", "reschedule", "postpone", "delete",
+    "remove", "edit", "update", "mark", "finish", "complete", "done", "cancel",
+    "drop", "move", "push back", "assign", "defer",
+    "list", "show", "what do i have", "do i have", "what's on",
+    "whats on", "check", "agenda", "today", "tomorrow", "yesterday", "this week", "next week",
+    "coursework", "course", "assignment", "homework", "syllabus", "notes",
+    "lecture", "lab", "exam", "quiz", "test", "midterm", "final", "paper",
+    "essay", "study", "reading",
+    "hackathon", "project", "projects", "devpost", "submission", "track",
+    "prize", "pitch", "demo",
+    "code", "repo", "repository", "snippet", "commit", "branch", "pr",
+    "pull request", "architecture", "git", "github", "issue", "issues", "bug", "bugs",
+    "calendar", "event", "events", "meeting", "meetings", "sync",
+    "availability", "available", "conflict", "conflicts", "clash", "free time", "busy", "slot", "slots",
+    "search", "web", "lookup", "research", "verify", "tavily", "online",
+    "url", "http", "https", "find", "documentation", "doc", "docs",
+    "feasible", "feasibility", "finish in time", "can i finish", "what to drop",
+    "what should i drop", "what i drop", "triage", "overload", "overloaded",
+    "overcommit", "capacity",
+    "memory", "remember that", "remember my", "remember to", "recall", "stored", "save", "log", "note", "notes",
+    "remind", "reminder", "call me", "my name is", "my name's", "prefer",
+    "preference", "forget my", "forget that", "forget what i", "my goal",
+    "park that", "park it", "park this", "come back to that", "parked shelf", "list parked",
+    "planner", "agent", "plan", "execute",
+)
+
+_TOOL_KEYWORDS_REGEX = re.compile(
+    r"\b(?:" + "|".join(re.escape(k) for k in sorted(_TOOL_KEYWORDS, key=len, reverse=True)) + r")\b",
+    re.IGNORECASE,
+)
+
+
 def message_needs_tools(message: str) -> bool:
-    """Determine whether a user message requires tool registry evaluation."""
+    """Determine whether a user message requires tool registry evaluation.
+    Uses whole-word matching to avoid false positives (e.g. 'pr' in 'protocol', 'git' in 'digital').
+    """
     msg = message.lower().strip()
     if not msg:
         return False
 
-    pure_conversational = {
-        "hi", "hello", "hey", "greetings", "good morning", "good evening",
-        "good afternoon", "how are you", "who are you", "what are you",
-        "what can you do", "what do you do", "help", "thank you", "thanks",
-        "bye", "goodbye", "tell me a joke", "what is compass", "who created you",
-        "what can you help with", "what can you help me with", "how are you doing",
-        "hey, what can you help with", "hey what can you help with",
-    }
     cleaned = msg.strip("!?.,:; ")
-    if cleaned in pure_conversational:
+    if cleaned in _PURE_CONVERSATIONAL:
         return False
 
-    tool_keywords = (
-        "task", "tasks", "todo", "todos", "due", "deadline", "deadlines",
-        "backlog", "work on", "workload", "priority", "status", "pending", "upcoming",
-        "add", "create", "new", "schedule", "reschedule", "postpone", "delete",
-        "remove", "edit", "update", "mark", "finish", "complete", "done", "cancel",
-        "drop", "move", "push back", "assign", "defer",
-        "list", "show", "what are", "what do i have", "do i have", "what's on",
-        "whats on", "check", "agenda", "today", "tomorrow", "yesterday", "this week", "next week",
-        "coursework", "course", "assignment", "homework", "syllabus", "notes",
-        "lecture", "lab", "exam", "quiz", "test", "midterm", "final", "paper",
-        "essay", "study", "reading",
-        "hackathon", "project", "projects", "devpost", "submission", "track",
-        "prize", "pitch", "demo",
-        "code", "repo", "repository", "snippet", "commit", "branch", "pr",
-        "pull request", "architecture", "git", "github", "issue", "issues", "bug", "bugs",
-        "calendar", "event", "events", "meeting", "meetings", "sync",
-        "availability", "available", "conflict", "conflicts", "clash", "free time", "busy", "slot", "slots",
-        "search", "web", "lookup", "research", "verify", "tavily", "online",
-        "url", "http", "https", "find", "documentation", "doc", "docs",
-        "feasible", "feasibility", "finish in time", "can i finish", "what to drop",
-        "what should i drop", "what i drop", "triage", "overload", "overloaded",
-        "overcommit", "capacity",
-        "memory", "remember that", "remember my", "remember to", "recall", "stored", "save", "log", "note", "notes",
-        "remind", "reminder", "call me", "my name is", "my name's", "prefer",
-        "preference", "forget my", "forget that", "forget what i", "my goal",
-        "park that", "park it", "park this", "come back to that", "parked shelf", "list parked",
-        "planner", "agent", "plan", "execute",
-    )
-    return any(k in msg for k in tool_keywords)
+    return bool(_TOOL_KEYWORDS_REGEX.search(msg))
 
 
 def is_greeting_intent(message: str) -> bool:

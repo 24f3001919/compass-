@@ -105,7 +105,9 @@ async def route_message(
         f"call the query_tasks tool with intent='roadmap' to identify and prioritize active deliverables. "
         f"When the user asks whether their overall workload is achievable or feasible, whether they have enough hours/capacity, what to drop, or asks for a workload feasibility review, "
         f"call the assess_feasibility tool with extracted days and hours_per_day. "
-        f"For general inquiries or conversation, respond directly with helpful text."
+        f"For direct factual questions and acronym queries, state the canonical full form clearly (e.g. for RISC, 'Reduced Instruction Set Computer') and keep definitions concise (under 80 words) without sprawling essays unless the user asks for a deep dive. "
+        f"When the user makes an open-ended or vague request for help without specific details (e.g. 'Can you help me with my work?'), respond with a friendly, brief clarifying question (under 60 words) asking what specific domain or project they would like to focus on (such as coursework, hackathons, or tracking tasks). "
+        f"For general inquiries or conversation, respond directly with helpful, concise text."
     )
     if memory_context:
         system_prompt += f"\n\n[WORKSPACE MEMORY & PAST SESSIONS - USE TO PREVENT SCHEDULE CLASHES & RECALL PAST CONTEXT]:\n{memory_context}"
@@ -123,83 +125,101 @@ async def route_message(
     messages.append({"role": "user", "content": message})
     needs_tools = message_needs_tools(message)
     tools: Any = TOOLS if needs_tools else None
+    is_explicit_add_task = is_task_mutation_request(message) or is_explicit_task_creation(message)
 
-    try:
-        call_kwargs: dict[str, Any] = {
-            "model": settings.ROUTER_MODEL,
-            "messages": messages,
-            "max_tokens": 1024,
-            "stream": False,
-        }
-        if tools:
-            call_kwargs["tools"] = tools
-            call_kwargs["tool_choice"] = "auto"
+    max_router_attempts = 2
+    for attempt in range(1, max_router_attempts + 1):
+        try:
+            call_kwargs: dict[str, Any] = {
+                "model": settings.ROUTER_MODEL,
+                "messages": messages,
+                "max_tokens": 1024,
+                "stream": False,
+            }
+            if tools:
+                call_kwargs["tools"] = tools
+                call_kwargs["tool_choice"] = "auto"
 
-        response: Any = await client.chat.completions.create(**call_kwargs)
+            response: Any = await client.chat.completions.create(**call_kwargs)
 
-        from backend.services.usage import record_usage
-        usage = getattr(response, "usage", None)
-        p_tok = usage.prompt_tokens if usage else max(len(message.split()) * 2, 64)
-        c_tok = usage.completion_tokens if usage else 50
-        record_usage(settings.ROUTER_MODEL, p_tok, c_tok)
+            from backend.services.usage import record_usage
+            usage = getattr(response, "usage", None)
+            p_tok = usage.prompt_tokens if usage else max(len(message.split()) * 2, 64)
+            c_tok = usage.completion_tokens if usage else 50
+            record_usage(settings.ROUTER_MODEL, p_tok, c_tok)
 
-        choice = response.choices[0]
-        is_explicit_add_task = is_task_mutation_request(message) or is_explicit_task_creation(message)
-
-        if choice.message.tool_calls:
-            tc: Any = choice.message.tool_calls[0]
-            func_name = getattr(getattr(tc, "function", None), "name", None) or getattr(tc, "name", "add_task")
-            raw_args = getattr(getattr(tc, "function", None), "arguments", "{}") or "{}"
-
-            try:
-                args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
-            except Exception as e:
-                logger.warning(f"Failed to parse function arguments JSON ({e}): {raw_args}")
-                args = {"title": message}
-
-            # Guard against model misrouting an explicit task creation command to query_tasks or another tool
-            if is_explicit_add_task and func_name != "add_task":
-                fallback_args = _extract_task_creation_args(message)
-                if not fallback_args.get("title"):
-                    return None, None, "What would you like to name this task? Please provide a title or description."
-                func_name = "add_task"
-                args = {**fallback_args, **{k: v for k, v in args.items() if k in ("domain", "due_date", "priority") and v}}
-
-            if func_name == "add_task":
-                extracted = _extract_task_creation_args(message)
-                if not args.get("title") and extracted.get("title"):
-                    args["title"] = extracted["title"]
-                if not args.get("due_date") and extracted.get("due_date"):
-                    args["due_date"] = extracted["due_date"]
-                if extracted.get("time_str"):
-                    args["time_str"] = extracted["time_str"]
-                if not args.get("title"):
-                    return None, None, "What would you like to name this task? Please provide a title or description."
-
-            logger.info(f"Router invoked tool: {func_name} with args: {args}")
-            return func_name, args, ""
-        else:
-            # Fallback if model responded with conversational text to an explicit task creation command
-            if is_explicit_add_task:
-                extracted = _extract_task_creation_args(message)
-                if not extracted.get("title"):
-                    return None, None, "What would you like to name this task? Please provide a title or description."
-                return "add_task", extracted, ""
-
-            reply = (choice.message.content or "").strip()
-            if not reply:
-                if is_greeting_intent(message):
-                    return None, None, "How can I help you today? I'm here to help you manage tasks, coursework, and deadlines."
-                if is_schedule_or_agent_intent(message):
-                    return "agent", {"goal": message}, ""
+            choices = getattr(response, "choices", None)
+            if not choices:
+                if attempt < max_router_attempts and not is_explicit_add_task:
+                    logger.warning("Router received empty choices on attempt %d; retrying once", attempt)
+                    continue
                 return _fallback_route(message, history)
 
-            return None, None, reply
+            choice = choices[0]
+            choice_msg = getattr(choice, "message", None)
+            tool_calls = getattr(choice_msg, "tool_calls", None) if choice_msg else None
 
-    except Exception as e:
-        logger.error(f"Nebius router invocation failed: {e}")
-        if is_task_mutation_request(message) or is_explicit_task_creation(message):
-            return "add_task", _extract_task_creation_args(message), ""
-        if is_schedule_or_agent_intent(message):
-            return "agent", {"goal": message}, ""
-        return _fallback_route(message, history)
+            if tool_calls:
+                tc: Any = tool_calls[0]
+                func_name = getattr(getattr(tc, "function", None), "name", None) or getattr(tc, "name", "add_task")
+                raw_args = getattr(getattr(tc, "function", None), "arguments", "{}") or "{}"
+
+                try:
+                    args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
+                except Exception as e:
+                    logger.warning(f"Failed to parse function arguments JSON ({e}): {raw_args}")
+                    args = {"title": message}
+
+                # Guard against model misrouting an explicit task creation command to query_tasks or another tool
+                if is_explicit_add_task and func_name != "add_task":
+                    fallback_args = _extract_task_creation_args(message)
+                    if not fallback_args.get("title"):
+                        return None, None, "What would you like to name this task? Please provide a title or description."
+                    func_name = "add_task"
+                    args = {**fallback_args, **{k: v for k, v in args.items() if k in ("domain", "due_date", "priority") and v}}
+
+                if func_name == "add_task":
+                    extracted = _extract_task_creation_args(message)
+                    if not args.get("title") and extracted.get("title"):
+                        args["title"] = extracted["title"]
+                    if not args.get("due_date") and extracted.get("due_date"):
+                        args["due_date"] = extracted["due_date"]
+                    if extracted.get("time_str"):
+                        args["time_str"] = extracted["time_str"]
+                    if not args.get("title"):
+                        return None, None, "What would you like to name this task? Please provide a title or description."
+
+                logger.info(f"Router invoked tool: {func_name} with args: {args}")
+                return func_name, args, ""
+            else:
+                # Fallback if model responded with conversational text to an explicit task creation command
+                if is_explicit_add_task:
+                    extracted = _extract_task_creation_args(message)
+                    if not extracted.get("title"):
+                        return None, None, "What would you like to name this task? Please provide a title or description."
+                    return "add_task", extracted, ""
+
+                reply = (getattr(choice_msg, "content", "") or "").strip() if choice_msg else ""
+                if not reply:
+                    if attempt < max_router_attempts and not is_greeting_intent(message) and not is_schedule_or_agent_intent(message):
+                        logger.warning("Router received empty completion content on attempt %d; retrying once", attempt)
+                        continue
+                    if is_greeting_intent(message):
+                        return None, None, "How can I help you today? I'm here to help you manage tasks, coursework, and deadlines."
+                    if is_schedule_or_agent_intent(message):
+                        return "agent", {"goal": message}, ""
+                    return _fallback_route(message, history)
+
+                return None, None, reply
+
+        except Exception as e:
+            err_type = type(e).__name__
+            if attempt < max_router_attempts and not is_explicit_add_task:
+                logger.warning("Nebius router transient failure on attempt %d (%s); retrying once", attempt, err_type)
+                continue
+            logger.error("Nebius router invocation failed: %s", err_type)
+            if is_task_mutation_request(message) or is_explicit_task_creation(message):
+                return "add_task", _extract_task_creation_args(message), ""
+            if is_schedule_or_agent_intent(message):
+                return "agent", {"goal": message}, ""
+            return _fallback_route(message, history)
