@@ -92,6 +92,117 @@ from backend.services.radar_verifier import verify_opportunity_status
 
 
 # ===========================================================================
+# FIXTURES: OPPORTUNITY SEEDING & TEST ISOLATION
+# ===========================================================================
+
+TEST_USER_IDS = [
+    "candidate_e2e_user",
+    "alice@compass.internal",
+    "bob@compass.internal",
+    "user_cancel_test",
+    "user_adapter_test",
+    "user_ats_test",
+    "user_browser_test",
+    "user_parse_test",
+    "user_ats_timeout",
+    "user_ats_confirmed",
+    "token_tester",
+]
+
+
+@pytest.fixture(autouse=True)
+async def setup_career_e2e_environment():
+    """Ensure opportunities 100-115 exist and test users are cleanly isolated for each test."""
+    from backend.memory.db import get_pool
+    import backend.memory.radar as radar_mem
+
+    pool = await get_pool()
+    if pool:
+        async with pool.acquire() as conn:
+            # Clean up test applications & batches first to ensure isolation and idempotency
+            await conn.execute(
+                "DELETE FROM career_applications WHERE user_id = ANY($1::text[])",
+                TEST_USER_IDS,
+            )
+            await conn.execute(
+                "DELETE FROM application_batches WHERE user_id = ANY($1::text[])",
+                TEST_USER_IDS,
+            )
+            await conn.execute(
+                "DELETE FROM resumes WHERE user_id = ANY($1::text[])",
+                TEST_USER_IDS,
+            )
+            await conn.execute(
+                "DELETE FROM user_opportunity_profiles WHERE user_id = ANY($1::text[])",
+                TEST_USER_IDS,
+            )
+
+            # Insert mock opportunities 100 to 115 if missing
+            for opp_id in range(100, 116):
+                await conn.execute(
+                    """
+                    INSERT INTO opportunities (
+                        id, company_name, normalized_company, role_title,
+                        opportunity_type, category, location, work_arrangement,
+                        country, is_india_eligible, canonical_url, official_application_url,
+                        current_status, description, created_at, updated_at
+                    ) VALUES (
+                        $1, $2, $3, $4, 'internship', 'ai_ml', 'Bengaluru, India',
+                        'hybrid', 'India', TRUE, $5, $5, 'DISCOVERED', 'Test opportunity description',
+                        now(), now()
+                    )
+                    ON CONFLICT (id) DO UPDATE SET
+                        current_status = EXCLUDED.current_status,
+                        updated_at = now()
+                    """,
+                    opp_id,
+                    f"Test Company {opp_id}",
+                    f"test_company_{opp_id}",
+                    f"Engineering Intern {opp_id}",
+                    f"https://testcompany{opp_id}.com/careers/intern",
+                )
+    else:
+        # In-memory mode fallback
+        for opp_id in range(100, 116):
+            radar_mem._in_memory_opportunities[opp_id] = {
+                "id": opp_id,
+                "company_name": f"Test Company {opp_id}",
+                "normalized_company": f"test_company_{opp_id}",
+                "role_title": f"Engineering Intern {opp_id}",
+                "opportunity_type": "internship",
+                "category": "ai_ml",
+                "location": "Bengaluru, India",
+                "work_arrangement": "hybrid",
+                "country": "India",
+                "is_india_eligible": True,
+                "canonical_url": f"https://testcompany{opp_id}.com/careers/intern",
+                "official_application_url": f"https://testcompany{opp_id}.com/careers/intern",
+                "current_status": OpportunityStatus.DISCOVERED.value,
+                "description": "Test opportunity description",
+                "requirements": None,
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc),
+            }
+
+    yield
+
+    # Teardown: clean up test user records
+    if pool:
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    "DELETE FROM career_applications WHERE user_id = ANY($1::text[])",
+                    TEST_USER_IDS,
+                )
+                await conn.execute(
+                    "DELETE FROM application_batches WHERE user_id = ANY($1::text[])",
+                    TEST_USER_IDS,
+                )
+        except Exception:
+            pass
+
+
+# ===========================================================================
 # 1. PHASE 5: COMPLETE END-TO-END CAREER WORKFLOW
 # ===========================================================================
 
@@ -324,7 +435,7 @@ async def test_complete_career_copilot_end_to_end_workflow():
 async def test_security_missing_attestation_blocks_approval():
     """Rejects batch approval when required attestations are omitted."""
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers={"x-user-id": "test_e2e_applicant_99"}) as client:
         # Create opportunity & batch
         prep_res = await client.post("/api/career/batches/prepare", json={"opportunity_ids": [101]})
         batch_id = prep_res.json()["batch_id"]
@@ -356,7 +467,7 @@ async def test_security_missing_attestation_blocks_approval():
 async def test_security_unapproved_batch_submission_rejected():
     """Rejects submission of a batch that has not passed explicit user approval."""
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers={"x-user-id": "test_e2e_applicant_99"}) as client:
         prep_res = await client.post("/api/career/batches/prepare", json={"opportunity_ids": [102]})
         batch_id = prep_res.json()["batch_id"]
 
@@ -412,7 +523,7 @@ async def test_security_cross_user_approval_and_submission_isolation():
 async def test_security_modified_application_invalidates_batch_approval():
     """Modifying reviewed application content invalidates batch approval and requires renewed approval."""
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers={"x-user-id": "test_e2e_applicant_99"}) as client:
         # 1. Prepare batch
         prep_res = await client.post("/api/career/batches/prepare", json={"opportunity_ids": [104]})
         batch_id = prep_res.json()["batch_id"]
@@ -488,7 +599,7 @@ async def test_security_expired_and_tampered_approval_tokens():
 async def test_security_duplicate_and_concurrent_batch_submission():
     """Prevents duplicate replay submissions and concurrent double-execution."""
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers={"x-user-id": "test_e2e_applicant_99"}) as client:
         # Prepare & approve batch
         prep_res = await client.post("/api/career/batches/prepare", json={"opportunity_ids": [105]})
         batch_id = prep_res.json()["batch_id"]
