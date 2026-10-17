@@ -92,7 +92,7 @@ async def search_chunks(
                 SELECT id, domain, project_id, content, source, tags, created_at, user_id,
                        1 - (embedding <=> $1) AS similarity
                 FROM memory_chunks
-                WHERE domain = $2
+                WHERE domain = $2 AND user_id IS NULL
                 ORDER BY embedding <=> $1 ASC
                 LIMIT $3
                 """,
@@ -104,6 +104,7 @@ async def search_chunks(
                 SELECT id, domain, project_id, content, source, tags, created_at, user_id,
                        1 - (embedding <=> $1) AS similarity
                 FROM memory_chunks
+                WHERE user_id IS NULL
                 ORDER BY embedding <=> $1 ASC
                 LIMIT $2
                 """,
