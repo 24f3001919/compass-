@@ -524,7 +524,17 @@ def is_schedule_or_agent_intent(message: str) -> bool:
     if not message or not message.strip():
         return False
 
-    msg_lower = message.lower()
+    msg_lower = message.lower().strip()
+
+    # Informational or definitional queries about roadmaps should NOT be treated as scheduling/agent intent
+    informational_patterns = (
+        "what is a roadmap", "what is a product roadmap", "what is roadmap",
+        "define roadmap", "definition of roadmap", "explain roadmap", "tell me about roadmap",
+        "explain what a roadmap is", "what does roadmap mean",
+    )
+    if any(inf in msg_lower for inf in informational_patterns):
+        return False
+
     schedule_phrases = (
         "propose a focus schedule", "propose schedule", "focus schedule",
         "propose a schedule", "propose my schedule", "suggest a schedule",
@@ -535,6 +545,8 @@ def is_schedule_or_agent_intent(message: str) -> bool:
         "plan my week", "plan my weekend", "plan this week",
         "focus schedule for this week", "schedule for this week", "schedule for tomorrow",
         "what is my schedule", "check my schedule",
+        "roadmap", "what should i do today", "prioritize my tasks",
+        "prioritize tasks", "prioritize my day", "prioritize my deliverables",
     )
     if any(phrase in msg_lower for phrase in schedule_phrases):
         return True
