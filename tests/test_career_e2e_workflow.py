@@ -741,13 +741,14 @@ def test_resume_file_empty_bytes_handled_clearly():
 
 
 def test_resume_file_unsupported_format_rejected():
-    """Unsupported formats (.docx, .png) return explicit rejection explaining supported types."""
+    """Unsupported formats (.png, .jpg) return explicit rejection explaining supported types."""
     from backend.services.career_file_parser import extract_resume_from_file_bytes
 
-    res = extract_resume_from_file_bytes(b"fake docx content", "resume.docx")
+    res = extract_resume_from_file_bytes(b"\x89PNG\r\n\x1a\nfake image content", "resume.png")
     assert res.success is False
     assert "Unsupported file format" in res.error_message
     assert "PDF" in res.error_message
+    assert "Word (.docx)" in res.error_message
 
 
 def test_resume_file_oversized_rejected():

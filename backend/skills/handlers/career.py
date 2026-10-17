@@ -258,12 +258,12 @@ async def handle_draft_cover_letter(args: Dict[str, Any], pool: Any = None) -> D
         f"✍️ **Truthful Cover Letter Drafted:** {opp.company_name} — {opp.role_title}",
         f"- **Verified Projects Grounded:** {', '.join(verified_projs) if verified_projs else 'General Profile Highlights'}",
         f"- **Verified Skills Grounded:** {', '.join(verified_skls) if verified_skls else 'General Skills'}",
-        f"- **Factual Invariant:** Zero unverified qualifications or dates invented.",
+        "- **Factual Invariant:** Zero unverified qualifications or dates invented.",
         "",
         "```text",
         letter_text,
         "```",
-        f"You can review or edit this cover letter anytime in **Application Center**.",
+        "You can review or edit this cover letter anytime in **Application Center**.",
     ]
 
     return {

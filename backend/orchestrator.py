@@ -487,14 +487,37 @@ async def handle_message(
                 user_id=user_id,
                 conversation_id=conv_id,
             ):
-                if step.type in ("think", "act", "observe", "critic"):
-                    content = step.content or ""
-                    if step.type == "act" and step.tool_name:
-                        content = f"Tool: `{step.tool_name}`({step.tool_args or ''})"
-                    if content:
-                        thoughts.append(content)
+                if step.type == "think":
+                    if not any("Understanding" in m for m in thoughts):
+                        thoughts.append("Thinking: Understanding your request")
+                elif step.type == "act":
+                    tool = (step.tool_name or "").lower()
+                    if any(k in tool for k in ("task", "deadline", "coursework", "hackathon")):
+                        m = "Retrieving relevant tasks & deadlines"
+                    elif any(k in tool for k in ("schedule", "calendar", "feasibility", "conflict")):
+                        m = "Checking upcoming deadlines & schedule"
+                    elif "web" in tool:
+                        m = "Searching reference documentation"
+                    elif any(k in tool for k in ("note", "code", "context", "project")):
+                        m = "Reviewing relevant context"
+                    else:
+                        clean_name = tool.replace("_", " ").title()
+                        m = f"Executing {clean_name}" if clean_name else "Executing action"
+                    if not thoughts or thoughts[-1] != m:
+                        thoughts.append(m)
+                elif step.type == "critic":
+                    m = "Verifying plan constraints"
+                    if not thoughts or thoughts[-1] != m:
+                        thoughts.append(m)
                 elif step.type == "synthesize":
                     synth_text = step.content
+                    m = "Preparing your response"
+                    if not thoughts or thoughts[-1] != m:
+                        thoughts.append(m)
+                elif step.type == "done":
+                    m = "Analysis complete"
+                    if not thoughts or thoughts[-1] != m:
+                        thoughts.append(m)
                 elif step.type == "error":
                     agent_succeeded = False
                     err_msg = step.content

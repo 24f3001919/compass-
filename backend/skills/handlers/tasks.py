@@ -2,13 +2,161 @@
 Compass — Task and Project Management Skill Handlers.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 import logging
 from datetime import datetime, date, timedelta
 
 from backend.skills.registry import register_skill
 
 logger = logging.getLogger("compass.skills.tasks")
+
+
+def prioritize_tasks(tasks: List[Dict[str, Any]], target_date: Optional[date] = None) -> List[Dict[str, Any]]:
+    """Prioritize tasks according to Phase 4 rules:
+    1. Overdue tasks (due_date < today and status != 'done')
+    2. Tasks due today (due_date == today and status != 'done')
+    3. Tasks due soon (today < due_date <= today + 7 days)
+    4. Explicit high / urgent priority
+    5. Other open tasks
+    """
+    today = target_date or date.today()
+
+    def score_task(t: Dict[str, Any]) -> tuple:
+        due = t.get("due_date")
+        if isinstance(due, str):
+            try:
+                due = datetime.strptime(due[:10], "%Y-%m-%d").date()
+            except Exception:
+                due = None
+        status = str(t.get("status") or "open").lower()
+        priority = str(t.get("priority") or "medium").lower()
+
+        if status == "done":
+            tier = 5
+        elif due and due < today:
+            tier = 0  # Overdue
+        elif due and due == today:
+            tier = 1  # Due today
+        elif due and due <= today + timedelta(days=7):
+            tier = 2  # Due soon
+        elif priority in ("urgent", "high"):
+            tier = 3  # High/urgent priority
+        else:
+            tier = 4  # Other open tasks
+
+        prio_weight = {"urgent": 0, "high": 1, "medium": 2, "low": 3}.get(priority, 2)
+        due_sort = due or date.max
+        return (tier, prio_weight, due_sort, t.get("id") or 0)
+
+    return sorted(tasks, key=score_task)
+
+
+def build_daily_roadmap(tasks: List[Dict[str, Any]], target_date: Optional[date] = None) -> str:
+    """Synthesize an actionable, structured step-by-step daily roadmap from task records."""
+    today = target_date or date.today()
+    prioritized = prioritize_tasks(tasks, today)
+
+    active_tasks = [t for t in prioritized if str(t.get("status", "")).lower() != "done"]
+    if not active_tasks:
+        return "You have no pending tasks requiring attention today. All clear!"
+
+    top_tasks = active_tasks[:6]
+    total_count = len(tasks)
+
+    overdue_count = sum(
+        1 for t in active_tasks
+        if t.get("due_date") and (
+            (isinstance(t["due_date"], date) and t["due_date"] < today)
+            or (isinstance(t["due_date"], str) and t["due_date"][:10] < today.isoformat())
+        )
+    )
+    due_today_count = sum(
+        1 for t in active_tasks
+        if t.get("due_date") and (
+            (isinstance(t["due_date"], date) and t["due_date"] == today)
+            or (isinstance(t["due_date"], str) and t["due_date"][:10] == today.isoformat())
+        )
+    )
+
+    lines = []
+    lines.append("### Your plan for today")
+    summary_parts = []
+    if due_today_count:
+        summary_parts.append(f"**{due_today_count}** task(s) due today")
+    if overdue_count:
+        summary_parts.append(f"**{overdue_count}** overdue item(s)")
+    summary_text = f"You have {total_count} total task(s) in your workspace"
+    if summary_parts:
+        summary_text += f", with {', '.join(summary_parts)}."
+    else:
+        summary_text += f". Prioritizing the top {len(top_tasks)} items needing attention."
+    lines.append(summary_text)
+    lines.append("")
+
+    # 1. Start here
+    first = top_tasks[0]
+    due_label = str(first.get("due_date")) if first.get("due_date") else "No due date"
+    prio_label = first.get("priority", "medium").title()
+    domain_label = first.get("domain", "general").title()
+    lines.append("### 1. Start here")
+    lines.append(f"**{first['title']}**")
+    lines.append(f"*{domain_label} · Priority: {prio_label} · Due: {due_label}*")
+    why = (
+        "Highest immediate priority with pressing deadline or dependency."
+        if (overdue_count or due_today_count)
+        else "Recommended lead task to establish momentum."
+    )
+    lines.append(why)
+    lines.append("")
+
+    # 2. Next
+    if len(top_tasks) > 1:
+        second = top_tasks[1]
+        due_label2 = str(second.get("due_date")) if second.get("due_date") else "No due date"
+        prio_label2 = second.get("priority", "medium").title()
+        domain_label2 = second.get("domain", "general").title()
+        lines.append("### 2. Next")
+        lines.append(f"**{second['title']}**")
+        lines.append(f"*{domain_label2} · Priority: {prio_label2} · Due: {due_label2}*")
+        lines.append("Follow up immediately after completing the lead task.")
+        lines.append("")
+
+    # 3. Continue
+    if len(top_tasks) > 2:
+        lines.append("### 3. Continue")
+        for t in top_tasks[2:]:
+            d_lbl = str(t.get("due_date")) if t.get("due_date") else "No due date"
+            p_lbl = t.get("priority", "medium").title()
+            dom_lbl = t.get("domain", "general").title()
+            lines.append(f"- **{t['title']}** ({dom_lbl} · {p_lbl} · Due: {d_lbl})")
+        lines.append("")
+
+    # Suggested schedule (explicitly estimates)
+    lines.append("### Suggested schedule")
+    lines.append("*Estimated focus blocks (adapt based on your actual availability):*")
+    blocks = [
+        ("Morning (09:00 - 11:30)", top_tasks[0]["title"]),
+    ]
+    if len(top_tasks) > 1:
+        blocks.append(("Midday (12:30 - 14:30)", top_tasks[1]["title"]))
+    if len(top_tasks) > 2:
+        rem_titles = ", ".join(f"'{t['title']}'" for t in top_tasks[2:4])
+        blocks.append(("Afternoon (15:00 - 17:00)", rem_titles))
+    for time_slot, item_title in blocks:
+        lines.append(f"- **{time_slot}**: {item_title}")
+    lines.append("")
+
+    # Before you finish
+    lines.append("### Before you finish")
+    lines.append("- [ ] Review completed tasks and update statuses")
+    lines.append(f"- [ ] Check remaining {max(0, total_count - len(top_tasks))} task(s) in Timeline")
+    lines.append("")
+
+    # Next action
+    lines.append("### Next action")
+    lines.append("Would you like me to commit this focus schedule to your calendar, or filter by a specific domain like **Coursework** or **Hackathon**?")
+
+    return "\n".join(lines)
 
 
 @register_skill("query_tasks")
@@ -25,17 +173,56 @@ async def handle_query_tasks(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
     count = len(tasks)
     d_str = f" in {domain.upper()}" if domain else ""
     s_str = f" with status '{status}'" if status else ""
-    if tasks:
-        task_details = [
-            f"'{t['title']}' (due: {t.get('due_date') or 'no due date'}, status: {t.get('status', 'open')})"
-            for t in tasks[:5]
-        ]
-        summary = f"Found {count} task(s){d_str}{s_str}: {'; '.join(task_details)}."
+
+    if count == 0:
+        # Strictly preserved for backward-compatibility with test contracts
+        return {
+            "response": f"Found 0 task(s){d_str}{s_str}.",
+            "data": [],
+        }
+
+    prioritized = prioritize_tasks(tasks, target_date=date.today())
+
+    # Check if request has roadmap or planning intent
+    req_context = " ".join([
+        str(args.get("intent") or ""),
+        str(args.get("mode") or ""),
+        str(args.get("goal") or ""),
+        str(args.get("query") or ""),
+        str(args.get("message") or ""),
+    ]).lower()
+
+    is_roadmap = any(
+        kw in req_context
+        for kw in (
+            "roadmap", "plan", "today", "prioritize", "what should i do",
+            "step-by-step", "step by step", "actionable", "attention",
+        )
+    )
+
+    if is_roadmap:
+        summary = build_daily_roadmap(prioritized, target_date=date.today())
     else:
-        summary = f"Found {count} task(s){d_str}{s_str}."
+        top_tasks = prioritized[:6]
+        task_lines = []
+        for t in top_tasks:
+            due_str = str(t.get("due_date")) if t.get("due_date") else "No due date"
+            dom = t.get("domain", "general").title()
+            prio = t.get("priority", "medium").title()
+            stat = t.get("status", "open")
+            task_lines.append(f"- **{t['title']}** (`{dom}` · {stat} · Due: {due_str} · Priority: {prio})")
+
+        more_notice = (
+            f"\n\n*Showing top {len(top_tasks)} prioritized items out of {count} total matching task(s). "
+            f"You can view the full list in the Timeline view.*"
+            if count > len(top_tasks)
+            else ""
+        )
+        summary = f"Found **{count}** task(s){d_str}{s_str}:\n\n" + "\n".join(task_lines) + more_notice
+
     return {
         "response": summary,
-        "data": tasks,
+        "data": prioritized,
     }
 
 

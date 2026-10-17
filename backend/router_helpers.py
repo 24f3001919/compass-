@@ -526,6 +526,11 @@ def is_schedule_or_agent_intent(message: str) -> bool:
         "review my schedule", "plan my week", "plan my weekend", "plan this week",
         "focus schedule for this week", "schedule for this week", "schedule for tomorrow",
         "what is my schedule", "check my schedule",
+        "roadmap", "daily roadmap", "step-by-step roadmap", "optimal roadmap",
+        "plan today", "plan my day", "plan for today", "daily plan", "plan out my day",
+        "prioritize my tasks", "prioritize tasks", "prioritize deadlines",
+        "what should i do today", "what should i work on today", "where should i start",
+        "tasks needing attention", "analyze my deadlines", "analyze deadlines",
     )
     if any(phrase in msg_lower for phrase in schedule_phrases):
         return True
@@ -536,6 +541,12 @@ def is_schedule_or_agent_intent(message: str) -> bool:
 
     # Check for review + tasks/projects
     if "review" in msg_lower and any(w in msg_lower for w in ("task", "tasks", "project", "projects", "deadline", "deadlines")):
+        return True
+
+    # Check for planning + today or prioritization
+    if any(w in msg_lower for w in ("roadmap", "prioritize", "prioritization")):
+        return True
+    if "today" in msg_lower and any(w in msg_lower for w in ("plan", "roadmap", "prioritize", "attention", "step-by-step", "step by step", "roadmap")):
         return True
 
     return False
@@ -688,7 +699,10 @@ def _fallback_route(message: str, history: Optional[list[dict[str, str]]] = None
                     return "query_tasks", {}, f"Checking your task due dates based on previous context: {content}"
                 return "query_tasks", {}, f"Referencing previous task: {content}"
     if any(term in msg_lower for term in ("task", "due", "deliverable", "deadline", "coursework", "hackathon")):
-        return "query_tasks", {}, ""
+        query_args: dict[str, Any] = {"query": message}
+        if any(w in msg_lower for w in ("roadmap", "plan", "today", "prioritize", "attention", "step-by-step", "step by step")):
+            query_args["intent"] = "roadmap"
+        return "query_tasks", query_args, ""
     if is_greeting_intent(message):
         return None, None, (
             "I am Compass, your AI copilot with long-term memory across hackathons, coursework, "

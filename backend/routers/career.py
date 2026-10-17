@@ -369,6 +369,20 @@ async def prepare_application_endpoint(request: Request, opportunity_id: Optiona
     return app
 
 
+@router.get("/applications/{app_id}", response_model=CareerApplicationOut)
+async def get_application_endpoint(app_id: int, request: Request):
+    """Retrieve a single tracked application with opportunity and resume details, scoped to authenticated user."""
+    user_id = _get_or_create_user_id(request)
+    app = await get_career_application_by_id(app_id, user_id)
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+    opp = await get_opportunity_by_id(app.opportunity_id, user_id)
+    resume = await get_resume_by_id(app.resume_id, user_id) if app.resume_id else None
+    app.opportunity = opp
+    app.resume = resume
+    return app
+
+
 @router.post("/applications/{app_id}/cover-letter", response_model=CareerApplicationOut)
 async def set_application_cover_letter_endpoint(app_id: int, body: Dict[str, Any], request: Request):
     """Attach or update the cover letter for a career application."""
@@ -564,43 +578,58 @@ async def submit_batch_endpoint(batch_id: str, body: BatchSubmitRequest, request
         )
 
     async with lock:
-        # Re-fetch after acquiring lock to guarantee atomic state
-        batch = await get_application_batch(batch_id, user_id)
-        if not batch or batch.get("status") != "APPROVED":
+        # Atomic database-backed claim across multiple server processes / workers
+        from backend.memory.career import (
+            claim_application_batch_for_submission,
+            release_application_batch_claim,
+            update_application_batch_status,
+        )
+        claimed = await claim_application_batch_for_submission(batch_id, user_id)
+        if not claimed:
             raise HTTPException(
                 status_code=409,
-                detail="Batch is no longer in APPROVED status.",
+                detail="Concurrent submission rejected: This batch is currently processing or is no longer in APPROVED status.",
             )
 
-        # Content integrity and token verification
-        apps_data = []
-        for aid in batch.get("application_ids", []):
-            app_rec = await get_career_application_by_id(aid, user_id)
-            if app_rec:
-                apps_data.append(app_rec.model_dump())
-        current_content_hash = compute_batch_content_hash(apps_data)
+        try:
+            # Content integrity and token verification
+            apps_data = []
+            for aid in batch.get("application_ids", []):
+                app_rec = await get_career_application_by_id(aid, user_id)
+                if app_rec:
+                    apps_data.append(app_rec.model_dump())
+            current_content_hash = compute_batch_content_hash(apps_data)
 
-        stored_token = batch.get("approval_token")
-        token_to_verify = body.approval_token or stored_token
+            stored_token = batch.get("approval_token")
+            token_to_verify = body.approval_token or stored_token
 
-        if not token_to_verify:
-            raise HTTPException(
-                status_code=403,
-                detail="Submission blocked: Missing approval token. Batch must be re-approved.",
-            )
+            if not token_to_verify:
+                await release_application_batch_claim(batch_id, user_id, "APPROVED")
+                raise HTTPException(
+                    status_code=403,
+                    detail="Submission blocked: Missing approval token. Batch must be re-approved.",
+                )
 
-        is_valid, reason = verify_batch_approval_token(token_to_verify, user_id, batch_id, current_content_hash)
-        if not is_valid:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Submission blocked: {reason}",
-            )
+            is_valid, reason = verify_batch_approval_token(token_to_verify, user_id, batch_id, current_content_hash)
+            if not is_valid:
+                await release_application_batch_claim(batch_id, user_id, "APPROVED")
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Submission blocked: {reason}",
+                )
 
-        from backend.memory.career import update_application_batch_status
-        await update_application_batch_status(batch_id, user_id, "SUBMITTING")
-
-        results = await execute_batch_submission(user_id, batch, body.preferred_method)
-        await finish_application_batch(batch_id, user_id, [r.model_dump() for r in results])
+            results = await execute_batch_submission(user_id, batch, body.preferred_method)
+            await finish_application_batch(batch_id, user_id, [r.model_dump() for r in results])
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error("Unhandled error executing batch submission %s: %s", batch_id, e)
+            await finish_application_batch(batch_id, user_id, [{
+                "application_id": 0,
+                "status": "FAILED",
+                "message": f"Submission crashed: {e}",
+            }])
+            raise HTTPException(status_code=500, detail=f"Submission execution failed: {e}")
 
     success_cnt = sum(1 for r in results if r.status in {"SUBMITTED", "APPROVED"})
     manual_cnt = sum(1 for r in results if r.status == CareerApplicationStatus.MANUAL_SUBMISSION_REQUIRED.value)

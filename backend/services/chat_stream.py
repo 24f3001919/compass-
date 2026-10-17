@@ -411,7 +411,13 @@ async def generate_chat_events(
                 is_first = False
                 yield f"data: {json.dumps({'type': 'token', 'value': chunk})}\n\n"
 
-            yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used})}\n\n"
+            done_payload: dict[str, Any] = {'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used}
+            raw_data = result.get('data')
+            if isinstance(raw_data, list):
+                valid_tasks = [t for t in raw_data if isinstance(t, dict) and 'title' in t][:6]
+                if valid_tasks:
+                    done_payload['tasks'] = valid_tasks
+            yield f"data: {json.dumps(done_payload)}\n\n"
             _schedule_stream_persistence(conv_id, message, response_text, user_id, guest_id, skill_used)
             return
 
@@ -489,10 +495,11 @@ async def generate_chat_events(
                             await stream.aclose()
                         break
 
+                    # Do not stream private model reasoning tokens or internal deliberations to the user
                     reasoning_val = getattr(delta, "reasoning", None) or getattr(delta, "reasoning_content", None)
-                    reasoning_token = reasoning_val if isinstance(reasoning_val, str) else ""
-                    if reasoning_token:
-                        yield f"data: {json.dumps({'type': 'thought', 'value': reasoning_token})}\n\n"
+                    if reasoning_val:
+                        # Private reasoning suppressed from normal UI
+                        pass
 
                     # Strip reasoning_content and <think> blocks from user SSE token output
                     token = (delta.content if delta else None) or ""
@@ -560,7 +567,13 @@ async def generate_chat_events(
                 # and replaces it with the clean tool-call response.
                 yield f"data: {json.dumps({'type': 'replace', 'value': response_text})}\n\n"
 
-            yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used})}\n\n"
+            done_payload2: dict[str, Any] = {'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used}
+            raw_data2 = result.get('data')
+            if isinstance(raw_data2, list):
+                valid_tasks2 = [t for t in raw_data2 if isinstance(t, dict) and 'title' in t][:6]
+                if valid_tasks2:
+                    done_payload2['tasks'] = valid_tasks2
+            yield f"data: {json.dumps(done_payload2)}\n\n"
             _schedule_stream_persistence(conv_id, message, response_text, user_id, guest_id, skill_used)
             return
 

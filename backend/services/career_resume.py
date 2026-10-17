@@ -313,7 +313,7 @@ def generate_resume_html(resume: ResumeOut, opportunity: Optional[OpportunityOut
 
     {f'<h2>Experience</h2>{exp_items}' if exp_items else ''}
 
-    {f'<h2>Achievements</h2><ul>' + "".join([f"<li>{a}</li>" for a in c.achievements]) + '</ul>' if c.achievements else ''}
+    {'<h2>Achievements</h2><ul>' + "".join([f"<li>{a}</li>" for a in c.achievements]) + '</ul>' if c.achievements else ''}
 </body>
 </html>
 """

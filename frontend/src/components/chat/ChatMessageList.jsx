@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react'
 import EvidenceCard from './EvidenceCard'
 import ThinkingBlock from './ThinkingBlock'
 import MarkdownRenderer from './MarkdownRenderer'
+import ChatTaskCard from './ChatTaskCard'
 import { fetchPersonaPhrases } from '../../api/chatApi'
 
 const DEFAULT_STARTING_PHRASES = [
@@ -25,6 +26,30 @@ const SUGGESTION_CHIPS = [
   "What's due this week?",
   "Recap where I left off",
 ]
+
+function getFollowUpSuggestions(text) {
+  if (!text || typeof text !== 'string') return []
+  const lower = text.toLowerCase()
+  if (lower.includes('roadmap') || lower.includes('plan for today') || lower.includes('start here') || lower.includes('suggested schedule')) {
+    return [
+      'Show overdue tasks',
+      'Build my schedule',
+      'Focus on coursework',
+      'Check calendar clashes',
+    ]
+  }
+  if (lower.includes('task') || lower.includes('deadline')) {
+    return [
+      'Plan an optimal roadmap for today',
+      'Show overdue tasks',
+      'Check schedule conflicts',
+    ]
+  }
+  return [
+    'What should I do today?',
+    'Review my upcoming tasks',
+  ]
+}
 
 function getTimeGreeting() {
   const hour = new Date().getHours()
@@ -305,7 +330,7 @@ export default function ChatMessageList({
                       </div>
                     )}
                     <div className="chat-msg-bubble" style={{
-                      maxWidth: '75%',
+                      maxWidth: 'min(85%, 820px)',
                       padding: '13px 17px',
                       borderRadius: '14px',
                       background: msg.role === 'user' ? 'var(--bg-sidebar)' : 'var(--bg-card)',
@@ -353,11 +378,57 @@ export default function ChatMessageList({
                       ) : (
                         <MarkdownRenderer content={msg.text} />
                       )}
+                      {msg.role === 'assistant' && msg.tasks && Array.isArray(msg.tasks) && msg.tasks.length > 0 && (
+                        <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            Relevant Tasks ({msg.tasks.length})
+                          </span>
+                          {msg.tasks.slice(0, 4).map((t, tIdx) => (
+                            <ChatTaskCard key={tIdx} task={t} onAction={(action, task) => onSendMessage && onSendMessage(`View task "${task.title}"`)} />
+                          ))}
+                        </div>
+                      )}
                       {msg.role === 'assistant' && msg.evidence && (
                         <EvidenceCard evidence={msg.evidence} />
                       )}
                     </div>
                   </div>
+
+                  {/* Contextual Follow-up Chips for Latest Assistant Response */}
+                  {isLatest && msg.role === 'assistant' && !isStreaming && !msg.error && (
+                    <div style={{
+                      display: 'flex',
+                      gap: '8px',
+                      marginLeft: '40px',
+                      marginTop: '2px',
+                      flexWrap: 'wrap',
+                    }}>
+                      {getFollowUpSuggestions(msg.text).map((chip, cIdx) => (
+                        <button
+                          key={cIdx}
+                          type="button"
+                          disabled={isStreaming || isTyping}
+                          onClick={() => onSendMessage && onSendMessage(chip)}
+                          className="persona-suggestion-chip"
+                          style={{
+                            padding: '4px 10px',
+                            fontSize: '12px',
+                            borderRadius: '16px',
+                            background: 'var(--bg-card-soft, rgba(0,0,0,0.04))',
+                            border: '1px solid var(--border)',
+                            color: 'var(--text-secondary)',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                          }}
+                        >
+                          <span style={{ color: 'var(--coursework, #3b82f6)' }}>✦</span>
+                          <span>{chip}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                   {showModes && (
                     <div style={{
@@ -403,7 +474,7 @@ export default function ChatMessageList({
                   🧭
                 </div>
                 <div className="chat-msg-bubble" style={{
-                  maxWidth: '75%',
+                  maxWidth: 'min(85%, 820px)',
                   padding: '13px 17px',
                   borderRadius: '14px',
                   background: 'var(--bg-card)',

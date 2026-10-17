@@ -257,13 +257,20 @@ def test_printable_resume_html_generation():
 @pytest.mark.asyncio
 async def test_application_lifecycle_and_handoff_package():
     """Validates application creation, status updates, and manual handoff package generation."""
-    app_record = await get_or_create_career_application("user_test_app", 202)
+    import uuid
+    user_id = f"user_test_app_{uuid.uuid4().hex[:8]}"
+    opp_id = await upsert_opportunity(
+        "Google India",
+        "Software Engineering Intern",
+        f"https://careers.google.com/jobs/results/swe-intern-test-app-{uuid.uuid4().hex[:6]}",
+    )
+    app_record = await get_or_create_career_application(user_id, opp_id)
     assert app_record.id is not None
     assert app_record.status == CareerApplicationStatus.SAVED
 
     updated = await update_career_application(
         app_record.id,
-        "user_test_app",
+        user_id,
         {
             "status": CareerApplicationStatus.READY_FOR_REVIEW.value,
             "form_answers": {
@@ -281,7 +288,7 @@ async def test_application_lifecycle_and_handoff_package():
     opp_dict = {
         "company_name": "Google India",
         "role_title": "Software Engineering Intern",
-        "canonical_url": "https://careers.google.com/jobs/results/swe-intern",
+        "canonical_url": "https://careers.google.com/jobs/results/swe-intern-test-app",
     }
     resume_dict = {
         "title": "Tailored SWE Resume",
@@ -289,7 +296,7 @@ async def test_application_lifecycle_and_handoff_package():
     }
     pkg = generate_manual_application_package(updated, opp_dict, resume_dict)
     assert pkg["company_name"] == "Google India"
-    assert pkg["portal_url"] == "https://careers.google.com/jobs/results/swe-intern"
+    assert pkg["portal_url"] == "https://careers.google.com/jobs/results/swe-intern-test-app"
     assert pkg["prefilled_answers"]["current_degree"] == "B.Tech Computer Science"
     assert len(pkg["submission_instructions"]) >= 4
 
@@ -302,8 +309,10 @@ async def test_application_lifecycle_and_handoff_package():
 async def test_batch_approval_security_gate():
     """Batch submission requires valid approval token and blocks unapproved attempts."""
     # 1. Create two applications
-    app1 = await get_or_create_career_application("user_batch_test", 301)
-    app2 = await get_or_create_career_application("user_batch_test", 302)
+    opp1_id = await upsert_opportunity("Batch Corp 1", "Intern 1", "https://batch.corp/test-batch-1")
+    opp2_id = await upsert_opportunity("Batch Corp 2", "Intern 2", "https://batch.corp/test-batch-2")
+    app1 = await get_or_create_career_application("user_batch_test", opp1_id)
+    app2 = await get_or_create_career_application("user_batch_test", opp2_id)
 
     # 2. Prepare batch
     batch_id = await create_application_batch("user_batch_test", [app1.id, app2.id])
@@ -337,6 +346,7 @@ async def test_batch_approval_security_gate():
 # ===========================================================================
 
 @pytest.mark.asyncio
+@pytest.mark.timeout(120)
 async def test_career_api_endpoints():
     """Validates FastAPI routes across master resume, tailoring, applications, and batching."""
     transport = ASGITransport(app=app)

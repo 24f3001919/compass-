@@ -271,9 +271,13 @@ export default function ChatPanel({
           setStreamingText('')
           setStreamingThought('')
           isSendingRef.current = false
-          const finalText = doneData?.response || receivedTokens
           if (finalText && finalText.trim()) {
-            setMessages(prev => [...prev, { role: 'assistant', text: finalText, thought: receivedThought || null }])
+            setMessages(prev => [...prev, {
+              role: 'assistant',
+              text: finalText,
+              thought: receivedThought || null,
+              tasks: Array.isArray(doneData?.tasks) ? doneData.tasks : null,
+            }])
           } else if (onSendMessage) {
             const reply = await onSendMessage(text, tone, specialistIdToUse)
             if (reply) {

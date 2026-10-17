@@ -52,7 +52,7 @@ async def get_pool() -> Optional[asyncpg.Pool]:
             return None
         _db_pool_available = True
     try:
-        pool = await asyncio.wait_for(_raw_get_pool(), timeout=1.5)
+        pool = await asyncio.wait_for(_raw_get_pool(), timeout=8.0)
         if pool is not None:
             _db_pool_available = True
             return pool
@@ -575,6 +575,158 @@ async def approve_application_batch(batch_id: str, user_id: str, token: str) -> 
             user_id,
         )
         return True
+
+
+async def claim_application_batch_for_submission(batch_id: str, user_id: str) -> bool:
+    """
+    Atomically claims an approved batch for submission across multi-worker environments.
+    Guarantees that two concurrent requests or separate server worker processes cannot
+    both acquire the submission lock for the same batch.
+    Transitions status: 'APPROVED' -> 'SUBMITTING'.
+    Returns True if successfully claimed, False if already claimed or not in APPROVED status.
+    """
+    pool = await get_pool()
+    now_ts = datetime.now(timezone.utc)
+    if not pool:
+        b = _in_memory_batches.get(batch_id)
+        if b and b["user_id"] == user_id and b.get("status") == "APPROVED":
+            b["status"] = "SUBMITTING"
+            b["updated_at"] = now_ts
+            return True
+        return False
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE application_batches
+            SET status = 'SUBMITTING', updated_at = now()
+            WHERE id = $1 AND user_id = $2 AND status = 'APPROVED'
+            RETURNING id;
+            """,
+            batch_id,
+            user_id,
+        )
+        return bool(row)
+
+
+async def release_application_batch_claim(batch_id: str, user_id: str, reset_status: str = "APPROVED") -> bool:
+    """Reverts a claimed SUBMITTING batch back to APPROVED if aborted prior to submission execution."""
+    pool = await get_pool()
+    now_ts = datetime.now(timezone.utc)
+    if not pool:
+        b = _in_memory_batches.get(batch_id)
+        if b and b["user_id"] == user_id and b.get("status") == "SUBMITTING":
+            b["status"] = reset_status
+            b["updated_at"] = now_ts
+            return True
+        return False
+
+    async with pool.acquire() as conn:
+        res = await conn.execute(
+            """
+            UPDATE application_batches
+            SET status = $3, updated_at = now()
+            WHERE id = $1 AND user_id = $2 AND status = 'SUBMITTING'
+            """,
+            batch_id,
+            user_id,
+            reset_status,
+        )
+        return "UPDATE 1" in res
+
+
+async def claim_career_application_for_submission(app_id: int, user_id: str) -> bool:
+    """
+    Atomically claims a career application for submission, transitioning it to SUBMITTING.
+    Guarantees an application cannot be submitted concurrently twice across workers.
+    """
+    pool = await get_pool()
+    now_ts = datetime.now(timezone.utc)
+    if not pool:
+        rec = _in_memory_applications.get(app_id)
+        if rec and rec["user_id"] == user_id and rec.get("status") == CareerApplicationStatus.APPROVED_FOR_SUBMISSION.value:
+            rec["status"] = "SUBMITTING"
+            rec["updated_at"] = now_ts
+            return True
+        return False
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE career_applications
+            SET status = 'SUBMITTING', updated_at = now()
+            WHERE id = $1 AND user_id = $2 AND status = 'APPROVED_FOR_SUBMISSION'
+            RETURNING id;
+            """,
+            app_id,
+            user_id,
+        )
+        return bool(row)
+
+
+async def reconcile_stale_submission_claims(user_id: Optional[str] = None, max_age_seconds: int = 600) -> Dict[str, int]:
+    """
+    Reconciles stale submission claims where a worker process may have died or timed out mid-flight.
+    Applications stuck in 'SUBMITTING' are marked 'SUBMISSION_OUTCOME_UNKNOWN' to prevent silent duplicate submissions.
+    Batches stuck in 'SUBMITTING' are reverted to 'READY_FOR_REVIEW' requiring candidate verification.
+    """
+    pool = await get_pool()
+    now_ts = datetime.now(timezone.utc)
+    reconciled_apps = 0
+    reconciled_batches = 0
+
+    if not pool:
+        for aid, rec in _in_memory_applications.items():
+            if rec.get("status") == "SUBMITTING":
+                if user_id is None or rec.get("user_id") == user_id:
+                    updated_at = rec.get("updated_at") or rec.get("created_at") or now_ts
+                    if (now_ts - updated_at).total_seconds() > max_age_seconds:
+                        rec["status"] = CareerApplicationStatus.SUBMISSION_OUTCOME_UNKNOWN.value
+                        rec["updated_at"] = now_ts
+                        reconciled_apps += 1
+
+        for bid, b in _in_memory_batches.items():
+            if b.get("status") == "SUBMITTING":
+                if user_id is None or b.get("user_id") == user_id:
+                    updated_at = b.get("updated_at") or b.get("created_at") or now_ts
+                    if (now_ts - updated_at).total_seconds() > max_age_seconds:
+                        b["status"] = "READY_FOR_REVIEW"
+                        b["approval_token"] = None
+                        b["updated_at"] = now_ts
+                        reconciled_batches += 1
+
+        return {"reconciled_applications": reconciled_apps, "reconciled_batches": reconciled_batches}
+
+    async with pool.acquire() as conn:
+        # Reconcile applications in DB
+        app_query = """
+            UPDATE career_applications
+            SET status = 'SUBMISSION_OUTCOME_UNKNOWN', updated_at = now()
+            WHERE status = 'SUBMITTING'
+              AND updated_at < now() - ($1 || ' seconds')::interval
+        """
+        params_app = [str(max_age_seconds)]
+        if user_id:
+            app_query += " AND user_id = $2"
+            params_app.append(user_id)
+        res_app = await conn.execute(app_query, *params_app)
+        reconciled_apps = int(res_app.split()[-1]) if res_app else 0
+
+        # Reconcile batches in DB
+        batch_query = """
+            UPDATE application_batches
+            SET status = 'READY_FOR_REVIEW', approval_token = NULL, updated_at = now()
+            WHERE status = 'SUBMITTING'
+              AND updated_at < now() - ($1 || ' seconds')::interval
+        """
+        params_batch = [str(max_age_seconds)]
+        if user_id:
+            batch_query += " AND user_id = $2"
+            params_batch.append(user_id)
+        res_batch = await conn.execute(batch_query, *params_batch)
+        reconciled_batches = int(res_batch.split()[-1]) if res_batch else 0
+
+    return {"reconciled_applications": reconciled_apps, "reconciled_batches": reconciled_batches}
 
 
 async def update_application_batch_status(batch_id: str, user_id: str, status: str) -> bool:

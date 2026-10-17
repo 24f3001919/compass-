@@ -113,6 +113,7 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
     let fullResponse = ''
     let lastConvId = conversationId || null
     let lastSkill = null
+    let lastTasks = null
 
     while (true) {
       const { done, value } = await reader.read()
@@ -149,6 +150,7 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
         } else if (evt.type === 'done') {
           if (evt.conversation_id) lastConvId = evt.conversation_id
           if (evt.skill_used) lastSkill = evt.skill_used
+          if (evt.tasks) lastTasks = evt.tasks
         } else if (evt.type === 'error') {
           const errMsg = evt.detail || evt.message || 'Stream error'
           const errObj = new Error(errMsg)
@@ -167,6 +169,7 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
         response: fullResponse,
         conversation_id: lastConvId,
         skill_used: lastSkill,
+        tasks: lastTasks,
       })
     }
     return {

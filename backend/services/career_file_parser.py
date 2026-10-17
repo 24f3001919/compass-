@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # Maximum file size: 5 MB
 MAX_RESUME_FILE_SIZE = 5 * 1024 * 1024
 
-SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".md"}
+SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md"}
 
 
 class ResumeParseResult(BaseModel):
@@ -39,6 +39,15 @@ def is_pdf_parser_available() -> bool:
     """Check if pypdf is installed and functional."""
     try:
         import pypdf
+        return True
+    except ImportError:
+        return False
+
+
+def is_docx_parser_available() -> bool:
+    """Check if python-docx is installed and functional."""
+    try:
+        import docx
         return True
     except ImportError:
         return False
@@ -85,8 +94,8 @@ def extract_resume_from_file_bytes(
             filename=filename,
             file_type=ext or "unknown",
             error_message=(
-                f"Unsupported file format '{ext}'. Supported formats are: PDF (.pdf), Plain Text (.txt), Markdown (.md). "
-                "Word (.docx) files require export to PDF first. Scanned image files require OCR."
+                f"Unsupported file format '{ext}'. Supported formats are: PDF (.pdf), Word (.docx), Plain Text (.txt), Markdown (.md). "
+                "Scanned image files require OCR."
             ),
         )
 
@@ -122,6 +131,54 @@ def extract_resume_from_file_bytes(
                 filename=filename,
                 file_type=ext,
                 error_message=f"Failed to read text file: {e}",
+            )
+
+    # 2. Microsoft Word (.docx) Parsing
+    if ext == ".docx":
+        if not is_docx_parser_available():
+            return ResumeParseResult(
+                success=False,
+                filename=filename,
+                file_type=".docx",
+                error_message="DOCX parser (python-docx) is not installed in the environment.",
+            )
+        import docx
+        try:
+            doc = docx.Document(io.BytesIO(file_bytes))
+            paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+            for table in doc.tables:
+                for row in table.rows:
+                    row_text = " | ".join(cell.text.strip() for cell in row.cells if cell.text.strip())
+                    if row_text:
+                        paragraphs.append(row_text)
+            full_text = "\n\n".join(paragraphs).strip()
+            if not full_text:
+                return ResumeParseResult(
+                    success=False,
+                    filename=filename,
+                    file_type=".docx",
+                    error_message="DOCX file contains no readable text content.",
+                )
+            parsed_content = parse_uploaded_resume_text(full_text)
+            warning = None
+            if not parsed_content.skills and not parsed_content.education:
+                warning = "Standard skills or education sections were not clearly identified in the DOCX document."
+            return ResumeParseResult(
+                success=True,
+                filename=filename,
+                file_type=".docx",
+                page_count=None,
+                raw_text=full_text[:3000],
+                extracted_content=parsed_content,
+                confidence_warning=warning,
+                requires_user_review=True,
+            )
+        except Exception as e:
+            return ResumeParseResult(
+                success=False,
+                filename=filename,
+                file_type=".docx",
+                error_message=f"Malformed or corrupted DOCX file: {e}",
             )
 
     # 2. PDF Parsing via pypdf

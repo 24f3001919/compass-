@@ -158,11 +158,11 @@ SUPPORTED_ADAPTERS: List[SubmissionAdapterCapability] = [
     SubmissionAdapterCapability(
         adapter_id="ats_endpoint",
         display_name="ATS Direct Postings API",
-        description="Programmatic submission via supported Greenhouse and Lever job board APIs where enterprise key is configured.",
+        description="Programmatic submission via supported partner posting endpoints where employer API key is configured.",
         is_automated=True,
         requires_credentials=True,
         is_configured=False,
-        supported_platforms=["Greenhouse", "Lever", "Ashby"],
+        supported_platforms=["Configured Partner ATS APIs"],
     ),
     SubmissionAdapterCapability(
         adapter_id="browser_assisted",
@@ -561,7 +561,20 @@ async def submit_single_application(
             message=f"Application was already submitted on {app.submitted_at.isoformat()}.",
         )
 
-    # 4. Route to adapter instance
+    # 5. Atomically claim application row for submission across multi-worker environments
+    from backend.memory.career import claim_career_application_for_submission
+    claimed_app = await claim_career_application_for_submission(app.id, user_id)
+    if not claimed_app:
+        return SubmissionResultItem(
+            application_id=app.id,
+            company_name=opp_dict.get("company_name", ""),
+            role_title=opp_dict.get("role_title", ""),
+            status="BLOCKED",
+            submission_method=method.value,
+            message="Submission blocked: Application is currently being submitted or was already processed.",
+        )
+
+    # 6. Route to adapter instance
     adapter = _ADAPTERS_MAP.get(method, ManualHandoffAdapter())
     return await adapter.execute(app, opp_dict, resume_dict, user_id)
 

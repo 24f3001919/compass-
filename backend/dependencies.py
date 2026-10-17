@@ -285,11 +285,12 @@ def _get_current_identity(request: Request) -> Optional[Identity]:
     settings = get_settings()
 
     user_header = request.headers.get("x-user-id")
-    if user_header and user_header.strip():
-        if settings.is_production():
+    cookie_user = request.cookies.get("compass_user_id")
+    if (user_header and user_header.strip()) or (cookie_user and cookie_user.strip()):
+        if not (settings.is_development() or settings.is_test()):
             raise HTTPException(
                 status_code=403,
-                detail="x-user-id impersonation is forbidden in production environment",
+                detail="x-user-id / compass_user_id impersonation is strictly forbidden outside development or test environments",
             )
 
     session_token = request.cookies.get("compass_session")
@@ -321,14 +322,12 @@ def _get_current_identity(request: Request) -> Optional[Identity]:
     if bearer_token and settings.AUTH_TOKEN and isinstance(settings.AUTH_TOKEN, str) and hmac.compare_digest(str(bearer_token), str(settings.AUTH_TOKEN)):
         return Identity(id="admin", is_admin=True, is_guest=False, user_id="admin", guest_id=verified_guest)
 
-    # 3. Development / testing quick identity header or cookie
-    if not settings.is_production():
-        cookie_user = request.cookies.get("compass_user_id")
+    # 3. Development / testing quick identity header or cookie (explicitly disallowed in production/staging)
+    if settings.is_development() or settings.is_test():
         dev_candidate = (user_header and user_header.strip()) or (cookie_user and cookie_user.strip())
         if dev_candidate:
             target = dev_candidate.strip().lower()
-            if settings.is_development() or settings.is_test() or "@" in target:
-                return Identity(id=target, is_admin=(target == "admin"), is_guest=False, user_id=target, guest_id=verified_guest)
+            return Identity(id=target, is_admin=(target == "admin"), is_guest=False, user_id=target, guest_id=verified_guest)
 
     # 4. Verified guest token
     if verified_guest:

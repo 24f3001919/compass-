@@ -91,6 +91,30 @@ export async function parseUploadResume(rawText) {
   return res.json()
 }
 
+export async function parseResumeFile(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const headers = {}
+  try {
+    const token = localStorage.getItem('compass_token')
+    if (token) headers['Authorization'] = `Bearer ${token}`
+    const guestId = localStorage.getItem('compass_guest_id')
+    if (guestId) headers['x-guest-id'] = guestId
+  } catch {
+    /* ignore storage access error */
+  }
+  const res = await fetch(`${API_BASE}/resumes/parse-file`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  })
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}))
+    throw new Error(errData.detail || `Failed to parse resume file: ${res.statusText}`)
+  }
+  return res.json()
+}
+
 export async function draftCoverLetter(opportunityId, emphasisProjects = null) {
   const res = await fetch(`${API_BASE}/cover-letters/draft`, {
     method: 'POST',

@@ -221,8 +221,8 @@ async def list_tasks(
     results = []
     for r in rows:
         item = dict(r)
-        if item["project_id"]:
-            item["project"] = {"id": item["project_id"], "name": item["project_name"]}
+        if item.get("project_id"):
+            item["project"] = {"id": item["project_id"], "name": item.get("project_name")}
         else:
             item["project"] = None
         results.append(item)

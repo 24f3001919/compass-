@@ -106,6 +106,17 @@ export default function ResumeStudio() {
     }
   }
 
+  const handleFileExtracted = (extracted) => {
+    if (!extracted) return
+    if (extracted.full_name) setFullName(extracted.full_name)
+    if (extracted.email) setEmail(extracted.email)
+    if (extracted.phone) setPhone(extracted.phone)
+    if (extracted.location) setLocation(extracted.location)
+    if (extracted.summary) setSummary(extracted.summary)
+    if (extracted.skills?.length) setSkillsText(extracted.skills.join(', '))
+    setShowImportModal(false)
+  }
+
   const handleDraftCoverLetter = async () => {
     if (!selectedResume?.opportunity_id) return
     setDraftingLetter(true)
@@ -593,6 +604,7 @@ export default function ResumeStudio() {
 
       {/* Import / Paste Resume Text Modal */}
       <ResumeImportModal
+        show={showImportModal}
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
         importText={importText}
@@ -600,6 +612,7 @@ export default function ResumeStudio() {
         onImport={handleImportResume}
         importing={importing}
         importSuccess={importSuccess}
+        onFileExtracted={handleFileExtracted}
       />
     </div>
   )

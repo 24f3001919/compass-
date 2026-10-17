@@ -37,18 +37,31 @@ _in_memory_sync_runs: List[Dict[str, Any]] = []
 _id_seq = 1000
 
 _db_pool_available: bool = True
+_last_db_failure_time: float = 0.0
+_DB_RETRY_INTERVAL_SEC: float = 5.0
 
 async def get_pool() -> Optional[asyncpg.Pool]:
-    """Return database pool, quickly switching to in-memory fallback if unavailable."""
-    global _db_pool_available
+    """Return database pool with cooldown retry instead of permanent latch."""
+    global _db_pool_available, _last_db_failure_time
+    import time
+    now = time.monotonic()
     if not _db_pool_available:
-        return None
+        if now - _last_db_failure_time < _DB_RETRY_INTERVAL_SEC:
+            return None
+        _db_pool_available = True
     try:
-        pool = await asyncio.wait_for(_raw_get_pool(), timeout=1.5)
-        return pool
+        pool = await asyncio.wait_for(_raw_get_pool(), timeout=8.0)
+        if pool is not None:
+            _db_pool_available = True
+            return pool
+        else:
+            _db_pool_available = False
+            _last_db_failure_time = now
+            return None
     except Exception as e:
         _db_pool_available = False
-        logger.info(f"Database connection pool unavailable ({e}); using radar in-memory storage mode.")
+        _last_db_failure_time = now
+        logger.info(f"Database connection pool unavailable ({e}); using radar in-memory storage mode (retry in {_DB_RETRY_INTERVAL_SEC}s).")
         return None
 
 

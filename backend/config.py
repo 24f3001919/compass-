@@ -97,9 +97,13 @@ class Settings(BaseSettings):
         """Check if running in test environment."""
         return self.ENVIRONMENT.lower() in ("test", "testing")
 
+    def is_staging(self) -> bool:
+        """Check if running in staging environment."""
+        return self.ENVIRONMENT.lower() in ("staging", "stage")
+
     def is_production(self) -> bool:
-        """Check if running in production mode."""
-        return self.ENVIRONMENT.lower() in ("production", "prod")
+        """Check if running in production or staging mode for security controls."""
+        return self.ENVIRONMENT.lower() in ("production", "prod", "staging", "stage")
 
     def get_missing_production_secrets(self) -> tuple[list[str], list[str]]:
         """Return (missing_secret_names, duplicate_secret_names) for production configuration without exposing secret values."""
