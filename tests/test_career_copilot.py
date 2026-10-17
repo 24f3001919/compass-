@@ -75,6 +75,58 @@ from backend.skills.handlers.career import (
 
 
 # ===========================================================================
+# FIXTURES: RADAR ISOLATION & TEST OPPORTUNITY SEEDING
+# ===========================================================================
+
+@pytest.fixture(autouse=True)
+async def setup_career_copilot_environment():
+    """Ensure radar pool state is reset and opportunities 1000-1005 exist for copilot lifecycle tests."""
+    import backend.memory.radar as radar_mem
+    from backend.memory.db import get_pool
+    radar_mem._db_pool_available = True
+    pool = await get_pool()
+    if pool:
+        try:
+            async with pool.acquire() as conn:
+                for oid in range(1000, 1006):
+                    await conn.execute(
+                        """
+                        INSERT INTO opportunities (
+                            id, company_name, normalized_company, role_title,
+                            opportunity_type, category, location, work_arrangement,
+                            country, is_india_eligible, canonical_url, official_application_url,
+                            current_status, description, created_at, updated_at
+                        ) VALUES (
+                            $1, 'Google India', 'google_india', 'Software Engineering Intern',
+                            'internship', 'general', 'Bengaluru, India', 'hybrid', 'India', TRUE,
+                            $2, $2, 'DISCOVERED', 'Test opportunity description', now(), now()
+                        )
+                        ON CONFLICT (id) DO NOTHING;
+                        """,
+                        oid,
+                        f"https://careers.google.com/jobs/results/swe-intern-test-app-{oid}",
+                    )
+        except Exception:
+            pass
+    for oid in range(1000, 1006):
+        radar_mem._in_memory_opportunities[oid] = {
+            "id": oid,
+            "company_name": "Google India",
+            "normalized_company": "google_india",
+            "role_title": "Software Engineering Intern",
+            "opportunity_type": "internship",
+            "category": "general",
+            "location": "Bengaluru, India",
+            "work_arrangement": "hybrid",
+            "country": "India",
+            "is_india_eligible": True,
+            "canonical_url": f"https://careers.google.com/jobs/results/swe-intern-test-app-{oid}",
+            "official_application_url": f"https://careers.google.com/jobs/results/swe-intern-test-app-{oid}",
+            "current_status": "DISCOVERED",
+        }
+
+
+# ===========================================================================
 # 1. Truthful Resume & Factual Validation Tests
 # ===========================================================================
 
@@ -350,7 +402,7 @@ async def test_batch_approval_security_gate():
 async def test_career_api_endpoints():
     """Validates FastAPI routes across master resume, tailoring, applications, and batching."""
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers={"x-user-id": "candidate@example.com"}) as client:
         # 1. Update Master Resume
         master_payload = {
             "full_name": "Test Candidate",
@@ -654,7 +706,7 @@ async def test_ai_career_skills_cover_letter_and_deadlines():
 async def test_career_api_cover_letter_and_upload_endpoints():
     """FastAPI integration tests for resume upload parsing and cover letter drafting."""
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers={"x-user-id": "priya@example.com"}) as client:
         # 1. Parse upload endpoint
         parse_res = await client.post(
             "/api/career/resumes/parse-upload",
