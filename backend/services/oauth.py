@@ -261,7 +261,7 @@ async def exchange_code_for_tokens(
             access_token = token_data.get("access_token")
 
             # Fetch account email, name, and picture from userinfo
-            email = "user@gmail.com"
+            email = None
             name = "Compass User"
             picture = ""
             try:
@@ -271,11 +271,33 @@ async def exchange_code_for_tokens(
                 )
                 if u_resp.status_code == 200:
                     u_json = u_resp.json()
-                    email = u_json.get("email", email)
-                    name = u_json.get("name", name)
-                    picture = u_json.get("picture", picture)
+                    email = u_json.get("email")
+                    name = u_json.get("name") or name
+                    picture = u_json.get("picture") or picture
+                    email_verified = u_json.get("verified_email", u_json.get("email_verified", True))
+                    if not email_verified:
+                        return {
+                            "error": "Google account email is not verified.",
+                            "status_code": 400,
+                        }
+                else:
+                    logger.error(f"Failed to retrieve userinfo from Google: status {u_resp.status_code}")
+                    return {
+                        "error": f"Failed to retrieve user profile from Google (status {u_resp.status_code}).",
+                        "status_code": u_resp.status_code,
+                    }
             except Exception as ue:
-                logger.warning(f"Failed to fetch userinfo: {ue}")
+                logger.error(f"Exception fetching Google userinfo: {ue}")
+                return {
+                    "error": "Failed to retrieve user profile from Google.",
+                    "status_code": 500,
+                }
+
+            if not email or "@" not in email:
+                return {
+                    "error": "Google profile did not provide a valid email address.",
+                    "status_code": 400,
+                }
 
             return {
                 "access_token": access_token,
@@ -302,7 +324,7 @@ async def exchange_code_for_tokens(
                 "mode": "live_simulated",
             }
         return {
-            "error": f"Error during token exchange: {e}",
+            "error": "Failed to complete token exchange with Google.",
             "mode": "error",
         }
 
