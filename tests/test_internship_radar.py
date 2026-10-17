@@ -242,6 +242,16 @@ async def test_verifier_detects_closed_notice(monkeypatch):
 # ===========================================================================
 
 @pytest.mark.asyncio
+async def test_radar_api_unauthenticated_rejected():
+    """Unauthenticated access to user radar endpoints must return 401."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as unauth_client:
+        res = await unauth_client.get("/api/opportunities")
+        assert res.status_code == 401
+        assert "authentication" in res.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
 async def test_radar_api_endpoints(monkeypatch):
     async def mock_gh(*args, **kwargs):
         return []
@@ -250,7 +260,7 @@ async def test_radar_api_endpoints(monkeypatch):
     monkeypatch.setattr("backend.services.radar_sync.tavily_available", lambda: False)
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers={"x-user-id": "candidate_radar_user"}) as client:
         # 1. Trigger sync (seeds curated opportunities quickly)
         sync_res = await client.post("/api/opportunities/sync?source=all")
         assert sync_res.status_code == 200
