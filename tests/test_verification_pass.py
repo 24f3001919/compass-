@@ -128,8 +128,17 @@ def test_unverified_x_user_id_header_is_rejected():
         "headers": [(b"x-user-id", b"attacker_injected_admin_id")],
     }
     req = Request(scope)
-    # Must NOT trust x-user-id; returns None
-    assert _get_current_user_id(req) is None
+    # Must NOT trust x-user-id in production; raises 403 forbidden
+    with patch("backend.dependencies.get_settings") as mock_settings:
+        mock_settings.return_value.ENVIRONMENT = "production"
+        mock_settings.return_value.is_production.return_value = True
+        mock_settings.return_value.is_development.return_value = False
+        mock_settings.return_value.is_test.return_value = False
+
+        with pytest.raises(HTTPException) as exc:
+            _get_current_user_id(req)
+        assert exc.value.status_code == 403
+        assert "x-user-id" in exc.value.detail and "forbidden" in exc.value.detail
 
 
 def test_guest_token_expiry_and_tampering():
