@@ -66,7 +66,12 @@ async def seed_demo_persona_endpoint(request: Request):
     Writes seeded tasks and memories strictly bound to the caller's identity.
     """
     ident = _get_current_identity(request)
-    user_id = ident.id if ident else _get_or_create_user_id(request)
+    if not ident:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required: You must have an active authenticated user session or verified guest identity to seed demo data.",
+        )
+    user_id = ident.id
     pool = await get_pool()
     if not pool:
         raise HTTPException(status_code=500, detail="Database unavailable")
