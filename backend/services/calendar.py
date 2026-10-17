@@ -74,7 +74,7 @@ async def get_calendar_connection_status(
                             "label": "Google Calendar: Not connected",
                             "note": "Live Google Calendar OAuth connection required in production.",
                         }
-                    email = row["account_email"] or user_id or "user@gmail.com"
+                    email = row["account_email"] or user_id or ""
                     return {
                         "connected": True,
                         "provider": row["provider"],
