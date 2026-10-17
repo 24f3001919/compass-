@@ -365,17 +365,18 @@ def _resolve_identities(request: Request) -> tuple[Optional[str], Optional[str]]
 
 
 def _get_or_create_user_id(request: Request) -> str:
-    """Resolve current user identity, falling back to verified guest identity or deterministic client hash.
+    """Resolve current user identity, requiring an authenticated user or verified guest session.
 
-    Guarantees every mutation is bound to an isolated user or guest workspace identity.
+    Rejects requests lacking a valid identity with HTTP 401 instead of silently falling back
+    to an unsafe IP-derived identity that could collide across different users sharing an IP.
     """
     ident = _get_current_identity(request)
     if ident:
         return ident.id
-    import hashlib
-    client_ip = get_client_ip(request)
-    h = hashlib.sha256(client_ip.encode("utf-8")).hexdigest()[:12]
-    return f"guest_{h}"
+    raise HTTPException(
+        status_code=401,
+        detail="Authentication or valid guest token required",
+    )
 
 
 def _now_iso() -> str:
