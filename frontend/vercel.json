@@ -12,6 +12,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://compass-backend-qryu.onrender.com/api/:path*"
+    },
+    {
+      "source": "/((?!api/|chat|health).*)",
+      "destination": "/index.html"
     }
   ]
 }
