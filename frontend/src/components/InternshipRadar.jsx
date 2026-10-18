@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import RadarOverviewCards from './radar/RadarOverviewCards'
 import RadarFilters from './radar/RadarFilters'
 import RadarOpportunityCard from './radar/RadarOpportunityCard'
 import RadarDetailModal from './radar/RadarDetailModal'
 import RadarProfileModal from './radar/RadarProfileModal'
+import ApplicationWorkspaceModal from './career/ApplicationWorkspaceModal'
 import {
   fetchOpportunities,
   fetchRecommendedOpportunities,
@@ -21,7 +22,12 @@ import {
   verifyOpportunity,
 } from '../api/radarApi'
 
-export default function InternshipRadar() {
+export default function InternshipRadar({
+  refreshTrigger = 0,
+  onRefreshComplete,
+  onRefreshError,
+  onOpenProfile,
+} = {}) {
   const [activeTab, setActiveTab] = useState('recommended')
   const [opportunities, setOpportunities] = useState([])
   const [stats, setStats] = useState(null)
@@ -35,8 +41,11 @@ export default function InternshipRadar() {
   const [error, setError] = useState(null)
   const [isSyncing, setIsSyncing] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
+  const [isRefreshingMatches, setIsRefreshingMatches] = useState(false)
+  const isFirstMountRef = useRef(true)
 
   const [selectedDetailOpp, setSelectedDetailOpp] = useState(null)
+  const [activeWorkspaceOpp, setActiveWorkspaceOpp] = useState(null)
   const [showProfileModal, setShowProfileModal] = useState(false)
 
   // Load analytics & profile
@@ -54,8 +63,11 @@ export default function InternshipRadar() {
   }, [])
 
   // Load list based on active tab and filters
-  const loadOpportunities = useCallback(async () => {
-    setLoading(true)
+  const loadOpportunities = useCallback(async (options = {}) => {
+    const isBackground = options?.background === true
+    if (!isBackground) {
+      setLoading(true)
+    }
     setError(null)
     try {
       let items = []
@@ -110,11 +122,48 @@ export default function InternshipRadar() {
       setOpportunities(items)
     } catch (err) {
       console.error('[Radar] Error fetching opportunities:', err)
-      setError(err.message || 'Failed to load opportunities.')
+      if (!isBackground) {
+        setError(err.message || 'Failed to load opportunities.')
+      } else {
+        throw err
+      }
     } finally {
-      setLoading(false)
+      if (!isBackground) {
+        setLoading(false)
+      }
     }
   }, [activeTab, selectedCategory, workArrangement, searchQuery, indiaOnly])
+
+  // Asynchronous background refresh for recommendation and eligibility updates
+  const handleBackgroundRefresh = useCallback(async () => {
+    setIsRefreshingMatches(true)
+    try {
+      await Promise.all([
+        loadMetadata(),
+        loadOpportunities({ background: true }),
+      ])
+      if (typeof onRefreshComplete === 'function') {
+        onRefreshComplete()
+      }
+    } catch (err) {
+      console.error('[Radar] Background refresh failed:', err)
+      if (typeof onRefreshError === 'function') {
+        onRefreshError(err)
+      }
+    } finally {
+      setIsRefreshingMatches(false)
+    }
+  }, [loadMetadata, loadOpportunities, onRefreshComplete, onRefreshError])
+
+  useEffect(() => {
+    if (isFirstMountRef.current) {
+      isFirstMountRef.current = false
+      return
+    }
+    if (refreshTrigger > 0) {
+      handleBackgroundRefresh()
+    }
+  }, [refreshTrigger, handleBackgroundRefresh])
 
   useEffect(() => {
     loadMetadata()
@@ -203,12 +252,14 @@ export default function InternshipRadar() {
     }
   }
 
-  // Save Academic Profile
+  // Save Academic Profile (modal in InternshipRadar)
   const handleSaveProfile = async newProfile => {
     const updated = await updateRadarProfile(newProfile)
     setProfile(updated)
-    await loadMetadata()
-    await loadOpportunities()
+    setShowProfileModal(false)
+    // Run background refresh asynchronously without blocking modal close
+    handleBackgroundRefresh()
+    return updated
   }
 
   return (
@@ -251,7 +302,7 @@ export default function InternshipRadar() {
       <RadarOverviewCards
         stats={stats}
         profile={profile}
-        onOpenProfile={() => setShowProfileModal(true)}
+        onOpenProfile={onOpenProfile || (() => setShowProfileModal(true))}
         onSelectTab={setActiveTab}
         onSync={handleSyncSources}
         isSyncing={isSyncing}
@@ -269,10 +320,35 @@ export default function InternshipRadar() {
         onToggleIndiaOnly={() => setIndiaOnly(prev => !prev)}
         workArrangement={workArrangement}
         onWorkArrangementChange={setWorkArrangement}
-        onOpenProfile={() => setShowProfileModal(true)}
+        onOpenProfile={onOpenProfile || (() => setShowProfileModal(true))}
         onSync={handleSyncSources}
         isSyncing={isSyncing}
       />
+
+      {/* Scoped Background Refreshing Indicator */}
+      {isRefreshingMatches && (
+        <div
+          role="status"
+          aria-live="polite"
+          id="radar-refreshing-indicator"
+          style={{
+            padding: '8px 14px',
+            marginBottom: '16px',
+            borderRadius: '8px',
+            background: 'rgba(59, 130, 246, 0.08)',
+            border: '1px solid rgba(59, 130, 246, 0.25)',
+            color: 'var(--primary, #3b82f6)',
+            fontSize: '12px',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <span style={{ display: 'inline-block', animation: 'spin 1.5s infinite linear' }}>🔄</span>
+          <span>Refreshing internship recommendations and eligibility matches…</span>
+        </div>
+      )}
 
       {/* 3. Opportunities List Content */}
       {loading ? (
@@ -376,6 +452,7 @@ export default function InternshipRadar() {
               onOpenDetail={setSelectedDetailOpp}
               onToggleSave={handleToggleSave}
               onUpdateAppStatus={handleUpdateApplication}
+              onApply={setActiveWorkspaceOpp}
             />
           ))}
         </div>
@@ -389,6 +466,21 @@ export default function InternshipRadar() {
           onUpdateApp={handleUpdateApplication}
           onVerify={handleVerifyOpportunity}
           isVerifying={isVerifying}
+          onApply={setActiveWorkspaceOpp}
+        />
+      )}
+
+      {/* Internal Application Workspace Modal */}
+      {activeWorkspaceOpp && (
+        <ApplicationWorkspaceModal
+          opportunity={activeWorkspaceOpp}
+          onClose={() => setActiveWorkspaceOpp(null)}
+          onApplicationUpdated={(updatedApp) => {
+            setOpportunities(prev =>
+              prev.map(o => (o.id === activeWorkspaceOpp.id ? { ...o, application_status: updatedApp.status } : o))
+            )
+            loadMetadata()
+          }}
         />
       )}
 
