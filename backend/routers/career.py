@@ -25,6 +25,7 @@ from backend.memory.career import (
     finish_application_batch,
     get_application_batch,
     get_career_application_by_id,
+    get_career_application_by_opportunity,
     get_master_resume,
     get_resume_by_id,
     list_career_applications,
@@ -160,6 +161,42 @@ async def get_resume_endpoint(resume_id: int, request: Request):
     return res
 
 
+@router.put("/resumes/{resume_id}", response_model=ResumeOut)
+async def update_resume_endpoint(resume_id: int, body: SaveResumeRequest, request: Request):
+    """
+    Update a specific resume (master or tailored).
+    Ensures updates are scoped to the authenticated user and validates against factual integrity.
+    """
+    user_id = _get_or_create_user_id(request)
+    res = await get_resume_by_id(resume_id, user_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    master = await get_master_resume(user_id)
+    master_content = master.content if (master and not res.is_master) else body.content
+
+    opp = None
+    if res.opportunity_id:
+        opp = await get_opportunity_by_id(res.opportunity_id, user_id)
+
+    report = validate_resume_against_master(body.content, master_content, opp)
+    new_status = ResumeValidationStatus.READY_FOR_REVIEW if report.is_valid else ResumeValidationStatus.VALIDATION_FAILED
+
+    updates: Dict[str, Any] = {
+        "title": body.title,
+        "content": body.content,
+        "validation_status": new_status.value,
+        "validation_report": report,
+    }
+    if body.cover_letter is not None:
+        updates["cover_letter"] = body.cover_letter
+
+    updated = await update_resume(resume_id, user_id, updates)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Resume update failed")
+    return updated
+
+
 @router.post("/resumes/{resume_id}/validate", response_model=ResumeValidationReport)
 async def validate_resume_endpoint(resume_id: int, request: Request):
     """Run strict factual integrity and completeness audit on a resume."""
@@ -187,7 +224,11 @@ async def validate_resume_endpoint(resume_id: int, request: Request):
 
 @router.get("/resumes/{resume_id}/export", response_class=HTMLResponse)
 @router.get("/resumes/{resume_id}/export/html", response_class=HTMLResponse)
-async def export_resume_html_endpoint(resume_id: int, request: Request):
+async def export_resume_html_endpoint(
+    resume_id: int,
+    request: Request,
+    template: Optional[str] = Query(None),
+):
     """Export clean, ATS-formatted printable HTML for PDF generation."""
     user_id = _get_or_create_user_id(request)
     res = await get_resume_by_id(resume_id, user_id)
@@ -198,8 +239,9 @@ async def export_resume_html_endpoint(resume_id: int, request: Request):
     if res.opportunity_id:
         opp = await get_opportunity_by_id(res.opportunity_id, user_id)
 
-    html = generate_resume_html(res, opp)
+    html = generate_resume_html(res, opp, template=template)
     return HTMLResponse(content=html, status_code=200)
+
 
 
 @router.post("/resumes/parse-upload", response_model=ResumeContent)
@@ -295,9 +337,38 @@ async def list_applications_endpoint(request: Request, status: Optional[str] = Q
     return enriched
 
 
+@router.get("/applications/prepare", response_model=CareerApplicationOut)
+async def get_prepared_application_endpoint(request: Request, opportunity_id: Optional[int] = Query(None)):
+    """
+    Read-only retrieval of an existing prepared application.
+    Does NOT mutate, create, or alter any application or resume records.
+    Returns 404 if the application has not yet been prepared.
+    """
+    user_id = _get_or_create_user_id(request)
+    opp_id = opportunity_id
+    if opp_id is None:
+        q_id = request.query_params.get("opportunity_id")
+        if q_id:
+            try:
+                opp_id = int(q_id)
+            except ValueError:
+                pass
+    if not opp_id:
+        raise HTTPException(status_code=400, detail="opportunity_id is required")
+
+    app = await get_career_application_by_opportunity(user_id, opp_id)
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not prepared yet. Use POST /applications/prepare to prepare.")
+
+    opp = await get_opportunity_by_id(opp_id, user_id)
+    resume = await get_resume_by_id(app.resume_id, user_id) if app.resume_id else None
+    app.opportunity = opp
+    app.resume = resume
+    return app
+
+
 @router.post("/applications/prepare", response_model=CareerApplicationOut)
-@router.post("/applications/{opportunity_id}", response_model=CareerApplicationOut)
-async def prepare_application_endpoint(request: Request, opportunity_id: Optional[int] = None):
+async def prepare_application_endpoint(request: Request, opportunity_id: Optional[int] = Query(None)):
     """Prepare an application record with tailored resume, truthful cover letter, and prefilled answers."""
     user_id = _get_or_create_user_id(request)
     opp_id = opportunity_id
@@ -367,6 +438,12 @@ async def prepare_application_endpoint(request: Request, opportunity_id: Optiona
 
     await log_application_event(app.id, "prepared", {"opportunity_id": opp.id})
     return app
+
+
+@router.post("/applications/{opportunity_id:int}", response_model=CareerApplicationOut)
+async def prepare_application_by_id_endpoint(opportunity_id: int, request: Request):
+    """Path-based shortcut to prepare an application for an integer opportunity ID."""
+    return await prepare_application_endpoint(request=request, opportunity_id=opportunity_id)
 
 
 @router.get("/applications/{app_id}", response_model=CareerApplicationOut)
