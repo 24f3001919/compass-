@@ -1,0 +1,81 @@
+{
+  "timestamp": "2026-10-17T03:07:26.778498+00:00",
+  "git_commit": "4e4944a",
+  "evaluation_version": "1.0.0",
+  "total_scenarios": 1,
+  "passed": 1,
+  "failed": 0,
+  "blocked": 0,
+  "not_evaluated": 0,
+  "critical_failures_count": 0,
+  "deterministic_pass_rate": 100.0,
+  "overall_ai_average": null,
+  "category_summaries": {
+    "A": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "pass_rate": 100.0
+    },
+    "B": {
+      "total": 0,
+      "passed": 0,
+      "failed": 0,
+      "pass_rate": 0.0
+    },
+    "C": {
+      "total": 0,
+      "passed": 0,
+      "failed": 0,
+      "pass_rate": 0.0
+    },
+    "D": {
+      "total": 0,
+      "passed": 0,
+      "failed": 0,
+      "pass_rate": 0.0
+    },
+    "E": {
+      "total": 0,
+      "passed": 0,
+      "failed": 0,
+      "pass_rate": 0.0
+    },
+    "F": {
+      "total": 0,
+      "passed": 0,
+      "failed": 0,
+      "pass_rate": 0.0
+    },
+    "G": {
+      "total": 0,
+      "passed": 0,
+      "failed": 0,
+      "pass_rate": 0.0
+    },
+    "H": {
+      "total": 0,
+      "passed": 0,
+      "failed": 0,
+      "pass_rate": 0.0
+    }
+  },
+  "scenario_results": [
+    {
+      "scenario_id": "SCENARIO_A1",
+      "category": "A",
+      "title": "Simple factual question",
+      "status": "PASS",
+      "deterministic_pass": true,
+      "deterministic_failures": [],
+      "ai_scores": {},
+      "ai_average": null,
+      "critical_failure": false,
+      "critical_failure_details": [],
+      "latency_ms": 8973,
+      "skill_used": "chat",
+      "error_message": null,
+      "sanitized_response": "RISC stands for **Reduced Instruction Set Computer**. It\u2019s a CPU architecture that uses a small, highly optimized set of simple instructions, enabling faster execution and lower power consumption compared to more complex instruction sets."
+    }
+  ]
+}
