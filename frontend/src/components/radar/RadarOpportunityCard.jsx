@@ -4,7 +4,8 @@ export default function RadarOpportunityCard({
   opportunity,
   onOpenDetail,
   onToggleSave,
-  onUpdateAppStatus,
+  onUpdateAppStatus: _onUpdateAppStatus,
+  onApply,
 }) {
   const {
     id,
@@ -12,11 +13,11 @@ export default function RadarOpportunityCard({
     role_title,
     location,
     work_arrangement,
-    category,
+    category: _category,
     current_status,
     eligibility_classification,
     eligibility_explanation,
-    official_application_url,
+    official_application_url: _official_application_url,
     prediction,
     is_saved,
     application_status,
@@ -271,32 +272,28 @@ export default function RadarOpportunityCard({
             Details & History
           </button>
 
-          {/* Official Apply Link Button */}
-          {official_application_url ? (
-            <a
-              href={official_application_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '6px 14px',
-                borderRadius: '7px',
-                background: current_status === 'OPEN_CONFIRMED' ? 'var(--brand)' : 'var(--bg-card)',
-                color: current_status === 'OPEN_CONFIRMED' ? '#ffffff' : 'var(--text-primary)',
-                border: current_status === 'OPEN_CONFIRMED' ? 'none' : '1px solid var(--border)',
-                fontSize: '12px',
-                fontWeight: 600,
-                textDecoration: 'none',
-              }}
-            >
-              <span>{current_status === 'OPEN_CONFIRMED' ? 'Apply Now' : 'Official Portal'}</span>
-              <span>↗</span>
-            </a>
-          ) : (
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>No link yet</span>
-          )}
+          {/* Internal Application Workspace Action */}
+          <button
+            type="button"
+            onClick={() => onApply && onApply(opportunity)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 14px',
+              borderRadius: '7px',
+              background: current_status === 'OPEN_CONFIRMED' ? 'var(--brand)' : 'var(--bg-card)',
+              color: current_status === 'OPEN_CONFIRMED' ? '#ffffff' : 'var(--text-primary)',
+              border: current_status === 'OPEN_CONFIRMED' ? 'none' : '1px solid var(--border)',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <span>Apply Now</span>
+            <span>⚡</span>
+          </button>
         </div>
       </div>
     </div>
