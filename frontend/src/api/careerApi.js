@@ -7,7 +7,9 @@
  * - Submission adapters & execution
  */
 
-const API_BASE = '/api/career'
+import { API_BASE as BASE_URL } from './baseClient'
+
+const API_BASE = `${BASE_URL}/api/career`
 
 function getHeaders() {
   const headers = { 'Content-Type': 'application/json' }
@@ -68,6 +70,16 @@ export async function fetchResume(resumeId) {
   return res.json()
 }
 
+export async function updateResume(resumeId, payload) {
+  const res = await fetch(`${API_BASE}/resumes/${resumeId}`, {
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) throw new Error(`Failed to update resume: ${res.statusText}`)
+  return res.json()
+}
+
 export async function validateResume(resumeId) {
   const res = await fetch(`${API_BASE}/resumes/${resumeId}/validate`, {
     method: 'POST',
@@ -77,9 +89,13 @@ export async function validateResume(resumeId) {
   return res.json()
 }
 
-export function getResumeExportUrl(resumeId) {
+export function getResumeExportUrl(resumeId, template = null) {
+  if (template) {
+    return `${API_BASE}/resumes/${resumeId}/export?template=${encodeURIComponent(template)}`
+  }
   return `${API_BASE}/resumes/${resumeId}/export`
 }
+
 
 export async function parseUploadResume(rawText) {
   const res = await fetch(`${API_BASE}/resumes/parse-upload`, {
@@ -149,6 +165,18 @@ export async function fetchApplications(status = null) {
   return res.json()
 }
 
+export async function fetchPreparedApplication(opportunityId) {
+  const res = await fetch(`${API_BASE}/applications/prepare?opportunity_id=${opportunityId}`, {
+    method: 'GET',
+    headers: getHeaders(),
+  })
+  if (!res.ok) {
+    if (res.status === 404) return null
+    throw new Error(`Failed to fetch prepared application: ${res.statusText}`)
+  }
+  return res.json()
+}
+
 export async function prepareApplication(opportunityId) {
   const res = await fetch(`${API_BASE}/applications/prepare?opportunity_id=${opportunityId}`, {
     method: 'POST',
@@ -157,6 +185,7 @@ export async function prepareApplication(opportunityId) {
   if (!res.ok) throw new Error(`Failed to prepare application: ${res.statusText}`)
   return res.json()
 }
+
 
 export async function updateApplication(appId, updates) {
   const res = await fetch(`${API_BASE}/applications/${appId}`, {
