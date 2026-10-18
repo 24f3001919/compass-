@@ -230,8 +230,41 @@ def tailor_resume_for_opportunity(
     return tailored_content, report, status
 
 
-def generate_resume_html(resume: ResumeOut, opportunity: Optional[OpportunityOut] = None) -> str:
-    """Generates a clean, ATS-compliant printable HTML document for PDF export and preview."""
+SUPPORTED_TEMPLATES = {
+    "ats_classic": "ATS Classic",
+    "modern": "Modern Clean",
+    "minimal": "Minimalist",
+}
+
+TEMPLATE_ALIASES = {
+    "ats": "ats_classic",
+    "classic": "ats_classic",
+    "ats_classic": "ats_classic",
+    "modern": "modern",
+    "minimal": "minimal",
+    "minimalist": "minimal",
+}
+
+
+def resolve_template_id(template: Optional[str]) -> str:
+    """Validates and resolves template identifier, falling back safely to ats_classic."""
+    if not template:
+        return "ats_classic"
+    norm = template.strip().lower()
+    return TEMPLATE_ALIASES.get(norm, "ats_classic")
+
+
+def generate_resume_html(
+    resume: ResumeOut,
+    opportunity: Optional[OpportunityOut] = None,
+    template: Optional[str] = "ats_classic",
+) -> str:
+    """
+    Generates a clean, ATS-compliant printable HTML document for PDF export and preview.
+    Supports three distinct single-column templates: ats_classic, modern, and minimal.
+    Preserves exact candidate facts across all templates.
+    """
+    tmpl_id = resolve_template_id(template)
     c = resume.content
     opp_banner = ""
     if opportunity:
@@ -273,27 +306,62 @@ def generate_resume_html(resume: ResumeOut, opportunity: Optional[OpportunityOut
         </div>
         """
 
+    # Template-specific CSS styles
+    if tmpl_id == "modern":
+        styles = """
+    body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; color: #1e293b; margin: 36px auto; max-width: 800px; line-height: 1.55; font-size: 14px; }
+    h1 { margin: 0 0 6px 0; font-size: 26px; color: #1e3a8a; letter-spacing: -0.2px; font-weight: 800; }
+    .contact { font-size: 13px; color: #475569; margin-bottom: 18px; border-bottom: 2px solid #2563eb; padding-bottom: 10px; }
+    .tailored-banner { background: #eff6ff; color: #1d4ed8; padding: 6px 14px; border-radius: 6px; font-size: 12px; margin-bottom: 16px; font-weight: 600; border-left: 4px solid #2563eb; }
+    h2 { font-size: 14px; color: #1e3a8a; text-transform: uppercase; border-left: 4px solid #2563eb; border-bottom: 1px solid #e2e8f0; padding: 2px 0 3px 8px; margin: 18px 0 10px 0; letter-spacing: 0.6px; font-weight: 700; }
+    .entry { margin-bottom: 14px; }
+    .entry-header { display: flex; justify-content: space-between; margin-bottom: 3px; font-size: 14px; }
+    .tech-badge { font-size: 11px; background: #eff6ff; color: #1d4ed8; padding: 2px 7px; border-radius: 4px; border: 1px solid #bfdbfe; font-weight: 500; }
+    p { margin: 4px 0; }
+    ul { margin: 4px 0 8px 18px; padding: 0; }
+    li { margin-bottom: 3px; }
+    @media print { body { margin: 0; padding: 20px; } .tailored-banner { display: none; } }
+"""
+    elif tmpl_id == "minimal":
+        styles = """
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif; color: #111827; margin: 40px auto; max-width: 780px; line-height: 1.5; font-size: 13.5px; }
+    h1 { margin: 0 0 4px 0; font-size: 22px; color: #111827; font-weight: 700; letter-spacing: -0.2px; }
+    .contact { font-size: 12.5px; color: #6b7280; margin-bottom: 20px; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; }
+    .tailored-banner { background: #f9fafb; color: #374151; padding: 5px 10px; border-radius: 4px; font-size: 11px; margin-bottom: 16px; border: 1px solid #e5e7eb; }
+    h2 { font-size: 12px; color: #374151; text-transform: uppercase; border-bottom: 1px solid #e5e7eb; padding-bottom: 2px; margin: 18px 0 8px 0; letter-spacing: 1px; font-weight: 600; }
+    .entry { margin-bottom: 12px; }
+    .entry-header { display: flex; justify-content: space-between; margin-bottom: 2px; }
+    .tech-badge { font-size: 11px; color: #6b7280; font-style: italic; }
+    p { margin: 3px 0; }
+    ul { margin: 4px 0 6px 16px; padding: 0; }
+    li { margin-bottom: 2px; color: #1f2937; }
+    @media print { body { margin: 0; padding: 20px; } .tailored-banner { display: none; } }
+"""
+    else:  # ats_classic
+        styles = """
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; margin: 40px auto; max-width: 800px; line-height: 1.5; font-size: 14px; }
+    h1 { margin: 0 0 4px 0; font-size: 24px; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
+    .contact { font-size: 13px; color: #475569; margin-bottom: 16px; border-bottom: 2px solid #0f172a; padding-bottom: 8px; }
+    .tailored-banner { background: #eff6ff; color: #1d4ed8; padding: 6px 12px; border-radius: 4px; font-size: 12px; margin-bottom: 16px; font-weight: bold; border-left: 4px solid #2563eb; }
+    h2 { font-size: 15px; color: #0f172a; text-transform: uppercase; border-bottom: 1px solid #cbd5e1; padding-bottom: 3px; margin: 18px 0 8px 0; letter-spacing: 0.5px; font-weight: 700; }
+    .entry { margin-bottom: 12px; }
+    .entry-header { display: flex; justify-content: space-between; margin-bottom: 2px; }
+    .tech-badge { font-size: 11px; background: #f1f5f9; padding: 2px 6px; border-radius: 3px; color: #334155; }
+    p { margin: 4px 0; }
+    ul { margin: 4px 0 8px 18px; padding: 0; }
+    li { margin-bottom: 2px; }
+    @media print { body { margin: 0; padding: 20px; } .tailored-banner { display: none; } }
+"""
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{resume.title}</title>
-<style>
-    body {{ font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; margin: 40px auto; max-width: 800px; line-height: 1.5; font-size: 14px; }}
-    h1 {{ margin: 0 0 4px 0; font-size: 24px; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; }}
-    .contact {{ font-size: 13px; color: #475569; margin-bottom: 16px; border-bottom: 2px solid #0f172a; padding-bottom: 8px; }}
-    .tailored-banner {{ background: #eff6ff; color: #1d4ed8; padding: 6px 12px; border-radius: 4px; font-size: 12px; margin-bottom: 16px; font-weight: bold; border-left: 4px solid #2563eb; }}
-    h2 {{ font-size: 15px; color: #0f172a; text-transform: uppercase; border-bottom: 1px solid #cbd5e1; padding-bottom: 3px; margin: 18px 0 8px 0; letter-spacing: 0.5px; }}
-    .entry {{ margin-bottom: 12px; }}
-    .entry-header {{ display: flex; justify-content: space-between; margin-bottom: 2px; }}
-    .tech-badge {{ font-size: 11px; background: #f1f5f9; padding: 2px 6px; border-radius: 3px; color: #334155; }}
-    p {{ margin: 4px 0; }}
-    ul {{ margin: 4px 0 8px 18px; padding: 0; }}
-    li {{ margin-bottom: 2px; }}
-    @media print {{ body {{ margin: 0; padding: 20px; }} .tailored-banner {{ display: none; }} }}
-</style>
+<style>{styles}</style>
 </head>
-<body>
+<body data-template="{tmpl_id}" class="resume-template-{tmpl_id}">
     {opp_banner}
     <h1>{c.full_name}</h1>
     <div class="contact">
@@ -317,6 +385,7 @@ def generate_resume_html(resume: ResumeOut, opportunity: Optional[OpportunityOut
 </body>
 </html>
 """
+
 
 
 def parse_uploaded_resume_text(raw_text: str) -> ResumeContent:
