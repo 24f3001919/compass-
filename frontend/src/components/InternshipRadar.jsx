@@ -395,6 +395,7 @@ export default function InternshipRadar() {
       {/* Academic Profile Modal */}
       {showProfileModal && (
         <RadarProfileModal
+          isOpen={showProfileModal}
           profile={profile}
           onClose={() => setShowProfileModal(false)}
           onSave={handleSaveProfile}
