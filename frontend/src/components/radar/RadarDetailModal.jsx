@@ -19,15 +19,16 @@ export default function RadarDetailModal({
   onUpdateApp,
   onVerify,
   isVerifying,
+  onApply,
 }) {
-  if (!opportunity) return null
-
   const [activeTab, setActiveTab] = useState('overview') // 'overview' | 'eligibility' | 'history' | 'tracking'
-  const [appStatus, setAppStatus] = useState(opportunity.application_status || 'interested')
-  const [personalDeadline, setPersonalDeadline] = useState(opportunity.personal_deadline || '')
-  const [privateNotes, setPrivateNotes] = useState(opportunity.private_notes || '')
+  const [appStatus, setAppStatus] = useState(opportunity?.application_status || 'interested')
+  const [personalDeadline, setPersonalDeadline] = useState(opportunity?.personal_deadline || '')
+  const [privateNotes, setPrivateNotes] = useState(opportunity?.private_notes || '')
   const [isSavingApp, setIsSavingApp] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+
+  if (!opportunity) return null
 
   const handleSaveTracking = async e => {
     e.preventDefault()
@@ -61,7 +62,7 @@ export default function RadarDetailModal({
     cycles = [],
     prediction,
     sources = [],
-    last_verified_at,
+    last_verified_at: _last_verified_at,
   } = opportunity
 
   return (
@@ -511,6 +512,31 @@ export default function RadarDetailModal({
             <span>{isVerifying ? 'Verifying Official URL…' : 'Live Re-verify Status'}</span>
           </button>
 
+          {/* Action: Open internal Application Workspace */}
+          <button
+            type="button"
+            onClick={() => {
+              onClose()
+              if (onApply) onApply(opportunity)
+            }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              background: 'var(--brand)',
+              color: '#ffffff',
+              border: 'none',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            <span>Open Application Workspace</span>
+            <span>⚡</span>
+          </button>
+
           {/* Action: Open official application portal */}
           {official_application_url && (
             <a
@@ -523,14 +549,15 @@ export default function RadarDetailModal({
                 gap: '6px',
                 padding: '8px 16px',
                 borderRadius: '8px',
-                background: current_status === 'OPEN_CONFIRMED' ? 'var(--brand)' : 'var(--text-primary)',
-                color: '#ffffff',
+                background: 'var(--bg-card)',
+                color: 'var(--text-primary)',
+                border: '1px solid var(--border)',
                 fontSize: '13px',
                 fontWeight: 600,
                 textDecoration: 'none',
               }}
             >
-              <span>{current_status === 'OPEN_CONFIRMED' ? 'Open Official Application' : 'Visit Career Page'}</span>
+              <span>Employer Portal</span>
               <span>↗</span>
             </a>
           )}
