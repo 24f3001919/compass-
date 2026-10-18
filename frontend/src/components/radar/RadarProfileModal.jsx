@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { fetchRadarProfile, updateRadarProfile } from '../../api/radarApi.js'
 
 const ROLE_OPTIONS = [
@@ -69,10 +69,7 @@ function RadarProfileModalContent({
 
   const [savingInternal, setSavingInternal] = useState(false)
   const [loadingProfile, setLoadingProfile] = useState(false)
-  const [saveSuccess, setSaveSuccess] = useState(false)
   const [errorMessage, setErrorMessage] = useState(null)
-
-  const closeTimeoutRef = useRef(null)
 
   // Populate state when profile prop changes
   const applyProfileData = useCallback(p => {
@@ -128,7 +125,6 @@ function RadarProfileModalContent({
     window.addEventListener('keydown', handleKeyDown)
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
-      if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current)
     }
   }, [onClose])
 
@@ -151,7 +147,6 @@ function RadarProfileModalContent({
     if (isBusy) return
 
     setErrorMessage(null)
-    setSaveSuccess(false)
 
     // Client-side validation
     if (!degree.trim()) {
@@ -208,11 +203,10 @@ function RadarProfileModalContent({
         onProfileUpdated(result || payload)
       }
 
-      setSaveSuccess(true)
-      closeTimeoutRef.current = setTimeout(() => {
-        setSaveSuccess(false)
-        if (typeof onClose === 'function') onClose()
-      }, 1000)
+      // Close modal immediately upon successful save
+      if (typeof onClose === 'function') {
+        onClose()
+      }
     } catch (err) {
       console.error('[RadarProfileModal] Failed to save profile:', err)
       setErrorMessage(
@@ -224,7 +218,6 @@ function RadarProfileModalContent({
   }
 
   const handleClose = () => {
-    if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current)
     if (typeof onClose === 'function') onClose()
   }
 
@@ -649,11 +642,6 @@ function RadarProfileModalContent({
 
           {/* Footer Submit */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', marginTop: '10px' }}>
-            {saveSuccess && (
-              <span style={{ fontSize: '13px', color: '#10b981', fontWeight: 600 }}>
-                ✓ Profile saved! Updating eligibility criteria…
-              </span>
-            )}
             <button
               type="button"
               onClick={handleClose}
