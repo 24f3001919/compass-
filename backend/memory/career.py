@@ -353,6 +353,25 @@ async def get_career_application_by_id(app_id: int, user_id: str) -> Optional[Ca
         return _parse_app_row(dict(row), is_persisted=True) if row else None
 
 
+async def get_career_application_by_opportunity(user_id: str, opportunity_id: int) -> Optional[CareerApplicationOut]:
+    """Read-only lookup of an existing career application without creating records."""
+    pool = await get_pool()
+    if not pool:
+        for a in _in_memory_applications.values():
+            if a["user_id"] == user_id and a["opportunity_id"] == opportunity_id:
+                return _parse_app_row(a, is_persisted=False)
+        return None
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM career_applications WHERE user_id = $1 AND opportunity_id = $2",
+            user_id,
+            opportunity_id,
+        )
+        return _parse_app_row(dict(row), is_persisted=True) if row else None
+
+
+
 async def list_career_applications(user_id: str, status: Optional[str] = None) -> List[CareerApplicationOut]:
     pool = await get_pool()
     if not pool:
