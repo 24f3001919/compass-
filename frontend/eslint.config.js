@@ -31,6 +31,7 @@ export default [
         URLSearchParams: "readonly",
         Blob: "readonly",
         URL: "readonly",
+        FormData: "readonly",
         alert: "readonly",
         confirm: "readonly",
         requestAnimationFrame: "readonly",
