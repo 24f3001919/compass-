@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { fetchRadarProfile, updateRadarProfile } from '../../api/radarApi.js'
 
 const ROLE_OPTIONS = [
   'Artificial Intelligence and Machine Learning',
@@ -11,14 +12,46 @@ const ROLE_OPTIONS = [
   'Open Source Programs',
 ]
 
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+
 export default function RadarProfileModal({
+  isOpen = true,
   profile,
   onClose,
   onSave,
-  isSaving,
+  isSaving = false,
+  onProfileUpdated,
+}) {
+  // If isOpen is explicitly false, do not render modal
+  if (isOpen !== undefined && !isOpen) {
+    return null
+  }
+
+  return (
+    <RadarProfileModalContent
+      profile={profile}
+      onClose={onClose}
+      onSave={onSave}
+      isSaving={isSaving}
+      onProfileUpdated={onProfileUpdated}
+    />
+  )
+}
+
+function RadarProfileModalContent({
+  profile,
+  onClose,
+  onSave,
+  isSaving = false,
+  onProfileUpdated,
 }) {
   const [degree, setDegree] = useState(profile?.degree || 'B.Tech')
-  const [specialization, setSpecialization] = useState(profile?.degree_specialization || 'Computer Science & Engineering')
+  const [specialization, setSpecialization] = useState(
+    profile?.degree_specialization || 'Computer Science & Engineering'
+  )
   const [university, setUniversity] = useState(profile?.university || '')
   const [academicYear, setAcademicYear] = useState(profile?.academic_year || 2)
   const [gradYear, setGradYear] = useState(profile?.grad_year || 2027)
@@ -27,9 +60,77 @@ export default function RadarProfileModal({
   const [preferredArrangements, setPreferredArrangements] = useState(
     profile?.preferred_work_arrangements || ['remote', 'hybrid', 'onsite']
   )
-  const [preferredRoles, setPreferredRoles] = useState(profile?.preferred_roles || [ROLE_OPTIONS[0], ROLE_OPTIONS[2]])
-  const [skillsStr, setSkillsStr] = useState((profile?.skills || ['Python', 'PyTorch', 'Data Structures', 'C++']).join(', '))
+  const [preferredRoles, setPreferredRoles] = useState(
+    profile?.preferred_roles || [ROLE_OPTIONS[0], ROLE_OPTIONS[2]]
+  )
+  const [skillsStr, setSkillsStr] = useState(
+    (profile?.skills || ['Python', 'PyTorch', 'Data Structures', 'C++']).join(', ')
+  )
+
+  const [savingInternal, setSavingInternal] = useState(false)
+  const [loadingProfile, setLoadingProfile] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [errorMessage, setErrorMessage] = useState(null)
+
+  const closeTimeoutRef = useRef(null)
+
+  // Populate state when profile prop changes
+  const applyProfileData = useCallback(p => {
+    if (!p) return
+    if (p.degree !== undefined) setDegree(p.degree || '')
+    if (p.degree_specialization !== undefined) setSpecialization(p.degree_specialization || '')
+    if (p.university !== undefined) setUniversity(p.university || '')
+    if (p.academic_year !== undefined && p.academic_year !== null) setAcademicYear(Number(p.academic_year))
+    if (p.grad_year !== undefined && p.grad_year !== null) setGradYear(Number(p.grad_year))
+    if (p.grad_month !== undefined && p.grad_month !== null) setGradMonth(Number(p.grad_month))
+    if (p.country_of_study !== undefined) setCountryOfStudy(p.country_of_study || 'India')
+    if (Array.isArray(p.preferred_work_arrangements)) setPreferredArrangements(p.preferred_work_arrangements)
+    if (Array.isArray(p.preferred_roles)) setPreferredRoles(p.preferred_roles)
+    if (Array.isArray(p.skills)) setSkillsStr(p.skills.join(', '))
+  }, [])
+
+  useEffect(() => {
+    if (profile) {
+      applyProfileData(profile)
+    }
+  }, [profile, applyProfileData])
+
+  // If no profile passed, attempt to load profile asynchronously without blocking the UI
+  useEffect(() => {
+    if (!profile) {
+      let isMounted = true
+      setLoadingProfile(true)
+      fetchRadarProfile()
+        .then(data => {
+          if (isMounted && data) {
+            applyProfileData(data)
+          }
+        })
+        .catch(err => {
+          console.warn('[RadarProfileModal] Background profile fetch non-fatal error:', err)
+        })
+        .finally(() => {
+          if (isMounted) setLoadingProfile(false)
+        })
+      return () => {
+        isMounted = false
+      }
+    }
+  }, [profile, applyProfileData])
+
+  // Keyboard Escape listener
+  useEffect(() => {
+    const handleKeyDown = e => {
+      if (e.key === 'Escape') {
+        if (typeof onClose === 'function') onClose()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current)
+    }
+  }, [onClose])
 
   const toggleArrangement = arr => {
     setPreferredArrangements(prev =>
@@ -43,36 +144,95 @@ export default function RadarProfileModal({
     )
   }
 
+  const isBusy = isSaving || savingInternal
+
   const handleSubmit = async e => {
     e.preventDefault()
+    if (isBusy) return
+
+    setErrorMessage(null)
     setSaveSuccess(false)
+
+    // Client-side validation
+    if (!degree.trim()) {
+      setErrorMessage('Please specify your Current Degree (e.g. B.Tech, B.E., BS).')
+      return
+    }
+
+    const parsedGradYear = Number(gradYear)
+    if (isNaN(parsedGradYear) || parsedGradYear < 2024 || parsedGradYear > 2035) {
+      setErrorMessage('Graduation Year must be between 2024 and 2035.')
+      return
+    }
+
+    const parsedAcademicYear = Number(academicYear)
+    if (isNaN(parsedAcademicYear) || parsedAcademicYear < 1 || parsedAcademicYear > 5) {
+      setErrorMessage('Academic Year must be between 1 and 5.')
+      return
+    }
+
+    if (!countryOfStudy.trim()) {
+      setErrorMessage('Please specify your Country of Study.')
+      return
+    }
+
     const skillsList = skillsStr
       .split(',')
       .map(s => s.trim())
       .filter(Boolean)
 
-    await onSave({
-      degree,
-      degree_specialization: specialization,
-      university,
-      academic_year: Number(academicYear),
-      grad_year: Number(gradYear),
-      grad_month: Number(gradMonth),
-      country_of_study: countryOfStudy,
-      country_of_residence: countryOfStudy,
+    const payload = {
+      degree: degree.trim(),
+      degree_specialization: specialization.trim(),
+      university: university.trim(),
+      academic_year: parsedAcademicYear,
+      grad_year: parsedGradYear,
+      grad_month: Number(gradMonth) || 6,
+      country_of_study: countryOfStudy.trim(),
+      country_of_residence: countryOfStudy.trim(),
       preferred_work_arrangements: preferredArrangements,
       preferred_roles: preferredRoles,
       skills: skillsList,
-    })
-    setSaveSuccess(true)
-    setTimeout(() => {
-      setSaveSuccess(false)
-      onClose()
-    }, 1200)
+    }
+
+    setSavingInternal(true)
+    try {
+      let result = null
+      if (typeof onSave === 'function') {
+        result = await onSave(payload)
+      } else {
+        result = await updateRadarProfile(payload)
+      }
+
+      if (typeof onProfileUpdated === 'function') {
+        onProfileUpdated(result || payload)
+      }
+
+      setSaveSuccess(true)
+      closeTimeoutRef.current = setTimeout(() => {
+        setSaveSuccess(false)
+        if (typeof onClose === 'function') onClose()
+      }, 1000)
+    } catch (err) {
+      console.error('[RadarProfileModal] Failed to save profile:', err)
+      setErrorMessage(
+        err.message || 'Failed to save profile. Please check your connection and try again.'
+      )
+    } finally {
+      setSavingInternal(false)
+    }
+  }
+
+  const handleClose = () => {
+    if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current)
+    if (typeof onClose === 'function') onClose()
   }
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="radar-profile-modal-title"
       style={{
         position: 'fixed',
         inset: 0,
@@ -84,7 +244,7 @@ export default function RadarProfileModal({
         padding: '16px',
         backdropFilter: 'blur(3px)',
       }}
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div
         style={{
@@ -113,23 +273,34 @@ export default function RadarProfileModal({
           }}
         >
           <div>
-            <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+            <h2
+              id="radar-profile-modal-title"
+              style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}
+            >
               Academic Eligibility & Matching Profile
             </h2>
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
               Used strictly for deterministic eligibility calculation and customized recommendation ranking.
+              {loadingProfile && (
+                <span style={{ marginLeft: '8px', color: 'var(--brand)', fontStyle: 'italic' }}>
+                  (Syncing latest profile…)
+                </span>
+              )}
             </div>
           </div>
           <button
             type="button"
-            onClick={onClose}
+            aria-label="Close modal"
+            onClick={handleClose}
             style={{
               background: 'transparent',
               border: 'none',
               fontSize: '22px',
               color: 'var(--text-muted)',
               cursor: 'pointer',
-              padding: '4px',
+              padding: '4px 8px',
+              borderRadius: '6px',
+              lineHeight: 1,
             }}
           >
             ✕
@@ -137,14 +308,63 @@ export default function RadarProfileModal({
         </div>
 
         {/* Scrollable Form */}
-        <form onSubmit={handleSubmit} style={{ padding: '24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '18px' }}>
+        <form
+          onSubmit={handleSubmit}
+          style={{
+            padding: '24px',
+            overflowY: 'auto',
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+          }}
+        >
+          {/* Error Banner */}
+          {errorMessage && (
+            <div
+              role="alert"
+              style={{
+                padding: '10px 14px',
+                borderRadius: '8px',
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                color: '#ef4444',
+                fontSize: '13px',
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '8px',
+              }}
+            >
+              <span>⚠️ {errorMessage}</span>
+              <button
+                type="button"
+                onClick={() => setErrorMessage(null)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#ef4444',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           {/* Degree & Specialization */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
-                Current Degree
+              <label
+                htmlFor="profile-degree"
+                style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}
+              >
+                Current Degree *
               </label>
               <input
+                id="profile-degree"
                 type="text"
                 value={degree}
                 onChange={e => setDegree(e.target.value)}
@@ -163,14 +383,18 @@ export default function RadarProfileModal({
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
+              <label
+                htmlFor="profile-specialization"
+                style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}
+              >
                 Specialization / Major
               </label>
               <input
+                id="profile-specialization"
                 type="text"
                 value={specialization}
                 onChange={e => setSpecialization(e.target.value)}
-                placeholder="e.g. Computer Science, AI"
+                placeholder="e.g. Computer Science, AI, EE"
                 style={{
                   width: '100%',
                   padding: '9px 12px',
@@ -185,15 +409,46 @@ export default function RadarProfileModal({
             </div>
           </div>
 
-          {/* Academic Year & Graduation Cohort */}
+          {/* University / Institution */}
+          <div>
+            <label
+              htmlFor="profile-university"
+              style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}
+            >
+              University / Institution
+            </label>
+            <input
+              id="profile-university"
+              type="text"
+              value={university}
+              onChange={e => setUniversity(e.target.value)}
+              placeholder="e.g. IIT Delhi, BITS Pilani, NIT Trichy"
+              style={{
+                width: '100%',
+                padding: '9px 12px',
+                borderRadius: '8px',
+                border: '1px solid var(--border)',
+                background: 'var(--bg-app)',
+                color: 'var(--text-primary)',
+                fontSize: '13px',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+
+          {/* Academic Year & Graduation Cohort & Country */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
-                Academic Year
+              <label
+                htmlFor="profile-academic-year"
+                style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}
+              >
+                Academic Year *
               </label>
               <select
+                id="profile-academic-year"
                 value={academicYear}
-                onChange={e => setAcademicYear(e.target.value)}
+                onChange={e => setAcademicYear(Number(e.target.value))}
                 style={{
                   width: '100%',
                   padding: '9px 12px',
@@ -214,13 +469,17 @@ export default function RadarProfileModal({
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
-                Graduation Year
+              <label
+                htmlFor="profile-grad-year"
+                style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}
+              >
+                Graduation Year *
               </label>
               <input
+                id="profile-grad-year"
                 type="number"
-                min={2025}
-                max={2032}
+                min={2024}
+                max={2035}
                 value={gradYear}
                 onChange={e => setGradYear(e.target.value)}
                 required
@@ -238,10 +497,44 @@ export default function RadarProfileModal({
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
-                Country of Study
+              <label
+                htmlFor="profile-grad-month"
+                style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}
+              >
+                Graduation Month
+              </label>
+              <select
+                id="profile-grad-month"
+                value={gradMonth}
+                onChange={e => setGradMonth(Number(e.target.value))}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-app)',
+                  color: 'var(--text-primary)',
+                  fontSize: '13px',
+                  boxSizing: 'border-box',
+                }}
+              >
+                {MONTH_NAMES.map((m, idx) => (
+                  <option key={m} value={idx + 1}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="profile-country"
+                style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}
+              >
+                Country of Study *
               </label>
               <input
+                id="profile-country"
                 type="text"
                 value={countryOfStudy}
                 onChange={e => setCountryOfStudy(e.target.value)}
@@ -262,10 +555,14 @@ export default function RadarProfileModal({
 
           {/* Technical Skills */}
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
+            <label
+              htmlFor="profile-skills"
+              style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}
+            >
               Technical Skills (comma-separated)
             </label>
             <input
+              id="profile-skills"
               type="text"
               value={skillsStr}
               onChange={e => setSkillsStr(e.target.value)}
@@ -358,8 +655,24 @@ export default function RadarProfileModal({
               </span>
             )}
             <button
+              type="button"
+              onClick={handleClose}
+              style={{
+                padding: '9px 16px',
+                borderRadius: '8px',
+                background: 'transparent',
+                color: 'var(--text-secondary)',
+                border: '1px solid var(--border)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+            <button
               type="submit"
-              disabled={isSaving}
+              disabled={isBusy}
               style={{
                 padding: '10px 20px',
                 borderRadius: '8px',
@@ -368,10 +681,11 @@ export default function RadarProfileModal({
                 border: 'none',
                 fontWeight: 600,
                 fontSize: '13px',
-                cursor: isSaving ? 'not-allowed' : 'pointer',
+                cursor: isBusy ? 'not-allowed' : 'pointer',
+                opacity: isBusy ? 0.7 : 1,
               }}
             >
-              {isSaving ? 'Saving Profile…' : 'Save Profile'}
+              {isBusy ? 'Saving Profile…' : 'Save Profile'}
             </button>
           </div>
         </form>
