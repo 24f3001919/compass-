@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from backend.models_radar import OpportunityOut
 
@@ -188,6 +188,17 @@ class UpdateApplicationStatusRequest(BaseModel):
     cover_letter: Optional[str] = None
     target_deadline: Optional[date] = None
     private_notes: Optional[str] = None
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def normalize_status(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            val_upper = v.upper()
+            try:
+                return CareerApplicationStatus(val_upper)
+            except ValueError:
+                return v
+        return v
 
 
 class BatchPrepareRequest(BaseModel):
