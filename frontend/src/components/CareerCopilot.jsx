@@ -3,10 +3,12 @@ import InternshipRadar from './InternshipRadar'
 import ResumeStudio from './career/ResumeStudio'
 import ApplicationCenter from './career/ApplicationCenter'
 import RadarProfileModal from './radar/RadarProfileModal'
+import { updateRadarProfile } from '../api/radarApi.js'
 
 export default function CareerCopilot() {
   const [activeSubTab, setActiveSubTab] = useState('radar') // 'radar' | 'resumes' | 'applications'
   const [showProfileModal, setShowProfileModal] = useState(false)
+  const [radarKey, setRadarKey] = useState(0)
 
   const SUB_TABS = [
     { key: 'radar', icon: '📡', label: 'Internship Radar', desc: 'Verified discovery & eligibility' },
@@ -132,17 +134,26 @@ export default function CareerCopilot() {
 
       {/* Main Tab Area */}
       <div style={{ flex: 1, padding: '20px 16px' }}>
-        {activeSubTab === 'radar' && <InternshipRadar />}
+        {activeSubTab === 'radar' && <InternshipRadar key={radarKey} />}
         {activeSubTab === 'resumes' && <ResumeStudio />}
         {activeSubTab === 'applications' && <ApplicationCenter />}
       </div>
 
       {/* Candidate Profile Modal */}
-      <RadarProfileModal
-        isOpen={showProfileModal}
-        onClose={() => setShowProfileModal(false)}
-        onProfileUpdated={() => {}}
-      />
+      {showProfileModal && (
+        <RadarProfileModal
+          isOpen={showProfileModal}
+          onClose={() => setShowProfileModal(false)}
+          onSave={async (newProfile) => {
+            const updated = await updateRadarProfile(newProfile)
+            setRadarKey(prev => prev + 1)
+            return updated
+          }}
+          onProfileUpdated={() => {
+            setRadarKey(prev => prev + 1)
+          }}
+        />
+      )}
     </div>
   )
 }
