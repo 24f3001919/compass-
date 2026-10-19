@@ -324,7 +324,7 @@ def _sanitize_oauth_error(error_val: Optional[str]) -> str:
     """Map OAuth error parameter strictly to an allowlisted constant literal to eliminate open redirect taint."""
     if not error_val:
         return "oauth_error"
-    normalized = str(error_val).strip().lower()
+    normalized = error_val.strip().lower()
     if normalized == "access_denied":
         return "access_denied"
     elif normalized == "invalid_request":
@@ -354,7 +354,7 @@ def _sanitize_state_error(reason_val: Optional[str]) -> str:
     """Map state validation error reason strictly to an allowlisted constant literal."""
     if not reason_val:
         return "invalid_state"
-    normalized = str(reason_val).strip().lower()
+    normalized = reason_val.strip().lower()
     if normalized == "missing_state":
         return "missing_state"
     elif normalized == "invalid_action":
