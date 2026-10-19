@@ -38,6 +38,7 @@ from backend.models_radar import (
     UserOpportunityProfileOut,
 )
 from backend.services.radar_eligibility import evaluate_eligibility
+from backend.services.radar_inventory import get_source_inventory
 from backend.services.radar_prediction import estimate_recruitment_cycle
 from backend.services.radar_sync import run_radar_sync
 from backend.services.radar_verifier import verify_opportunity_status
@@ -65,14 +66,16 @@ async def list_opportunities_endpoint(
     request: Request,
     status: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
+    employer_type: Optional[str] = Query(None),
     work_arrangement: Optional[str] = Query(None),
     country: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     india_only: bool = Query(False),
+    verified_only: bool = Query(False),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ):
-    """List opportunities with pagination, filtering, and deterministic personal eligibility assessment."""
+    """List opportunities with pagination, filtering, employer type selection, and deterministic eligibility assessment."""
     user_id = _get_or_create_user_id(request)
     profile = await get_user_opportunity_profile(user_id)
 
@@ -80,10 +83,12 @@ async def list_opportunities_endpoint(
         user_id=user_id,
         status=status,
         category=category,
+        employer_type=employer_type,
         work_arrangement=work_arrangement,
         country=country,
         search=search,
         india_only=india_only,
+        verified_only=verified_only,
         page=page,
         page_size=page_size,
     )
@@ -99,28 +104,38 @@ async def list_opportunities_endpoint(
 
 
 @router.get("/recommended", response_model=List[OpportunityOut])
-async def get_recommended_opportunities(request: Request, limit: int = Query(20, ge=1, le=50)):
-    """Return top recommended opportunities tailored to user's profile and preferences."""
+async def get_recommended_opportunities(
+    request: Request,
+    limit: int = Query(20, ge=1, le=50),
+    employer_type: Optional[str] = Query(None),
+):
+    """
+    Return top recommended opportunities tailored to user's profile and preferences.
+    Neutral ranking prioritizes verified active status, candidate eligibility, and skill match
+    with zero bias toward company size or prestige.
+    """
     user_id = _get_or_create_user_id(request)
     profile = await get_user_opportunity_profile(user_id)
 
     raw_items, _ = await get_all_opportunities(
         user_id=user_id,
+        employer_type=employer_type,
         page=1,
-        page_size=100,  # Evaluate top 100 for ranking
+        page_size=150,  # Evaluate broader candidate set for ranking
     )
 
     enriched = [_enrich_opportunity(item, profile) for item in raw_items]
 
-    # Deterministic Ranking Matrix:
-    # 1. ELIGIBLE + OPEN_CONFIRMED
-    # 2. POTENTIAL_MATCH + OPEN_CONFIRMED
-    # 3. ELIGIBLE + UPCOMING_CONFIRMED
-    # 4. POTENTIAL_MATCH + UPCOMING_CONFIRMED
-    # 5. Others
+    # Neutral Ranking Matrix:
+    # 1. Verified and active status: OPEN_CONFIRMED first (0), UPCOMING_CONFIRMED (1), others (2)
+    # 2. Personal candidate eligibility: ELIGIBLE (0), POTENTIAL_MATCH (1), INSUFFICIENT_INFO (2), INELIGIBLE (3)
+    # 3. User preferred role fit (bonus -1)
+    # 4. User skill match overlap (bonus -N)
+    # 5. India / Remote eligibility preference
+    # 6. Approaching application deadline
     def rank_key(o: OpportunityOut) -> tuple:
         status_weight = 0 if o.current_status == OpportunityStatus.OPEN_CONFIRMED else (
-            1 if o.current_status == OpportunityStatus.UPCOMING_CONFIRMED else 2
+            1 if o.current_status in (OpportunityStatus.UPCOMING_CONFIRMED, OpportunityStatus.ANNOUNCED) else 2
         )
         eligibility_weight = {
             EligibilityClassification.ELIGIBLE: 0,
@@ -128,8 +143,24 @@ async def get_recommended_opportunities(request: Request, limit: int = Query(20,
             EligibilityClassification.INSUFFICIENT_INFORMATION: 2,
             EligibilityClassification.INELIGIBLE: 3,
         }.get(o.eligibility_classification, 2)
+
+        role_bonus = 0
+        if profile and profile.preferred_roles:
+            pref = [r.lower() for r in profile.preferred_roles]
+            if any(p in o.role_title.lower() or p in o.category.lower() for p in pref):
+                role_bonus = -1
+
+        skill_bonus = 0
+        if profile and profile.skills and o.requirements and o.requirements.required_skills:
+            user_s = {s.strip().lower() for s in profile.skills if s.strip()}
+            req_s = {s.strip().lower() for s in o.requirements.required_skills if s.strip()}
+            overlap = len(user_s.intersection(req_s))
+            skill_bonus = -overlap
+
         india_bonus = 0 if o.is_india_eligible else 1
-        return (eligibility_weight, status_weight, india_bonus)
+        deadline_weight = o.confirmed_close_date.toordinal() if o.confirmed_close_date else 9999999
+
+        return (status_weight, eligibility_weight, role_bonus, skill_bonus, india_bonus, deadline_weight)
 
     enriched.sort(key=rank_key)
     return enriched[:limit]
@@ -139,10 +170,11 @@ async def get_recommended_opportunities(request: Request, limit: int = Query(20,
 async def get_open_confirmed_opportunities(
     request: Request,
     category: Optional[str] = Query(None),
+    employer_type: Optional[str] = Query(None),
     work_arrangement: Optional[str] = Query(None),
     india_only: bool = Query(True),
 ):
-    """Return strictly verified open opportunities."""
+    """Return strictly verified open opportunities across all employer types."""
     user_id = _get_or_create_user_id(request)
     profile = await get_user_opportunity_profile(user_id)
 
@@ -150,10 +182,11 @@ async def get_open_confirmed_opportunities(
         user_id=user_id,
         status=OpportunityStatus.OPEN_CONFIRMED,
         category=category,
+        employer_type=employer_type,
         work_arrangement=work_arrangement,
         india_only=india_only,
         page=1,
-        page_size=50,
+        page_size=100,
     )
     return [_enrich_opportunity(item, profile) for item in raw_items]
 
@@ -283,6 +316,12 @@ async def get_sync_status_endpoint():
     """Check status of last synchronization run."""
     last_run = await get_last_sync_run()
     return {"last_run": last_run}
+
+
+@router.get("/sources", response_model=List[Dict[str, Any]])
+async def list_sources_endpoint():
+    """Retrieve the audited source inventory with access methods, permissions, and status."""
+    return get_source_inventory()
 
 
 @router.post("/{opportunity_id}/verify")

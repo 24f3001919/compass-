@@ -50,7 +50,7 @@ async def get_pool() -> Optional[asyncpg.Pool]:
             return None
         _db_pool_available = True
     try:
-        pool = await asyncio.wait_for(_raw_get_pool(), timeout=8.0)
+        pool = await asyncio.wait_for(_raw_get_pool(), timeout=15.0)
         if pool is not None:
             _db_pool_available = True
             return pool
@@ -105,6 +105,7 @@ def _parse_row_to_opportunity(row: Dict[str, Any], sources: List[Dict[str, Any]]
             discovered_at=s.get("discovered_at"),
             last_checked_at=s.get("last_checked_at"),
             verification_result=s.get("verification_result"),
+            is_official_source=bool(s.get("is_official_source", False)),
         )
         for s in sources
     ]
@@ -128,6 +129,7 @@ def _parse_row_to_opportunity(row: Dict[str, Any], sources: List[Dict[str, Any]]
         company_name=row["company_name"],
         normalized_company=row.get("normalized_company") or row["company_name"],
         role_title=row["role_title"],
+        employer_type=row.get("employer_type") or "enterprise",
         opportunity_type=row.get("opportunity_type", "internship"),
         category=row.get("category", "general"),
         location=row.get("location"),
@@ -145,6 +147,10 @@ def _parse_row_to_opportunity(row: Dict[str, Any], sources: List[Dict[str, Any]]
         last_verified_at=row.get("last_verified_at"),
         created_at=row.get("created_at"),
         updated_at=row.get("updated_at"),
+        verification_evidence=row.get("verification_evidence"),
+        employer_identity_verified=bool(row.get("employer_identity_verified", False)),
+        official_source_confirmed=bool(row.get("official_source_confirmed", False)),
+        application_url_checked=bool(row.get("application_url_checked", False)),
         requirements=reqs,
         sources=src_models,
         cycles=cycle_models,
@@ -164,6 +170,7 @@ async def upsert_opportunity(
     official_application_url: Optional[str] = None,
     current_status: str = OpportunityStatus.DISCOVERED,
     opportunity_type: str = "internship",
+    employer_type: str = "enterprise",
     category: str = "general",
     location: Optional[str] = None,
     work_arrangement: str = "unknown",
@@ -175,6 +182,10 @@ async def upsert_opportunity(
     confirmed_close_date: Optional[date] = None,
     description: Optional[str] = None,
     last_verified_at: Optional[datetime] = None,
+    verification_evidence: Optional[str] = None,
+    employer_identity_verified: bool = False,
+    official_source_confirmed: bool = False,
+    application_url_checked: bool = False,
 ) -> int:
     """Insert or update an opportunity idempotently using canonical_url."""
     global _id_seq
@@ -185,11 +196,43 @@ async def upsert_opportunity(
         # In-memory fallback
         for opp_id, opp in _in_memory_opportunities.items():
             if opp["canonical_url"] == canonical_url:
+                # Status precedence & protection rules:
+                # 1. Closed/Cancelled confirmed records cannot be overwritten by weaker discovery or stale claims
+                # 2. Verified active/upcoming records cannot be downgraded by unverified DISCOVERED records
+                existing_st = opp.get("current_status")
+                new_st = current_status
+                if existing_st in ("CLOSED_CONFIRMED", "CANCELLED_CONFIRMED"):
+                    if current_status not in ("CLOSED_CONFIRMED", "CANCELLED_CONFIRMED"):
+                        new_st = existing_st
+                elif existing_st == "OPEN_CONFIRMED":
+                    if current_status in ("DISCOVERED", "NEEDS_VERIFICATION"):
+                        new_st = existing_st
+                elif existing_st == "UPCOMING_CONFIRMED":
+                    if current_status in ("DISCOVERED", "NEEDS_VERIFICATION"):
+                        new_st = existing_st
+
+                # Evidence protection: do not let a weaker unverified source overwrite verified evidence
+                has_verified_evidence = opp.get("employer_identity_verified") or opp.get("official_source_confirmed")
+                if has_verified_evidence and not (employer_identity_verified or official_source_confirmed):
+                    eff_evidence = opp.get("verification_evidence") or verification_evidence
+                else:
+                    eff_evidence = verification_evidence or opp.get("verification_evidence")
+
                 opp.update({
                     "company_name": company_name,
                     "role_title": role_title,
-                    "current_status": current_status,
-                    "last_verified_at": last_verified_at or datetime.now(timezone.utc),
+                    "employer_type": employer_type or opp.get("employer_type", "enterprise"),
+                    "category": category or opp.get("category", "general"),
+                    "location": location or opp.get("location"),
+                    "work_arrangement": work_arrangement if work_arrangement != "unknown" else opp.get("work_arrangement", "unknown"),
+                    "compensation": compensation or opp.get("compensation"),
+                    "duration": duration or opp.get("duration"),
+                    "current_status": new_st,
+                    "last_verified_at": last_verified_at or opp.get("last_verified_at"),
+                    "verification_evidence": eff_evidence,
+                    "employer_identity_verified": employer_identity_verified or opp.get("employer_identity_verified", False),
+                    "official_source_confirmed": official_source_confirmed or opp.get("official_source_confirmed", False),
+                    "application_url_checked": application_url_checked or opp.get("application_url_checked", False),
                 })
                 return opp_id
         _id_seq += 1
@@ -198,6 +241,7 @@ async def upsert_opportunity(
             "company_name": company_name,
             "normalized_company": norm_co,
             "role_title": role_title,
+            "employer_type": employer_type,
             "opportunity_type": opportunity_type,
             "category": category,
             "location": location,
@@ -213,6 +257,10 @@ async def upsert_opportunity(
             "confirmed_close_date": confirmed_close_date,
             "description": description,
             "last_verified_at": last_verified_at,
+            "verification_evidence": verification_evidence,
+            "employer_identity_verified": employer_identity_verified,
+            "official_source_confirmed": official_source_confirmed,
+            "application_url_checked": application_url_checked,
             "sources": [],
             "cycles": [],
             "requirements": {},
@@ -221,18 +269,21 @@ async def upsert_opportunity(
 
     query = """
     INSERT INTO opportunities (
-        company_name, normalized_company, role_title, opportunity_type, category,
+        company_name, normalized_company, role_title, opportunity_type, employer_type, category,
         location, work_arrangement, country, is_india_eligible, compensation, duration,
         official_application_url, canonical_url, current_status, confirmed_open_date,
-        confirmed_close_date, description, last_verified_at, created_at, updated_at
+        confirmed_close_date, description, last_verified_at, verification_evidence,
+        employer_identity_verified, official_source_confirmed, application_url_checked,
+        created_at, updated_at
     ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, now(), now()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, now(), now()
     )
     ON CONFLICT (canonical_url) DO UPDATE SET
         company_name = EXCLUDED.company_name,
         normalized_company = EXCLUDED.normalized_company,
         role_title = EXCLUDED.role_title,
         opportunity_type = EXCLUDED.opportunity_type,
+        employer_type = COALESCE(NULLIF(EXCLUDED.employer_type, 'enterprise'), opportunities.employer_type),
         category = EXCLUDED.category,
         location = COALESCE(EXCLUDED.location, opportunities.location),
         work_arrangement = CASE WHEN EXCLUDED.work_arrangement != 'unknown' THEN EXCLUDED.work_arrangement ELSE opportunities.work_arrangement END,
@@ -242,14 +293,25 @@ async def upsert_opportunity(
         duration = COALESCE(EXCLUDED.duration, opportunities.duration),
         official_application_url = COALESCE(EXCLUDED.official_application_url, opportunities.official_application_url),
         current_status = CASE
-            WHEN EXCLUDED.current_status IN ('OPEN_CONFIRMED', 'CLOSED_CONFIRMED') THEN EXCLUDED.current_status
-            WHEN opportunities.current_status = 'OPEN_CONFIRMED' AND EXCLUDED.current_status != 'CLOSED_CONFIRMED' THEN opportunities.current_status
+            WHEN opportunities.current_status IN ('CLOSED_CONFIRMED', 'CANCELLED_CONFIRMED') THEN
+                CASE WHEN EXCLUDED.current_status IN ('CLOSED_CONFIRMED', 'CANCELLED_CONFIRMED') THEN EXCLUDED.current_status ELSE opportunities.current_status END
+            WHEN opportunities.current_status = 'OPEN_CONFIRMED' AND EXCLUDED.current_status IN ('DISCOVERED', 'NEEDS_VERIFICATION') THEN opportunities.current_status
+            WHEN opportunities.current_status = 'UPCOMING_CONFIRMED' AND EXCLUDED.current_status IN ('DISCOVERED', 'NEEDS_VERIFICATION') THEN opportunities.current_status
             ELSE EXCLUDED.current_status
         END,
         confirmed_open_date = COALESCE(EXCLUDED.confirmed_open_date, opportunities.confirmed_open_date),
         confirmed_close_date = COALESCE(EXCLUDED.confirmed_close_date, opportunities.confirmed_close_date),
         description = COALESCE(EXCLUDED.description, opportunities.description),
         last_verified_at = COALESCE(EXCLUDED.last_verified_at, opportunities.last_verified_at),
+        verification_evidence = CASE
+            WHEN (opportunities.employer_identity_verified OR opportunities.official_source_confirmed)
+                 AND NOT (EXCLUDED.employer_identity_verified OR EXCLUDED.official_source_confirmed)
+                 THEN COALESCE(opportunities.verification_evidence, EXCLUDED.verification_evidence)
+            ELSE COALESCE(EXCLUDED.verification_evidence, opportunities.verification_evidence)
+        END,
+        employer_identity_verified = EXCLUDED.employer_identity_verified OR opportunities.employer_identity_verified,
+        official_source_confirmed = EXCLUDED.official_source_confirmed OR opportunities.official_source_confirmed,
+        application_url_checked = EXCLUDED.application_url_checked OR opportunities.application_url_checked,
         updated_at = now()
     RETURNING id;
     """
@@ -260,6 +322,7 @@ async def upsert_opportunity(
             norm_co,
             role_title.strip(),
             opportunity_type,
+            employer_type,
             category,
             location,
             work_arrangement,
@@ -274,6 +337,10 @@ async def upsert_opportunity(
             confirmed_close_date,
             description,
             last_verified_at,
+            verification_evidence,
+            employer_identity_verified,
+            official_source_confirmed,
+            application_url_checked,
         )
         return row["id"]
 
@@ -397,10 +464,12 @@ async def get_all_opportunities(
     user_id: Optional[str] = None,
     status: Optional[str] = None,
     category: Optional[str] = None,
+    employer_type: Optional[str] = None,
     work_arrangement: Optional[str] = None,
     country: Optional[str] = None,
     search: Optional[str] = None,
     india_only: bool = False,
+    verified_only: bool = False,
     page: int = 1,
     page_size: int = 25,
 ) -> Tuple[List[OpportunityOut], int]:
@@ -409,8 +478,12 @@ async def get_all_opportunities(
         items = list(_in_memory_opportunities.values())
         if status:
             items = [i for i in items if i.get("current_status") == status]
+        if verified_only:
+            items = [i for i in items if i.get("current_status") == "OPEN_CONFIRMED"]
         if category:
             items = [i for i in items if i.get("category") == category]
+        if employer_type:
+            items = [i for i in items if i.get("employer_type") == employer_type]
         if india_only:
             items = [i for i in items if i.get("is_india_eligible") is True]
         if search:
@@ -436,9 +509,14 @@ async def get_all_opportunities(
     if status:
         args.append(status)
         conditions.append(f"o.current_status = ${len(args)}")
+    if verified_only:
+        conditions.append("o.current_status = 'OPEN_CONFIRMED'")
     if category:
         args.append(category)
         conditions.append(f"o.category = ${len(args)}")
+    if employer_type:
+        args.append(employer_type)
+        conditions.append(f"o.employer_type = ${len(args)}")
     if work_arrangement:
         args.append(work_arrangement)
         conditions.append(f"o.work_arrangement = ${len(args)}")
@@ -728,15 +806,21 @@ async def get_user_application_tracking(user_id: str) -> List[OpportunityOut]:
 async def get_radar_overview_stats(user_id: str) -> Dict[str, Any]:
     pool = await get_pool()
     if not pool:
+        all_opps = list(_in_memory_opportunities.values())
         return {
-            "verified_open_count": sum(1 for o in _in_memory_opportunities.values() if o.get("current_status") == "OPEN_CONFIRMED"),
-            "strong_matches_count": 0,
-            "opening_soon_count": sum(1 for o in _in_memory_opportunities.values() if o.get("current_status") in ("UPCOMING_CONFIRMED", "ANNOUNCED")),
+            "verified_open_count": sum(1 for o in all_opps if o.get("current_status") == "OPEN_CONFIRMED"),
+            "strong_matches_count": sum(1 for o in all_opps if o.get("current_status") == "OPEN_CONFIRMED"),
+            "opening_soon_count": sum(1 for o in all_opps if o.get("current_status") in ("UPCOMING_CONFIRMED", "ANNOUNCED")),
             "upcoming_deadlines_count": 0,
             "saved_count": sum(1 for v in _in_memory_user_opps.values() if v.get("is_saved")),
             "applications_in_progress_count": sum(1 for v in _in_memory_user_opps.values() if v.get("application_status")),
             "last_sync_at": None,
-            "total_tracked_opportunities": len(_in_memory_opportunities),
+            "total_tracked_opportunities": len(all_opps),
+            "startups_count": sum(1 for o in all_opps if o.get("employer_type") == "startup"),
+            "research_count": sum(1 for o in all_opps if o.get("employer_type") == "research"),
+            "government_count": sum(1 for o in all_opps if o.get("employer_type") == "government"),
+            "open_source_count": sum(1 for o in all_opps if o.get("employer_type") == "open_source"),
+            "enterprise_count": sum(1 for o in all_opps if o.get("employer_type") in ("enterprise", None, "")),
         }
 
     async with pool.acquire() as conn:
@@ -751,6 +835,9 @@ async def get_radar_overview_stats(user_id: str) -> Dict[str, Any]:
         last_sync = await conn.fetchval(
             "SELECT run_completed_at FROM opportunity_sync_runs WHERE status = 'completed' ORDER BY run_completed_at DESC LIMIT 1"
         )
+        type_rows = await conn.fetch("SELECT employer_type, COUNT(*) as cnt FROM opportunities GROUP BY employer_type")
+        type_counts = {r["employer_type"]: r["cnt"] for r in type_rows}
+
         return {
             "verified_open_count": open_cnt,
             "strong_matches_count": open_cnt,
@@ -760,6 +847,11 @@ async def get_radar_overview_stats(user_id: str) -> Dict[str, Any]:
             "applications_in_progress_count": apps_cnt,
             "last_sync_at": last_sync,
             "total_tracked_opportunities": total,
+            "startups_count": type_counts.get("startup", 0),
+            "research_count": type_counts.get("research", 0),
+            "government_count": type_counts.get("government", 0),
+            "open_source_count": type_counts.get("open_source", 0),
+            "enterprise_count": type_counts.get("enterprise", 0),
         }
 
 
