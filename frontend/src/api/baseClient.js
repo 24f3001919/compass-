@@ -7,12 +7,26 @@ const isLocalDevHost = typeof window !== 'undefined' &&
   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
 
 function resolveInitialApiBase() {
-  if (import.meta.env.VITE_API_BASE_URL) {
+  // If hosted on a public domain (Vercel, custom domain, anything other than localhost),
+  // ALWAYS use '' (same-origin relative URL) so that:
+  // 1. All requests go to /api and /health on the same domain (e.g. compass-farmlytics.vercel.app)
+  // 2. Vercel server-side rewrites forward traffic to Render seamlessly
+  // 3. Browser ad-blockers (uBlock Origin, Brave Shields, Privacy Badger) NEVER block same-origin requests (avoids net::ERR_BLOCKED_BY_CLIENT)
+  if (typeof window !== 'undefined' && !isLocalDevHost) {
+    try {
+      localStorage.removeItem('compass_active_api_base')
+    } catch {
+      /* ignore storage access error */
+    }
+    return ''
+  }
+
+  if (import.meta.env.VITE_API_BASE_URL && isLocalDevHost) {
     return import.meta.env.VITE_API_BASE_URL.replace(/\/$/, '')
   }
   try {
     const saved = localStorage.getItem('compass_active_api_base')
-    if (saved) return saved.replace(/\/$/, '')
+    if (saved && isLocalDevHost) return saved.replace(/\/$/, '')
   } catch {
     /* ignore storage access error */
   }
@@ -25,6 +39,17 @@ function resolveInitialApiBase() {
 export let API_BASE = resolveInitialApiBase()
 
 export function setApiBase(newBase) {
+  // In production on Vercel, keep same-origin '' to avoid cross-domain ad-blocker triggers
+  if (typeof window !== 'undefined' && !isLocalDevHost) {
+    API_BASE = ''
+    try {
+      localStorage.removeItem('compass_active_api_base')
+    } catch {
+      /* ignore */
+    }
+    return
+  }
+
   API_BASE = (newBase || '').replace(/\/$/, '')
   try {
     if (API_BASE) {
@@ -36,6 +61,7 @@ export function setApiBase(newBase) {
     /* ignore storage access error */
   }
 }
+
 
 
 export const FALLBACK_TASKS = [
@@ -273,9 +299,8 @@ export async function checkBackendHealth(force = false) {
 
     try {
       // 1. If currently configured for localhost, test localhost first with a quick 2.5s timeout
-      const isLocal = API_BASE.includes('localhost') || API_BASE.includes('127.0.0.1')
+      const isLocal = isLocalDevHost || API_BASE.includes('localhost') || API_BASE.includes('127.0.0.1')
       let res = null
-      let usedBase = API_BASE
 
       if (isLocal) {
         try {
@@ -287,33 +312,17 @@ export async function checkBackendHealth(force = false) {
             res = await probe(`${RENDER_BACKEND_URL}/health`, 35000)
             if (res && (res.ok || res.status === 200)) {
               setApiBase(RENDER_BACKEND_URL)
-              usedBase = RENDER_BACKEND_URL
             }
           } catch {
-            // Cloud backend is also waking up
             return 'Waking up the server…'
           }
         }
       } else {
-        // 2. Production or Cloud target — allow 35s for Render cold start
-        try {
-          res = await probe(`${API_BASE || ''}/health`, 35000)
-        } catch {
-          // If relative proxy (/health on Vercel) timed out or failed, attempt direct Render URL
-          if (!API_BASE && RENDER_BACKEND_URL) {
-            try {
-              res = await probe(`${RENDER_BACKEND_URL}/health`, 35000)
-              if (res && res.ok) {
-                setApiBase(RENDER_BACKEND_URL)
-                usedBase = RENDER_BACKEND_URL
-              }
-            } catch {
-              return 'Waking up the server…'
-            }
-          } else {
-            return 'Waking up the server…'
-          }
-        }
+        // 2. Production (Vercel) — ALWAYS use same-origin /health.
+        // Vercel rewrites forward to Render server-side.
+        // Same-origin calls are NEVER blocked by ad-blockers (fixes net::ERR_BLOCKED_BY_CLIENT).
+        API_BASE = ''
+        res = await probe('/health', 35000)
       }
 
       if (!res) {
