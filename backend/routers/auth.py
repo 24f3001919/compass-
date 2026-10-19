@@ -312,36 +312,32 @@ def _resolve_oauth_redirect_uri(request: Request) -> str:
 
 def _resolve_frontend_origin(request: Request) -> str:
     """Resolve active Compass frontend base URL for OAuth redirects and error returns."""
-    allowed = set(s.rstrip("/") for s in getattr(settings, "CORS_ORIGINS", []))
-    allowed.update({
+    allowed = {
         "http://localhost:5173", "http://127.0.0.1:5173",
         "http://localhost:3000", "http://127.0.0.1:3000",
         "https://compass-farmlytics.vercel.app",
         "https://compass-kappa-nine.vercel.app",
         "https://compass-frontend.vercel.app",
-    })
+    }
+    for s in getattr(settings, "CORS_ORIGINS", []):
+        if s and isinstance(s, str):
+            allowed.add(s.rstrip("/"))
 
     origin = request.headers.get("origin") or request.headers.get("referer")
     if origin:
         parsed = urllib.parse.urlparse(origin)
         if parsed.scheme and parsed.netloc:
-            candidate = f"{parsed.scheme}://{parsed.netloc}"
-            if candidate in allowed or any(candidate.startswith(a) for a in allowed):
+            candidate = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+            if candidate in allowed:
                 return candidate
-
-    fwd_host = request.headers.get("x-forwarded-host") or request.headers.get("host")
-    if fwd_host:
-        h = fwd_host.split(":")[0].lower()
-        if h in ("localhost", "127.0.0.1") or h.endswith(".localhost"):
-            return "http://localhost:5173"
-        if h.endswith(".vercel.app") or h == "compass-farmlytics.vercel.app":
-            return f"https://{fwd_host}"
 
     redirect_uri = getattr(settings, "GOOGLE_REDIRECT_URI", "")
     if redirect_uri and "://" in redirect_uri and "localhost" not in redirect_uri:
         p = urllib.parse.urlparse(redirect_uri)
         if p.scheme and p.netloc:
-            return f"{p.scheme}://{p.netloc}"
+            candidate = f"{p.scheme}://{p.netloc}".rstrip("/")
+            if candidate in allowed:
+                return candidate
 
     if settings.is_development() or settings.is_test():
         return "http://localhost:5173"
@@ -528,7 +524,7 @@ async def calendar_callback(
         if is_test_client:
             return HTMLResponse(
                 f"<html><body style='font-family:sans-serif;padding:40px;background:#0f172a;color:#f87171;'>"
-                f"<h3>Google Calendar Authorization Error: {safe_error}</h3>"
+                f"<h3>Google Calendar Authorization Error: {escape(safe_error)}</h3>"
                 f"<p><a style='color:#38bdf8;' href='{frontend_origin}/'>Return to Compass</a></p>"
                 f"</body></html>",
                 status_code=400,

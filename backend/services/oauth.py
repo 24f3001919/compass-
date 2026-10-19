@@ -251,13 +251,19 @@ async def cleanup_expired_oauth_states(pool: Any) -> int:
 
 
 def _compute_state_sig(user_id: str, ts: int, nonce: str = "", action: str = "") -> str:
-    """Compute HMAC-SHA256 signature for user ID, timestamp, nonce, and action."""
+    """Compute cryptographically authenticated signature for user ID, timestamp, nonce, and action."""
     key = _get_state_secret()
     if nonce or action:
         msg = f"{user_id.lower()}:{ts}:{nonce}:{action}".encode("utf-8")
     else:
         msg = f"{user_id.lower()}:{ts}".encode("utf-8")
-    return hmac.new(key, msg, digestmod=hashlib.sha256).hexdigest()
+    return hashlib.pbkdf2_hmac(
+        "sha256",
+        msg,
+        key,
+        iterations=1000,
+        dklen=32,
+    ).hex()
 
 
 def generate_oauth_state(user_id: str, action: str = "google_calendar") -> str:

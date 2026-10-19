@@ -186,7 +186,6 @@ export function setCurrentUserId(userId) {
   // Proactively clear obsolete compass_user_id cookie that triggers production impersonation errors
   if (typeof document !== 'undefined') {
     try {
-      document.cookie = 'compass_user_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;'
       document.cookie = 'compass_user_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure'
     } catch {
       /* ignore cookie cleanup error */
