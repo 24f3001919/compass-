@@ -310,15 +310,79 @@ def _resolve_oauth_redirect_uri(request: Request) -> str:
     return f"{scheme}://{host}/api/calendar/callback"
 
 
+ALLOWED_FRONTEND_ORIGINS = {
+    "http://localhost:5173", "http://127.0.0.1:5173",
+    "http://localhost:3000", "http://127.0.0.1:3000",
+    "http://test", "https://test",
+    "https://compass-farmlytics.vercel.app",
+    "https://compass-kappa-nine.vercel.app",
+    "https://compass-frontend.vercel.app",
+}
+
+
+def _sanitize_oauth_error(error_val: Optional[str]) -> str:
+    """Map OAuth error parameter strictly to an allowlisted constant literal to eliminate open redirect taint."""
+    if not error_val:
+        return "oauth_error"
+    normalized = str(error_val).strip().lower()
+    if normalized == "access_denied":
+        return "access_denied"
+    elif normalized == "invalid_request":
+        return "invalid_request"
+    elif normalized == "unauthorized_client":
+        return "unauthorized_client"
+    elif normalized == "unsupported_response_type":
+        return "unsupported_response_type"
+    elif normalized == "invalid_scope":
+        return "invalid_scope"
+    elif normalized == "server_error":
+        return "server_error"
+    elif normalized == "temporarily_unavailable":
+        return "temporarily_unavailable"
+    elif normalized == "interaction_required":
+        return "interaction_required"
+    elif normalized == "login_required":
+        return "login_required"
+    elif normalized == "consent_required":
+        return "consent_required"
+    elif normalized == "account_selection_required":
+        return "account_selection_required"
+    return "oauth_error"
+
+
+def _sanitize_state_error(reason_val: Optional[str]) -> str:
+    """Map state validation error reason strictly to an allowlisted constant literal."""
+    if not reason_val:
+        return "invalid_state"
+    normalized = str(reason_val).strip().lower()
+    if normalized == "missing_state":
+        return "missing_state"
+    elif normalized == "invalid_action":
+        return "invalid_action"
+    elif normalized == "expired_state":
+        return "expired_state"
+    elif normalized == "replayed_state":
+        return "replayed_state"
+    elif normalized == "database_error":
+        return "database_error"
+    return "invalid_state"
+
+
+def _build_safe_frontend_redirect(frontend_origin: str, query_string: str) -> str:
+    """Construct a validated safe frontend redirect URL strictly bound to allowed origins."""
+    origin = frontend_origin if frontend_origin in ALLOWED_FRONTEND_ORIGINS else "https://compass-farmlytics.vercel.app"
+    clean_query = query_string.lstrip("?").lstrip("&")
+    target = f"{origin}/?{clean_query}" if clean_query else f"{origin}/"
+    parsed = urllib.parse.urlparse(target)
+    target_origin = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+    if target_origin not in ALLOWED_FRONTEND_ORIGINS:
+        return "https://compass-farmlytics.vercel.app/"
+    return target
+
+
 def _resolve_frontend_origin(request: Request) -> str:
     """Resolve active Compass frontend base URL for OAuth redirects and error returns."""
-    allowed = {
-        "http://localhost:5173", "http://127.0.0.1:5173",
-        "http://localhost:3000", "http://127.0.0.1:3000",
-        "https://compass-farmlytics.vercel.app",
-        "https://compass-kappa-nine.vercel.app",
-        "https://compass-frontend.vercel.app",
-    }
+    allowed = set(ALLOWED_FRONTEND_ORIGINS)
     for s in getattr(settings, "CORS_ORIGINS", []):
         if s and isinstance(s, str):
             allowed.add(s.rstrip("/"))
@@ -328,16 +392,18 @@ def _resolve_frontend_origin(request: Request) -> str:
         parsed = urllib.parse.urlparse(origin)
         if parsed.scheme and parsed.netloc:
             candidate = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
-            if candidate in allowed:
-                return candidate
+            for safe_origin in allowed:
+                if candidate == safe_origin:
+                    return safe_origin
 
     redirect_uri = getattr(settings, "GOOGLE_REDIRECT_URI", "")
     if redirect_uri and "://" in redirect_uri and "localhost" not in redirect_uri:
         p = urllib.parse.urlparse(redirect_uri)
         if p.scheme and p.netloc:
             candidate = f"{p.scheme}://{p.netloc}".rstrip("/")
-            if candidate in allowed:
-                return candidate
+            for safe_origin in allowed:
+                if candidate == safe_origin:
+                    return safe_origin
 
     if settings.is_development() or settings.is_test():
         return "http://localhost:5173"
@@ -520,7 +586,7 @@ async def calendar_callback(
 
     # 1. Handle OAuth access denial or external errors from Google
     if error:
-        safe_error = re.sub(r"[^\w_.-]", "", error) or "oauth_error"
+        safe_error = _sanitize_oauth_error(error)
         if is_test_client:
             return HTMLResponse(
                 f"<html><body style='font-family:sans-serif;padding:40px;background:#0f172a;color:#f87171;'>"
@@ -529,7 +595,8 @@ async def calendar_callback(
                 f"</body></html>",
                 status_code=400,
             )
-        response = RedirectResponse(url=f"{frontend_origin}/?calendar_error={safe_error}", status_code=303)
+        target_url = _build_safe_frontend_redirect(frontend_origin, f"calendar_error={safe_error}")
+        response = RedirectResponse(url=target_url, status_code=303)
         response.delete_cookie("compass_user_id", path="/")
         return response
 
@@ -547,7 +614,8 @@ async def calendar_callback(
                 status_code=400,
             )
         else:
-            response = RedirectResponse(url=f"{frontend_origin}/?calendar_error=missing_state", status_code=303)
+            target_url = _build_safe_frontend_redirect(frontend_origin, "calendar_error=missing_state")
+            response = RedirectResponse(url=target_url, status_code=303)
             response.delete_cookie("compass_user_id", path="/")
             return response
 
@@ -561,7 +629,8 @@ async def calendar_callback(
                 "</body></html>",
                 status_code=400,
             )
-        response = RedirectResponse(url=f"{frontend_origin}/?calendar_error=missing_code", status_code=303)
+        target_url = _build_safe_frontend_redirect(frontend_origin, "calendar_error=missing_code")
+        response = RedirectResponse(url=target_url, status_code=303)
         response.delete_cookie("compass_user_id", path="/")
         return response
 
@@ -574,21 +643,23 @@ async def calendar_callback(
             is_valid, initiating_user, err_reason = await verify_and_consume_oauth_state(state, pool=pool)
         except Exception as e:
             logger.error("CRITICAL: OAuth state consumption failed with database error: %s", e)
-            response = RedirectResponse(url=f"{frontend_origin}/?calendar_error=database_error", status_code=303)
+            target_url = _build_safe_frontend_redirect(frontend_origin, "calendar_error=database_error")
+            response = RedirectResponse(url=target_url, status_code=303)
             response.delete_cookie("compass_user_id", path="/")
             return response
 
         if not is_valid:
-            safe_reason = re.sub(r"[^\w_.-]", "", err_reason or "invalid_state")
+            safe_reason = _sanitize_state_error(err_reason)
             if is_test_client:
                 return HTMLResponse(
                     f"<html><body style='font-family:sans-serif;padding:40px;background:#0f172a;color:#f87171;'>"
-                    f"<h3>Invalid OAuth State: {safe_reason}</h3>"
+                    f"<h3>Invalid OAuth State: {escape(safe_reason)}</h3>"
                     f"<p><a style='color:#38bdf8;' href='{frontend_origin}/'>Return to Compass</a></p>"
                     f"</body></html>",
                     status_code=403,
                 )
-            response = RedirectResponse(url=f"{frontend_origin}/?calendar_error={safe_reason}", status_code=303)
+            target_url = _build_safe_frontend_redirect(frontend_origin, f"calendar_error={safe_reason}")
+            response = RedirectResponse(url=target_url, status_code=303)
             response.delete_cookie("compass_user_id", path="/")
             return response
 
@@ -610,7 +681,8 @@ async def calendar_callback(
                 f"</body></html>",
                 status_code=400,
             )
-        response = RedirectResponse(url=f"{frontend_origin}/?calendar_error=token_exchange_failed", status_code=303)
+        target_url = _build_safe_frontend_redirect(frontend_origin, "calendar_error=token_exchange_failed")
+        response = RedirectResponse(url=target_url, status_code=303)
         response.delete_cookie("compass_user_id", path="/")
         return response
 
@@ -625,7 +697,8 @@ async def calendar_callback(
                 f"</body></html>",
                 status_code=400,
             )
-        response = RedirectResponse(url=f"{frontend_origin}/?calendar_error=invalid_userinfo", status_code=303)
+        target_url = _build_safe_frontend_redirect(frontend_origin, "calendar_error=invalid_userinfo")
+        response = RedirectResponse(url=target_url, status_code=303)
         response.delete_cookie("compass_user_id", path="/")
         return response
 
@@ -653,7 +726,8 @@ async def calendar_callback(
             )
         except Exception as e:
             logger.error("Failed to save calendar connection: %s", e)
-            response = RedirectResponse(url=f"{frontend_origin}/?calendar_error=database_error", status_code=303)
+            target_url = _build_safe_frontend_redirect(frontend_origin, "calendar_error=database_error")
+            response = RedirectResponse(url=target_url, status_code=303)
             response.delete_cookie("compass_user_id", path="/")
             return response
 
@@ -689,8 +763,9 @@ async def calendar_callback(
         )
         return response
 
+    target_url = _build_safe_frontend_redirect(frontend_origin, f"calendar_connected=true&email={safe_email}")
     response = RedirectResponse(
-        url=f"{frontend_origin}/?calendar_connected=true&email={safe_email}",
+        url=target_url,
         status_code=303,
     )
     response.set_cookie(
