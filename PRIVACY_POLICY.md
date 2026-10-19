@@ -12,8 +12,8 @@ This Privacy Policy explains what personal data we collect, why we collect it, h
 ## 1. Data Controller and Operator
 
 - **Application**: Compass — Autonomous Productivity & Memory Assistant
-- **Operator**: Compass Development Team
-- **Contact Email**: privacy@compass.app / support@compass.app
+- **Operator & Privacy Handler**: Ratnesh Singh
+- **Contact Email**: `ratnesh.24bce11406@vitbhopal.ac.in`
 
 ---
 
@@ -68,7 +68,7 @@ To deliver autonomous AI assistance, Compass interacts with the following vetted
 
 - **Task & Memory Storage**: We retain tasks and memory chunks for as long as your workspace is active.
 - **Stale Memory Roll-Up**: Automated background consolidation jobs flag overdue tasks and synthesize stale conversations to minimize data bloat.
-- **Your Right to Erasure**: You can delete individual conversations, clear tasks, or disconnect calendar integrations directly from the user interface. To request full deletion of all data associated with your email, contact `privacy@compass.app`.
+- **Your Right to Erasure**: You can delete individual conversations, clear tasks, or disconnect calendar integrations directly from the user interface. To request full deletion of all data associated with your email, contact `ratnesh.24bce11406@vitbhopal.ac.in`.
 
 ---
 
@@ -98,4 +98,5 @@ We may update this Privacy Policy from time to time. Any material changes will b
 ## 10. Contact Us
 
 If you have questions, concerns, or requests regarding this Privacy Policy or your data protection rights, please reach out to:
-- **Email**: `privacy@compass.app`
+- **Data Controller & Privacy Handler**: Ratnesh Singh
+- **Email**: `ratnesh.24bce11406@vitbhopal.ac.in`
