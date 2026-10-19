@@ -162,6 +162,27 @@ export default function CalendarView({
       window.history.replaceState({}, document.title, window.location.pathname)
     }
 
+    if (urlParams.get('calendar_error')) {
+      const rawError = urlParams.get('calendar_error')
+      const errorMap = {
+        access_denied: 'Google Calendar connection was cancelled or access denied.',
+        missing_code: 'Google authorization code was missing.',
+        missing_state: 'Security validation failed: missing OAuth state parameter.',
+        invalid_state: 'Security validation failed: invalid or cross-user OAuth state. Please try connecting again.',
+        expired_state: 'OAuth connection timed out. Please try connecting again.',
+        replayed_state: 'This OAuth authorization was already processed. If you need to reconnect, please click Connect again.',
+        token_exchange_failed: 'Failed to exchange authorization tokens with Google. Please try again.',
+        database_error: 'Database error occurred while saving Google Calendar credentials. Please try again.',
+        invalid_userinfo: 'Unable to retrieve verified profile email from Google.',
+      }
+      const desc = errorMap[rawError] || `Google Calendar connection failed (${rawError}).`
+      setBannerMessage({
+        type: 'error',
+        text: `❌ ${desc}`
+      })
+      window.history.replaceState({}, document.title, window.location.pathname)
+    }
+
     fetchCalendarStatus().then(status => {
       if (status) setCalendarStatus(status)
     })

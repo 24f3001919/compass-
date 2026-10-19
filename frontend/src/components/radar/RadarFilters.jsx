@@ -8,6 +8,16 @@ const CATEGORIES = [
   { id: 'research', label: 'Research & Labs' },
   { id: 'data', label: 'Data Science' },
   { id: 'cloud', label: 'Cloud & Infrastructure' },
+  { id: 'open_source', label: 'Open Source' },
+]
+
+const EMPLOYER_TYPES = [
+  { id: '', label: 'All Employer Types' },
+  { id: 'startup', label: '🚀 Startups & SMEs' },
+  { id: 'research', label: '🔬 Research & Labs' },
+  { id: 'government', label: '🏛️ Government & Public' },
+  { id: 'open_source', label: '🌐 Open Source Fellowships' },
+  { id: 'enterprise', label: '🏢 Established Enterprises' },
 ]
 
 const TABS = [
@@ -26,6 +36,8 @@ export default function RadarFilters({
   onSearchChange,
   selectedCategory,
   onCategoryChange,
+  selectedEmployerType,
+  onEmployerTypeChange,
   indiaOnly,
   onToggleIndiaOnly,
   workArrangement,
@@ -89,7 +101,7 @@ export default function RadarFilters({
         }}
       >
         {/* Search Bar */}
-        <div style={{ flex: '1 1 240px', minWidth: '220px', position: 'relative' }}>
+        <div style={{ flex: '1 1 200px', minWidth: '180px', position: 'relative' }}>
           <input
             type="text"
             placeholder="Search company, role title, keyword…"
@@ -120,6 +132,29 @@ export default function RadarFilters({
             🔍
           </span>
         </div>
+
+        {/* Employer Type Selector */}
+        <select
+          value={selectedEmployerType || ''}
+          onChange={e => onEmployerTypeChange && onEmployerTypeChange(e.target.value)}
+          title="Filter by Employer Category"
+          style={{
+            padding: '10px 14px',
+            borderRadius: '8px',
+            border: '1px solid var(--border)',
+            background: 'var(--bg-card)',
+            color: 'var(--text-primary)',
+            fontSize: '13px',
+            outline: 'none',
+            cursor: 'pointer',
+          }}
+        >
+          {EMPLOYER_TYPES.map(t => (
+            <option key={t.id} value={t.id}>
+              {t.label}
+            </option>
+          ))}
+        </select>
 
         {/* Category Selector */}
         <select

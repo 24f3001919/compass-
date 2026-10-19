@@ -15,6 +15,10 @@ export default function RadarOpportunityCard({
     work_arrangement,
     category: _category,
     current_status,
+    employer_type,
+    verification_evidence,
+    official_source_confirmed,
+    sources = [],
     eligibility_classification,
     eligibility_explanation,
     official_application_url: _official_application_url,
@@ -25,6 +29,22 @@ export default function RadarOpportunityCard({
     is_india_eligible,
     compensation,
   } = opportunity
+
+  // Employer Type Display Label & Style
+  const getEmployerTypeBadge = () => {
+    switch (employer_type) {
+      case 'startup':
+        return { label: '🚀 Startup / SME', bg: 'rgba(236, 72, 153, 0.1)', text: '#db2777' }
+      case 'research':
+        return { label: '🔬 Research Lab', bg: 'rgba(99, 102, 241, 0.1)', text: '#4f46e5' }
+      case 'government':
+        return { label: '🏛️ Public Sector', bg: 'rgba(20, 184, 166, 0.1)', text: '#0d9488' }
+      case 'open_source':
+        return { label: '🌐 Open Source', bg: 'rgba(139, 92, 246, 0.1)', text: '#7c3aed' }
+      default:
+        return { label: '🏢 Enterprise', bg: 'rgba(100, 116, 139, 0.1)', text: '#475569' }
+    }
+  }
 
   // Status Badge Colors & Labels
   const getStatusBadge = () => {
@@ -57,11 +77,14 @@ export default function RadarOpportunityCard({
 
   const statusBadge = getStatusBadge()
   const eligBadge = getEligibilityBadge()
+  const typeBadge = getEmployerTypeBadge()
 
   // Format date
   const formattedVerified = last_verified_at
     ? new Date(last_verified_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
     : null
+
+  const primarySource = sources.length > 0 ? sources[0].source_name : (official_source_confirmed ? 'Official Careers Site' : null)
 
   return (
     <div
@@ -93,8 +116,23 @@ export default function RadarOpportunityCard({
               color: statusBadge.text,
               border: `1px solid ${statusBadge.border}`,
             }}
+            title={verification_evidence || ''}
           >
             ● {statusBadge.label}
+          </span>
+
+          {/* Employer Type Badge */}
+          <span
+            style={{
+              padding: '3px 9px',
+              borderRadius: '16px',
+              fontSize: '11px',
+              fontWeight: 600,
+              background: typeBadge.bg,
+              color: typeBadge.text,
+            }}
+          >
+            {typeBadge.label}
           </span>
 
           {/* Eligibility Pill */}
@@ -124,7 +162,7 @@ export default function RadarOpportunityCard({
                 fontWeight: 600,
               }}
             >
-              🇮🇳 India Student Eligible
+              🇮🇳 India Eligible
             </span>
           )}
         </div>
@@ -249,8 +287,13 @@ export default function RadarOpportunityCard({
           gap: '8px',
         }}
       >
-        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-          {formattedVerified ? `Verified ${formattedVerified}` : 'Discovered'}
+        <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <div>{formattedVerified ? `Verified ${formattedVerified}` : 'Discovered'}</div>
+          {primarySource && (
+            <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }} title={verification_evidence || ''}>
+              📡 {primarySource}
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>

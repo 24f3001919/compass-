@@ -62,8 +62,36 @@ export default function RadarDetailModal({
     cycles = [],
     prediction,
     sources = [],
-    last_verified_at: _last_verified_at,
+    last_verified_at,
+    employer_type,
+    verification_evidence,
+    employer_identity_verified,
+    official_source_confirmed,
+    application_url_checked,
+    is_official_source: _is_official_source,
+    verification_failure_reason,
+    source_identifier,
   } = opportunity
+
+  const getEmployerTypeLabel = type => {
+    switch (type) {
+      case 'startup':
+        return { label: '🚀 Startup', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)' }
+      case 'research':
+        return { label: '🔬 Research Lab', color: '#06b6d4', bg: 'rgba(6, 182, 212, 0.1)' }
+      case 'government':
+        return { label: '🏛️ Government / Public', color: '#d97706', bg: 'rgba(217, 119, 6, 0.1)' }
+      case 'open_source':
+        return { label: '🌐 Open Source Fellowship', color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' }
+      case 'sme':
+        return { label: '💼 SME', color: '#6366f1', bg: 'rgba(99, 102, 241, 0.1)' }
+      case 'enterprise':
+      default:
+        return { label: '🏢 Enterprise', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' }
+    }
+  }
+
+  const empTypeInfo = getEmployerTypeLabel(employer_type)
 
   return (
     <div
@@ -108,9 +136,21 @@ export default function RadarDetailModal({
           }}
         >
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--brand)', textTransform: 'uppercase' }}>
                 {company_name}
+              </span>
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  padding: '2px 8px',
+                  borderRadius: '6px',
+                  color: empTypeInfo.color,
+                  backgroundColor: empTypeInfo.bg,
+                }}
+              >
+                {empTypeInfo.label}
               </span>
               <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>•</span>
               <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
@@ -258,6 +298,74 @@ export default function RadarDetailModal({
                   </div>
                 </div>
               )}
+
+              {/* Evidence-Based Verification Status */}
+              <div
+                style={{
+                  padding: '16px',
+                  borderRadius: '10px',
+                  background: 'rgba(59, 130, 246, 0.05)',
+                  border: '1px solid rgba(59, 130, 246, 0.2)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>🛡️</span>
+                    <span>Evidence-Based Verification Status</span>
+                  </h4>
+                  {last_verified_at && (
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      Last checked: {new Date(last_verified_at).toLocaleDateString()} {new Date(last_verified_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '8px', fontSize: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>{official_source_confirmed ? '✅' : '⚠️'}</span>
+                    <span style={{ color: 'var(--text-secondary)' }}>
+                      Official Portal: <strong>{official_source_confirmed ? 'Confirmed' : 'Aggregated / Discovery'}</strong>
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>{employer_identity_verified ? '✅' : 'ℹ️'}</span>
+                    <span style={{ color: 'var(--text-secondary)' }}>
+                      Employer Identity: <strong>{employer_identity_verified ? 'Verified Entity' : 'Candidate'}</strong>
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>{application_url_checked ? '✅' : '❓'}</span>
+                    <span style={{ color: 'var(--text-secondary)' }}>
+                      Application Link: <strong>{application_url_checked ? 'Reachable (Live)' : 'Pending Check'}</strong>
+                    </span>
+                  </div>
+                  {source_identifier && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span>🏷️</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>
+                        Requisition ID: <code style={{ fontSize: '11px' }}>{source_identifier}</code>
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {verification_evidence && (
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', background: 'var(--bg-card)', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                    <span style={{ fontWeight: 600 }}>Evidence Note: </span>
+                    <span>{verification_evidence}</span>
+                  </div>
+                )}
+
+                {verification_failure_reason && (
+                  <div style={{ fontSize: '12px', color: '#dc2626', background: 'rgba(239, 68, 68, 0.08)', padding: '8px 12px', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                    <span style={{ fontWeight: 600 }}>Verification Note: </span>
+                    <span>{verification_failure_reason}</span>
+                  </div>
+                )}
+              </div>
             </>
           )}
 
