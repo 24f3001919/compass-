@@ -115,8 +115,11 @@ async def lifespan(app: FastAPI):
                 await asyncio.sleep(6 * 3600)  # every 6 hours
                 from backend.services.rate_limiter import cleanup_stale_rate_limit_buckets
                 from backend.services.budgets import prune_expired_guests
+                from backend.services.oauth import cleanup_expired_oauth_states
                 await cleanup_stale_rate_limit_buckets(older_than_hours=24)
                 await prune_expired_guests(retention_days=int(getattr(settings, "GUEST_RETENTION_DAYS", 30)))
+                if pool:
+                    await cleanup_expired_oauth_states(pool)
             except asyncio.CancelledError:
                 break
             except Exception as e:
