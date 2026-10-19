@@ -196,6 +196,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         )
         if request.url.scheme == "https" or settings.is_production():
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        if "compass_user_id" in request.cookies:
+            response.delete_cookie("compass_user_id", path="/")
         return response
 
 

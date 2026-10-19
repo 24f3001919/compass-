@@ -1,4 +1,14 @@
-import { API_BASE, getAuthHeaders } from './baseClient'
+import { API_BASE, getAuthHeaders, getGuestToken, initGuestSession } from './baseClient'
+
+async function ensureSession() {
+  if (!getGuestToken()) {
+    try {
+      await initGuestSession()
+    } catch {
+      /* ignore */
+    }
+  }
+}
 
 export async function fetchOpportunities({
   status,
@@ -12,6 +22,7 @@ export async function fetchOpportunities({
   page = 1,
   pageSize = 20,
 } = {}) {
+  await ensureSession()
   const params = new URLSearchParams()
   if (status) params.set('status', status)
   if (category) params.set('category', category)
@@ -33,6 +44,7 @@ export async function fetchOpportunities({
 }
 
 export async function fetchRecommendedOpportunities(limit = 20, employer_type = '') {
+  await ensureSession()
   const params = new URLSearchParams()
   params.set('limit', String(limit))
   if (employer_type) params.set('employer_type', employer_type)
@@ -46,6 +58,7 @@ export async function fetchRecommendedOpportunities(limit = 20, employer_type = 
 }
 
 export async function fetchOpenOpportunities(filters = {}) {
+  await ensureSession()
   const params = new URLSearchParams()
   if (filters.category) params.set('category', filters.category)
   if (filters.employer_type) params.set('employer_type', filters.employer_type)
