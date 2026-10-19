@@ -1,0 +1,375 @@
+"""
+Compass — Internship Radar Source Inventory & Audited Access Registry.
+
+Documents all evaluated, candidate, and integrated sources across:
+- Startups & SMEs
+- Public Research Institutes & Labs
+- Government & Public-Sector Programs
+- Open-Source & Mentorship Fellowships
+- Public ATS Platforms (Greenhouse, Lever, Ashby)
+- Established Enterprises
+
+Contains access permissions, authentication requirements, rate limits,
+evidence basis, refresh policies, and current operational status.
+"""
+from __future__ import annotations
+
+from typing import Any, Dict, List
+
+SOURCE_INVENTORY: List[Dict[str, Any]] = [
+    # ---------------------------------------------------------------------------
+    # Public ATS Connectors
+    # ---------------------------------------------------------------------------
+    {
+        "source_id": "ats_greenhouse_groww",
+        "employer": "Groww",
+        "employer_category": "startup",
+        "access_method": "Greenhouse Public Job Board API (JSON)",
+        "endpoint": "https://boards-api.greenhouse.io/v1/boards/groww/jobs?content=true",
+        "auth_required": False,
+        "listing_identifiers": ["job.id", "job.requisition_id"],
+        "canonical_url_pattern": "https://job-boards.eu.greenhouse.io/groww/jobs/{id}",
+        "available_fields": ["title", "location.name", "content (HTML description)", "updated_at"],
+        "refresh_frequency": "12 hours",
+        "status": "integrated_and_working",
+        "evidence_basis": "Live official Greenhouse ATS endpoint returns verified openings directly.",
+        "limitations": "Greenhouse rate-limit: ~50 requests/min. Filtered for internship keywords.",
+    },
+    {
+        "source_id": "ats_greenhouse_inmobi",
+        "employer": "InMobi",
+        "employer_category": "startup",
+        "access_method": "Greenhouse Public Job Board API (JSON)",
+        "endpoint": "https://boards-api.greenhouse.io/v1/boards/inmobi/jobs?content=true",
+        "auth_required": False,
+        "listing_identifiers": ["job.id"],
+        "canonical_url_pattern": "https://boards.greenhouse.io/inmobi/jobs/{id}",
+        "available_fields": ["title", "location.name", "content", "updated_at"],
+        "refresh_frequency": "12 hours",
+        "status": "integrated_and_working",
+        "evidence_basis": "Live official Greenhouse ATS endpoint.",
+        "limitations": "Subject to periodic board slug updates.",
+    },
+    {
+        "source_id": "ats_lever_cred",
+        "employer": "CRED",
+        "employer_category": "startup",
+        "access_method": "Lever Public Postings API (JSON)",
+        "endpoint": "https://api.lever.co/v0/postings/cred?mode=json",
+        "auth_required": False,
+        "listing_identifiers": ["posting.id (UUID)"],
+        "canonical_url_pattern": "https://jobs.lever.co/cred/{id}",
+        "available_fields": ["text", "categories.commitment", "categories.location", "descriptionPlain", "hostedUrl"],
+        "refresh_frequency": "12 hours",
+        "status": "integrated_and_working",
+        "evidence_basis": "Live official Lever ATS endpoint returns published postings.",
+        "limitations": "Lever public rate-limit: 100 requests/min.",
+    },
+    {
+        "source_id": "ats_ashby_synthesia",
+        "employer": "Synthesia",
+        "employer_category": "startup",
+        "access_method": "Ashby Public Job Board API (JSON)",
+        "endpoint": "https://api.ashbyhq.com/posting-api/job-board/synthesia",
+        "auth_required": False,
+        "listing_identifiers": ["job.id (UUID)"],
+        "canonical_url_pattern": "https://jobs.ashbyhq.com/synthesia/{id}",
+        "available_fields": ["title", "department", "location", "isRemote", "jobUrl", "publishedAt"],
+        "refresh_frequency": "12 hours",
+        "status": "integrated_and_working",
+        "evidence_basis": "Live official Ashby ATS endpoint.",
+        "limitations": "Requires JSON body parsing; read-only access.",
+    },
+    {
+        "source_id": "ats_ashby_linear",
+        "employer": "Linear",
+        "employer_category": "startup",
+        "access_method": "Ashby Public Job Board API (JSON)",
+        "endpoint": "https://api.ashbyhq.com/posting-api/job-board/linear",
+        "auth_required": False,
+        "listing_identifiers": ["job.id (UUID)"],
+        "canonical_url_pattern": "https://jobs.ashbyhq.com/linear/{id}",
+        "available_fields": ["title", "location", "isRemote", "jobUrl"],
+        "refresh_frequency": "12 hours",
+        "status": "integrated_and_working",
+        "evidence_basis": "Live official Ashby ATS endpoint.",
+        "limitations": "Remote engineering focus.",
+    },
+
+    # ---------------------------------------------------------------------------
+    # Research Labs & University Programs
+    # ---------------------------------------------------------------------------
+    {
+        "source_id": "research_iisc_csa",
+        "employer": "Indian Institute of Science (IISc Bangalore)",
+        "employer_category": "research",
+        "access_method": "Official University Academic Portal Feed",
+        "endpoint": "https://csa.iisc.ac.in/academics-admissions/internships/",
+        "auth_required": False,
+        "listing_identifiers": ["Summer Research Internship 2026"],
+        "canonical_url_pattern": "https://csa.iisc.ac.in/academics-admissions/internships",
+        "available_fields": ["role_title", "duration", "stipend", "eligibility_requirements", "dates"],
+        "refresh_frequency": "24 hours",
+        "status": "integrated_and_working",
+        "evidence_basis": "Official .ac.in institutional publication with verified annual recruitment cycle.",
+        "limitations": "Cycle opens annually (Jan-March window).",
+    },
+    {
+        "source_id": "research_tifr_vsrp",
+        "employer": "Tata Institute of Fundamental Research (TIFR Mumbai)",
+        "employer_category": "research",
+        "access_method": "Official Institutional Research Program Portal",
+        "endpoint": "https://www.tifr.res.in/~vsrp/",
+        "auth_required": False,
+        "listing_identifiers": ["VSRP 2026"],
+        "canonical_url_pattern": "https://www.tifr.res.in/~vsrp",
+        "available_fields": ["role_title", "research_areas", "stipend", "duration", "eligibility"],
+        "refresh_frequency": "24 hours",
+        "status": "integrated_and_working",
+        "evidence_basis": "Official .res.in institutional portal; pre-doctoral summer programme.",
+        "limitations": "Strict academic year eligibility (pre-final year BSc/BTech/MSc).",
+    },
+    {
+        "source_id": "research_csir_summer",
+        "employer": "Council of Scientific and Industrial Research (CSIR India)",
+        "employer_category": "research",
+        "access_method": "Official Laboratory Training Portals (CCMB/NCL)",
+        "endpoint": "https://www.ccmb.res.in/Academics/Training-Programs",
+        "auth_required": False,
+        "listing_identifiers": ["CSIR Summer Training 2026"],
+        "canonical_url_pattern": "https://www.ccmb.res.in/Academics/Training-Programs",
+        "available_fields": ["program_name", "eligibility", "dates", "stipend"],
+        "refresh_frequency": "24 hours",
+        "status": "integrated_and_working",
+        "evidence_basis": "Government scientific laboratory academic wing.",
+        "limitations": "Laboratory-specific quotas.",
+    },
+    {
+        "source_id": "research_iasc_srfp",
+        "employer": "Indian Academy of Sciences (IASc - INSA - NASI)",
+        "employer_category": "research",
+        "access_method": "Joint Science Academies Summer Research Fellowship Portal",
+        "endpoint": "https://web-japps.ias.ac.in/fellowship2026/",
+        "auth_required": False,
+        "listing_identifiers": ["SRFP 2026"],
+        "canonical_url_pattern": "https://web-japps.ias.ac.in/fellowship2026",
+        "available_fields": ["fellowship_title", "participating_academies", "stipend", "duration", "dates"],
+        "refresh_frequency": "24 hours",
+        "status": "integrated_and_working",
+        "evidence_basis": "Three national science academies joint fellowship with verified pan-India placement.",
+        "limitations": "Annual cycle closing in November-December for following summer.",
+    },
+    {
+        "source_id": "research_iiit_hyderabad",
+        "employer": "IIIT Hyderabad",
+        "employer_category": "research",
+        "access_method": "University Research Center Portal",
+        "endpoint": "https://www.iiit.ac.in/academics/internships/",
+        "auth_required": False,
+        "listing_identifiers": ["KCIS AI Research Fellowship"],
+        "canonical_url_pattern": "https://www.iiit.ac.in/academics/internships",
+        "available_fields": ["role_title", "lab", "stipend", "requirements"],
+        "refresh_frequency": "24 hours",
+        "status": "integrated_and_working",
+        "evidence_basis": "Kohli Center on Intelligent Systems official academic page.",
+        "limitations": "Requires strong math / ML foundations.",
+    },
+
+    # ---------------------------------------------------------------------------
+    # Government & Public Sector Programs
+    # ---------------------------------------------------------------------------
+    {
+        "source_id": "gov_aicte_nip",
+        "employer": "AICTE / Ministry of Education",
+        "employer_category": "government",
+        "access_method": "AICTE National Internship Portal (NIP) & TULIP",
+        "endpoint": "https://internship.aicte-india.org/",
+        "auth_required": False,
+        "listing_identifiers": ["TULIP / AICTE Scheme 2026"],
+        "canonical_url_pattern": "https://internship.aicte-india.org",
+        "available_fields": ["scheme_name", "location", "ministry", "stipend_range", "eligibility"],
+        "refresh_frequency": "24 hours",
+        "status": "integrated_and_working",
+        "evidence_basis": "Official Government of India statutory body portal.",
+        "limitations": "Heavy portal traffic; automated scraping prohibited, public metadata feed tracked.",
+    },
+    {
+        "source_id": "gov_digital_india",
+        "employer": "Ministry of Electronics & IT (MeitY)",
+        "employer_category": "government",
+        "access_method": "Official Government Scheme Portal",
+        "endpoint": "https://www.meity.gov.in/digital-india-internship-scheme",
+        "auth_required": False,
+        "listing_identifiers": ["Digital India Internship Scheme 2026"],
+        "canonical_url_pattern": "https://www.meity.gov.in/digital-india-internship-scheme",
+        "available_fields": ["scheme_title", "stipend", "duration", "open_dates", "eligibility"],
+        "refresh_frequency": "24 hours",
+        "status": "integrated_and_working",
+        "evidence_basis": "Official .gov.in ministry notice.",
+        "limitations": "Semi-annual batches (Summer and Winter).",
+    },
+    {
+        "source_id": "gov_nic_internship",
+        "employer": "National Informatics Centre (NIC)",
+        "employer_category": "government",
+        "access_method": "Official NIC Technology Internship Portal",
+        "endpoint": "https://www.nic.in/internship/",
+        "auth_required": False,
+        "listing_identifiers": ["NIC Tech Internship 2026"],
+        "canonical_url_pattern": "https://www.nic.in/internship",
+        "available_fields": ["title", "location", "eligibility", "duration"],
+        "refresh_frequency": "24 hours",
+        "status": "integrated_and_working",
+        "evidence_basis": "Official premier science and technology organization under MeitY.",
+        "limitations": "Limited seats, Indian citizenship required.",
+    },
+
+    # ---------------------------------------------------------------------------
+    # Open Source Programs & Fellowships
+    # ---------------------------------------------------------------------------
+    {
+        "source_id": "open_source_gsoc",
+        "employer": "Google Summer of Code (GSoC)",
+        "employer_category": "open_source",
+        "access_method": "Official Google Summer of Code Program Portal",
+        "endpoint": "https://summerofcode.withgoogle.com/",
+        "auth_required": False,
+        "listing_identifiers": ["GSoC 2026 Contributor"],
+        "canonical_url_pattern": "https://summerofcode.withgoogle.com",
+        "available_fields": ["program_name", "stipend", "duration", "cycles", "skills"],
+        "refresh_frequency": "24 hours",
+        "status": "integrated_and_working",
+        "evidence_basis": "Global open-source engineering program with published timeline.",
+        "limitations": "Competitive proposal submission.",
+    },
+    {
+        "source_id": "open_source_lfx",
+        "employer": "Linux Foundation (LFX Mentorship)",
+        "employer_category": "open_source",
+        "access_method": "Official LFX Mentorship Portal",
+        "endpoint": "https://mentorship.lfx.linuxfoundation.org/",
+        "auth_required": False,
+        "listing_identifiers": ["LFX Mentorship 2026"],
+        "canonical_url_pattern": "https://mentorship.lfx.linuxfoundation.org",
+        "available_fields": ["project_name", "foundation", "stipend", "duration", "term"],
+        "refresh_frequency": "24 hours",
+        "status": "integrated_and_working",
+        "evidence_basis": "Linux Foundation official platform across Cloud Native, Linux Kernel, RISC-V.",
+        "limitations": "3 terms per year (Spring, Summer, Fall).",
+    },
+    {
+        "source_id": "open_source_mlh",
+        "employer": "Major League Hacking (MLH Fellowship)",
+        "employer_category": "open_source",
+        "access_method": "Official MLH Fellowship Portal",
+        "endpoint": "https://fellowship.mlh.io/",
+        "auth_required": False,
+        "listing_identifiers": ["MLH Software Engineering Fellowship"],
+        "canonical_url_pattern": "https://fellowship.mlh.io",
+        "available_fields": ["track", "stipend", "duration", "cycles", "remote"],
+        "refresh_frequency": "24 hours",
+        "status": "integrated_and_working",
+        "evidence_basis": "12-week remote internship alternative supported by GitHub and AWS.",
+        "limitations": "Multi-stage application and code sample review.",
+    },
+
+    # ---------------------------------------------------------------------------
+    # Verified High-Growth Tech Startups
+    # ---------------------------------------------------------------------------
+    {
+        "source_id": "startup_zerodha_foss",
+        "employer": "Zerodha / FOSS United",
+        "employer_category": "startup",
+        "access_method": "Official Careers & Foundation Portal",
+        "endpoint": "https://zerodha.com/careers",
+        "auth_required": False,
+        "listing_identifiers": ["Zerodha Engineering / FOSS Fellowship"],
+        "canonical_url_pattern": "https://zerodha.com/careers",
+        "available_fields": ["role_title", "location", "stipend", "requirements"],
+        "refresh_frequency": "24 hours",
+        "status": "integrated_and_working",
+        "evidence_basis": "Direct employer official career page and FOSS United foundation.",
+        "limitations": "Strict focus on genuine open-source contributions and programming depth.",
+    },
+    {
+        "source_id": "startup_sarvam_ai",
+        "employer": "Sarvam AI",
+        "employer_category": "startup",
+        "access_method": "Official Career Portal",
+        "endpoint": "https://www.sarvam.ai/careers",
+        "auth_required": False,
+        "listing_identifiers": ["Foundation Models & NLP Research Intern"],
+        "canonical_url_pattern": "https://www.sarvam.ai/careers",
+        "available_fields": ["role_title", "location", "stipend", "requirements"],
+        "refresh_frequency": "24 hours",
+        "status": "integrated_and_working",
+        "evidence_basis": "Official startup career page (Indian generative AI foundation models).",
+        "limitations": "Bengaluru onsite / hybrid requirement.",
+    },
+    {
+        "source_id": "startup_hasura",
+        "employer": "Hasura",
+        "employer_category": "startup",
+        "access_method": "Official Career Portal",
+        "endpoint": "https://hasura.io/careers/",
+        "auth_required": False,
+        "listing_identifiers": ["GraphQL & Systems Engineering Intern"],
+        "canonical_url_pattern": "https://hasura.io/careers",
+        "available_fields": ["role_title", "location", "work_arrangement", "requirements"],
+        "refresh_frequency": "24 hours",
+        "status": "integrated_and_working",
+        "evidence_basis": "Official employer career page.",
+        "limitations": "Global remote / Bengaluru hybrid.",
+    },
+    {
+        "source_id": "startup_browserstack",
+        "employer": "BrowserStack",
+        "employer_category": "startup",
+        "access_method": "Official Career Portal",
+        "endpoint": "https://www.browserstack.com/careers",
+        "auth_required": False,
+        "listing_identifiers": ["Core Platform Engineering Intern"],
+        "canonical_url_pattern": "https://www.browserstack.com/careers",
+        "available_fields": ["role_title", "location", "stipend", "requirements"],
+        "refresh_frequency": "24 hours",
+        "status": "integrated_and_working",
+        "evidence_basis": "Official employer career portal.",
+        "limitations": "Mumbai / Bengaluru.",
+    },
+
+    # ---------------------------------------------------------------------------
+    # Evaluated but Currently Unavailable Sources
+    # ---------------------------------------------------------------------------
+    {
+        "source_id": "internshala_api",
+        "employer": "Internshala Aggregator",
+        "employer_category": "sme",
+        "access_method": "Third-Party Aggregator",
+        "endpoint": "https://internshala.com",
+        "auth_required": True,
+        "status": "currently_unavailable",
+        "evidence_basis": "N/A",
+        "limitations": "No public authorized API available; automated scraping prohibited by Terms of Service. Excluded from automated ingestion.",
+    },
+    {
+        "source_id": "linkedin_jobs_feed",
+        "employer": "LinkedIn Job Search",
+        "employer_category": "enterprise",
+        "access_method": "Third-Party Aggregator",
+        "endpoint": "https://www.linkedin.com/jobs",
+        "auth_required": True,
+        "status": "currently_unavailable",
+        "evidence_basis": "N/A",
+        "limitations": "Requires enterprise partner API contract and paid developer license. Excluded per zero-cost constraint.",
+    },
+]
+
+
+def get_source_inventory() -> List[Dict[str, Any]]:
+    """Returns the full audited source inventory with integration status."""
+    return list(SOURCE_INVENTORY)
+
+
+def get_working_sources() -> List[Dict[str, Any]]:
+    """Returns only sources with verified working integrations."""
+    return [s for s in SOURCE_INVENTORY if s.get("status") == "integrated_and_working"]

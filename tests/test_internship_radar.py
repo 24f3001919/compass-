@@ -251,12 +251,17 @@ async def test_radar_api_unauthenticated_rejected():
         assert "authentication" in res.json()["detail"].lower()
 
 
+@pytest.mark.timeout(180)
 @pytest.mark.asyncio
 async def test_radar_api_endpoints(monkeypatch):
     async def mock_gh(*args, **kwargs):
         return []
 
+    async def mock_ats(*args, **kwargs):
+        return []
+
     monkeypatch.setattr("backend.services.radar_sync.fetch_github_markdown_opportunities", mock_gh)
+    monkeypatch.setattr("backend.services.radar_sync.fetch_all_public_ats_opportunities", mock_ats)
     monkeypatch.setattr("backend.services.radar_sync.tavily_available", lambda: False)
 
     transport = ASGITransport(app=app)
@@ -316,6 +321,8 @@ async def test_radar_api_endpoints(monkeypatch):
         unsave_res = await client.delete(f"/api/opportunities/{first_id}/save")
         assert unsave_res.status_code == 200
         assert unsave_res.json()["saved"] is False
+    import asyncio
+    await asyncio.sleep(0.05)
 
 
 # ===========================================================================

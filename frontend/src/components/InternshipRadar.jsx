@@ -34,6 +34,7 @@ export default function InternshipRadar({
   const [profile, setProfile] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('')
+  const [selectedEmployerType, setSelectedEmployerType] = useState('')
   const [workArrangement, setWorkArrangement] = useState('')
   const [indiaOnly, setIndiaOnly] = useState(true)
 
@@ -42,6 +43,9 @@ export default function InternshipRadar({
   const [isSyncing, setIsSyncing] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
   const [isRefreshingMatches, setIsRefreshingMatches] = useState(false)
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(false)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const isFirstMountRef = useRef(true)
 
   const [selectedDetailOpp, setSelectedDetailOpp] = useState(null)
@@ -65,17 +69,27 @@ export default function InternshipRadar({
   // Load list based on active tab and filters
   const loadOpportunities = useCallback(async (options = {}) => {
     const isBackground = options?.background === true
-    if (!isBackground) {
+    const targetPage = options?.targetPage || 1
+    const isAppending = options?.append === true
+
+    if (!isBackground && !isAppending) {
       setLoading(true)
     }
+    if (isAppending) {
+      setIsLoadingMore(true)
+    }
     setError(null)
+
     try {
       let items = []
+      let serverHasMore = false
+
       if (activeTab === 'recommended') {
-        items = await fetchRecommendedOpportunities(30)
+        items = await fetchRecommendedOpportunities(30, selectedEmployerType)
       } else if (activeTab === 'open') {
         items = await fetchOpenOpportunities({
           category: selectedCategory,
+          employer_type: selectedEmployerType,
           work_arrangement: workArrangement,
           india_only: indiaOnly,
         })
@@ -89,13 +103,15 @@ export default function InternshipRadar({
         // 'all'
         const res = await fetchOpportunities({
           category: selectedCategory,
+          employer_type: selectedEmployerType,
           work_arrangement: workArrangement,
           search: searchQuery,
           india_only: indiaOnly,
-          page: 1,
-          pageSize: 40,
+          page: targetPage,
+          pageSize: 24,
         })
         items = res.opportunities || []
+        serverHasMore = Boolean(res.has_more)
       }
 
       // Client-side text search filter if tab is not 'all'
@@ -109,6 +125,11 @@ export default function InternshipRadar({
         )
       }
 
+      // Employer type filter for client-filtered tabs
+      if (selectedEmployerType && activeTab !== 'all' && activeTab !== 'open' && activeTab !== 'recommended') {
+        items = items.filter(o => o.employer_type === selectedEmployerType)
+      }
+
       // Category filter for tabs other than 'all' and 'open'
       if (activeTab !== 'all' && activeTab !== 'open' && selectedCategory) {
         items = items.filter(o => o.category === selectedCategory)
@@ -119,7 +140,13 @@ export default function InternshipRadar({
         items = items.filter(o => o.work_arrangement === workArrangement)
       }
 
-      setOpportunities(items)
+      if (isAppending) {
+        setOpportunities(prev => [...prev, ...items])
+      } else {
+        setOpportunities(items)
+      }
+      setHasMore(serverHasMore)
+      setPage(targetPage)
     } catch (err) {
       console.error('[Radar] Error fetching opportunities:', err)
       if (!isBackground) {
@@ -128,11 +155,12 @@ export default function InternshipRadar({
         throw err
       }
     } finally {
-      if (!isBackground) {
+      if (!isBackground && !isAppending) {
         setLoading(false)
       }
+      setIsLoadingMore(false)
     }
-  }, [activeTab, selectedCategory, workArrangement, searchQuery, indiaOnly])
+  }, [activeTab, selectedCategory, selectedEmployerType, workArrangement, searchQuery, indiaOnly])
 
   // Asynchronous background refresh for recommendation and eligibility updates
   const handleBackgroundRefresh = useCallback(async () => {
@@ -304,8 +332,6 @@ export default function InternshipRadar({
         profile={profile}
         onOpenProfile={onOpenProfile || (() => setShowProfileModal(true))}
         onSelectTab={setActiveTab}
-        onSync={handleSyncSources}
-        isSyncing={isSyncing}
       />
 
       {/* 2. Filter Bar */}
@@ -316,6 +342,8 @@ export default function InternshipRadar({
         onSearchChange={setSearchQuery}
         selectedCategory={selectedCategory}
         onCategoryChange={setSelectedCategory}
+        selectedEmployerType={selectedEmployerType}
+        onEmployerTypeChange={setSelectedEmployerType}
         indiaOnly={indiaOnly}
         onToggleIndiaOnly={() => setIndiaOnly(prev => !prev)}
         workArrangement={workArrangement}
@@ -438,24 +466,65 @@ export default function InternshipRadar({
           </button>
         </div>
       ) : (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-            gap: '16px',
-          }}
-        >
-          {opportunities.map(opp => (
-            <RadarOpportunityCard
-              key={opp.id}
-              opportunity={opp}
-              onOpenDetail={setSelectedDetailOpp}
-              onToggleSave={handleToggleSave}
-              onUpdateAppStatus={handleUpdateApplication}
-              onApply={setActiveWorkspaceOpp}
-            />
-          ))}
-        </div>
+        <>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+              gap: '16px',
+            }}
+          >
+            {opportunities.map(opp => (
+              <RadarOpportunityCard
+                key={opp.id}
+                opportunity={opp}
+                onOpenDetail={setSelectedDetailOpp}
+                onToggleSave={handleToggleSave}
+                onUpdateAppStatus={handleUpdateApplication}
+                onApply={setActiveWorkspaceOpp}
+              />
+            ))}
+          </div>
+          {hasMore && (
+            <div style={{ textAlign: 'center', marginTop: '28px' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isLoadingMore) {
+                    loadOpportunities({ append: true, targetPage: page + 1 })
+                  }
+                }}
+                disabled={isLoadingMore}
+                style={{
+                  padding: '10px 24px',
+                  borderRadius: '8px',
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-primary)',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: isLoadingMore ? 'not-allowed' : 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                }}
+              >
+                {isLoadingMore ? (
+                  <>
+                    <span style={{ animation: 'spin 1s infinite linear' }}>⏳</span>
+                    <span>Loading more opportunities…</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Load More Opportunities</span>
+                    <span>↓</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Detail & History Modal */}

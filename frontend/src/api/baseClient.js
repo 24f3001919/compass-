@@ -172,7 +172,6 @@ export function getCurrentUserId() {
 }
 
 export function setCurrentUserId(userId) {
-  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:'
   if (userId && userId.trim()) {
     const clean = userId.trim().toLowerCase()
     localStorage.setItem('compass_user_id', clean)
@@ -180,22 +179,17 @@ export function setCurrentUserId(userId) {
       localStorage.setItem('compass_user_email', clean)
       addKnownAccount(clean)
     }
-    if (isHttps) {
-      try {
-        document.cookie = `compass_user_id=${encodeURIComponent(clean)}; path=/; max-age=31536000; SameSite=Lax; Secure`
-      } catch {
-        /* ignore cookie write error */
-      }
-    }
   } else {
     localStorage.removeItem('compass_user_id')
     localStorage.removeItem('compass_user_email')
-    if (isHttps) {
-      try {
-        document.cookie = `compass_user_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure`
-      } catch {
-        /* ignore cookie write error */
-      }
+  }
+  // Proactively clear obsolete compass_user_id cookie that triggers production impersonation errors
+  if (typeof document !== 'undefined') {
+    try {
+      document.cookie = 'compass_user_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;'
+      document.cookie = 'compass_user_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure'
+    } catch {
+      /* ignore cookie cleanup error */
     }
   }
 }

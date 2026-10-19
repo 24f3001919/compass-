@@ -5,8 +5,6 @@ export default function RadarOverviewCards({
   profile,
   onOpenProfile,
   onSelectTab,
-  onSync,
-  isSyncing,
 }) {
   const missingProfileFields = profile?.missing_fields_limiting_eligibility || []
   const hasIncompleteProfile = missingProfileFields.includes('academic_year') || missingProfileFields.includes('grad_year')

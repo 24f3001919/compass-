@@ -37,6 +37,24 @@ class OpportunityStatus:
     }
 
 
+class EmployerType:
+    STARTUP = "startup"
+    RESEARCH = "research"
+    GOVERNMENT = "government"
+    SME = "sme"
+    OPEN_SOURCE = "open_source"
+    ENTERPRISE = "enterprise"
+
+    ALL = {
+        STARTUP,
+        RESEARCH,
+        GOVERNMENT,
+        SME,
+        OPEN_SOURCE,
+        ENTERPRISE,
+    }
+
+
 class ApplicationStatus:
     INTERESTED = "interested"
     PREPARING = "preparing"
@@ -123,6 +141,7 @@ class OpportunitySourceOut(BaseModel):
     discovered_at: Optional[datetime] = None
     last_checked_at: Optional[datetime] = None
     verification_result: Optional[str] = None
+    is_official_source: bool = False
 
 
 class OpportunityOut(BaseModel):
@@ -130,6 +149,7 @@ class OpportunityOut(BaseModel):
     company_name: str
     normalized_company: str
     role_title: str
+    employer_type: str = EmployerType.ENTERPRISE  # startup, research, government, sme, open_source, enterprise
     opportunity_type: str  # internship, fellowship, research, externship, co-op
     category: str  # ai_ml, swe, backend, data, research, cloud, open_source, general
     location: Optional[str] = None
@@ -147,6 +167,12 @@ class OpportunityOut(BaseModel):
     last_verified_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    # Evidence-based verification metadata
+    verification_evidence: Optional[str] = None
+    employer_identity_verified: bool = False
+    official_source_confirmed: bool = False
+    application_url_checked: bool = False
 
     # Nested related domain data
     requirements: Optional[OpportunityRequirementsOut] = None
@@ -212,6 +238,12 @@ class OpportunityOverviewStats(BaseModel):
     applications_in_progress_count: int = 0
     last_sync_at: Optional[datetime] = None
     total_tracked_opportunities: int = 0
+    # Employer Category Counts
+    startups_count: int = 0
+    research_count: int = 0
+    government_count: int = 0
+    open_source_count: int = 0
+    enterprise_count: int = 0
 
 
 class OpportunitiesListResponse(BaseModel):
