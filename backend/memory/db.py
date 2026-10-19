@@ -160,6 +160,15 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
             );
             CREATE UNIQUE INDEX IF NOT EXISTS idx_calendar_conn_user_provider ON calendar_connections(user_id, provider);
 
+            CREATE TABLE IF NOT EXISTS oauth_consumed_states (
+                state_sig          TEXT          PRIMARY KEY,
+                user_id            TEXT          NOT NULL,
+                action             TEXT          NOT NULL,
+                consumed_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),
+                expires_at         TIMESTAMPTZ   NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_oauth_consumed_expires ON oauth_consumed_states(expires_at);
+
         CREATE TABLE IF NOT EXISTS calendar_event_links (
             id                 SERIAL        PRIMARY KEY,
             task_id            INTEGER       NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
@@ -316,6 +325,13 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
         CREATE INDEX IF NOT EXISTS idx_opportunities_company ON opportunities(normalized_company);
         CREATE INDEX IF NOT EXISTS idx_opportunities_india ON opportunities(is_india_eligible);
         CREATE INDEX IF NOT EXISTS idx_opportunities_dates ON opportunities(confirmed_close_date, confirmed_open_date);
+
+        ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS employer_type TEXT NOT NULL DEFAULT 'enterprise';
+        ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS verification_evidence TEXT;
+        ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS employer_identity_verified BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS official_source_confirmed BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS application_url_checked BOOLEAN NOT NULL DEFAULT FALSE;
+        CREATE INDEX IF NOT EXISTS idx_opportunities_employer_type ON opportunities(employer_type);
 
         CREATE TABLE IF NOT EXISTS opportunity_sources (
             id                  SERIAL        PRIMARY KEY,
@@ -571,12 +587,12 @@ async def init_pool(dsn: str | None = None) -> asyncpg.Pool:
         try:
             async with pool.acquire(timeout=10.0) as check_conn:
                 existing_tables = await check_conn.fetch(
-                    "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('user_profile_facts', 'parked_thoughts')"
+                    "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('user_profile_facts', 'parked_thoughts', 'oauth_consumed_states')"
                 )
                 found = {r["table_name"] for r in existing_tables}
                 import logging
                 db_logger = logging.getLogger("compass.db")
-                for req_table in ("user_profile_facts", "parked_thoughts"):
+                for req_table in ("user_profile_facts", "parked_thoughts", "oauth_consumed_states"):
                     if req_table not in found:
                         db_logger.error(f"ERROR: Required database table '{req_table}' is missing! Feature will degrade.")
         except Exception as e:
