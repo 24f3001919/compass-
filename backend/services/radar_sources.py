@@ -37,7 +37,7 @@ def canonicalize_url(url: str, role_title: Optional[str] = None) -> str:
         # Normalize netloc and path
         netloc = parsed.netloc.lower()
         path = parsed.path.rstrip("/")
-        fragment = parsed.fragment
+        fragment = parsed.fragment if parsed.fragment.startswith("role-") else ""
         # If generic path (e.g. '', '/', '/jobs', '/careers', '/jobs/') and role_title provided, append anchor
         if (not path or path in {"/jobs", "/careers", "/career", "/internships", "/internship"}) and role_title and not fragment and not clean_query:
             slug = re.sub(r"[^\w\s-]", "", role_title.strip().lower()).replace(" ", "-")
