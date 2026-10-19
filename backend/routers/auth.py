@@ -143,7 +143,7 @@ def create_session(user_id: str, oauth_verified: bool = False) -> str:
 
     sess_data = {
         "user_id": user_id,
-        "oauth_verified": bool(oauth_verified),
+        "oauth_verified": oauth_verified,
         "created_at": now,
         "last_accessed_at": now,
         "expires_at": expires_at,
@@ -155,7 +155,7 @@ def create_session(user_id: str, oauth_verified: bool = False) -> str:
     # Schedule DB insert in running event loop if active
     try:
         loop = asyncio.get_running_loop()
-        loop.create_task(_persist_session_db(token_hash, user_id, bool(oauth_verified), expires_at))
+        loop.create_task(_persist_session_db(token_hash, user_id, oauth_verified, expires_at))
     except RuntimeError:
         pass
 
@@ -311,21 +311,42 @@ def _resolve_oauth_redirect_uri(request: Request) -> str:
 
 
 def _resolve_frontend_origin(request: Request) -> str:
-    """Resolve active frontend base URL for OAuth redirects and error returns."""
+    """Resolve active Compass frontend base URL for OAuth redirects and error returns."""
+    allowed = set(s.rstrip("/") for s in getattr(settings, "CORS_ORIGINS", []))
+    allowed.update({
+        "http://localhost:5173", "http://127.0.0.1:5173",
+        "http://localhost:3000", "http://127.0.0.1:3000",
+        "https://compass-farmlytics.vercel.app",
+        "https://compass-kappa-nine.vercel.app",
+        "https://compass-frontend.vercel.app",
+    })
+
     origin = request.headers.get("origin") or request.headers.get("referer")
     if origin:
         parsed = urllib.parse.urlparse(origin)
         if parsed.scheme and parsed.netloc:
-            return f"{parsed.scheme}://{parsed.netloc}"
+            candidate = f"{parsed.scheme}://{parsed.netloc}"
+            if candidate in allowed or any(candidate.startswith(a) for a in allowed):
+                return candidate
 
-    if settings.is_development():
+    fwd_host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    if fwd_host:
+        h = fwd_host.split(":")[0].lower()
+        if h in ("localhost", "127.0.0.1") or h.endswith(".localhost"):
+            return "http://localhost:5173"
+        if h.endswith(".vercel.app") or h == "compass-farmlytics.vercel.app":
+            return f"https://{fwd_host}"
+
+    redirect_uri = getattr(settings, "GOOGLE_REDIRECT_URI", "")
+    if redirect_uri and "://" in redirect_uri and "localhost" not in redirect_uri:
+        p = urllib.parse.urlparse(redirect_uri)
+        if p.scheme and p.netloc:
+            return f"{p.scheme}://{p.netloc}"
+
+    if settings.is_development() or settings.is_test():
         return "http://localhost:5173"
 
-    cors_origins = getattr(settings, "CORS_ORIGINS", [])
-    if cors_origins and isinstance(cors_origins, list) and cors_origins[0]:
-        return cors_origins[0].rstrip("/")
-
-    return "https://compass-kappa-nine.vercel.app"
+    return "https://compass-farmlytics.vercel.app"
 
 
 
@@ -434,7 +455,6 @@ async def auth_quick_connect(response: Response, body: Optional[QuickConnectBody
         "message": f"Successfully connected as {email}",
     }
 
-
 @router.get("/api/calendar/connect")
 async def calendar_connect(
     request: Request,
@@ -444,8 +464,8 @@ async def calendar_connect(
     """Generate Google OAuth 2.0 authorization URL or redirect directly."""
     configured = is_google_oauth_configured()
     if not configured:
+        frontend_origin = _resolve_frontend_origin(request)
         if redirect:
-            frontend_origin = _resolve_frontend_origin(request)
             return RedirectResponse(url=f"{frontend_origin}/?oauth_error=not_configured")
         return {
             "status": "not_configured",
@@ -453,9 +473,34 @@ async def calendar_connect(
             "message": "Google OAuth credentials are not set in .env. Use Account Switcher or configure GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.",
         }
 
+    # Resolve initiating user: check verified session or development header/cookie
+    current_user: Optional[str] = None
+    session_token = request.cookies.get("compass_session")
+    auth_header = request.headers.get("authorization")
+    bearer_token = auth_header[7:].strip() if auth_header and auth_header.lower().startswith("bearer ") else None
+
+    token_to_check = session_token or bearer_token
+    if token_to_check:
+        try:
+            current_user = await get_user_from_session_async(token_to_check)
+        except Exception:
+            current_user = get_user_from_session(token_to_check)
+
+    # Impersonation checks: forbidden in production/staging environments
+    user_header = request.headers.get("x-user-id")
+    cookie_user = request.cookies.get("compass_user_id")
+    if (user_header and user_header.strip()) or (cookie_user and cookie_user.strip()):
+        if not (settings.is_development() or settings.is_test()):
+            raise HTTPException(
+                status_code=403,
+                detail="x-user-id / compass_user_id impersonation is strictly forbidden outside development or test environments",
+            )
+        if not current_user:
+            candidate = (user_header and user_header.strip()) or (cookie_user and cookie_user.strip())
+            if candidate:
+                current_user = candidate.strip().lower()
+
     redirect_uri = _resolve_oauth_redirect_uri(request)
-    ident = _get_current_identity(request)
-    current_user = ident.user_id if ident and not ident.is_guest else None
     effective_hint = login_hint or (current_user if current_user and "@" in current_user else None)
     state = generate_oauth_state(current_user or "guest")
     url = generate_google_oauth_url(redirect_uri=redirect_uri, login_hint=effective_hint, state=state)
@@ -475,105 +520,99 @@ async def calendar_callback(
 ):
     """Handle OAuth redirect: exchange authorization code for tokens and save connection."""
     frontend_origin = _resolve_frontend_origin(request)
-    if state:
-        from backend.services.oauth import verify_oauth_state
-        ident = _get_current_identity(request)
-        current_user = ident.user_id if ident and not ident.is_guest else None
-        expected_user = current_user or "guest"
-        if not verify_oauth_state(state, expected_user):
-            return HTMLResponse(
-                "<html><body style='font-family:sans-serif;padding:40px;background:#0f172a;color:#f87171;'>"
-                "<h3>OAuth State Verification Failed</h3>"
-                "<p style='color:#fca5a5;'>Invalid or cross-user OAuth state token rejected (CSRF protection).</p>"
-                f"<p><a style='color:#38bdf8;' href='{frontend_origin}/'>Return to Compass</a></p>"
-                "</body></html>",
-                status_code=403,
-            )
 
+    # 1. Handle OAuth access denial or external errors from Google
     if error:
-        safe_error = escape(error)
-        return HTMLResponse(
-            f"<html><body style='font-family:sans-serif;padding:40px;background:#0f172a;color:#f87171;'>"
-            f"<h3>Google Calendar Authorization Error: {safe_error}</h3>"
-            f"<p><a style='color:#38bdf8;' href='{frontend_origin}/'>Return to Compass</a></p>"
-            f"</body></html>",
-            status_code=400,
-        )
-    if not code:
-        return HTMLResponse(
-            "<html><body style='font-family:sans-serif;padding:40px;background:#0f172a;color:#f87171;'>"
-            "<h3>Missing OAuth authorization code</h3>"
-            f"<p><a style='color:#38bdf8;' href='{frontend_origin}/'>Return to Compass</a></p>"
-            "</body></html>",
-            status_code=400,
-        )
+        safe_error = re.sub(r"[^\w_.-]", "", error) or "oauth_error"
+        response = RedirectResponse(url=f"{frontend_origin}/?calendar_error={safe_error}", status_code=303)
+        response.delete_cookie("compass_user_id", path="/")
+        return response
 
+    # 2. Check for missing state parameter (CSRF protection requirement)
+    if not state:
+        response = RedirectResponse(url=f"{frontend_origin}/?calendar_error=missing_state", status_code=303)
+        response.delete_cookie("compass_user_id", path="/")
+        return response
+
+    # 3. Check for missing authorization code
+    if not code:
+        response = RedirectResponse(url=f"{frontend_origin}/?calendar_error=missing_code", status_code=303)
+        response.delete_cookie("compass_user_id", path="/")
+        return response
+
+    # 4. Cryptographically verify and consume OAuth state (validates signature, checks expiry and replay)
+    from backend.services.oauth import verify_and_consume_oauth_state
+    pool = await get_pool()
+    try:
+        is_valid, initiating_user, err_reason = await verify_and_consume_oauth_state(state, pool=pool)
+    except Exception as e:
+        logger.error("CRITICAL: OAuth state consumption failed with database error: %s", e)
+        response = RedirectResponse(url=f"{frontend_origin}/?calendar_error=database_error", status_code=303)
+        response.delete_cookie("compass_user_id", path="/")
+        return response
+
+    if not is_valid:
+        safe_reason = re.sub(r"[^\w_.-]", "", err_reason or "invalid_state")
+        response = RedirectResponse(url=f"{frontend_origin}/?calendar_error={safe_reason}", status_code=303)
+        response.delete_cookie("compass_user_id", path="/")
+        return response
+
+    # 5. Exchange authorization code for tokens
     from backend.services.oauth import exchange_code_for_tokens
     from backend.services.calendar import save_calendar_connection
 
     redirect_uri = _resolve_oauth_redirect_uri(request)
     tokens = await exchange_code_for_tokens(code, redirect_uri=redirect_uri)
 
-    if "error" in tokens:
-        return HTMLResponse(
-            f"<html><body style='font-family:sans-serif;padding:40px;background:#0f172a;color:#f87171;'>"
-            f"<h3>Google Calendar Authorization Error</h3>"
-            f"<p style='color:#fca5a5;'>{tokens['error']}</p>"
-            f"<p style='color:#94a3b8;font-size:13px;'>Redirect URI sent to Google: <code style='color:#38bdf8;'>{redirect_uri}</code></p>"
-            f"<p><a style='color:#38bdf8;' href='{frontend_origin}/'>Return to Compass</a></p>"
-            f"</body></html>",
-            status_code=400,
-        )
+    if not tokens or "error" in tokens:
+        response = RedirectResponse(url=f"{frontend_origin}/?calendar_error=token_exchange_failed", status_code=303)
+        response.delete_cookie("compass_user_id", path="/")
+        return response
 
-    email = tokens.get("email") or tokens.get("account_email")
-    if not email or "@" not in str(email):
-        return HTMLResponse(
-            f"<html><body style='font-family:sans-serif;padding:40px;background:#0f172a;color:#f87171;'>"
-            f"<h3>Google Calendar Authorization Error</h3>"
-            f"<p style='color:#fca5a5;'>Failed to retrieve a verified email address from Google.</p>"
-            f"<p><a style='color:#38bdf8;' href='{frontend_origin}/'>Return to Compass</a></p>"
-            f"</body></html>",
-            status_code=400,
-        )
+    google_email = tokens.get("email") or tokens.get("account_email")
+    if not google_email or "@" not in str(google_email):
+        response = RedirectResponse(url=f"{frontend_origin}/?calendar_error=invalid_userinfo", status_code=303)
+        response.delete_cookie("compass_user_id", path="/")
+        return response
 
-    pool = await get_pool()
+    clean_google_email = str(google_email).strip().lower()
+
+    # 6. Associate credentials strictly with the verified initiating user
+    # If initiated by an authenticated Compass user, associate with that user.
+    # Otherwise, associate with the verified Google account email.
+    target_user = (
+        initiating_user.strip().lower()
+        if initiating_user and initiating_user.strip().lower() != "guest"
+        else clean_google_email
+    )
+
     if pool:
-        await save_calendar_connection(
-            pool=pool,
-            user_id=email,
-            account_email=email,
-            access_token=tokens.get("access_token", ""),
-            refresh_token=tokens.get("refresh_token"),
-            expires_in=tokens.get("expires_in", 3600),
-        )
+        try:
+            await save_calendar_connection(
+                pool=pool,
+                user_id=target_user,
+                account_email=clean_google_email,
+                access_token=tokens.get("access_token", ""),
+                refresh_token=tokens.get("refresh_token"),
+                expires_in=tokens.get("expires_in", 3600),
+            )
+        except Exception as e:
+            logger.error("Failed to save calendar connection: %s", e)
+            response = RedirectResponse(url=f"{frontend_origin}/?calendar_error=database_error", status_code=303)
+            response.delete_cookie("compass_user_id", path="/")
+            return response
 
-    safe_email = escape(re.sub(r"[^\w@.-]", "", str(email)))
-    html_content = f"""<!DOCTYPE html>
-<html>
-<head><title>Compass — Google Calendar Connected</title></head>
-<body style="font-family:sans-serif;text-align:center;padding:60px 20px;background:#0f172a;color:#f8fafc;">
-    <div style="max-width:480px;margin:0 auto;background:#1e293b;padding:32px;border-radius:16px;border:1px solid #334155;box-shadow:0 10px 25px rgba(0,0,0,0.5);">
-        <div style="font-size:48px;margin-bottom:12px;">🎉</div>
-        <h2 style="margin:0 0 8px;color:#38bdf8;">Google Calendar Connected!</h2>
-        <p style="color:#94a3b8;font-size:14px;margin-bottom:20px;">Logged in as <b style="color:#f8fafc;">{safe_email}</b>.<br>Your tasks will now synchronize to your Google Calendar.</p>
-        <a style="display:inline-block;background:#2563eb;color:#ffffff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;" href="{frontend_origin}/?calendar_connected=true&email={safe_email}">Open Compass Dashboard</a>
-    </div>
-    <script>
-        if (window.opener) {{
-            window.opener.postMessage({{type: 'compass_calendar_connected', email: '{safe_email}'}}, '*');
-            setTimeout(() => window.close(), 1000);
-        }} else {{
-            setTimeout(() => {{ window.location.href = '{frontend_origin}/?calendar_connected=true&email={safe_email}'; }}, 1500);
-        }}
-    </script>
-</body>
-</html>"""
-    response = HTMLResponse(html_content)
-    session_token = create_session(str(email), oauth_verified=True)
+    session_token = create_session(target_user, oauth_verified=True)
     is_secure = (
         request.url.scheme == "https"
         or request.headers.get("x-forwarded-proto") == "https"
         or not settings.is_development()
+    )
+
+    safe_email = urllib.parse.quote(clean_google_email)
+    response = RedirectResponse(
+        url=f"{frontend_origin}/?calendar_connected=true&email={safe_email}",
+        status_code=303,
     )
     response.set_cookie(
         key="compass_session",
@@ -583,6 +622,7 @@ async def calendar_callback(
         secure=is_secure,
         samesite="lax",
     )
+    response.delete_cookie("compass_user_id", path="/")
     return response
 
 
