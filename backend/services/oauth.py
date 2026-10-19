@@ -133,23 +133,198 @@ def is_google_oauth_configured() -> bool:
     return bool(c_id and secret and not str(c_id).startswith("demo-"))
 
 
+import asyncio
 import time
 
+# Replay protection cache: records consumed HMAC state signatures and their consumption timestamps
+_CONSUMED_OAUTH_STATES: dict[str, float] = {}
+_STATE_LOCK = asyncio.Lock()
 
-def _compute_state_sig(user_id: str, ts: int) -> str:
-    """Compute HMAC-SHA256 signature for user ID and timestamp."""
-    key = _get_encryption_key()
-    msg = f"{user_id.lower()}:{ts}".encode("utf-8")
+
+def _get_state_secret() -> bytes:
+    """Derive HMAC secret key for signing and verifying OAuth state.
+    
+    Checks COMPASS_STATE_SECRET, SECRET_KEY, TOKEN_ENCRYPTION_KEY, or AUTH_TOKEN.
+    In production, enforces that production secrets are configured without insecure fallbacks.
+    """
+    settings = get_settings()
+    if settings.is_production():
+        settings.validate_production_secrets()
+    secret = (
+        os.getenv("COMPASS_STATE_SECRET")
+        or os.getenv("SECRET_KEY")
+        or getattr(settings, "TOKEN_ENCRYPTION_KEY", None)
+        or getattr(settings, "AUTH_TOKEN", None)
+    )
+    if not secret:
+        if settings.is_production():
+            raise ValueError(
+                "CRITICAL SECURITY CONFIGURATION ERROR: Missing OAuth state secret "
+                "(COMPASS_STATE_SECRET / SECRET_KEY / TOKEN_ENCRYPTION_KEY / AUTH_TOKEN)."
+            )
+        secret = "compass-dev-oauth-state-secret-salt"
+
+    return hashlib.pbkdf2_hmac(
+        "sha256",
+        secret.encode("utf-8"),
+        b"compass-calendar-oauth-state-salt-2026",
+        iterations=100_000,
+        dklen=32,
+    )
+
+
+async def record_consumed_state(
+    sig: str,
+    user_id: str,
+    action: str,
+    max_age_seconds: int = 600,
+    pool: Any = None,
+) -> bool:
+    """Atomically record and consume OAuth state signature.
+    
+    If pool is provided: executes an atomic INSERT ON CONFLICT DO NOTHING in PostgreSQL.
+    PostgreSQL's PRIMARY KEY uniqueness on state_sig guarantees that exactly ONE concurrent
+    request can succeed across multiple workers, processes, or server restarts.
+    Returns True if inserted (first use), False if already consumed.
+    
+    In production with a database pool, any database failure produces an operational error
+    rather than silently falling back to insecure process-local replay protection.
+    
+    If pool is None: falls back to an asyncio.Lock-guaranteed atomic check-and-insert in memory.
+    """
+    settings = get_settings()
+    if pool is not None:
+        try:
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=max_age_seconds)
+            async with pool.acquire() as conn:
+                res = await conn.execute(
+                    """
+                    INSERT INTO oauth_consumed_states (state_sig, user_id, action, consumed_at, expires_at)
+                    VALUES ($1, $2, $3, now(), $4)
+                    ON CONFLICT (state_sig) DO NOTHING
+                    """,
+                    sig,
+                    user_id,
+                    action,
+                    expires_at,
+                )
+                if isinstance(res, str):
+                    return res == "INSERT 0 1"
+        except Exception as e:
+            logger.error("CRITICAL: Database atomic state consumption failed on oauth_consumed_states: %s", e)
+            if settings.is_production():
+                raise RuntimeError(f"Database error during OAuth state consumption: {e}") from e
+            logger.warning("Non-production environment: falling back to memory lock after DB error: %s", e)
+
+    # In-memory atomic fallback with asyncio.Lock
+    async with _STATE_LOCK:
+        now = time.time()
+        cutoff = now - 1800
+        for k in list(_CONSUMED_OAUTH_STATES.keys()):
+            if _CONSUMED_OAUTH_STATES[k] < cutoff:
+                _CONSUMED_OAUTH_STATES.pop(k, None)
+        if sig in _CONSUMED_OAUTH_STATES:
+            return False
+        _CONSUMED_OAUTH_STATES[sig] = now
+        return True
+
+
+async def cleanup_expired_oauth_states(pool: Any) -> int:
+    """Prune consumed state records where expires_at < NOW().
+    
+    Safe because states past expires_at (600s TTL) are already expired and
+    would be rejected by timestamp validation anyway.
+    Never deletes records where expires_at >= NOW().
+    """
+    if pool is None:
+        return 0
+    try:
+        async with pool.acquire() as conn:
+            res = await conn.execute(
+                "DELETE FROM oauth_consumed_states WHERE expires_at < now()"
+            )
+            if isinstance(res, str) and res.startswith("DELETE "):
+                return int(res.split(" ")[1])
+    except Exception as e:
+        logger.warning(f"Failed to prune expired oauth states: {e}")
+    return 0
+
+
+def _compute_state_sig(user_id: str, ts: int, nonce: str = "", action: str = "") -> str:
+    """Compute HMAC-SHA256 signature for user ID, timestamp, nonce, and action."""
+    key = _get_state_secret()
+    if nonce or action:
+        msg = f"{user_id.lower()}:{ts}:{nonce}:{action}".encode("utf-8")
+    else:
+        msg = f"{user_id.lower()}:{ts}".encode("utf-8")
     return hmac.new(key, msg, digestmod=hashlib.sha256).hexdigest()
 
 
-def generate_oauth_state(user_id: str) -> str:
-    """Generate cryptographically HMAC-signed OAuth state bound to user_id and timestamp."""
-    clean_user = (user_id or "guest").lower()
+def generate_oauth_state(user_id: str, action: str = "google_calendar") -> str:
+    """Generate cryptographically HMAC-signed, unpredictable OAuth state bound to user_id, timestamp, and nonce."""
+    clean_user = (user_id or "guest").lower().strip()
     ts = int(time.time())
-    sig = _compute_state_sig(clean_user, ts)
-    raw = f"{clean_user}:{ts}:{sig}"
+    nonce = secrets.token_urlsafe(16)
+    sig = _compute_state_sig(clean_user, ts, nonce, action)
+    raw = f"{clean_user}:{ts}:{nonce}:{action}:{sig}"
     return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("utf-8")
+
+
+async def verify_and_consume_oauth_state(
+    state: str,
+    max_age_seconds: int = 600,
+    expected_action: str = "google_calendar",
+    pool: Any = None,
+) -> Tuple[bool, Optional[str], Optional[str]]:
+    """Verify that an OAuth state parameter is authentic, unexpired, and unplayed; atomically mark it consumed.
+    
+    Returns:
+        (is_valid: bool, initiating_user_id: Optional[str], error_reason: Optional[str])
+    """
+    if not state or not isinstance(state, str):
+        return False, None, "missing_state"
+
+    try:
+        raw = base64.urlsafe_b64decode(state.encode("utf-8")).decode("utf-8")
+        parts = raw.split(":")
+        now = int(time.time())
+
+        if len(parts) == 5:
+            user_id_part, ts_str, nonce, action, sig = parts
+            if action != expected_action:
+                return False, None, "invalid_action"
+            ts = int(ts_str)
+            if abs(now - ts) > max_age_seconds:
+                return False, None, "expired_state"
+            expected_sig = _compute_state_sig(user_id_part, ts, nonce, action)
+            if not hmac.compare_digest(sig, expected_sig):
+                return False, None, "invalid_state"
+            # Atomically consume state (PostgreSQL primary key or asyncio.Lock)
+            consumed = await record_consumed_state(sig, user_id_part, action, max_age_seconds, pool=pool)
+            if not consumed:
+                return False, None, "replayed_state"
+            return True, user_id_part, None
+
+        if len(parts) == 3:
+            # Backward compatibility with legacy 3-part states (user_id:ts:sig)
+            user_id_part, ts_str, sig = parts
+            ts = int(ts_str)
+            if abs(now - ts) > max_age_seconds:
+                return False, None, "expired_state"
+            expected_sig = _compute_state_sig(user_id_part, ts)
+            if not hmac.compare_digest(sig, expected_sig):
+                return False, None, "invalid_state"
+            consumed = await record_consumed_state(sig, user_id_part, expected_action, max_age_seconds, pool=pool)
+            if not consumed:
+                return False, None, "replayed_state"
+            return True, user_id_part, None
+
+        return False, None, "invalid_state"
+    except RuntimeError:
+        raise
+    except Exception as e:
+        logger.debug(f"State verification failed: {e}")
+        return False, None, "invalid_state"
 
 
 def verify_oauth_state(state: str, expected_user_id: str, max_age_seconds: int = 600) -> bool:
@@ -159,18 +334,28 @@ def verify_oauth_state(state: str, expected_user_id: str, max_age_seconds: int =
     try:
         raw = base64.urlsafe_b64decode(state.encode("utf-8")).decode("utf-8")
         parts = raw.split(":")
-        if len(parts) != 3:
-            return False
-        user_id_part, ts_str, sig = parts
-        clean_expected = (expected_user_id or "guest").lower()
-        if user_id_part.lower() != clean_expected:
-            return False
-        ts = int(ts_str)
         now = int(time.time())
-        if abs(now - ts) > max_age_seconds:
-            return False
-        expected_sig = _compute_state_sig(clean_expected, ts)
-        return hmac.compare_digest(sig, expected_sig)
+        if len(parts) == 5:
+            user_id_part, ts_str, nonce, action, sig = parts
+            ts = int(ts_str)
+            if abs(now - ts) > max_age_seconds:
+                return False
+            expected_sig = _compute_state_sig(user_id_part, ts, nonce, action)
+            if not hmac.compare_digest(sig, expected_sig):
+                return False
+            clean_expected = (expected_user_id or "guest").lower().strip()
+            return user_id_part.lower() == clean_expected
+        if len(parts) == 3:
+            user_id_part, ts_str, sig = parts
+            ts = int(ts_str)
+            if abs(now - ts) > max_age_seconds:
+                return False
+            expected_sig = _compute_state_sig(user_id_part, ts)
+            if not hmac.compare_digest(sig, expected_sig):
+                return False
+            clean_expected = (expected_user_id or "guest").lower().strip()
+            return user_id_part.lower() == clean_expected
+        return False
     except Exception:
         return False
 
