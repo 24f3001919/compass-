@@ -9,11 +9,11 @@ Welcome to **Compass**! This document provides guidelines and setup instructions
 Compass is a persistent-memory AI copilot connecting tasks, hackathon deadlines, coursework, code context, and conversations into one agent-driven workspace with deterministic feasibility and human confirmation gates.
 
 Key architectural documentation:
-- **System Architecture**: [docs/architecture.md](file:///c:/Users/Ratnesh%20Singh/OneDrive/Desktop/compass/docs/architecture.md)
-- **Deployment & Runbook**: [docs/deployment.md](file:///c:/Users/Ratnesh%20Singh/OneDrive/Desktop/compass/docs/deployment.md)
-- **Security & Threat Model**: [docs/security.md](file:///c:/Users/Ratnesh%20Singh/OneDrive/Desktop/compass/docs/security.md)
-- **API Contract**: [docs/api_contract.md](file:///c:/Users/Ratnesh%20Singh/OneDrive/Desktop/compass/docs/api_contract.md)
-- **Testing Strategy**: [docs/testing.md](file:///c:/Users/Ratnesh%20Singh/OneDrive/Desktop/compass/docs/testing.md)
+- **System Architecture**: [docs/architecture.md](docs/architecture.md)
+- **Deployment & Runbook**: [docs/deployment.md](docs/deployment.md)
+- **Security & Threat Model**: [docs/security.md](docs/security.md)
+- **API Contract**: [docs/api_contract.md](docs/api_contract.md)
+- **Testing Strategy**: [docs/testing.md](docs/testing.md)
 
 ---
 

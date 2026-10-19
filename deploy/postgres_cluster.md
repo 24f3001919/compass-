@@ -107,7 +107,7 @@ postgresql://compass_app:<PASSWORD>@c-compass-prod.rw.nebius.internal:5432/compa
    ```bash
    nebius lockbox secret create \
      --name compass-db-credentials \
-     --payload '[{"key": "DATABASE_URL", "text_value": "postgresql://compass_app:SECRET@c-compass-prod.rw.nebius.internal:5432/compass"}]'
+     --payload '[{"key": "DATABASE_URL", "text_value": "postgresql://compass_app:<PASSWORD>@c-compass-prod.rw.nebius.internal:5432/compass"}]'
    ```
 3. **Reference in Deployments**:
    - `deploy/serverless_endpoint.yaml` and `deploy/serverless_job.yaml` mount this secret directly into the `DATABASE_URL` environment variable.

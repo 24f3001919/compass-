@@ -156,7 +156,7 @@ Tavily search and extract calls are partitioned into `tavily_usage_log`, trackin
 
 ## 📝 Part 3: Nebius & NVIDIA Developer Feedback (For the $100 Award)
 
-> **Complete Comprehensive Report**: See [NEBIUS_PLATFORM_FEEDBACK.md](file:///Users/nandani/Downloads/compass/NEBIUS_PLATFORM_FEEDBACK.md) for full benchmark telemetry, MoE architectural analysis, and reproducible code samples.
+> **Complete Comprehensive Report**: See [NEBIUS_PLATFORM_FEEDBACK.md](NEBIUS_PLATFORM_FEEDBACK.md) for full benchmark telemetry, MoE architectural analysis, and reproducible code samples.
 
 ### Summary Feedback on Nebius Token Factory & NVIDIA Nemotron Models
 1. **Nemotron-3 Nano (30B) Native Function Calling**:
