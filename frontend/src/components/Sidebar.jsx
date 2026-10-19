@@ -25,6 +25,7 @@ export default function Sidebar({
   onDomainDeleted,
   mobileOpen = false,
   onCloseMobile,
+  onRetryConnection,
 }) {
   const [showCreateDomainModal, setShowCreateDomainModal] = React.useState(false)
   const [confirmDeleteKey, setConfirmDeleteKey] = React.useState(null)
@@ -52,7 +53,10 @@ export default function Sidebar({
     })
   }
 
-  const isOnline = backendStatus.toLowerCase().includes('neon') || backendStatus.toLowerCase().includes('live')
+  const isOnline = backendStatus.toLowerCase().includes('neon') ||
+    backendStatus.toLowerCase().includes('live') ||
+    backendStatus.toLowerCase().includes('connected') ||
+    backendStatus.toLowerCase().includes('ready')
   const totalActive = Object.values(domainCounts || {}).reduce((sum, n) => sum + (typeof n === 'number' ? n : 0), 0)
 
   const baseDomains = [
@@ -587,8 +591,14 @@ export default function Sidebar({
       {effectivelyCollapsed ? (
         <div
           id="sidebar-specs-card"
-          onClick={() => onOpenTelemetry && onOpenTelemetry()}
-          title={isOnline ? `${totalActive} tasks synced — ${backendStatus} (Click for telemetry)` : `Reconnecting — ${backendStatus}`}
+          onClick={() => {
+            if (!isOnline && onRetryConnection) {
+              onRetryConnection()
+            } else if (onOpenTelemetry) {
+              onOpenTelemetry()
+            }
+          }}
+          title={isOnline ? `${totalActive} tasks synced — ${backendStatus} (Click for telemetry)` : `Reconnecting — ${backendStatus} (Click to wake up)`}
           aria-label={isOnline ? `${totalActive} tasks synced — ${backendStatus}` : `Reconnecting — ${backendStatus}`}
           style={{
             width: '44px',
@@ -600,7 +610,7 @@ export default function Sidebar({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            cursor: onOpenTelemetry ? 'pointer' : 'default',
+            cursor: (!isOnline && onRetryConnection) || onOpenTelemetry ? 'pointer' : 'default',
             position: 'relative',
             transition: 'all 0.15s ease',
             flexShrink: 0,
@@ -628,17 +638,46 @@ export default function Sidebar({
           border: '1px solid rgba(255, 255, 255, 0.06)',
           marginTop: '16px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <div style={{
-              width: '7px',
-              height: '7px',
-              borderRadius: '50%',
-              background: isOnline ? '#34d399' : '#f5a623',
-              flexShrink: 0
-            }} />
-            <span style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--text-on-dark)' }}>
-              {isOnline ? `${totalActive} tasks synced` : 'Reconnecting'}
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                background: isOnline ? '#34d399' : '#f5a623',
+                boxShadow: isOnline ? '0 0 8px rgba(52, 211, 153, 0.5)' : '0 0 8px rgba(245, 166, 35, 0.5)',
+                flexShrink: 0
+              }} />
+              <span style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--text-on-dark)' }}>
+                {isOnline ? `${totalActive} tasks synced` : 'Reconnecting'}
+              </span>
+            </div>
+            {!isOnline && onRetryConnection && (
+              <button
+                id="sidebar-retry-connection-button"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onRetryConnection()
+                }}
+                title="Ping backend to wake up now"
+                style={{
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  padding: '2px 8px',
+                  borderRadius: '6px',
+                  background: 'rgba(251, 191, 36, 0.16)',
+                  border: '1px solid rgba(251, 191, 36, 0.35)',
+                  color: 'var(--brand, #fbbf24)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(251, 191, 36, 0.28)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(251, 191, 36, 0.16)'}
+              >
+                Wake up
+              </button>
+            )}
           </div>
           <div style={{ fontSize: '10.5px', color: 'var(--text-muted)', paddingLeft: '15px' }}>
             {backendStatus}

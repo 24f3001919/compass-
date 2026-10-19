@@ -400,7 +400,10 @@ export default function ChatPanel({
 
 
   const isInputDisabled = isStreaming || isTyping
-  const isOnline = backendStatus.toLowerCase().includes('neon') || backendStatus.toLowerCase().includes('live')
+  const isOnline = backendStatus.toLowerCase().includes('neon') ||
+    backendStatus.toLowerCase().includes('live') ||
+    backendStatus.toLowerCase().includes('connected') ||
+    backendStatus.toLowerCase().includes('ready')
   const overdueCount = tasks.filter(t => (t.countdown || '').toLowerCase().includes('overdue')).length
 
   return (

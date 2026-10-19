@@ -1,12 +1,42 @@
 // Compass Base API Client
 // Handles base URL resolution, guest identity, user session, and common headers.
 
-export const API_BASE = (
-  import.meta.env.VITE_API_BASE_URL ||
-  (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? 'http://localhost:8000'
-    : '')
-).replace(/\/$/, '')
+export const RENDER_BACKEND_URL = 'https://compass-backend-qryu.onrender.com'
+
+const isLocalDevHost = typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+
+function resolveInitialApiBase() {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL.replace(/\/$/, '')
+  }
+  try {
+    const saved = localStorage.getItem('compass_active_api_base')
+    if (saved) return saved.replace(/\/$/, '')
+  } catch {
+    /* ignore storage access error */
+  }
+  if (isLocalDevHost) {
+    return 'http://localhost:8000'
+  }
+  return ''
+}
+
+export let API_BASE = resolveInitialApiBase()
+
+export function setApiBase(newBase) {
+  API_BASE = (newBase || '').replace(/\/$/, '')
+  try {
+    if (API_BASE) {
+      localStorage.setItem('compass_active_api_base', API_BASE)
+    } else {
+      localStorage.removeItem('compass_active_api_base')
+    }
+  } catch {
+    /* ignore storage access error */
+  }
+}
+
 
 export const FALLBACK_TASKS = [
   {
@@ -215,28 +245,101 @@ export function getAuthHeaders(extraHeaders = {}) {
   return headers
 }
 
-export async function checkBackendHealth() {
-  try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 8000)
+let inflightHealthCheck = null
 
-    const res = await fetch(`${API_BASE}/health`, {
-      method: 'GET',
-      headers: getAuthHeaders(),
-      signal: controller.signal
-    })
-    clearTimeout(timeoutId)
-
-    if (!res.ok) {
-      return 'Backend Error • HTTP ' + res.status
-    }
-
-    const data = await res.json()
-    if (data.db_connected || data.status === 'ok') {
-      return 'Live • Neon Connected'
-    }
-    return 'Edge Online • Syncing'
-  } catch {
-    return 'Waking up the server…'
+export async function checkBackendHealth(force = false) {
+  if (inflightHealthCheck && !force) {
+    return inflightHealthCheck
   }
+
+  inflightHealthCheck = (async () => {
+    // Helper to probe an endpoint with a custom timeout
+    const probe = async (url, timeoutMs) => {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+      try {
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: getAuthHeaders(),
+          signal: controller.signal,
+        })
+        clearTimeout(timeoutId)
+        return res
+      } catch (err) {
+        clearTimeout(timeoutId)
+        throw err
+      }
+    }
+
+    try {
+      // 1. If currently configured for localhost, test localhost first with a quick 2.5s timeout
+      const isLocal = API_BASE.includes('localhost') || API_BASE.includes('127.0.0.1')
+      let res = null
+      let usedBase = API_BASE
+
+      if (isLocal) {
+        try {
+          res = await probe(`${API_BASE}/health`, 2500)
+        } catch {
+          // Local server is not running on port 8000. Fall back to cloud backend immediately.
+          console.info(`[Compass] Local backend (${API_BASE}) unreachable. Attempting cloud backend: ${RENDER_BACKEND_URL}`)
+          try {
+            res = await probe(`${RENDER_BACKEND_URL}/health`, 35000)
+            if (res && (res.ok || res.status === 200)) {
+              setApiBase(RENDER_BACKEND_URL)
+              usedBase = RENDER_BACKEND_URL
+            }
+          } catch {
+            // Cloud backend is also waking up
+            return 'Waking up the server…'
+          }
+        }
+      } else {
+        // 2. Production or Cloud target — allow 35s for Render cold start
+        try {
+          res = await probe(`${API_BASE || ''}/health`, 35000)
+        } catch {
+          // If relative proxy (/health on Vercel) timed out or failed, attempt direct Render URL
+          if (!API_BASE && RENDER_BACKEND_URL) {
+            try {
+              res = await probe(`${RENDER_BACKEND_URL}/health`, 35000)
+              if (res && res.ok) {
+                setApiBase(RENDER_BACKEND_URL)
+                usedBase = RENDER_BACKEND_URL
+              }
+            } catch {
+              return 'Waking up the server…'
+            }
+          } else {
+            return 'Waking up the server…'
+          }
+        }
+      }
+
+      if (!res) {
+        return 'Waking up the server…'
+      }
+
+      if (!res.ok) {
+        // If HTTP 502/503/504, Render or proxy is still booting up
+        if ([502, 503, 504].includes(res.status)) {
+          return 'Waking up the server…'
+        }
+        return 'Backend Error • HTTP ' + res.status
+      }
+
+      const data = await res.json()
+      if (data.db_connected || data.status === 'ok') {
+        return 'Live • Neon Connected'
+      }
+      return 'Edge Online • Syncing'
+    } catch {
+      return 'Waking up the server…'
+    } finally {
+      inflightHealthCheck = null
+    }
+  })()
+
+  return inflightHealthCheck
 }
+

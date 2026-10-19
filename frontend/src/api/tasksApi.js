@@ -10,7 +10,7 @@ import { API_BASE, FALLBACK_TASKS, getAuthHeaders } from './baseClient'
 export async function fetchTasks(domain) {
   try {
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 10000)
+    const timeoutId = setTimeout(() => controller.abort(), 20000)
 
     const url = domain && domain !== 'all'
       ? `${API_BASE}/api/tasks?domain=${encodeURIComponent(domain)}`
@@ -44,7 +44,7 @@ export async function fetchTasks(domain) {
 export async function fetchUsageSummary() {
   try {
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 3000)
+    const timeoutId = setTimeout(() => controller.abort(), 10000)
     const res = await fetch(`${API_BASE}/api/usage/summary`, { signal: controller.signal })
     clearTimeout(timeoutId)
     if (!res.ok) return null

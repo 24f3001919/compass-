@@ -251,6 +251,21 @@ export default function App() {
     refreshUsage()
   }, [loadTasks, selectedDomain, refreshUsage, checkMigration])
 
+  const handleRetryConnection = useCallback(async () => {
+    setBackendStatus('Pinging backend…')
+    try {
+      const status = await checkBackendHealth(true)
+      setBackendStatus(status)
+      const isOk = status.toLowerCase().includes('neon') || status.toLowerCase().includes('live') || status.toLowerCase().includes('connected')
+      if (isOk) {
+        loadTasks(selectedDomain)
+        refreshUsage()
+      }
+    } catch {
+      setBackendStatus('Waking up the server…')
+    }
+  }, [loadTasks, refreshUsage, selectedDomain])
+
   useEffect(() => {
     let isMounted = true
 
@@ -261,7 +276,17 @@ export default function App() {
     const pollHealth = async () => {
       try {
         const status = await checkBackendHealth()
-        if (isMounted) setBackendStatus(status)
+        if (isMounted) {
+          setBackendStatus(prev => {
+            const wasOnline = prev.toLowerCase().includes('neon') || prev.toLowerCase().includes('live') || prev.toLowerCase().includes('connected')
+            const isNowOnline = status.toLowerCase().includes('neon') || status.toLowerCase().includes('live') || status.toLowerCase().includes('connected')
+            if (!wasOnline && isNowOnline) {
+              loadTasks(selectedDomain)
+              refreshUsage()
+            }
+            return status
+          })
+        }
       } catch {
         if (isMounted) setBackendStatus('Waking up the server…')
       }
@@ -425,6 +450,7 @@ export default function App() {
         onDomainDeleted={handleDomainDeleted}
         mobileOpen={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
+        onRetryConnection={handleRetryConnection}
       />
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-app)', minWidth: 0, overflow: 'hidden' }}>
