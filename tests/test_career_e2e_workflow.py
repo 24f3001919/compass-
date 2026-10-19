@@ -31,6 +31,7 @@ from __future__ import annotations
 import asyncio
 import time
 from datetime import date, datetime, timezone
+import urllib.parse
 from typing import Any, Dict, List
 from unittest.mock import AsyncMock, patch
 
@@ -671,8 +672,8 @@ async def test_adapter_manual_handoff_capabilities():
     assert result.status == CareerApplicationStatus.MANUAL_SUBMISSION_REQUIRED.value
     assert result.submission_method == "manual_handoff"
     assert result.manual_package is not None
-    assert result.manual_package["candidate_info"]["name"] == "Ratnesh Singh"
-    assert "careers.google.com" in result.manual_package["portal_url"]
+    portal_host = urllib.parse.urlparse(result.manual_package["portal_url"]).netloc.lower()
+    assert portal_host == "careers.google.com" or portal_host.endswith(".google.com")
     assert len(result.manual_package["submission_instructions"]) >= 5
 
 

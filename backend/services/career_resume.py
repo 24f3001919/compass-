@@ -403,7 +403,7 @@ def parse_uploaded_resume_text(raw_text: str) -> ResumeContent:
     phone = None
     location = None
 
-    email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", raw_text)
+    email_match = re.search(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b", raw_text)
     if email_match:
         email = email_match.group(0)
 

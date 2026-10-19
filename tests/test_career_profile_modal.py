@@ -234,9 +234,14 @@ def test_vercel_spa_rewrites_configuration():
         assert len(rewrites) >= 4, f"{conf_path} must define proxy rewrites and SPA fallback"
 
         # Verify proxy destinations are preserved
-        assert any(r.get("source") == "/health" and "onrender.com" in r.get("destination", "") for r in rewrites)
-        assert any(r.get("source") == "/chat" and "onrender.com" in r.get("destination", "") for r in rewrites)
-        assert any(r.get("source") == "/api/:path*" and "onrender.com" in r.get("destination", "") for r in rewrites)
+        import urllib.parse
+        def _is_render_dest(dest: str) -> bool:
+            h = urllib.parse.urlparse(dest).netloc.lower()
+            return h == "compass-backend-qryu.onrender.com" or h.endswith(".onrender.com")
+
+        assert any(r.get("source") == "/health" and _is_render_dest(r.get("destination", "")) for r in rewrites)
+        assert any(r.get("source") == "/chat" and _is_render_dest(r.get("destination", "")) for r in rewrites)
+        assert any(r.get("source") == "/api/:path*" and _is_render_dest(r.get("destination", "")) for r in rewrites)
 
         # Verify SPA fallback rewrite directs to index.html and does not intercept /api/, /chat, or /health
         spa_rewrite = next((r for r in rewrites if r.get("destination") == "/index.html"), None)

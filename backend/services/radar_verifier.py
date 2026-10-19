@@ -95,6 +95,10 @@ GENERIC_CAREERS_PATHS = {
 }
 
 
+def _matches_host(netloc: str, domain: str) -> bool:
+    return netloc == domain or netloc.endswith("." + domain)
+
+
 def is_specific_ats_job_url(url: str) -> bool:
     """Check if a URL points to a specific requisition on a supported ATS platform."""
     if not url:
@@ -106,19 +110,19 @@ def is_specific_ats_job_url(url: str) -> bool:
         parts = [p for p in path.split("/") if p]
 
         # Greenhouse specific job: /jobs/{id} or /{company}/jobs/{id}
-        if "greenhouse.io" in netloc:
+        if _matches_host(netloc, "greenhouse.io"):
             return len(parts) >= 2 and parts[-2] == "jobs" and parts[-1].isdigit()
 
         # Lever specific job: /{company}/{uuid}
-        if "lever.co" in netloc:
+        if _matches_host(netloc, "lever.co"):
             return len(parts) >= 2 and len(parts[-1]) >= 8
 
         # Ashby specific job: /{company}/{uuid}
-        if "ashbyhq.com" in netloc:
+        if _matches_host(netloc, "ashbyhq.com"):
             return len(parts) >= 2 and len(parts[-1]) >= 8
 
         # Workday specific job: .../job/...
-        if "myworkdayjobs.com" in netloc:
+        if _matches_host(netloc, "myworkdayjobs.com"):
             return "job" in parts and len(parts) > parts.index("job") + 1
 
         return False
@@ -147,7 +151,7 @@ def is_generic_careers_or_homepage(url: str) -> bool:
             return True
 
         # ATS root/board pages without specific job IDs are generic
-        if any(ats in netloc for ats in OFFICIAL_ATS_DOMAINS):
+        if any(_matches_host(netloc, ats) for ats in OFFICIAL_ATS_DOMAINS):
             return not is_specific_ats_job_url(url)
 
         return False
