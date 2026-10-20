@@ -81,17 +81,18 @@ async def format_chat_response(
 
     safe_reply = text_reply or ""
 
-    if persist and chat_success:
+    if persist:
         try:
             from backend.memory.db import get_pool
             pool = await get_pool()
-            async with pool.acquire() as conn:
-                real_cid = await conversations.get_or_create_conversation(
-                    conn, conv_id, user_id=user_id, guest_id=guest_id
-                )
-                await conversations.add_message(conn, real_cid, role="user", content=message)
-                await conversations.add_message(conn, real_cid, role="assistant", content=safe_reply, skill_called="chat")
-                conv_id = real_cid
+            if pool:
+                async with pool.acquire() as conn:
+                    real_cid = await conversations.get_or_create_conversation(
+                        conn, conv_id, user_id=user_id, guest_id=guest_id
+                    )
+                    await conversations.add_message(conn, real_cid, role="user", content=message)
+                    await conversations.add_message(conn, real_cid, role="assistant", content=safe_reply, skill_called="chat")
+                    conv_id = real_cid
         except Exception as e:
             logger.debug(f"Could not persist message history: {e}")
 
