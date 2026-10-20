@@ -8,6 +8,8 @@ import {
   setApplicationCoverLetter,
   updateApplication,
   getResumeExportUrl,
+  getResumeExportDocxUrl,
+  fetchJobAnalysis,
 } from '../../api/careerApi'
 import {
   loadWorkspaceDraft,
@@ -53,6 +55,11 @@ export default function ApplicationWorkspaceModal({
   const [draftConflict, setDraftConflict] = useState(null)
   const [isInitialLoaded, setIsInitialLoaded] = useState(false)
 
+  // Job Requirement Analysis state (Phase 5 & 8)
+  const [jobAnalysis, setJobAnalysis] = useState(null)
+  const [loadingAnalysis, setLoadingAnalysis] = useState(false)
+  const [customJobDesc, setCustomJobDesc] = useState(opportunity?.description || '')
+
   // Preparation Checklist state (stored in application metadata / notes or locally)
   const [checklist, setChecklist] = useState({
     resumeTailored: false,
@@ -61,6 +68,20 @@ export default function ApplicationWorkspaceModal({
     questionsReviewed: false,
     submittedExternally: false,
   })
+
+  // Load deep job requirement analysis
+  const loadJobAnalysisData = useCallback(async (customDesc = null) => {
+    if (!opportunity?.id) return
+    setLoadingAnalysis(true)
+    try {
+      const report = await fetchJobAnalysis(opportunity.id, customDesc)
+      setJobAnalysis(report)
+    } catch (err) {
+      console.warn('Could not load detailed job analysis:', err)
+    } finally {
+      setLoadingAnalysis(false)
+    }
+  }, [opportunity?.id])
 
   // Load or auto-prepare application on mount
   const loadWorkspaceData = useCallback(async () => {
@@ -97,13 +118,14 @@ export default function ApplicationWorkspaceModal({
         }
       }
       setIsInitialLoaded(true)
+      loadJobAnalysisData()
     } catch (err) {
       console.error('Error loading application workspace:', err)
       setError(err.message || 'Failed to prepare application workspace.')
     } finally {
       setLoading(false)
     }
-  }, [opportunity?.id])
+  }, [opportunity?.id, loadJobAnalysisData])
 
   useEffect(() => {
     loadWorkspaceData()
@@ -322,6 +344,7 @@ export default function ApplicationWorkspaceModal({
 
   const TABS = [
     { key: 'overview', icon: '📋', label: 'Role & Match' },
+    { key: 'job_analysis', icon: '🎯', label: 'Job Analysis' },
     { key: 'resume', icon: '📄', label: 'Tailored Resume' },
     { key: 'cover_letter', icon: '✍️', label: 'Cover Letter' },
     { key: 'checklist', icon: '✅', label: 'Checklist & Notes' },
@@ -673,9 +696,249 @@ export default function ApplicationWorkspaceModal({
                       </div>
                     </div>
 
-                    <div style={{ marginTop: '14px', fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                      🛡️ <strong>Zero Hallucination Guarantee:</strong> Compass never invents skills, experiences, or numerical accomplishments. Tailored resumes are generated exclusively from your verified master resume.
+                    <div style={{ marginTop: '14px', fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>🛡️ <strong>Zero Hallucination Guarantee:</strong> Tailored resumes strictly derived from verified profile background.</span>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('job_analysis')}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          background: 'transparent',
+                          border: '1px solid var(--border)',
+                          color: 'var(--brand)',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Deep Requirement Breakdown →
+                      </button>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB: Deep Job Description Analysis & Evidence Match (Phase 5) */}
+              {activeTab === 'job_analysis' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                  {/* Top Match Score & Verdict Card */}
+                  <div
+                    style={{
+                      padding: '18px 20px',
+                      borderRadius: '12px',
+                      background: 'var(--bg-app)',
+                      border: '1px solid var(--border)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '16px',
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                        Deterministic Requirement Alignment
+                      </div>
+                      <h3 style={{ margin: '0 0 6px 0', fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                        {opportunity.role_title} @ {opportunity.company_name}
+                      </h3>
+                      <div style={{ fontSize: '13px', color: 'var(--text-secondary)', maxWidth: '600px', lineHeight: 1.5 }}>
+                        {jobAnalysis?.summary_verdict || (loadingAnalysis ? 'Analyzing requirements against candidate master profile…' : 'Requirement analysis ready.')}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: '12px 20px',
+                        borderRadius: '10px',
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border)',
+                        textAlign: 'center',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: '26px',
+                          fontWeight: 800,
+                          color: (jobAnalysis?.match_score || 0) >= 0.75 ? '#16a34a' : (jobAnalysis?.match_score || 0) >= 0.5 ? '#d97706' : '#dc2626',
+                        }}
+                      >
+                        {loadingAnalysis ? '…' : `${Math.round((jobAnalysis?.match_score || 0) * 100)}%`}
+                      </div>
+                      <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                        Match Score
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Missing Critical Skills Alert */}
+                  {jobAnalysis?.missing_critical_skills && jobAnalysis.missing_critical_skills.length > 0 && (
+                    <div
+                      style={{
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        background: '#fef2f2',
+                        border: '1px solid #fecaca',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                      }}
+                    >
+                      <span style={{ fontSize: '18px' }}>⚠️</span>
+                      <div style={{ fontSize: '13px', color: '#991b1b', lineHeight: 1.4 }}>
+                        <strong>Missing Mandatory Qualifications:</strong>{' '}
+                        {jobAnalysis.missing_critical_skills.join(', ')}. If you possess these, update your master profile before submitting.
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Job Description Fine-Tuner */}
+                  <div
+                    style={{
+                      padding: '14px 18px',
+                      borderRadius: '10px',
+                      background: 'var(--bg-app)',
+                      border: '1px solid var(--border)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        Detailed Job Description (Editable for custom postings)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => loadJobAnalysisData(customJobDesc)}
+                        disabled={loadingAnalysis}
+                        style={{
+                          padding: '5px 12px',
+                          borderRadius: '6px',
+                          background: 'var(--brand)',
+                          color: '#ffffff',
+                          border: 'none',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: loadingAnalysis ? 'not-allowed' : 'pointer',
+                        }}
+                      >
+                        {loadingAnalysis ? 'Analyzing…' : '🔄 Re-Analyze Alignment'}
+                      </button>
+                    </div>
+                    <textarea
+                      rows={4}
+                      value={customJobDesc}
+                      onChange={e => setCustomJobDesc(e.target.value)}
+                      placeholder="Paste complete job description or eligibility requirements here to re-evaluate…"
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        borderRadius: '6px',
+                        border: '1px solid var(--border)',
+                        background: 'var(--bg-card)',
+                        color: 'var(--text-primary)',
+                        fontSize: '12px',
+                        fontFamily: 'monospace',
+                        boxSizing: 'border-box',
+                        resize: 'vertical',
+                      }}
+                    />
+                  </div>
+
+                  {/* Detailed Evidence Match Grid */}
+                  <div
+                    style={{
+                      padding: '16px 18px',
+                      borderRadius: '10px',
+                      background: 'var(--bg-app)',
+                      border: '1px solid var(--border)',
+                    }}
+                  >
+                    <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      Requirement-by-Requirement Evidence Traceability
+                    </h4>
+
+                    {jobAnalysis?.matches && jobAnalysis.matches.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {jobAnalysis.matches.map((m, idx) => {
+                          const statusConfig = {
+                            supported: { bg: '#f0fdf4', text: '#166534', border: '#bbf7d0', icon: '✓', label: 'Supported' },
+                            partial: { bg: '#eff6ff', text: '#1e40af', border: '#bfdbfe', icon: '~', label: 'Partial Match' },
+                            missing_evidence: { bg: '#fffbeb', text: '#92400e', border: '#fde68a', icon: '?', label: 'Missing Evidence' },
+                            gap: { bg: '#fef2f2', text: '#991b1b', border: '#fecaca', icon: '✗', label: 'Requirement Gap' },
+                          }[m.match_status] || { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1', icon: '•', label: m.match_status }
+
+                          return (
+                            <div
+                              key={idx}
+                              style={{
+                                padding: '12px 14px',
+                                borderRadius: '8px',
+                                background: 'var(--bg-card)',
+                                border: '1px solid var(--border)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '6px',
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span
+                                    style={{
+                                      padding: '2px 8px',
+                                      borderRadius: '4px',
+                                      fontSize: '10px',
+                                      fontWeight: 800,
+                                      textTransform: 'uppercase',
+                                      background: statusConfig.bg,
+                                      color: statusConfig.text,
+                                      border: `1px solid ${statusConfig.border}`,
+                                    }}
+                                  >
+                                    {statusConfig.icon} {statusConfig.label}
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontSize: '10px',
+                                      fontWeight: 700,
+                                      padding: '2px 6px',
+                                      borderRadius: '4px',
+                                      background: m.is_mandatory ? '#fee2e2' : '#f1f5f9',
+                                      color: m.is_mandatory ? '#991b1b' : '#475569',
+                                      textTransform: 'uppercase',
+                                    }}
+                                  >
+                                    {m.is_mandatory ? 'Mandatory' : 'Preferred'} {m.category}
+                                  </span>
+                                </div>
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                  Confidence: {Math.round(m.confidence * 100)}%
+                                </span>
+                              </div>
+
+                              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                {m.requirement}
+                              </div>
+
+                              {m.supporting_facts && m.supporting_facts.length > 0 && (
+                                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', background: 'var(--bg-app)', padding: '6px 10px', borderRadius: '6px' }}>
+                                  <strong>Verified Profile Evidence:</strong> {m.supporting_facts.join(' • ')}
+                                </div>
+                              )}
+
+                              {m.reasoning && (
+                                <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                  {m.reasoning}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: '13px' }}>
+                        {loadingAnalysis ? 'Extracting mandatory and preferred criteria…' : 'No requirements parsed. Paste detailed job description above.'}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -711,26 +974,52 @@ export default function ApplicationWorkspaceModal({
                         {tailoring ? 'Tailoring with AI…' : '✨ Re-Tailor with AI'}
                       </button>
                       {resume?.id && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            window.open(getResumeExportUrl(resume.id, resumeTemplate), '_blank')
-                            setChecklist(prev => ({ ...prev, resumeDownloaded: true }))
-                            showNotification('Opened ATS-compliant printable resume for PDF export.')
-                          }}
-                          style={{
-                            padding: '7px 14px',
-                            borderRadius: '8px',
-                            background: 'var(--brand)',
-                            color: '#ffffff',
-                            border: 'none',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          📄 Export ATS Resume (Print/PDF)
-                        </button>
+                        <>
+                          <a
+                            href={getResumeExportDocxUrl(resume.id)}
+                            download
+                            onClick={() => {
+                              setChecklist(prev => ({ ...prev, resumeDownloaded: true }))
+                              showNotification('Downloading clean ATS Word (.docx) document.')
+                            }}
+                            style={{
+                              padding: '7px 14px',
+                              borderRadius: '8px',
+                              background: 'var(--bg-app)',
+                              border: '1px solid var(--border)',
+                              color: 'var(--text-primary)',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              textDecoration: 'none',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                            }}
+                          >
+                            📥 Export Word (.docx)
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              window.open(getResumeExportUrl(resume.id, resumeTemplate), '_blank')
+                              setChecklist(prev => ({ ...prev, resumeDownloaded: true }))
+                              showNotification('Opened ATS-compliant printable resume for PDF export.')
+                            }}
+                            style={{
+                              padding: '7px 14px',
+                              borderRadius: '8px',
+                              background: 'var(--brand)',
+                              color: '#ffffff',
+                              border: 'none',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            📄 Export ATS Resume (Print/PDF)
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>

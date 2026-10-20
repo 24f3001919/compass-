@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
   fetchApplications,
   updateApplication,
   prepareBatch,
   approveBatch,
   submitBatch,
-  fetchAdapters,
   draftCoverLetter,
   setApplicationCoverLetter,
 } from '../../api/careerApi'
@@ -15,7 +14,6 @@ import CoverLetterModal from './CoverLetterModal'
 
 export default function ApplicationCenter() {
   const [applications, setApplications] = useState([])
-  const [adapters, setAdapters] = useState([])
   const [selectedAppIds, setSelectedAppIds] = useState(new Set())
   const [currentBatch, setCurrentBatch] = useState(null)
   const [showApprovalModal, setShowApprovalModal] = useState(false)
@@ -33,26 +31,22 @@ export default function ApplicationCenter() {
   const [workAuthConfirmed, setWorkAuthConfirmed] = useState(false)
   const [legalAccepted, setLegalAccepted] = useState(false)
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [apps, adps] = await Promise.all([
-        fetchApplications(),
-        fetchAdapters(),
-      ])
+      const apps = await fetchApplications()
       setApplications(apps)
-      setAdapters(adps)
     } catch (err) {
       setError(err.message || 'Failed to load applications')
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const toggleSelectApp = (id) => {
     setSelectedAppIds(prev => {
