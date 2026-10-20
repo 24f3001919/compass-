@@ -231,10 +231,14 @@ async def test_sse_disconnect_cancels_upstream():
         resp = await stream_chat(req, request)
         gen = aiter(resp.body_iterator)
 
-        first = await anext(gen)  # ": ping\n\n"
-        assert "ping" in _to_text(first)
-        second = await anext(gen)  # first token
-        assert "chunk1" in _to_text(second)
+        events = []
+        async for item in gen:
+            txt = _to_text(item)
+            events.append(txt)
+            if "chunk1" in txt:
+                break
+        assert any("ping" in e for e in events)
+        assert any("chunk1" in e for e in events)
 
         # Next iteration detects is_disconnected=True and terminates stream
         with pytest.raises(StopAsyncIteration):
@@ -250,11 +254,9 @@ async def test_sse_disconnect_cancels_upstream():
          patch("backend.routers.chat.get_pool", return_value=None), \
          patch("backend.routers.chat._get_current_identity", return_value=Identity(id="u1", is_admin=False, user_id="u1")):
         resp = await stream_chat(req, request_cancel)
-        gen = aiter(resp.body_iterator)
-        await anext(gen)  # ping
-        await anext(gen)  # chunk1
         with pytest.raises(asyncio.CancelledError):
-            await anext(gen)
+            async for _ in resp.body_iterator:
+                pass
 
 
 @pytest.mark.asyncio

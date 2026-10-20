@@ -35,53 +35,7 @@ logger = logging.getLogger("compass.services.chat_stream")
 get_pool = db_get_pool
 
 
-class StreamingThinkFilter:
-    """Filter out <think>...</think> reasoning blocks from streamed model tokens."""
-
-    def __init__(self):
-        self.in_think = False
-        self.buffer = ""
-
-    def process(self, token: str) -> str:
-        self.buffer += token
-        out = ""
-        while self.buffer:
-            if not self.in_think:
-                if "<think>" in self.buffer:
-                    idx = self.buffer.index("<think>")
-                    out += self.buffer[:idx]
-                    self.buffer = self.buffer[idx + len("<think>"):]
-                    self.in_think = True
-                else:
-                    match_pos = -1
-                    for i in range(len(self.buffer)):
-                        if "<think>".startswith(self.buffer[i:]):
-                            match_pos = i
-                            break
-                    if match_pos != -1:
-                        out += self.buffer[:match_pos]
-                        self.buffer = self.buffer[match_pos:]
-                        break
-                    else:
-                        out += self.buffer
-                        self.buffer = ""
-            else:
-                if "</think>" in self.buffer:
-                    idx = self.buffer.index("</think>")
-                    self.buffer = self.buffer[idx + len("</think>"):]
-                    self.in_think = False
-                else:
-                    match_pos = -1
-                    for i in range(len(self.buffer)):
-                        if "</think>".startswith(self.buffer[i:]):
-                            match_pos = i
-                            break
-                    if match_pos != -1:
-                        self.buffer = self.buffer[match_pos:]
-                    else:
-                        self.buffer = ""
-                    break
-        return out
+from backend.services.streaming_filter import StreamingThinkFilter
 
 
 async def _resolve_pool():
@@ -551,11 +505,11 @@ async def generate_chat_events(
                 raw_name = (first_tc.get("name") or "").strip()
                 raw_args_str = (first_tc.get("arguments") or "").strip()
                 if raw_name:
-                    pre_routed_skill = raw_name
-                    try:
-                        pre_routed_args = json.loads(raw_args_str) if raw_args_str else {}
-                    except Exception:
-                        pre_routed_args = {}
+                    from backend.services.chat_stream_helpers import validate_direct_tool_dispatch
+                    dispatch_res = validate_direct_tool_dispatch(raw_name, raw_args_str)
+                    if dispatch_res:
+                        pre_routed_skill, pre_routed_args = dispatch_res
+
 
             if pre_routed_skill:
                 if pre_routed_skill in ("search_web", "deep_research"):

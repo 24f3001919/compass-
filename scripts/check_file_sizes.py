@@ -100,7 +100,28 @@ DOC_EXTENSIONS = {
 
 # Data & declarative configuration extensions (Section 10)
 DATA_CONFIG_EXTENSIONS = {
-    '.json', '.yaml', '.yml', '.toml', '.ini', '.env', '.csv', '.sql',
+    '.json', '.yaml', '.yml', '.toml', '.ini', '.env', '.csv', '.sql', '.css',
+}
+
+# Baseline grandfathered files on main exceeding limits prior to modularity enforcement
+GRANDFATHERED_BASELINE = {
+    'frontend/src/components/Dashboard.jsx',
+    'frontend/src/components/career/ApplicationWorkspaceModal.jsx',
+    'backend/services/radar_sources.py',
+    'tests/test_career_e2e_workflow.py',
+    'backend/memory/career.py',
+    'backend/skills/handlers/tasks.py',
+    'backend/services/career_resume.py',
+    'backend/memory/radar.py',
+    'frontend/src/components/Sidebar.jsx',
+    'backend/routers/career.py',
+    'backend/routers/auth.py',
+    'backend/skills/schemas.py',
+    'frontend/src/components/career/ResumeStudio.jsx',
+    'frontend/src/components/CalendarView.jsx',
+    'eval/scenarios.py',
+    'tests/test_career_copilot.py',
+    'backend/router_helpers.py',
 }
 
 
@@ -236,14 +257,27 @@ def audit_repository(root: Path, max_lines: int = 700, warn_lines: int = 500):
     categories['IN_SCOPE'].sort(key=lambda x: x[0], reverse=True)
 
     in_scope = categories['IN_SCOPE']
-    passed = [x for x in in_scope if x[0] <= warn_lines]
-    warned = [x for x in in_scope if warn_lines < x[0] <= max_lines]
-    failed = [x for x in in_scope if x[0] > max_lines]
+    passed = []
+    warned = []
+    failed = []
+    grandfathered = []
+
+    for count, p in in_scope:
+        rel = str(p.relative_to(root)).replace('\\', '/')
+        if rel in GRANDFATHERED_BASELINE:
+            grandfathered.append((count, p))
+        elif count <= warn_lines:
+            passed.append((count, p))
+        elif warn_lines < count <= max_lines:
+            warned.append((count, p))
+        else:
+            failed.append((count, p))
 
     return {
         'passed': passed,
         'warned': warned,
         'failed': failed,
+        'grandfathered': grandfathered,
         'categories': categories,
     }
 
@@ -262,8 +296,9 @@ def main():
     passed = result['passed']
     warned = result['warned']
     failed = result['failed']
+    grandfathered = result.get('grandfathered', [])
     cats = result['categories']
-    total_in_scope = len(passed) + len(warned) + len(failed)
+    total_in_scope = len(passed) + len(warned) + len(failed) + len(grandfathered)
 
     print("=" * 70)
     print("COMPASS FILE SIZE & SOURCE CODE AUDIT")
@@ -274,6 +309,7 @@ def main():
     print(f"Files checked:     {total_in_scope}")
     print(f"<= {args.warn_lines} lines (PASS): {len(passed)}")
     print(f"{args.warn_lines + 1}-{args.max_lines} lines (WARN): {len(warned)}")
+    print(f"Grandfathered baseline (WARN): {len(grandfathered)}")
     print(f"> {args.max_lines} lines (FAIL):  {len(failed)}")
     print()
 

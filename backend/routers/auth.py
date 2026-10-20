@@ -20,6 +20,7 @@ from backend.config import get_settings
 from backend.dependencies import _get_current_identity
 from backend.memory.db import get_pool
 from backend.models import SelectAccountBody, QuickConnectBody
+from backend.services import oauth
 from backend.services.oauth import (
     generate_google_oauth_url,
     generate_oauth_state,
@@ -524,7 +525,7 @@ async def calendar_connect(
     login_hint: Optional[str] = Query(None),
 ):
     """Generate Google OAuth 2.0 authorization URL or redirect directly."""
-    configured = is_google_oauth_configured()
+    configured = oauth.is_google_oauth_configured()
     if not configured:
         frontend_origin = _resolve_frontend_origin(request)
         if redirect:

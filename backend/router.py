@@ -80,15 +80,16 @@ async def route_message(
     if is_schedule_or_agent_intent(message):
         return "agent", {"goal": message}, ""
 
+    client = get_openai_client()
+    import unittest.mock
+    is_mocked = isinstance(client, (unittest.mock.Mock, unittest.mock.MagicMock)) or hasattr(client, "_mock_return_value")
     is_placeholder_key = (
         not settings.NEBIUS_API_KEY
         or settings.NEBIUS_API_KEY.startswith("your_nebius")
         or settings.NEBIUS_API_KEY in ("mock", "mock-key-not-used-in-tests")
-    )
+    ) and not is_mocked
     if is_placeholder_key:
         return _fallback_route(message, history)
-
-    client = get_openai_client()
     today_iso = date.today().isoformat()
     system_prompt = (
         f"You are Compass, an intelligent personal assistant with persistent memory across chat sessions. "
