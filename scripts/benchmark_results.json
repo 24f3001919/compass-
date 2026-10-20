@@ -1,0 +1,492 @@
+[
+  {
+    "case_id": "A. Simple Question",
+    "prompt": "What is RISC?",
+    "cold": {
+      "t_start": 362424.2253371,
+      "first_event_ms": 3268.4220999944955,
+      "first_status_ms": 3268.580900039524,
+      "first_meaningful_token_ms": 5163.529200013727,
+      "total_completion_ms": 5484.454900026321,
+      "tokens_count": 82,
+      "word_count": 60,
+      "status_stages": [
+        "thinking",
+        "generating"
+      ],
+      "skill_used": "chat",
+      "text_preview": " RISC stands for **Reduced Instruction Set Computing**\u2014a design philosophy where a CPU uses a small, simple set of instr",
+      "error": null
+    },
+    "warm_runs": [
+      {
+        "t_start": 362430.7142132,
+        "first_event_ms": 2793.1898000533693,
+        "first_status_ms": 2793.310500041116,
+        "first_meaningful_token_ms": 5087.162200012244,
+        "total_completion_ms": 5286.421000026166,
+        "tokens_count": 59,
+        "word_count": 40,
+        "status_stages": [
+          "thinking",
+          "generating"
+        ],
+        "skill_used": "chat",
+        "text_preview": " RISC means **Reduced Instruction Set Computing**\u2014a CPU design that uses a small, simple set of instructions to run fast",
+        "error": null
+      },
+      {
+        "t_start": 362436.5031527,
+        "first_event_ms": 2995.85379997734,
+        "first_status_ms": 2995.970399992075,
+        "first_meaningful_token_ms": 4528.193099948112,
+        "total_completion_ms": 4808.225199987646,
+        "tokens_count": 92,
+        "word_count": 70,
+        "status_stages": [
+          "thinking",
+          "generating"
+        ],
+        "skill_used": "chat",
+        "text_preview": " RISC stands for **Reduced Instruction Set Computing**.   It\u2019s a CPU design that uses a small, simple set of instruction",
+        "error": null
+      },
+      {
+        "t_start": 362441.8177359,
+        "first_event_ms": 3181.836800009478,
+        "first_status_ms": 3181.9490999914706,
+        "first_meaningful_token_ms": 4785.306699981447,
+        "total_completion_ms": 4987.656900018919,
+        "tokens_count": 52,
+        "word_count": 37,
+        "status_stages": [
+          "thinking",
+          "generating"
+        ],
+        "skill_used": "chat",
+        "text_preview": " RISC stands for **Reduced Instruction Set Computing**\u2014a CPU design that uses a small, simple set of instructions to run",
+        "error": null
+      },
+      {
+        "t_start": 362447.3153854,
+        "first_event_ms": 2786.915099946782,
+        "first_status_ms": 2786.9749999954365,
+        "first_meaningful_token_ms": 4388.013799965847,
+        "total_completion_ms": 4419.933600001968,
+        "tokens_count": 41,
+        "word_count": 29,
+        "status_stages": [
+          "thinking",
+          "generating"
+        ],
+        "skill_used": "chat",
+        "text_preview": " RISC stands for **Reduced Instruction Set Computing**\u2014a CPU design that uses a small, simple set of instructions to exe",
+        "error": null
+      },
+      {
+        "t_start": 362452.2460093,
+        "first_event_ms": 2983.1781000248156,
+        "first_status_ms": 2983.238600019831,
+        "first_meaningful_token_ms": 6052.255399990827,
+        "total_completion_ms": 6480.658299988136,
+        "tokens_count": 74,
+        "word_count": 51,
+        "status_stages": [
+          "thinking",
+          "generating"
+        ],
+        "skill_used": "chat",
+        "text_preview": " RISC stands for **Reduced Instruction Set Computing**.   It\u2019s a CPU design that uses a small, simple set of instruction",
+        "error": null
+      }
+    ],
+    "stats_total": {
+      "median": 4987.66,
+      "min": 4419.93,
+      "max": 6480.66,
+      "p95": 5286.42
+    },
+    "stats_first_event": {
+      "median": 2983.18,
+      "min": 2786.92,
+      "max": 3181.84,
+      "p95": 2995.85
+    },
+    "stats_first_token": {
+      "median": 4785.31,
+      "min": 4388.01,
+      "max": 6052.26,
+      "p95": 5087.16
+    }
+  },
+  {
+    "case_id": "B. Web Research",
+    "prompt": "Verify the Nebius hackathon deadline on Devpost.",
+    "cold": {
+      "t_start": 362459.2349465,
+      "first_event_ms": 2732.3750000214204,
+      "first_status_ms": 2732.4784999946132,
+      "first_meaningful_token_ms": null,
+      "total_completion_ms": 8949.40320000751,
+      "tokens_count": 1,
+      "word_count": 0,
+      "status_stages": [
+        "thinking",
+        "generating",
+        "reasoning"
+      ],
+      "skill_used": null,
+      "text_preview": " ",
+      "error": "Internal error occurred while processing stream."
+    },
+    "warm_runs": [
+      {
+        "t_start": 362469.1973088,
+        "first_event_ms": 2669.4727999856696,
+        "first_status_ms": 2669.531699968502,
+        "first_meaningful_token_ms": null,
+        "total_completion_ms": 8078.415500000119,
+        "tokens_count": 1,
+        "word_count": 0,
+        "status_stages": [
+          "thinking",
+          "generating",
+          "searching"
+        ],
+        "skill_used": "search_web",
+        "text_preview": " ",
+        "error": null
+      },
+      {
+        "t_start": 362477.7764795,
+        "first_event_ms": 2790.916300029494,
+        "first_status_ms": 2791.014400019776,
+        "first_meaningful_token_ms": null,
+        "total_completion_ms": 9224.820400006138,
+        "tokens_count": 1,
+        "word_count": 0,
+        "status_stages": [
+          "thinking",
+          "generating",
+          "searching"
+        ],
+        "skill_used": "search_web",
+        "text_preview": " ",
+        "error": null
+      },
+      {
+        "t_start": 362487.5028356,
+        "first_event_ms": 2665.366399975028,
+        "first_status_ms": 2665.4413000214845,
+        "first_meaningful_token_ms": null,
+        "total_completion_ms": 6751.191699993797,
+        "tokens_count": 1,
+        "word_count": 0,
+        "status_stages": [
+          "thinking",
+          "generating",
+          "reasoning"
+        ],
+        "skill_used": "get_hackathon_deadlines",
+        "text_preview": " ",
+        "error": null
+      },
+      {
+        "t_start": 362494.7571508,
+        "first_event_ms": 2609.4883999903686,
+        "first_status_ms": 2609.7271000035107,
+        "first_meaningful_token_ms": null,
+        "total_completion_ms": 6064.579999947455,
+        "tokens_count": 1,
+        "word_count": 0,
+        "status_stages": [
+          "thinking",
+          "generating",
+          "reasoning"
+        ],
+        "skill_used": "get_hackathon_deadlines",
+        "text_preview": " ",
+        "error": null
+      },
+      {
+        "t_start": 362501.323375,
+        "first_event_ms": 2495.607500022743,
+        "first_status_ms": 2495.711700001266,
+        "first_meaningful_token_ms": null,
+        "total_completion_ms": 9772.850200009998,
+        "tokens_count": 1,
+        "word_count": 0,
+        "status_stages": [
+          "thinking",
+          "generating",
+          "searching"
+        ],
+        "skill_used": "search_web",
+        "text_preview": " ",
+        "error": null
+      }
+    ],
+    "stats_total": {
+      "median": 8078.42,
+      "min": 6064.58,
+      "max": 9772.85,
+      "p95": 9224.82
+    },
+    "stats_first_event": {
+      "median": 2665.37,
+      "min": 2495.61,
+      "max": 2790.92,
+      "p95": 2669.47
+    },
+    "stats_first_token": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "p95": 0.0
+    }
+  },
+  {
+    "case_id": "C. Context-Dependent",
+    "prompt": "What deadlines or tasks do I have scheduled for Nebius or presentations?",
+    "cold": {
+      "t_start": 362511.5969703,
+      "first_event_ms": 2697.401399957016,
+      "first_status_ms": 2697.5330999703147,
+      "first_meaningful_token_ms": null,
+      "total_completion_ms": 9386.608999979217,
+      "tokens_count": 1,
+      "word_count": 0,
+      "status_stages": [
+        "thinking",
+        "generating",
+        "reasoning"
+      ],
+      "skill_used": null,
+      "text_preview": " ",
+      "error": "Internal error occurred while processing stream."
+    },
+    "warm_runs": [
+      {
+        "t_start": 362521.9861551,
+        "first_event_ms": 3180.109800014179,
+        "first_status_ms": 3180.2203999832273,
+        "first_meaningful_token_ms": null,
+        "total_completion_ms": 11675.317600020207,
+        "tokens_count": 1,
+        "word_count": 0,
+        "status_stages": [
+          "thinking",
+          "generating",
+          "reasoning"
+        ],
+        "skill_used": null,
+        "text_preview": " ",
+        "error": "Internal error occurred while processing stream."
+      },
+      {
+        "t_start": 362534.1748132,
+        "first_event_ms": 3515.392899978906,
+        "first_status_ms": 3515.470499987714,
+        "first_meaningful_token_ms": 18795.056400005706,
+        "total_completion_ms": 20360.362999956124,
+        "tokens_count": 238,
+        "word_count": 131,
+        "status_stages": [
+          "thinking",
+          "generating"
+        ],
+        "skill_used": "chat",
+        "text_preview": " Here\u2019s what\u2019s on your plate that\u2019s tied to Nebius:  - **Nebius Buildathon Phase\u202f2 Submission** \u2013 due\u202f2026\u201109\u201117 (high p",
+        "error": null
+      },
+      {
+        "t_start": 362555.0426127,
+        "first_event_ms": 3633.3345999591984,
+        "first_status_ms": 3633.440499950666,
+        "first_meaningful_token_ms": 8631.543900002725,
+        "total_completion_ms": 9895.393899991177,
+        "tokens_count": 231,
+        "word_count": 113,
+        "status_stages": [
+          "thinking",
+          "generating"
+        ],
+        "skill_used": "chat",
+        "text_preview": " Here are the Nebius\u2011related items currently on your schedule:  - **Nebius Buildathon Phase\u202f2 Submission** \u2013 due\u202f2026\u201109",
+        "error": null
+      },
+      {
+        "t_start": 362565.4525734,
+        "first_event_ms": 3246.1336000123993,
+        "first_status_ms": 3246.2430000305176,
+        "first_meaningful_token_ms": null,
+        "total_completion_ms": 7511.993399995845,
+        "tokens_count": 1,
+        "word_count": 0,
+        "status_stages": [
+          "thinking",
+          "generating",
+          "reasoning"
+        ],
+        "skill_used": null,
+        "text_preview": " ",
+        "error": "Internal error occurred while processing stream."
+      },
+      {
+        "t_start": 362573.4692715,
+        "first_event_ms": 3999.139399966225,
+        "first_status_ms": 3999.2024999810383,
+        "first_meaningful_token_ms": null,
+        "total_completion_ms": 8171.705499989912,
+        "tokens_count": 1,
+        "word_count": 0,
+        "status_stages": [
+          "thinking",
+          "generating",
+          "reasoning"
+        ],
+        "skill_used": null,
+        "text_preview": " ",
+        "error": "Internal error occurred while processing stream."
+      }
+    ],
+    "stats_total": {
+      "median": 15127.88,
+      "min": 9895.39,
+      "max": 20360.36,
+      "p95": 9895.39
+    },
+    "stats_first_event": {
+      "median": 3515.39,
+      "min": 3180.11,
+      "max": 3999.14,
+      "p95": 3633.33
+    },
+    "stats_first_token": {
+      "median": 13713.3,
+      "min": 8631.54,
+      "max": 18795.06,
+      "p95": 8631.54
+    }
+  },
+  {
+    "case_id": "D. Long Answer",
+    "prompt": "Compare RISC vs CISC across architecture philosophy, instruction format, pipelining, register counts, power efficiency, and modern hybrid processor implementations.",
+    "cold": {
+      "t_start": 362582.1525838,
+      "first_event_ms": 3341.6445999755524,
+      "first_status_ms": 3341.7062999797054,
+      "first_meaningful_token_ms": 7819.588199956343,
+      "total_completion_ms": 10000.911599956453,
+      "tokens_count": 616,
+      "word_count": 330,
+      "status_stages": [
+        "thinking",
+        "generating"
+      ],
+      "skill_used": "chat",
+      "text_preview": " **RISC vs\u202fCISC \u2013 quick\u2011look cheat sheet**  **Architecture philosophy**   - **RISC**: \u201cDo one thing, do it fast.\u201d  Simpl",
+      "error": null
+    },
+    "warm_runs": [
+      {
+        "t_start": 362593.1581343,
+        "first_event_ms": 2910.720499989111,
+        "first_status_ms": 2910.7857999624684,
+        "first_meaningful_token_ms": 6010.13069995679,
+        "total_completion_ms": 8797.843299980741,
+        "tokens_count": 557,
+        "word_count": 330,
+        "status_stages": [
+          "thinking",
+          "generating"
+        ],
+        "skill_used": "chat",
+        "text_preview": " **RISC vs\u202fCISC \u2013 quick cheat sheet**  **Philosophy**   - **RISC**: \u201cSimple instructions, do a lot of them.\u201d Focus on re",
+        "error": null
+      },
+      {
+        "t_start": 362602.4587692,
+        "first_event_ms": 3660.77379998751,
+        "first_status_ms": 3660.8344999840483,
+        "first_meaningful_token_ms": 8287.942699971609,
+        "total_completion_ms": 11473.960799979977,
+        "tokens_count": 689,
+        "word_count": 355,
+        "status_stages": [
+          "thinking",
+          "generating"
+        ],
+        "skill_used": "chat",
+        "text_preview": " **RISC vs\u202fCISC \u2013 quick cheat sheet**  **Architecture philosophy**   - **RISC**: \u201cDo one thing, do it fast.\u201d  Simple, fi",
+        "error": null
+      },
+      {
+        "t_start": 362614.4450307,
+        "first_event_ms": 2809.1218000045046,
+        "first_status_ms": 2809.184700017795,
+        "first_meaningful_token_ms": 6816.807999974117,
+        "total_completion_ms": 8734.480699989945,
+        "tokens_count": 484,
+        "word_count": 258,
+        "status_stages": [
+          "thinking",
+          "generating"
+        ],
+        "skill_used": "chat",
+        "text_preview": " **RISC vs\u202fCISC \u2013 quick cheat sheet**  **Architecture philosophy**   - **RISC**: \u201cDo one thing, do it fast.\u201d\u202fSimple, fix",
+        "error": null
+      },
+      {
+        "t_start": 362623.6825918,
+        "first_event_ms": 3265.273099998012,
+        "first_status_ms": 3265.3827000176534,
+        "first_meaningful_token_ms": 5966.088699991815,
+        "total_completion_ms": 8472.973500029184,
+        "tokens_count": 659,
+        "word_count": 352,
+        "status_stages": [
+          "thinking",
+          "generating"
+        ],
+        "skill_used": "chat",
+        "text_preview": " **RISC vs\u202fCISC \u2013 quick cheat sheet**  **Architecture philosophy**   - **RISC**: \u201cDo one thing, do it fast.\u201d  Simple ins",
+        "error": null
+      },
+      {
+        "t_start": 362632.6605124,
+        "first_event_ms": 3085.3887000121176,
+        "first_status_ms": 3085.4574000113644,
+        "first_meaningful_token_ms": 7188.0394000327215,
+        "total_completion_ms": 9530.16760002356,
+        "tokens_count": 564,
+        "word_count": 300,
+        "status_stages": [
+          "thinking",
+          "generating"
+        ],
+        "skill_used": "chat",
+        "text_preview": " **RISC vs\u202fCISC \u2013 quick cheat sheet**  **Architecture philosophy**   - **RISC**: \u201cDo one thing, do it fast.\u201d  Simple, fi",
+        "error": null
+      }
+    ],
+    "stats_total": {
+      "median": 8797.84,
+      "min": 8472.97,
+      "max": 11473.96,
+      "p95": 9530.17
+    },
+    "stats_first_event": {
+      "median": 3085.39,
+      "min": 2809.12,
+      "max": 3660.77,
+      "p95": 3265.27
+    },
+    "stats_first_token": {
+      "median": 6816.81,
+      "min": 5966.09,
+      "max": 8287.94,
+      "p95": 7188.04
+    }
+  }
+]
