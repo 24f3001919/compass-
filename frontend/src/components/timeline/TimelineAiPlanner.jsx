@@ -2,6 +2,8 @@ import React from 'react'
 import {
   Sparkles,
   ArrowRight,
+  Calendar,
+  Brain,
 } from 'lucide-react'
 
 export default function TimelineAiPlanner({
@@ -14,25 +16,24 @@ export default function TimelineAiPlanner({
   return (
     <div
       style={{
-        background: 'linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%)',
-        borderRadius: '14px',
-        padding: '20px 24px',
-        marginBottom: '26px',
-        color: '#ffffff',
-        boxShadow: '0 4px 20px rgba(30, 27, 75, 0.15)',
-        border: '1px solid rgba(99, 102, 241, 0.25)',
+        background: 'var(--bg-card)',
+        borderRadius: 'var(--radius-card, 8px)',
+        padding: '18px 20px',
+        marginBottom: '24px',
+        color: 'var(--text-primary)',
+        border: '1px solid var(--border)',
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(99, 102, 241, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Sparkles size={17} color="#c7d2fe" />
+          <div style={{ width: '32px', height: '32px', borderRadius: 'var(--radius-btn, 6px)', background: 'rgba(245, 166, 35, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent, #f5a623)' }}>
+            <Sparkles size={16} strokeWidth={1.8} />
           </div>
           <div>
-            <div style={{ fontSize: '15px', fontWeight: '700', letterSpacing: '-0.2px' }}>
-              Compass
+            <div style={{ fontSize: '15px', fontWeight: '600', letterSpacing: '-0.2px', color: 'var(--text-primary)' }}>
+              Compass Assistant
             </div>
-            <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
               Powered by NVIDIA Nemotron MoE on Nebius Token Factory
             </div>
           </div>
@@ -42,40 +43,38 @@ export default function TimelineAiPlanner({
           <button
             type="button"
             onClick={() => handleOpenCompass && handleOpenCompass('Propose an optimized conflict-free schedule for today')}
+            className="btn-secondary"
             style={{
-              fontSize: '12px',
-              fontWeight: '600',
-              padding: '6px 12px',
-              borderRadius: '8px',
-              background: 'rgba(255, 255, 255, 0.08)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              color: '#e2e8f0',
+              fontSize: '13px',
+              fontWeight: '500',
+              padding: '0 12px',
+              minHeight: '44px',
               cursor: 'pointer',
-              transition: 'all 0.15s ease',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
             }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.16)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
           >
-            🗓️ Auto-Schedule
+            <Calendar size={14} strokeWidth={1.8} />
+            <span>Auto-Schedule</span>
           </button>
           <button
             type="button"
             onClick={() => handleOpenCompass && handleOpenCompass('Detect any cognitive overload or overlapping deadlines')}
+            className="btn-secondary"
             style={{
-              fontSize: '12px',
-              fontWeight: '600',
-              padding: '6px 12px',
-              borderRadius: '8px',
-              background: 'rgba(255, 255, 255, 0.08)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              color: '#e2e8f0',
+              fontSize: '13px',
+              fontWeight: '500',
+              padding: '0 12px',
+              minHeight: '44px',
               cursor: 'pointer',
-              transition: 'all 0.15s ease',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
             }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.16)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
           >
-            🧠 Analyze Conflicts
+            <Brain size={14} strokeWidth={1.8} />
+            <span>Analyze Conflicts</span>
           </button>
         </div>
       </div>
@@ -89,40 +88,33 @@ export default function TimelineAiPlanner({
           onChange={e => setQuickAiPrompt(e.target.value)}
           style={{
             flex: 1,
-            background: 'rgba(255, 255, 255, 0.06)',
-            border: '1px solid rgba(255, 255, 255, 0.18)',
-            borderRadius: '10px',
-            padding: '10px 14px',
-            fontSize: '13.5px',
-            color: '#ffffff',
+            background: 'var(--bg-card-soft)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-btn, 6px)',
+            padding: '0 14px',
+            minHeight: '44px',
+            fontSize: '13px',
+            color: 'var(--text-primary)',
             outline: 'none',
-            transition: 'all 0.15s ease',
+            boxSizing: 'border-box',
           }}
-          onFocus={e => (e.target.style.borderColor = '#818cf8')}
-          onBlur={e => (e.target.style.borderColor = 'rgba(255, 255, 255, 0.18)')}
         />
         <button
           type="submit"
+          className="btn-primary-amber"
           style={{
-            display: 'flex',
+            display: 'inline-flex',
             alignItems: 'center',
             gap: '6px',
-            background: '#6366f1',
-            border: 'none',
-            borderRadius: '10px',
+            minHeight: '44px',
             padding: '0 18px',
             fontSize: '13px',
-            fontWeight: '700',
-            color: '#ffffff',
+            fontWeight: '600',
             cursor: 'pointer',
-            boxShadow: '0 2px 10px rgba(99, 102, 241, 0.4)',
-            transition: 'all 0.15s ease',
           }}
-          onMouseEnter={e => (e.currentTarget.style.background = '#4f46e5')}
-          onMouseLeave={e => (e.currentTarget.style.background = '#6366f1')}
         >
           <span>Plan</span>
-          <ArrowRight size={14} />
+          <ArrowRight size={14} strokeWidth={1.8} />
         </button>
       </form>
     </div>

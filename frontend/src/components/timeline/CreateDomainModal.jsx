@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { normalizeDomainKey, saveCustomDomain, getCustomDomains } from './domainMeta'
+import { X, Trash2 } from 'lucide-react'
 
 const PRESET_ICONS = [
   '🎯', '🧠', '📝', '🔬', '⚡', '🎨', '🛠️', '💼',
@@ -104,8 +105,8 @@ export default function CreateDomainModal({
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(15, 18, 30, 0.65)',
-        backdropFilter: 'blur(5px)',
+        background: 'rgba(27, 26, 23, 0.45)',
+        backdropFilter: 'blur(3px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -117,12 +118,12 @@ export default function CreateDomainModal({
         onClick={e => e.stopPropagation()}
         style={{
           background: 'var(--bg-card)',
-          borderRadius: '16px',
+          borderRadius: 'var(--radius-card, 8px)',
           border: '1px solid var(--border)',
           width: '100%',
           maxWidth: '420px',
           padding: '24px',
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.45)',
+          boxShadow: '0 8px 30px rgba(0, 0, 0, 0.12)',
           color: 'var(--text-primary)',
           boxSizing: 'border-box',
           position: 'relative',
@@ -135,7 +136,7 @@ export default function CreateDomainModal({
               id="create-domain-title"
               style={{
                 fontSize: '17px',
-                fontWeight: '700',
+                fontWeight: '600',
                 color: 'var(--text-primary)',
                 margin: 0,
                 letterSpacing: '-0.2px',
@@ -150,24 +151,20 @@ export default function CreateDomainModal({
           <button
             onClick={onClose}
             aria-label="Close dialog"
+            className="btn-touch-target btn-secondary"
             style={{
-              background: 'transparent',
-              border: 'none',
               color: 'var(--text-muted)',
-              width: '28px',
-              height: '28px',
-              borderRadius: '6px',
+              width: '32px',
+              height: '32px',
+              minHeight: '32px',
+              borderRadius: 'var(--radius-btn, 6px)',
               cursor: 'pointer',
-              fontSize: '15px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              transition: 'all 0.15s ease',
             }}
-            onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
           >
-            ✕
+            <X size={16} strokeWidth={1.8} />
           </button>
         </div>
 
@@ -403,7 +400,8 @@ export default function CreateDomainModal({
                         onMouseEnter={e => { e.currentTarget.style.color = '#f87171'; e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)' }}
                         onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'transparent' }}
                       >
-                        ✕ Remove
+                        <Trash2 size={12} strokeWidth={1.8} style={{ display: 'inline', marginRight: '4px' }} />
+                        <span>Remove</span>
                       </button>
                     )}
                   </div>
@@ -426,24 +424,14 @@ export default function CreateDomainModal({
             <button
               type="button"
               onClick={onClose}
+              className="btn-touch-target btn-secondary"
               style={{
-                padding: '8px 14px',
-                borderRadius: '8px',
-                border: '1px solid var(--border)',
-                background: 'transparent',
-                color: 'var(--text-secondary)',
+                padding: '8px 16px',
+                borderRadius: 'var(--radius-btn, 6px)',
                 fontSize: '13px',
                 fontWeight: '500',
                 cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.color = 'var(--text-primary)'
-                e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.color = 'var(--text-secondary)'
-                e.currentTarget.style.background = 'transparent'
+                minHeight: '44px'
               }}
             >
               Cancel
@@ -451,19 +439,15 @@ export default function CreateDomainModal({
             <button
               id="btn-confirm-create-domain"
               type="submit"
+              className="btn-touch-target btn-primary-amber"
               style={{
                 padding: '8px 18px',
-                borderRadius: '8px',
-                border: 'none',
-                background: 'var(--brand)',
-                color: '#2a1a00',
+                borderRadius: 'var(--radius-btn, 6px)',
                 fontSize: '13px',
-                fontWeight: '700',
+                fontWeight: '600',
                 cursor: 'pointer',
-                transition: 'opacity 0.15s ease',
+                minHeight: '44px'
               }}
-              onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
-              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
             >
               Create Domain
             </button>

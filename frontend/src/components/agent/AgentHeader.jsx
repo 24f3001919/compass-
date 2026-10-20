@@ -1,7 +1,7 @@
 import React from 'react'
 
 const SUGGESTED_GOALS = [
-  "I have 5 days left and I'm working 4 hours a day. Go through everything I have open across the hackathon, my coursework, and my code debt, and tell me honestly whether I can finish it — and if I can't, decide what I drop.",
+  "I have 5 days left and I'm working 4 hours a day. Go through everything I have open across the hackathon, my coursework, and my code debt, and tell me honestly whether I can finish it, and if I can't, decide what I drop.",
   "Plan my week considering all hackathon deadlines and coursework",
   "Flag any deadline conflicts this week and suggest resolutions",
   "Write a retrospective for the Compass project",
@@ -33,24 +33,28 @@ export default function AgentHeader({
       padding: '16px 20px',
       borderBottom: '1px solid var(--border)',
       flexShrink: 0,
+      background: 'var(--bg-card)',
     }}>
       {/* Proactive Autonomous Overnight Briefing Banner */}
       {proactiveBriefing && (
         <div style={{
           background: 'var(--bg-card-soft)',
           border: '1px solid var(--border)',
-          borderRadius: '8px',
-          padding: '10px 14px',
-          marginBottom: '12px',
+          borderRadius: 'var(--radius-card, 8px)',
+          padding: '12px 16px',
+          marginBottom: '14px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: '12px',
+          flexWrap: 'wrap',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '22px' }}>🌅</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent, #f5a623)' }}>
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+            </svg>
             <div>
-              <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--primary)', letterSpacing: '0.02em' }}>
+              <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.2px' }}>
                 Your Morning Briefing is Ready
               </div>
               <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
@@ -58,42 +62,45 @@ export default function AgentHeader({
               </div>
             </div>
           </div>
+
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               id="load-proactive-briefing-btn"
               onClick={onLoadProactiveBriefing}
+              className="btn-primary-amber"
               style={{
-                padding: '6px 14px',
-                background: 'var(--primary)',
-                border: 'none',
-                borderRadius: '6px',
-                color: '#fff',
+                padding: '0 14px',
+                minHeight: '36px',
+                borderRadius: 'var(--radius-btn, 6px)',
                 fontSize: '12px',
                 fontWeight: '600',
                 cursor: 'pointer',
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
-                gap: '4px',
+                gap: '6px',
               }}
             >
-              📥 View Briefing
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              <span>View Briefing</span>
             </button>
             <button
               id="trigger-nightly-btn"
               onClick={onTriggerNightly}
               disabled={triggeringNightly}
+              className="btn-secondary"
               style={{
-                padding: '6px 12px',
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border)',
-                borderRadius: '6px',
-                color: 'var(--text-secondary)',
+                padding: '0 12px',
+                minHeight: '36px',
+                borderRadius: 'var(--radius-btn, 6px)',
                 fontSize: '12px',
                 cursor: 'pointer',
               }}
               title="Generate an updated briefing right now"
             >
-              {triggeringNightly ? '⏳ Updating…' : '↻ Refresh Now'}
+              {triggeringNightly ? 'Updating…' : 'Refresh Now'}
             </button>
           </div>
         </div>
@@ -111,14 +118,13 @@ export default function AgentHeader({
           style={{
             flex: '1 1 200px',
             minHeight: '44px',
-            padding: '10px 14px',
+            padding: '0 14px',
             background: 'var(--bg-app)',
             border: '1px solid var(--border)',
-            borderRadius: '8px',
+            borderRadius: 'var(--radius-btn, 6px)',
             color: 'var(--text-primary)',
-            fontSize: '14px',
+            fontSize: '13px',
             outline: 'none',
-            fontFamily: 'Inter, system-ui, sans-serif',
             boxSizing: 'border-box',
           }}
         />
@@ -126,38 +132,42 @@ export default function AgentHeader({
           <button
             id="agent-stop-btn"
             onClick={onStopAgent}
-            className="btn-touch-target"
+            className="btn-secondary"
             style={{
-              padding: '10px 18px',
+              padding: '0 18px',
               minHeight: '44px',
-              background: '#dc2626',
-              border: 'none',
-              borderRadius: '8px',
-              color: '#fff',
+              background: '#ef4444',
+              border: '1px solid #ef4444',
+              borderRadius: 'var(--radius-btn, 6px)',
+              color: '#ffffff',
               fontSize: '13px',
               fontWeight: '600',
               cursor: 'pointer',
               whiteSpace: 'nowrap',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
             }}
           >
-            ⏹ Stop
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="4" y="4" width="16" height="16" rx="2" />
+            </svg>
+            <span>Stop</span>
           </button>
         ) : (
           <button
             id="agent-run-btn"
             onClick={() => onRunAgent(goal)}
             disabled={!goal.trim()}
-            className="btn-touch-target"
+            className="btn-primary-amber"
             style={{
-              padding: '10px 18px',
+              padding: '0 18px',
               minHeight: '44px',
-              background: goal.trim() ? 'var(--primary)' : 'var(--bg-card-soft)',
-              border: '1px solid var(--border)',
-              borderRadius: '8px',
-              color: goal.trim() ? '#fff' : 'var(--text-muted)',
+              borderRadius: 'var(--radius-btn, 6px)',
               fontSize: '13px',
               fontWeight: '600',
               cursor: goal.trim() ? 'pointer' : 'not-allowed',
+              opacity: goal.trim() ? 1 : 0.5,
               whiteSpace: 'nowrap',
             }}
           >
@@ -168,47 +178,63 @@ export default function AgentHeader({
         <button
           id="agent-history-toggle-btn"
           onClick={() => { onFetchRunsHistory(); setShowHistory(!showHistory) }}
-          className="btn-touch-target"
+          className="btn-secondary"
           style={{
-            padding: '10px 14px',
+            padding: '0 14px',
             minHeight: '44px',
-            background: showHistory ? 'var(--primary)' : 'var(--bg-card-soft)',
-            border: '1px solid var(--border)',
-            borderRadius: '8px',
-            color: showHistory ? '#fff' : 'var(--text-secondary)',
+            borderRadius: 'var(--radius-btn, 6px)',
             fontSize: '13px',
-            fontWeight: '600',
+            fontWeight: '500',
             cursor: 'pointer',
             whiteSpace: 'nowrap',
-            display: 'flex',
+            display: 'inline-flex',
             alignItems: 'center',
             gap: '6px',
           }}
           title="View past plans and questions"
         >
-          📜 Past Plans ({runsListCount})
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+          </svg>
+          <span>Past Plans ({runsListCount})</span>
         </button>
 
         {steps.length > 0 && (
           <button
             id="agent-copy-trace-btn"
             onClick={onCopyTrace}
-            className="btn-touch-target"
+            className="btn-secondary"
             style={{
-              padding: '10px 14px',
+              padding: '0 14px',
               minHeight: '44px',
-              background: 'var(--bg-card-soft)',
-              border: '1px solid var(--border)',
-              borderRadius: '8px',
-              color: copyFeedback ? '#059669' : 'var(--text-secondary)',
+              borderRadius: 'var(--radius-btn, 6px)',
+              color: copyFeedback ? 'var(--domain-code, #1c8a62)' : 'var(--text-secondary)',
               fontSize: '13px',
-              fontWeight: '600',
+              fontWeight: '500',
               cursor: 'pointer',
               whiteSpace: 'nowrap',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
             }}
             title="Copy this plan to clipboard"
           >
-            {copyFeedback ? '✓ Copied' : '📋 Copy Plan'}
+            {copyFeedback ? (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span>Copied</span>
+              </>
+            ) : (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                <span>Copy Plan</span>
+              </>
+            )}
           </button>
         )}
       </div>
@@ -224,23 +250,25 @@ export default function AgentHeader({
               setRejectFeedback("Do not move OS Homework 2 deadline")
               onRunAgent(demoGoal)
             }}
+            className="btn-secondary"
             style={{
-              padding: '6px 13px',
-              background: 'rgba(239, 68, 68, 0.08)',
-              border: '1px solid rgba(239, 68, 68, 0.25)',
-              borderRadius: '14px',
-              color: '#dc2626',
-              fontSize: '11.5px',
-              fontWeight: '600',
+              padding: '0 12px',
+              minHeight: '38px',
+              borderRadius: 'var(--radius-btn, 6px)',
+              color: '#ef4444',
+              fontSize: '12px',
+              fontWeight: '500',
               cursor: 'pointer',
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
-              gap: '5px',
-              transition: 'all 0.2s',
+              gap: '6px',
             }}
             title="Resolves conflicting deadlines and allows you to guide the plan"
           >
-            ⚡ Resolve Deadline Conflicts
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+            <span>Resolve Deadline Conflicts</span>
           </button>
 
           <button
@@ -250,23 +278,25 @@ export default function AgentHeader({
               setGoal(demoGoal)
               onRunAgent(demoGoal)
             }}
+            className="btn-secondary"
             style={{
-              padding: '6px 13px',
-              background: 'rgba(59, 130, 246, 0.08)',
-              border: '1px solid rgba(59, 130, 246, 0.25)',
-              borderRadius: '14px',
-              color: '#2563eb',
-              fontSize: '11.5px',
-              fontWeight: '600',
+              padding: '0 12px',
+              minHeight: '38px',
+              borderRadius: 'var(--radius-btn, 6px)',
+              color: 'var(--domain-coursework, #2f64c8)',
+              fontSize: '12px',
+              fontWeight: '500',
               cursor: 'pointer',
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
-              gap: '5px',
-              transition: 'all 0.2s',
+              gap: '6px',
             }}
             title="Balances hackathon, coursework, and code commitments"
           >
-            ⚡ Balance My Workload
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+            <span>Balance My Workload</span>
           </button>
 
           <button
@@ -276,41 +306,40 @@ export default function AgentHeader({
               setGoal(demoGoal)
               onRunAgent(demoGoal)
             }}
+            className="btn-secondary"
             style={{
-              padding: '6px 13px',
-              background: 'rgba(245, 158, 11, 0.08)',
-              border: '1px solid rgba(245, 158, 11, 0.25)',
-              borderRadius: '14px',
-              color: '#b45309',
-              fontSize: '11.5px',
-              fontWeight: '600',
+              padding: '0 12px',
+              minHeight: '38px',
+              borderRadius: 'var(--radius-btn, 6px)',
+              color: 'var(--accent, #f5a623)',
+              fontSize: '12px',
+              fontWeight: '500',
               cursor: 'pointer',
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
-              gap: '5px',
-              transition: 'all 0.2s',
+              gap: '6px',
             }}
             title="Shows how the assistant asks for clarification when info is missing"
           >
-            🛡️ Check Missing Info
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+            <span>Check Missing Info</span>
           </button>
 
           {SUGGESTED_GOALS.map((sg, i) => (
             <button
               key={i}
               onClick={() => { setGoal(sg); onRunAgent(sg) }}
+              className="btn-secondary"
               style={{
-                padding: '5px 10px',
-                background: 'var(--bg-card-soft)',
-                border: '1px solid var(--border)',
-                borderRadius: '14px',
+                padding: '0 10px',
+                minHeight: '38px',
+                borderRadius: 'var(--radius-btn, 6px)',
                 color: 'var(--text-secondary)',
-                fontSize: '11px',
+                fontSize: '12px',
                 cursor: 'pointer',
-                transition: 'all 0.2s',
               }}
-              onMouseEnter={e => { e.target.style.background = 'var(--bg-card)'; e.target.style.color = 'var(--text-primary)' }}
-              onMouseLeave={e => { e.target.style.background = 'var(--bg-card-soft)'; e.target.style.color = 'var(--text-secondary)' }}
             >
               {sg}
             </button>

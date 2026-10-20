@@ -196,7 +196,7 @@ export default function ChatPanel({
     if (!conversationId || messages.length === 0) {
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', text: "This conversation is empty right now — there are no messages to recap." }
+        { role: 'assistant', text: "This conversation is empty right now, there are no messages to recap." }
       ])
       return
     }

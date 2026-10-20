@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { createTask, updateTask } from '../../api/client'
 import { DOMAIN_META } from './domainMeta'
+import { Calendar, GitFork, Compass, X } from 'lucide-react'
 
 export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain, tasks = [], customDomains = [], onOpenCompass }) {
   const [title, setTitle] = useState('')
@@ -163,8 +164,8 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(22, 21, 42, 0.45)',
-        backdropFilter: 'blur(4px)',
+        background: 'rgba(27, 26, 23, 0.45)',
+        backdropFilter: 'blur(3px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -176,44 +177,44 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
         onClick={e => e.stopPropagation()}
         style={{
           background: 'var(--bg-card)',
-          borderRadius: '16px',
+          borderRadius: 'var(--radius-card, 8px)',
           border: '1px solid var(--border)',
           width: '100%',
           maxWidth: '540px',
           maxHeight: '90vh',
           overflowY: 'auto',
           padding: '24px',
-          boxShadow: 'var(--shadow-lg)',
+          boxShadow: '0 8px 30px rgba(0, 0, 0, 0.12)',
           color: 'var(--text-primary)'
         }}
       >
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <div>
-            <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.3px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.3px' }}>
               Add a deadline
             </h3>
-            <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', margin: '4px 0 0' }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 0' }}>
               Set a due date or let Compass organize your schedule.
             </p>
           </div>
           <button
             onClick={onClose}
+            aria-label="Close"
+            className="btn-touch-target btn-secondary"
             style={{
-              background: 'var(--bg-card-soft)',
-              border: '1px solid var(--border)',
               color: 'var(--text-muted)',
-              width: '28px',
-              height: '28px',
-              borderRadius: '7px',
+              width: '32px',
+              height: '32px',
+              minHeight: '32px',
+              borderRadius: 'var(--radius-btn, 6px)',
               cursor: 'pointer',
-              fontSize: '14px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
             }}
           >
-            ✕
+            <X size={16} strokeWidth={1.8} />
           </button>
         </div>
 
@@ -548,8 +549,18 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
                     display: 'flex', alignItems: 'center', gap: '6px'
                   }}
                   title={!dueDate ? "Please pick a new deadline date above first" : `Shift existing deadline to ${dueDate}`}
+                  className="btn-touch-target btn-secondary"
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: 'var(--radius-btn, 6px)',
+                    fontSize: '12.5px',
+                    fontWeight: '600',
+                    cursor: !dueDate ? 'not-allowed' : 'pointer',
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    minHeight: '44px'
+                  }}
                 >
-                  <span>📅</span>
+                  <Calendar size={13} strokeWidth={1.8} />
                   <span>Shift Existing Deadline {dueDate ? `to ${dueDate}` : '(Pick Date First)'}</span>
                 </button>
 
@@ -558,20 +569,19 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
                   id="btn-different-thing"
                   onClick={handleCreateDifferentThing}
                   disabled={loading}
+                  className="btn-touch-target btn-secondary"
                   style={{
-                    padding: '7px 13px',
-                    borderRadius: '8px',
-                    background: 'var(--bg-card-soft)',
-                    border: '1px solid var(--border)',
-                    color: 'var(--text-primary)',
-                    fontSize: '12px',
+                    padding: '8px 14px',
+                    borderRadius: 'var(--radius-btn, 6px)',
+                    fontSize: '12.5px',
                     fontWeight: '600',
                     cursor: loading ? 'not-allowed' : 'pointer',
-                    display: 'flex', alignItems: 'center', gap: '6px'
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    minHeight: '44px'
                   }}
                   title="Add as a separate deadline for a completely different item"
                 >
-                  <span>🔀</span>
+                  <GitFork size={13} strokeWidth={1.8} />
                   <span>Completely Different Thing</span>
                 </button>
 
@@ -579,19 +589,18 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
                   type="button"
                   id="btn-compass-fix-samename"
                   onClick={() => handleAskCompass(`I have an existing deadline titled "${sameNameMatch.title}" scheduled for ${sameNameMatch.due_date || 'unscheduled'}, and I want to add another deadline with the same name for ${dueDate || 'upcoming'}. Can you look into my schedules, check for conflicts, and help me decide whether to shift it or schedule it as a separate deliverable?`)}
+                  className="btn-touch-target btn-secondary"
                   style={{
-                    padding: '7px 13px',
-                    borderRadius: '8px',
-                    background: 'rgba(139, 92, 246, 0.15)',
-                    border: '1px solid rgba(139, 92, 246, 0.4)',
-                    color: '#c084fc',
-                    fontSize: '12px',
-                    fontWeight: '700',
+                    padding: '8px 14px',
+                    borderRadius: 'var(--radius-btn, 6px)',
+                    fontSize: '12.5px',
+                    fontWeight: '600',
                     cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', gap: '6px'
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    minHeight: '44px'
                   }}
                 >
-                  <span>🧭</span>
+                  <Compass size={13} strokeWidth={1.8} />
                   <span>Ask Compass to Fix It</span>
                 </button>
               </div>
@@ -599,27 +608,26 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
           )}
 
           {/* Form Actions */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginTop: '12px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginTop: '16px', flexWrap: 'wrap' }}>
             <button
               type="button"
               id="btn-ask-compass-schedule"
               onClick={() => handleAskCompass()}
+              className="btn-touch-target btn-secondary"
               style={{
-                padding: '9px 14px',
-                borderRadius: '8px',
-                background: 'rgba(139, 92, 246, 0.12)',
-                border: '1px solid rgba(139, 92, 246, 0.35)',
-                color: '#c084fc',
+                padding: '8px 14px',
+                borderRadius: 'var(--radius-btn, 6px)',
                 fontSize: '12.5px',
-                fontWeight: '700',
+                fontWeight: '600',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px'
+                gap: '6px',
+                minHeight: '44px'
               }}
               title="Ask Compass to analyze schedules and resolve conflicts before adding"
             >
-              <span>🧭</span>
+              <Compass size={14} strokeWidth={1.8} />
               <span>Ask Compass to Look into Schedules</span>
             </button>
 
@@ -627,15 +635,14 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
               <button
                 type="button"
                 onClick={onClose}
+                className="btn-touch-target btn-secondary"
                 style={{
-                  padding: '9px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--border)',
-                  background: 'var(--bg-card-soft)',
-                  color: 'var(--text-secondary)',
+                  padding: '8px 16px',
+                  borderRadius: 'var(--radius-btn, 6px)',
                   fontSize: '13px',
                   fontWeight: '500',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  minHeight: '44px'
                 }}
               >
                 Cancel
@@ -644,22 +651,18 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
                 id="btn-submit-create-deadline"
                 type="submit"
                 disabled={loading || Boolean(exactMatch)}
+                className={`btn-touch-target ${exactMatch ? 'btn-secondary' : 'btn-primary-amber'}`}
                 style={{
-                  padding: '9px 20px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: exactMatch
-                    ? 'var(--bg-card-soft)'
-                    : 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-                  color: exactMatch ? 'var(--text-muted)' : '#ffffff',
+                  padding: '8px 20px',
+                  borderRadius: 'var(--radius-btn, 6px)',
                   fontSize: '13px',
-                  fontWeight: '700',
+                  fontWeight: '600',
                   cursor: (loading || exactMatch) ? 'not-allowed' : 'pointer',
                   opacity: loading || exactMatch ? 0.6 : 1,
-                  boxShadow: exactMatch ? 'none' : '0 4px 12px rgba(37, 99, 235, 0.4)',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px'
+                  gap: '8px',
+                  minHeight: '44px'
                 }}
               >
                 {loading ? 'Creating…' : exactMatch ? 'Duplicate Blocked' : 'Create deadline'}

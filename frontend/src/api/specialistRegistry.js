@@ -10,7 +10,7 @@ export const SPECIALIST_AGENTS = [
     bg: 'rgba(56, 189, 248, 0.12)',
     border: 'rgba(56, 189, 248, 0.3)',
     description: 'Automatically selects the best specialist agent based on prompt intent.',
-    placeholder: 'Ask anything — Auto Dispatcher will select the optimal specialist...',
+    placeholder: 'Ask anything: Auto Dispatcher will select the optimal specialist...',
     keywords: ['auto', 'dispatcher', 'routing', 'intent', 'all'],
   },
   {

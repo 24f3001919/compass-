@@ -100,7 +100,7 @@ export const FALLBACK_TASKS = [
   },
   {
     id: '3',
-    title: 'CS 61C — RISC-V Pipeline Synthesis Report',
+    title: 'CS 61C: RISC-V Pipeline Synthesis Report',
     domain: 'coursework',
     project: 'CS 61C',
     countdown: '1d left (Thursday)',

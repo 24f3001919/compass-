@@ -88,7 +88,7 @@ export default function ExtractionReviewModal({
               </span>
             </div>
             <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-secondary, #334155)' }}>
-              Source: <strong style={{ color: 'var(--text-primary)' }}>{diag.filename || 'Uploaded Document'}</strong> ({diag.file_type || 'file'}) — Please verify accuracy before committing.
+              Source: <strong style={{ color: 'var(--text-primary)' }}>{diag.filename || 'Uploaded Document'}</strong> ({diag.file_type || 'file'}). Please verify accuracy before committing.
             </p>
           </div>
           <button
@@ -117,7 +117,7 @@ export default function ExtractionReviewModal({
           <div style={{ padding: '12px 26px', background: '#fffbeb', borderBottom: '1px solid #fef3c7' }}>
             {missing.length > 0 && (
               <div style={{ fontSize: '12.5px', color: '#b45309', marginBottom: conflicts.length ? '4px' : '0', fontWeight: '500' }}>
-                ⚠️ <strong>Missing Fields:</strong> {missing.join(', ')} — you can complete these below.
+                ⚠️ <strong>Missing Fields:</strong> {missing.join(', ')}: you can complete these below.
               </div>
             )}
             {conflicts.map((conf, idx) => (

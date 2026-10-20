@@ -108,11 +108,11 @@ export default function ThinkingBlock({ thought, isLive = false }) {
         display: 'inline-flex',
         alignItems: 'center',
         gap: '6px',
-        padding: '3px 9px',
-        borderRadius: '12px',
-        background: 'var(--bg-card-soft, rgba(0, 0, 0, 0.04))',
+        padding: '4px 10px',
+        borderRadius: 'var(--radius-btn, 6px)',
+        background: 'var(--bg-card-soft)',
         border: '1px solid var(--border)',
-        fontSize: '11.5px',
+        fontSize: '12px',
         color: 'var(--text-secondary)',
         marginBottom: '8px',
       }}>
@@ -121,8 +121,7 @@ export default function ThinkingBlock({ thought, isLive = false }) {
           width: '6px',
           height: '6px',
           borderRadius: '50%',
-          background: 'var(--coursework, #3b82f6)',
-          animation: 'pulse 1.5s infinite',
+          background: 'var(--accent, #f5a623)',
         }} />
         <span>Understanding your request…</span>
       </div>
@@ -134,12 +133,12 @@ export default function ThinkingBlock({ thought, isLive = false }) {
   return (
     <div style={{
       marginBottom: '10px',
-      borderRadius: '8px',
+      borderRadius: 'var(--radius-btn, 6px)',
       border: '1px solid var(--border)',
-      background: 'var(--bg-card-soft, rgba(0, 0, 0, 0.03))',
+      background: 'var(--bg-card-soft)',
       overflow: 'hidden',
       fontSize: '12px',
-      transition: 'all 0.2s ease',
+      transition: 'all 0.15s ease',
     }}>
       <button
         type="button"
@@ -149,13 +148,13 @@ export default function ThinkingBlock({ thought, isLive = false }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '6px 10px',
+          padding: '8px 12px',
           background: 'transparent',
           border: 'none',
           cursor: 'pointer',
           color: 'var(--text-secondary)',
           fontWeight: '500',
-          fontSize: '11.5px',
+          fontSize: '12px',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -165,34 +164,41 @@ export default function ThinkingBlock({ thought, isLive = false }) {
               width: '6px',
               height: '6px',
               borderRadius: '50%',
-              background: 'var(--coursework, #3b82f6)',
-              animation: 'pulse 1.5s infinite',
+              background: 'var(--accent, #f5a623)',
             }} />
           ) : (
-            <span style={{ color: 'var(--coursework, #3b82f6)', fontSize: '11px' }}>✦</span>
+            <span style={{ color: 'var(--accent, #f5a623)', fontSize: '11px' }}>✦</span>
           )}
           <span>
             {isLive ? `${latestMilestone}…` : `Activity: ${milestones.length} step${milestones.length > 1 ? 's' : ''} completed`}
           </span>
         </div>
-        <span style={{
-          fontSize: '9px',
-          color: 'var(--text-muted)',
-          transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-          transition: 'transform 0.2s ease',
-        }}>
-          ▼
-        </span>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{
+            transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform 0.15s ease',
+          }}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
       </button>
 
       {isOpen && (
         <div style={{
           padding: '8px 12px',
-          borderTop: '1px solid var(--border-soft, rgba(0, 0, 0, 0.06))',
+          borderTop: '1px solid var(--border)',
           display: 'flex',
           flexDirection: 'column',
-          gap: '4px',
-          background: 'var(--bg-card, rgba(0, 0, 0, 0.01))',
+          gap: '6px',
+          background: 'var(--bg-card)',
         }}>
           {milestones.map((m, idx) => {
             const isLast = idx === milestones.length - 1 && isLive
@@ -200,16 +206,22 @@ export default function ThinkingBlock({ thought, isLive = false }) {
               <div key={idx} style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '7px',
-                fontSize: '11.5px',
+                gap: '8px',
+                fontSize: '12px',
                 color: isLast ? 'var(--text-primary)' : 'var(--text-secondary)',
               }}>
                 <span style={{
-                  color: isLast ? 'var(--coursework, #3b82f6)' : 'var(--success, #10b981)',
-                  fontWeight: '600',
-                  fontSize: '10px',
+                  color: isLast ? 'var(--accent, #f5a623)' : 'var(--domain-code, #1c8a62)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
                 }}>
-                  {isLast ? '●' : '✓'}
+                  {isLast ? (
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'currentColor' }} />
+                  ) : (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
                 </span>
                 <span>{m}</span>
               </div>

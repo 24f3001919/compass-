@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Link2, X, Check, Copy, ExternalLink } from 'lucide-react'
 
 export default function ShareModal({ isOpen, onClose, conversation }) {
   const [copied, setCopied] = useState(false)
@@ -34,8 +35,8 @@ export default function ShareModal({ isOpen, onClose, conversation }) {
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0, 0, 0, 0.7)',
-        backdropFilter: 'blur(4px)',
+        background: 'rgba(27, 26, 23, 0.45)',
+        backdropFilter: 'blur(3px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -48,68 +49,76 @@ export default function ShareModal({ isOpen, onClose, conversation }) {
         style={{
           background: 'var(--bg-card)',
           border: '1px solid var(--border)',
-          borderRadius: '16px',
+          borderRadius: 'var(--radius-card, 8px)',
           padding: '24px',
           maxWidth: '460px',
           width: '100%',
-          boxShadow: 'var(--shadow-lg), 0 20px 40px rgba(0,0,0,0.6)',
+          boxShadow: '0 8px 30px rgba(0, 0, 0, 0.12)',
           display: 'flex',
           flexDirection: 'column',
           gap: '16px',
-          animation: 'fadeIn 0.15s ease',
         }}
       >
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{
-              width: '36px', height: '36px', borderRadius: '10px',
-              background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.3) 100%)',
-              color: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px'
+              width: '36px', height: '36px', borderRadius: 'var(--radius-btn, 6px)',
+              background: 'var(--bg-card-soft)', border: '1px solid var(--border)',
+              color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}>
-              🔗
+              <Link2 size={18} strokeWidth={1.8} />
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.2px' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.2px' }}>
                 Share link to chat
               </h3>
-              <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+              <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--text-muted)' }}>
                 Anyone with this link will be able to view this chat.
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
+            aria-label="Close"
+            className="btn-touch-target btn-secondary"
             style={{
-              background: 'none', border: 'none', color: 'var(--text-muted)',
-              fontSize: '18px', cursor: 'pointer', padding: '2px 6px', borderRadius: '6px'
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              width: '32px',
+              height: '32px',
+              minHeight: '32px',
+              borderRadius: 'var(--radius-btn, 6px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
             title="Close"
           >
-            ✕
+            <X size={16} strokeWidth={1.8} />
           </button>
         </div>
 
         {/* Chat Preview Card */}
         <div style={{
           padding: '12px 14px',
-          borderRadius: '10px',
-          background: 'var(--bg-app)',
+          borderRadius: 'var(--radius-card, 8px)',
+          background: 'var(--bg-card-soft)',
           border: '1px solid var(--border)',
           display: 'flex',
           flexDirection: 'column',
           gap: '4px',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {conversation.title || 'Chat Session'}
             </span>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
               {conversation.message_count || 0} messages
             </span>
           </div>
           {conversation.preview && (
-            <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: 0.85 }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: 0.85 }}>
               "{conversation.preview}"
             </div>
           )}
@@ -126,46 +135,41 @@ export default function ShareModal({ isOpen, onClose, conversation }) {
             style={{
               flex: 1,
               padding: '10px 14px',
-              borderRadius: '8px',
+              borderRadius: 'var(--radius-btn, 6px)',
               background: 'var(--bg-app)',
               border: '1px solid var(--border)',
               color: 'var(--text-primary)',
-              fontSize: '12.5px',
+              fontSize: '13px',
               outline: 'none',
               fontFamily: 'monospace',
+              minHeight: '44px',
             }}
           />
           <button
             id="btn-copy-share-link"
             onClick={handleCopy}
+            className="btn-touch-target btn-primary-amber"
             style={{
               padding: '10px 18px',
-              borderRadius: '8px',
-              border: 'none',
-              background: copied ? '#10b981' : 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-              color: '#ffffff',
-              fontSize: '12.5px',
-              fontWeight: '700',
+              borderRadius: 'var(--radius-btn, 6px)',
+              fontSize: '13px',
+              fontWeight: '600',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
               whiteSpace: 'nowrap',
-              boxShadow: copied ? '0 2px 10px rgba(16, 185, 129, 0.4)' : '0 2px 10px rgba(37, 99, 235, 0.35)',
-              transition: 'all 0.2s ease',
+              minHeight: '44px',
             }}
           >
             {copied ? (
               <>
-                <span>✓</span>
+                <Check size={14} strokeWidth={1.8} />
                 <span>Copied!</span>
               </>
             ) : (
               <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                </svg>
+                <Copy size={14} strokeWidth={1.8} />
                 <span>Copy Link</span>
               </>
             )}
@@ -174,19 +178,20 @@ export default function ShareModal({ isOpen, onClose, conversation }) {
 
         {/* Footer info & open in new tab */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '4px' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
             Link is active and viewable by anyone.
           </span>
           <button
             onClick={handleOpenLink}
             style={{
-              background: 'none', border: 'none', color: 'var(--brand)',
-              fontSize: '12px', fontWeight: '700', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: '4px'
+              background: 'none', border: 'none', color: 'var(--accent)',
+              fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: '4px',
+              minHeight: '36px',
             }}
           >
             <span>Open preview</span>
-            <span style={{ fontSize: '11px' }}>↗</span>
+            <ExternalLink size={12} strokeWidth={1.8} />
           </button>
         </div>
       </div>

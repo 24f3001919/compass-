@@ -69,14 +69,14 @@ export default function ConfirmationGate({
 
   return (
     <div
+      id="action-confirmation-gate"
       style={{
         background: 'var(--bg-card)',
-        border: '1.5px solid #818cf8',
-        borderRadius: '12px',
-        padding: '20px',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-card, 8px)',
+        padding: '18px 20px',
         marginTop: '12px',
         marginBottom: '16px',
-        boxShadow: '0 4px 20px rgba(99, 102, 241, 0.12)',
       }}
     >
       {/* Header with Safety Shield */}
@@ -85,21 +85,21 @@ export default function ConfirmationGate({
           style={{
             width: '32px',
             height: '32px',
-            borderRadius: '8px',
-            background: 'rgba(99, 102, 241, 0.12)',
+            borderRadius: 'var(--radius-btn, 6px)',
+            background: 'rgba(245, 166, 35, 0.12)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#6366f1',
+            color: 'var(--accent, #f5a623)',
           }}
         >
-          <ShieldAlert size={18} />
+          <ShieldAlert size={18} strokeWidth={1.8} />
         </div>
         <div>
-          <div style={{ fontSize: '15px', fontWeight: '800', color: '#0f172a', letterSpacing: '-0.3px' }}>
-            Action Confirmation Gate — {pendingActions.length} Pending Action{pendingActions.length !== 1 ? 's' : ''}
+          <div style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.2px' }}>
+            Action Confirmation Gate: {pendingActions.length} Pending Action{pendingActions.length !== 1 ? 's' : ''}
           </div>
-          <div style={{ fontSize: '12.5px', color: '#64748b' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
             Zero-mutation safety protocol: AI proposed changes require your explicit authorization.
           </div>
         </div>
@@ -114,27 +114,28 @@ export default function ConfirmationGate({
             <div
               key={i}
               style={{
-                background: isDestructive ? '#fef2f2' : '#f8fafc',
-                border: `1px solid ${isDestructive ? '#fecaca' : '#e2e8f0'}`,
-                borderRadius: '8px',
+                background: isDestructive ? 'rgba(239, 68, 68, 0.08)' : 'var(--bg-card-soft)',
+                border: `1px solid ${isDestructive ? 'rgba(239, 68, 68, 0.25)' : 'var(--border)'}`,
+                borderRadius: 'var(--radius-card, 8px)',
                 padding: '10px 14px',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '12px',
               }}
             >
-              <ActionIcon size={16} color={isDestructive ? '#ef4444' : '#6366f1'} />
-              <div style={{ flex: 1, fontSize: '13px', color: isDestructive ? '#991b1b' : '#0f172a', fontWeight: '500' }}>
+              <ActionIcon size={16} strokeWidth={1.8} color={isDestructive ? '#ef4444' : 'var(--text-secondary)'} />
+              <div style={{ flex: 1, fontSize: '13px', color: 'var(--text-primary)', fontWeight: '500' }}>
                 {formatActionDescription(action)}
               </div>
               <span
                 style={{
                   fontSize: '11px',
-                  fontWeight: '700',
-                  padding: '2px 8px',
-                  borderRadius: '4px',
-                  background: isDestructive ? 'rgba(239, 68, 68, 0.1)' : 'rgba(99, 102, 241, 0.1)',
-                  color: isDestructive ? '#dc2626' : '#4f46e5',
+                  fontWeight: '600',
+                  padding: '3px 8px',
+                  borderRadius: 'var(--radius-btn, 6px)',
+                  background: isDestructive ? 'rgba(239, 68, 68, 0.12)' : 'var(--bg-card)',
+                  color: isDestructive ? '#ef4444' : 'var(--text-secondary)',
+                  border: '1px solid var(--border)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.04em',
                 }}
@@ -156,17 +157,16 @@ export default function ConfirmationGate({
           placeholder="Optional revision guidance (e.g. 'Keep current due date, just reduce duration')..."
           style={{
             width: '100%',
-            padding: '10px 14px',
+            padding: '0 14px',
+            minHeight: '44px',
             background: 'var(--bg-card-soft)',
             border: '1px solid var(--border)',
-            borderRadius: '8px',
+            borderRadius: 'var(--radius-btn, 6px)',
             color: 'var(--text-primary)',
             fontSize: '13px',
             outline: 'none',
             boxSizing: 'border-box',
           }}
-          onFocus={e => (e.target.style.borderColor = '#6366f1')}
-          onBlur={e => (e.target.style.borderColor = '#cbd5e1')}
         />
       </div>
 
@@ -175,49 +175,40 @@ export default function ConfirmationGate({
         <button
           id="agent-approve-btn"
           onClick={onApprove}
+          className="btn-primary-amber"
           style={{
-            display: 'flex',
+            display: 'inline-flex',
             alignItems: 'center',
-            gap: '7px',
-            padding: '9px 20px',
-            background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
-            border: 'none',
-            borderRadius: '8px',
-            color: '#ffffff',
-            fontSize: '13.5px',
-            fontWeight: '700',
+            gap: '8px',
+            padding: '0 20px',
+            minHeight: '44px',
+            borderRadius: 'var(--radius-btn, 6px)',
+            fontSize: '13px',
+            fontWeight: '600',
             cursor: 'pointer',
-            boxShadow: '0 2px 8px rgba(22, 163, 74, 0.3)',
-            transition: 'all 0.15s ease',
           }}
-          onMouseEnter={e => (e.currentTarget.style.transform = 'translateY(-1px)')}
-          onMouseLeave={e => (e.currentTarget.style.transform = 'translateY(0)')}
         >
-          <CheckCircle2 size={16} />
+          <CheckCircle2 size={16} strokeWidth={1.8} />
           <span>Authorize Changes</span>
         </button>
 
         <button
           id="agent-reject-btn"
           onClick={onReject}
+          className="btn-secondary"
           style={{
-            display: 'flex',
+            display: 'inline-flex',
             alignItems: 'center',
-            gap: '7px',
-            padding: '9px 18px',
-            background: 'var(--bg-card)',
-            border: '1px solid #ef4444',
-            borderRadius: '8px',
-            color: '#dc2626',
-            fontSize: '13.5px',
-            fontWeight: '600',
+            gap: '8px',
+            padding: '0 18px',
+            minHeight: '44px',
+            borderRadius: 'var(--radius-btn, 6px)',
+            fontSize: '13px',
+            fontWeight: '500',
             cursor: 'pointer',
-            transition: 'all 0.15s ease',
           }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-card)')}
         >
-          <XCircle size={16} />
+          <XCircle size={16} strokeWidth={1.8} />
           <span>Reject / Re-plan</span>
         </button>
       </div>

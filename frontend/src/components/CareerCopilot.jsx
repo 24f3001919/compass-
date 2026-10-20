@@ -2,11 +2,12 @@ import React, { useState } from 'react'
 import InternshipRadar from './InternshipRadar'
 import ApplicationCenter from './career/ApplicationCenter'
 import RadarProfileModal from './radar/RadarProfileModal'
+import DarkModeToggle from './DarkModeToggle'
 import { updateRadarProfile } from '../api/radarApi.js'
 
 const ResumeStudio = React.lazy(() => import('./career/ResumeStudio'))
 
-export default function CareerCopilot() {
+export default function CareerCopilot({ isDarkMode, onToggleDarkMode }) {
   const [activeSubTab, setActiveSubTab] = useState('radar') // 'radar' | 'resumes' | 'applications'
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [profileRefreshTrigger, setProfileRefreshTrigger] = useState(0)
@@ -59,9 +60,9 @@ export default function CareerCopilot() {
   }
 
   const SUB_TABS = [
-    { key: 'radar', icon: '📡', label: 'Internship Radar', desc: 'Verified discovery & eligibility' },
-    { key: 'resumes', icon: '📄', label: 'Resume Studio', desc: 'Factual tailoring & ATS export' },
-    { key: 'applications', icon: '🚀', label: 'Application Center', desc: 'Pipelines & batch approvals' },
+    { key: 'radar', label: 'Internship Radar', desc: 'Verified discovery & eligibility' },
+    { key: 'resumes', label: 'Resume Studio', desc: 'Factual tailoring & ATS export' },
+    { key: 'applications', label: 'Application Center', desc: 'Pipelines & batch approvals' },
   ]
 
   return (
@@ -95,53 +96,58 @@ export default function CareerCopilot() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div
             style={{
-              width: '42px',
-              height: '42px',
-              borderRadius: '12px',
-              background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-              color: '#ffffff',
+              width: '38px',
+              height: '38px',
+              borderRadius: '6px',
+              background: 'var(--bg-card-soft)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-primary)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '22px',
-              fontWeight: 'bold',
-              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
+              flexShrink: 0,
             }}
           >
-            🎯
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <circle cx="12" cy="12" r="6" />
+              <circle cx="12" cy="12" r="2" />
+            </svg>
           </div>
           <div>
-            <h1 style={{ margin: 0, fontSize: '19px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+            <h1 style={{ margin: 0, fontSize: '26px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.3px', lineHeight: 1.2 }}>
               Career Copilot
             </h1>
-            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
               Autonomous discovery, truthful resume tailoring, and authorized application management.
             </p>
           </div>
         </div>
 
-        {/* Action Button: Edit Candidate Profile */}
-        <button
-          type="button"
-          onClick={() => setShowProfileModal(true)}
-          style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            color: 'var(--text-primary)',
-            padding: '8px 16px',
-            borderRadius: '9px',
-            fontSize: '12.5px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)',
-            transition: 'all 0.15s ease',
-          }}
-        >
-          ⚙️ Candidate Profile
-        </button>
+        {/* Action Controls & Dark Mode Toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => setShowProfileModal(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            <span>Candidate Profile</span>
+          </button>
+          <DarkModeToggle
+            isDarkMode={Boolean(isDarkMode)}
+            onToggleDarkMode={onToggleDarkMode}
+            id="career-theme-toggle"
+          />
+        </div>
       </div>
 
       {/* Success / Feedback Notification Banner */}
@@ -153,7 +159,7 @@ export default function CareerCopilot() {
           style={{
             margin: '12px 24px 0 24px',
             padding: '10px 16px',
-            borderRadius: '8px',
+            borderRadius: '6px',
             fontSize: '13px',
             fontWeight: 500,
             display: 'flex',
@@ -163,28 +169,17 @@ export default function CareerCopilot() {
             flexShrink: 0,
             background:
               notification.type === 'warning'
-                ? 'rgba(245, 158, 11, 0.12)'
+                ? 'var(--bg-card-soft)'
                 : notification.type === 'success'
-                ? 'rgba(16, 185, 129, 0.12)'
-                : 'rgba(59, 130, 246, 0.12)',
-            color:
-              notification.type === 'warning'
-                ? '#f59e0b'
-                : notification.type === 'success'
-                ? '#10b981'
-                : '#3b82f6',
-            border: `1px solid ${
-              notification.type === 'warning'
-                ? 'rgba(245, 158, 11, 0.3)'
-                : notification.type === 'success'
-                ? 'rgba(16, 185, 129, 0.3)'
-                : 'rgba(59, 130, 246, 0.3)'
-            }`,
+                ? 'var(--bg-card-soft)'
+                : 'var(--bg-card-soft)',
+            color: 'var(--text-primary)',
+            border: '1px solid var(--border)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span>
-              {notification.type === 'warning' ? '⚡' : notification.type === 'success' ? '✓' : '🔄'}
+              {notification.type === 'warning' ? '⚠️' : notification.type === 'success' ? '✓' : '🔄'}
             </span>
             <span>{notification.message}</span>
           </div>
@@ -195,9 +190,9 @@ export default function CareerCopilot() {
                 onClick={notification.onRetry}
                 style={{
                   background: 'var(--bg-card)',
-                  border: '1px solid currentColor',
+                  border: '1px solid var(--border)',
                   color: 'inherit',
-                  padding: '3px 10px',
+                  padding: '4px 10px',
                   borderRadius: '6px',
                   fontSize: '12px',
                   fontWeight: 600,
@@ -245,8 +240,33 @@ export default function CareerCopilot() {
                 type="button"
                 onClick={() => setActiveSubTab(tab.key)}
                 className={`career-subtab-btn ${isActive ? 'active' : ''}`}
+                style={{
+                  minHeight: '44px',
+                  borderRadius: '6px',
+                }}
               >
-                <span style={{ fontSize: '15px', lineHeight: 1 }}>{tab.icon}</span>
+                {tab.key === 'radar' && (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+                    <path d="M2 12h20" />
+                  </svg>
+                )}
+                {tab.key === 'resumes' && (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                    <polyline points="10 9 9 9 8 9" />
+                  </svg>
+                )}
+                {tab.key === 'applications' && (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect width="20" height="14" x="2" y="7" rx="2" ry="2" />
+                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                  </svg>
+                )}
                 <span>{tab.label}</span>
               </button>
             )

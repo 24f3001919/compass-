@@ -167,21 +167,23 @@ export default function ChatMessageList({
           <div style={{
             width: '56px',
             height: '56px',
-            borderRadius: '16px',
+            borderRadius: 'var(--radius-card, 8px)',
             background: 'var(--bg-card)',
             border: '1px solid var(--border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '26px',
             marginBottom: '18px',
-            boxShadow: 'var(--shadow-sm)',
+            color: 'var(--accent, #f5a623)',
           }}>
-            🧭
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+            </svg>
           </div>
 
-          <h2 className="serif-accent" style={{
-            fontSize: '22px',
+          <h2 style={{
+            fontSize: '26px',
             fontWeight: '600',
             color: 'var(--text-primary)',
             marginBottom: '10px',
@@ -192,7 +194,7 @@ export default function ChatMessageList({
           </h2>
 
           <p style={{
-            fontSize: '13.5px',
+            fontSize: '13px',
             color: 'var(--text-secondary)',
             marginBottom: '26px',
             maxWidth: '480px',
@@ -208,7 +210,7 @@ export default function ChatMessageList({
           <div style={{
             display: 'flex',
             flexWrap: 'wrap',
-            gap: '10px',
+            gap: '8px',
             justifyContent: 'center',
             maxWidth: '520px',
           }}>
@@ -217,9 +219,20 @@ export default function ChatMessageList({
                 key={idx}
                 type="button"
                 onClick={() => onSendMessage && onSendMessage(chip)}
-                className="persona-suggestion-chip"
+                className="btn-secondary"
+                style={{
+                  padding: '0 14px',
+                  minHeight: '44px',
+                  borderRadius: 'var(--radius-btn, 6px)',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                }}
               >
-                <span style={{ color: 'var(--coursework)', fontSize: '14px' }}>✦</span>
+                <span style={{ color: 'var(--accent, #f5a623)', fontSize: '13px' }}>✦</span>
                 <span>{chip}</span>
               </button>
             ))}
@@ -227,7 +240,7 @@ export default function ChatMessageList({
         </div>
       ) : (
         <>
-          <div className="serif-accent" style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '18px' }}>
+          <div style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '18px', fontWeight: '500' }}>
             {getTimeGreeting()}
           </div>
 
@@ -242,22 +255,24 @@ export default function ChatMessageList({
                   <div style={{ display: 'flex', gap: '10px', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', width: '100%' }}>
                     {msg.role === 'assistant' && (
                       <div className="chat-msg-avatar" style={{
-                        width: '30px', height: '30px', borderRadius: '8px', background: 'var(--bg-sidebar)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', flexShrink: 0
+                        width: '32px', height: '32px', borderRadius: 'var(--radius-btn, 6px)', background: 'var(--bg-sidebar)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent, #f5a623)', flexShrink: 0
                       }}>
-                        🧭
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10" />
+                          <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+                        </svg>
                       </div>
                     )}
                     <div className="chat-msg-bubble" style={{
                       maxWidth: 'min(85%, 820px)',
                       padding: '13px 17px',
-                      borderRadius: '14px',
+                      borderRadius: 'var(--radius-card, 8px)',
                       background: msg.role === 'user' ? 'var(--bg-sidebar)' : 'var(--bg-card)',
-                      color: msg.role === 'user' ? 'var(--text-on-dark)' : 'var(--text-primary)',
+                      color: msg.role === 'user' ? 'var(--sidebar-text-active, #ffffff)' : 'var(--text-primary)',
                       fontSize: '13.5px',
                       lineHeight: '1.5',
                       border: msg.role === 'user' ? 'none' : '1px solid var(--border)',
-                      boxShadow: 'var(--shadow-sm)'
                     }}>
                       {msg.role === 'assistant' && msg.thought && (
                         <ThinkingBlock thought={msg.thought} />
@@ -270,7 +285,11 @@ export default function ChatMessageList({
                           {msg.error && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: msg.text ? '6px' : '0' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--danger, #ef4444)', fontSize: '13px' }}>
-                                <span>⚠️</span>
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                                  <line x1="12" y1="9" x2="12" y2="13" />
+                                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                                </svg>
                                 <span>{msg.error}</span>
                               </div>
                               {msg.canRetry && msg.retryPrompt && (
@@ -283,22 +302,25 @@ export default function ChatMessageList({
                                       onSendMessage(msg.retryPrompt)
                                     }
                                   }}
+                                  className="btn-secondary"
                                   style={{
                                     alignSelf: 'flex-start',
-                                    display: 'flex',
+                                    display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: '6px',
-                                    padding: '5px 12px',
-                                    borderRadius: '6px',
-                                    background: 'var(--bg-card-soft, rgba(0,0,0,0.05))',
-                                    border: '1px solid var(--border)',
-                                    color: 'var(--text-primary)',
+                                    padding: '0 12px',
+                                    minHeight: '36px',
+                                    borderRadius: 'var(--radius-btn, 6px)',
                                     fontSize: '12px',
                                     cursor: 'pointer',
                                     fontWeight: '500',
                                   }}
                                 >
-                                  <span>🔄</span>
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="1 4 1 10 7 10" />
+                                    <polyline points="23 20 23 14 17 14" />
+                                    <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" />
+                                  </svg>
                                   <span>Retry</span>
                                 </button>
                               )}
@@ -327,7 +349,7 @@ export default function ChatMessageList({
                     <div style={{
                       display: 'flex',
                       gap: '8px',
-                      marginLeft: '40px',
+                      marginLeft: '42px',
                       marginTop: '2px',
                       flexWrap: 'wrap',
                     }}>
@@ -337,13 +359,12 @@ export default function ChatMessageList({
                           type="button"
                           disabled={isStreaming || isTyping}
                           onClick={() => onSendMessage && onSendMessage(chip)}
-                          className="persona-suggestion-chip"
+                          className="btn-secondary"
                           style={{
-                            padding: '4px 10px',
+                            padding: '0 12px',
+                            minHeight: '36px',
                             fontSize: '12px',
-                            borderRadius: '16px',
-                            background: 'var(--bg-card-soft, rgba(0,0,0,0.04))',
-                            border: '1px solid var(--border)',
+                            borderRadius: 'var(--radius-btn, 6px)',
                             color: 'var(--text-secondary)',
                             cursor: 'pointer',
                             display: 'inline-flex',
@@ -351,7 +372,7 @@ export default function ChatMessageList({
                             gap: '5px',
                           }}
                         >
-                          <span style={{ color: 'var(--coursework, #3b82f6)' }}>✦</span>
+                          <span style={{ color: 'var(--accent, #f5a623)' }}>✦</span>
                           <span>{chip}</span>
                         </button>
                       ))}
@@ -362,29 +383,72 @@ export default function ChatMessageList({
                     <div style={{
                       display: 'flex',
                       gap: '8px',
-                      marginLeft: '40px',
+                      marginLeft: '42px',
                       flexWrap: 'wrap',
                     }}>
                       <button
                         type="button"
-                        className="mode-quick-btn"
+                        className="btn-secondary"
+                        style={{
+                          padding: '0 14px',
+                          minHeight: '44px',
+                          borderRadius: 'var(--radius-btn, 6px)',
+                          fontSize: '13px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          cursor: 'pointer',
+                        }}
                         onClick={() => onSelectMode ? onSelectMode('advice', 'Advice') : onSendMessage && onSendMessage('Advice')}
                       >
-                        💡 Advice
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent, #f5a623)' }}>
+                          <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
+                          <path d="M9 18h6" />
+                          <path d="M10 22h4" />
+                        </svg>
+                        <span>Advice</span>
                       </button>
                       <button
                         type="button"
-                        className="mode-quick-btn"
+                        className="btn-secondary"
+                        style={{
+                          padding: '0 14px',
+                          minHeight: '44px',
+                          borderRadius: 'var(--radius-btn, 6px)',
+                          fontSize: '13px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          cursor: 'pointer',
+                        }}
                         onClick={() => onSelectMode ? onSelectMode('sounding_board', 'Sounding board') : onSendMessage && onSendMessage('Sounding board')}
                       >
-                        👂 Sounding board
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--domain-coursework, #2f64c8)' }}>
+                          <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+                          <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
+                        </svg>
+                        <span>Sounding board</span>
                       </button>
                       <button
                         type="button"
-                        className="mode-quick-btn"
+                        className="btn-secondary"
+                        style={{
+                          padding: '0 14px',
+                          minHeight: '44px',
+                          borderRadius: 'var(--radius-btn, 6px)',
+                          fontSize: '13px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          cursor: 'pointer',
+                        }}
                         onClick={() => onSelectMode ? onSelectMode('plan', 'Plan') : onSendMessage && onSendMessage('Plan')}
                       >
-                        📋 Plan
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--domain-code, #1c8a62)' }}>
+                          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                          <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                        </svg>
+                        <span>Plan</span>
                       </button>
                     </div>
                   )}
@@ -396,21 +460,23 @@ export default function ChatMessageList({
             {isStreaming && (
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-start' }}>
                 <div className="chat-msg-avatar" style={{
-                  width: '30px', height: '30px', borderRadius: '8px', background: 'var(--bg-sidebar)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', flexShrink: 0
+                  width: '32px', height: '32px', borderRadius: 'var(--radius-btn, 6px)', background: 'var(--bg-sidebar)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent, #f5a623)', flexShrink: 0
                 }}>
-                  🧭
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+                  </svg>
                 </div>
                 <div className="chat-msg-bubble" style={{
                   maxWidth: 'min(85%, 820px)',
                   padding: '13px 17px',
-                  borderRadius: '14px',
+                  borderRadius: 'var(--radius-card, 8px)',
                   background: 'var(--bg-card)',
                   color: 'var(--text-primary)',
                   fontSize: '13.5px',
                   lineHeight: '1.5',
                   border: '1px solid var(--border)',
-                  boxShadow: 'var(--shadow-md)'
                 }}>
                   {streamingThought && (
                     <ThinkingBlock thought={streamingThought} isLive={true} />

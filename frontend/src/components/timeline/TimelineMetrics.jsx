@@ -12,43 +12,42 @@ export default function TimelineMetrics({ metrics }) {
       style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: '16px',
-        marginBottom: '24px',
+        gap: '14px',
+        marginBottom: '22px',
       }}
     >
       {/* Metric 1: Daily Progress */}
       <div
         style={{
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
-          borderRadius: '14px',
-          padding: '18px 20px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-card, 8px)',
+          padding: '16px 18px',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <span style={{ fontSize: '12.5px', fontWeight: '600', color: '#64748b' }}>Daily Completion</span>
-          <div style={{ width: '28px', height: '28px', borderRadius: '7px', background: '#ecfdf5', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <CheckCircle2 size={16} />
+          <span style={{ fontSize: '13px', fontWeight: '500', color: 'var(--text-secondary)' }}>Daily Completion</span>
+          <div style={{ width: '28px', height: '28px', borderRadius: 'var(--radius-btn, 6px)', background: 'rgba(28, 138, 98, 0.1)', color: 'var(--domain-code, #1c8a62)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <CheckCircle2 size={16} strokeWidth={1.8} />
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-          <span style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a' }}>{metrics.completed}</span>
-          <span style={{ fontSize: '13px', color: '#94a3b8' }}>/ {metrics.total} tasks</span>
+          <span style={{ fontSize: '24px', fontWeight: '600', color: 'var(--text-primary)' }}>{metrics.completed}</span>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>/ {metrics.total} tasks</span>
         </div>
         {/* Progress Bar */}
-        <div style={{ width: '100%', height: '6px', background: '#f1f5f9', borderRadius: '3px', marginTop: '10px', overflow: 'hidden' }}>
+        <div style={{ width: '100%', height: '6px', background: 'var(--bg-card-soft)', borderRadius: '3px', marginTop: '10px', overflow: 'hidden' }}>
           <div
             style={{
               width: `${metrics.progressPct}%`,
               height: '100%',
-              background: 'linear-gradient(90deg, #10b981 0%, #059669 100%)',
+              background: 'var(--domain-code, #1c8a62)',
               borderRadius: '3px',
               transition: 'width 0.4s ease',
             }}
           />
         </div>
-        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '6px', fontWeight: '600' }}>
+        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px', fontWeight: '500' }}>
           {metrics.progressPct}% of goal accomplished
         </div>
       </div>
@@ -56,24 +55,23 @@ export default function TimelineMetrics({ metrics }) {
       {/* Metric 2: Scheduled Focus Time */}
       <div
         style={{
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
-          borderRadius: '14px',
-          padding: '18px 20px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-card, 8px)',
+          padding: '16px 18px',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <span style={{ fontSize: '12.5px', fontWeight: '600', color: '#64748b' }}>Scheduled Focus</span>
-          <div style={{ width: '28px', height: '28px', borderRadius: '7px', background: '#eff6ff', color: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Clock size={16} />
+          <span style={{ fontSize: '13px', fontWeight: '500', color: 'var(--text-secondary)' }}>Scheduled Focus</span>
+          <div style={{ width: '28px', height: '28px', borderRadius: 'var(--radius-btn, 6px)', background: 'rgba(47, 100, 200, 0.1)', color: 'var(--domain-coursework, #2f64c8)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Clock size={16} strokeWidth={1.8} />
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-          <span style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a' }}>{metrics.focusHours}</span>
-          <span style={{ fontSize: '13px', color: '#94a3b8' }}>hours planned</span>
+          <span style={{ fontSize: '24px', fontWeight: '600', color: 'var(--text-primary)' }}>{metrics.focusHours}</span>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>hours planned</span>
         </div>
-        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '12px' }}>
+        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '12px' }}>
           Distributed across {metrics.open} pending tasks
         </div>
       </div>
@@ -81,63 +79,61 @@ export default function TimelineMetrics({ metrics }) {
       {/* Metric 3: Critical & Impending */}
       <div
         style={{
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
-          borderRadius: '14px',
-          padding: '18px 20px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-card, 8px)',
+          padding: '16px 18px',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <span style={{ fontSize: '12.5px', fontWeight: '600', color: '#64748b' }}>Critical Deadlines</span>
+          <span style={{ fontSize: '13px', fontWeight: '500', color: 'var(--text-secondary)' }}>Critical Deadlines</span>
           <div
             style={{
               width: '28px',
               height: '28px',
-              borderRadius: '7px',
-              background: metrics.urgent > 0 ? '#fef2f2' : '#f8fafc',
-              color: metrics.urgent > 0 ? '#ef4444' : '#64748b',
+              borderRadius: 'var(--radius-btn, 6px)',
+              background: metrics.urgent > 0 ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-card-soft)',
+              color: metrics.urgent > 0 ? '#ef4444' : 'var(--text-secondary)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <AlertTriangle size={16} />
+            <AlertTriangle size={16} strokeWidth={1.8} />
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-          <span style={{ fontSize: '24px', fontWeight: '800', color: metrics.urgent > 0 ? '#ef4444' : '#0f172a' }}>
+          <span style={{ fontSize: '24px', fontWeight: '600', color: metrics.urgent > 0 ? '#ef4444' : 'var(--text-primary)' }}>
             {metrics.urgent}
           </span>
-          <span style={{ fontSize: '13px', color: '#94a3b8' }}>urgent / due soon</span>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>urgent / due soon</span>
         </div>
-        <div style={{ fontSize: '11px', color: metrics.overdue > 0 ? '#ef4444' : '#64748b', marginTop: '12px', fontWeight: metrics.overdue > 0 ? '700' : '400' }}>
-          {metrics.overdue > 0 ? `⚠️ ${metrics.overdue} task(s) overdue` : 'No overdue items'}
+        <div style={{ fontSize: '12px', color: metrics.overdue > 0 ? '#ef4444' : 'var(--text-secondary)', marginTop: '12px', fontWeight: metrics.overdue > 0 ? '600' : '400' }}>
+          {metrics.overdue > 0 ? `${metrics.overdue} task(s) overdue` : 'No overdue items'}
         </div>
       </div>
 
       {/* Metric 4: Cognitive Workload Guardrail */}
       <div
         style={{
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
-          borderRadius: '14px',
-          padding: '18px 20px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-card, 8px)',
+          padding: '16px 18px',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <span style={{ fontSize: '12.5px', fontWeight: '600', color: '#64748b' }}>Cognitive Guardrail</span>
-          <div style={{ width: '28px', height: '28px', borderRadius: '7px', background: '#f5f3ff', color: '#8b5cf6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <BrainCircuit size={16} />
+          <span style={{ fontSize: '13px', fontWeight: '500', color: 'var(--text-secondary)' }}>Cognitive Guardrail</span>
+          <div style={{ width: '28px', height: '28px', borderRadius: 'var(--radius-btn, 6px)', background: 'rgba(245, 166, 35, 0.1)', color: 'var(--accent, #f5a623)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <BrainCircuit size={16} strokeWidth={1.8} />
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-          <span style={{ fontSize: '20px', fontWeight: '800', color: Number(metrics.focusHours) > 8 ? '#f59e0b' : '#10b981' }}>
+          <span style={{ fontSize: '18px', fontWeight: '600', color: Number(metrics.focusHours) > 8 ? 'var(--accent, #f5a623)' : 'var(--domain-code, #1c8a62)' }}>
             {Number(metrics.focusHours) > 8 ? 'High Workload' : 'Optimal Capacity'}
           </span>
         </div>
-        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '12px' }}>
+        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '12px' }}>
           Burnout & schedule collision protection active
         </div>
       </div>

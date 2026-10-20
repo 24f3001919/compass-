@@ -141,7 +141,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
 
   const copyTraceAsMarkdown = () => {
     const mdLines = [
-      `# 🧭 Compass Plan — ${goal || 'Question'}`,
+      `# 🧭 Compass Plan: ${goal || 'Question'}`,
       `**Total Steps**: ${steps.length}`,
       '',
       '---',
@@ -503,12 +503,17 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
             padding: '60px 20px',
             color: 'var(--text-muted)',
           }}>
-            <div style={{ fontSize: '48px', marginBottom: '12px' }}>🧭</div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px', color: 'var(--accent, #f5a623)' }}>
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+              </svg>
+            </div>
             <div style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '8px' }}>
               Your Compass Assistant
             </div>
-            <div style={{ fontSize: '13px', lineHeight: '1.8', maxWidth: '400px', margin: '0 auto', color: 'var(--text-secondary)' }}>
-              Ask anything about your tasks, deadlines, or schedule — in plain English.
+            <div style={{ fontSize: '13px', lineHeight: '1.6', maxWidth: '400px', margin: '0 auto', color: 'var(--text-secondary)' }}>
+              Ask anything about your tasks, deadlines, or schedule: in plain English.
               I'll look through everything and give you a clear answer.
               Before making any changes, I'll always ask for your approval first.
             </div>
@@ -519,10 +524,14 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
           <div style={{
             textAlign: 'center',
             padding: '40px',
-            color: 'var(--primary)',
+            color: 'var(--accent, #f5a623)',
           }}>
-            <div style={{ fontSize: '20px', animation: 'pulse 1.5s ease-in-out infinite' }}>
-              🧭 Getting started…
+            <div style={{ fontSize: '15px', fontWeight: '500', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+              </svg>
+              <span>Getting started…</span>
             </div>
           </div>
         )}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { updateTask, verifyTaskDeadline } from '../../api/client'
 import { DOMAIN_META, getDomainMeta } from './domainMeta'
+import { Trash2, Edit2, Check, X, AlertTriangle } from 'lucide-react'
 
 const inputStyle = {
   width: '100%',
@@ -136,8 +137,8 @@ export default function TaskDetailModal({ task, onClose, onDelete, onUpdated }) 
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(22, 21, 42, 0.45)',
-        backdropFilter: 'blur(4px)',
+        background: 'rgba(27, 26, 23, 0.45)',
+        backdropFilter: 'blur(3px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -149,37 +150,41 @@ export default function TaskDetailModal({ task, onClose, onDelete, onUpdated }) 
         onClick={e => e.stopPropagation()}
         style={{
           background: 'var(--bg-card)',
-          borderRadius: '16px',
+          borderRadius: 'var(--radius-card, 8px)',
           border: '1px solid var(--border)',
           width: '100%',
           maxWidth: '580px',
           maxHeight: '90vh',
           overflowY: 'auto',
           padding: '24px',
-          boxShadow: 'var(--shadow-lg)',
+          boxShadow: '0 8px 30px rgba(0, 0, 0, 0.12)',
           color: 'var(--text-primary)'
         }}
       >
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px', gap: '10px' }}>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <span className={`badge-${task.domain}`} style={{ fontSize: '10.5px', padding: '3px 9px', borderRadius: '20px', textTransform: 'uppercase', fontWeight: '700' }}>
-              {task.domain}
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', background: 'var(--bg-card-soft)', border: '1px solid var(--border)', padding: '3px 8px', borderRadius: 'var(--radius-btn, 6px)', textTransform: 'uppercase', fontWeight: '600', color: 'var(--text-primary)' }}>
+              <span className="domain-swatch" style={{ background: (DOMAIN_META[task.domain] || {}).color || '#6b7a86' }} />
+              <span>{task.domain}</span>
             </span>
             <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '500' }}>• {task.project}</span>
-            <div className={`countdown-badge ${isOverdue ? 'countdown-overdue' : ''}`} style={{ fontSize: '11px' }}>
-              {isOverdue && '⚠️ '}{task.countdown}
+            <div className={`countdown-badge ${isOverdue ? 'countdown-overdue' : ''}`} style={{ fontSize: '11px', borderRadius: 'var(--radius-btn, 6px)' }}>
+              {isOverdue && <AlertTriangle size={12} strokeWidth={1.8} style={{ display: 'inline', marginRight: '4px' }} />}{task.countdown}
             </div>
           </div>
           <button
             onClick={onClose}
+            aria-label="Close"
+            className="btn-touch-target btn-secondary"
             style={{
-              background: 'var(--bg-card-soft)', border: '1px solid var(--border)', color: 'var(--text-muted)',
-              width: '28px', height: '28px', borderRadius: '7px', cursor: 'pointer',
-              fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--text-muted)',
+              width: '32px', height: '32px', minHeight: '32px',
+              borderRadius: 'var(--radius-btn, 6px)', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
               flexShrink: 0
             }}
-          >✕</button>
+          ><X size={16} strokeWidth={1.8} /></button>
         </div>
 
         {saveError && (
@@ -490,16 +495,19 @@ export default function TaskDetailModal({ task, onClose, onDelete, onUpdated }) 
             id="btn-delete-task-modal"
             disabled={deleting || saving}
             onClick={handleDelete}
+            className="btn-touch-target btn-secondary"
             style={{
               display: 'flex', alignItems: 'center', gap: '6px',
-              padding: '8px 14px', background: 'var(--danger-bg)',
-              border: '1px solid rgba(239,68,68,0.3)', color: '#dc2626',
-              borderRadius: '8px', fontSize: '12.5px', fontWeight: '600',
+              padding: '8px 14px',
+              borderRadius: 'var(--radius-btn, 6px)', fontSize: '13px', fontWeight: '600',
               cursor: (deleting || saving) ? 'not-allowed' : 'pointer',
-              opacity: (deleting || saving) ? 0.5 : 1, transition: 'all 0.15s ease'
+              opacity: (deleting || saving) ? 0.5 : 1,
+              minHeight: '44px',
+              color: 'var(--danger-text)'
             }}
           >
-            🗑️ {deleting ? 'Deleting…' : 'Delete'}
+            <Trash2 size={14} strokeWidth={1.8} />
+            <span>{deleting ? 'Deleting…' : 'Delete'}</span>
           </button>
 
           <div style={{ display: 'flex', gap: '8px' }}>
@@ -508,11 +516,12 @@ export default function TaskDetailModal({ task, onClose, onDelete, onUpdated }) 
                 <button
                   onClick={handleCancelEdit}
                   disabled={saving}
+                  className="btn-touch-target btn-secondary"
                   style={{
-                    padding: '8px 16px', background: 'var(--bg-card-soft)',
-                    border: '1px solid var(--border)', color: 'var(--text-secondary)',
-                    borderRadius: '8px', fontSize: '12.5px', fontWeight: '500',
-                    cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1
+                    padding: '8px 16px',
+                    borderRadius: 'var(--radius-btn, 6px)', fontSize: '13px', fontWeight: '500',
+                    cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1,
+                    minHeight: '44px'
                   }}
                 >
                   Cancel
@@ -521,27 +530,28 @@ export default function TaskDetailModal({ task, onClose, onDelete, onUpdated }) 
                   id="btn-save-task-changes"
                   onClick={handleSave}
                   disabled={saving}
+                  className="btn-touch-target btn-primary-amber"
                   style={{
                     padding: '8px 20px',
-                    background: saving ? '#1d4ed8' : 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-                    border: 'none', color: '#fff',
-                    borderRadius: '8px', fontSize: '12.5px', fontWeight: '700',
+                    borderRadius: 'var(--radius-btn, 6px)', fontSize: '13px', fontWeight: '600',
                     cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1,
-                    boxShadow: '0 4px 12px rgba(37,99,235,0.35)',
-                    display: 'flex', alignItems: 'center', gap: '6px'
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    minHeight: '44px'
                   }}
                 >
-                  {saving ? '⏳ Saving…' : '✓ Save Changes'}
+                  <Check size={14} strokeWidth={1.8} />
+                  <span>{saving ? 'Saving…' : 'Save Changes'}</span>
                 </button>
               </>
             ) : (
               <>
                 <button
                   onClick={onClose}
+                  className="btn-touch-target btn-secondary"
                   style={{
-                    padding: '8px 16px', background: 'var(--bg-card-soft)',
-                    border: '1px solid var(--border)', color: 'var(--text-secondary)',
-                    borderRadius: '8px', fontSize: '12.5px', fontWeight: '500', cursor: 'pointer'
+                    padding: '8px 16px',
+                    borderRadius: 'var(--radius-btn, 6px)', fontSize: '13px', fontWeight: '500', cursor: 'pointer',
+                    minHeight: '44px'
                   }}
                 >
                   Close
@@ -549,17 +559,17 @@ export default function TaskDetailModal({ task, onClose, onDelete, onUpdated }) 
                 <button
                   id="btn-edit-task"
                   onClick={() => setIsEditing(true)}
+                  className="btn-touch-target btn-primary-amber"
                   style={{
                     padding: '8px 18px',
-                    background: 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)',
-                    border: 'none', color: '#fff',
-                    borderRadius: '8px', fontSize: '12.5px', fontWeight: '700',
+                    borderRadius: 'var(--radius-btn, 6px)', fontSize: '13px', fontWeight: '600',
                     cursor: 'pointer',
-                    boxShadow: '0 4px 12px rgba(109,40,217,0.35)',
-                    display: 'flex', alignItems: 'center', gap: '6px'
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    minHeight: '44px'
                   }}
                 >
-                  ✏️ Edit
+                  <Edit2 size={13} strokeWidth={1.8} />
+                  <span>Edit</span>
                 </button>
               </>
             )}

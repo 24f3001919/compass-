@@ -456,16 +456,18 @@ export default function Dashboard({
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '10px 16px',
-            background: 'rgba(245, 158, 11, 0.1)',
-            border: '1px solid rgba(245, 158, 11, 0.3)',
-            borderRadius: '10px',
+            background: 'var(--bg-card-soft)',
+            border: '1px solid var(--border)',
+            borderRadius: '6px',
             marginBottom: '18px',
-            fontSize: '12.5px',
-            color: '#fbbf24',
+            fontSize: '13px',
+            color: 'var(--text-primary)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '15px' }}>⚡</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
             <span>
               <strong>Demo / Offline Mode:</strong> Backend server is connecting. Displaying cached demo tasks. Your changes will sync once connected.
             </span>
@@ -473,15 +475,12 @@ export default function Dashboard({
           <button
             type="button"
             onClick={handleManualRefresh}
+            className="btn-secondary"
             style={{
-              background: 'rgba(245, 158, 11, 0.2)',
-              border: 'none',
-              color: '#fbbf24',
-              padding: '4px 10px',
-              borderRadius: '6px',
-              fontWeight: '700',
-              fontSize: '11px',
-              cursor: 'pointer',
+              minHeight: '36px',
+              padding: '0 12px',
+              fontSize: '12px',
+              fontWeight: '600',
             }}
           >
             Retry Sync
@@ -490,27 +489,33 @@ export default function Dashboard({
       )}
 
       {/* Page Header */}
-      <div style={{ marginBottom: '20px' }}>
+      <div style={{ marginBottom: '22px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <h2
                 style={{
-                  fontSize: '22px',
-                  fontWeight: '800',
+                  fontSize: '26px',
+                  fontWeight: '600',
                   color: 'var(--text-primary)',
-                  letterSpacing: '-0.4px',
+                  letterSpacing: '-0.3px',
                   margin: 0,
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
                   flexWrap: 'wrap',
+                  lineHeight: 1.2,
                 }}
               >
-                <span>📊</span>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect width="7" height="9" x="3" y="3" rx="1" />
+                  <rect width="7" height="5" x="14" y="3" rx="1" />
+                  <rect width="7" height="9" x="14" y="12" rx="1" />
+                  <rect width="7" height="5" x="3" y="16" rx="1" />
+                </svg>
                 <span>Dashboard</span>
-                <span className="serif-accent" style={{ color: 'var(--text-secondary)', fontWeight: '600', fontSize: '16px' }}>
-                  — {today}
+                <span style={{ color: 'var(--text-muted)', fontWeight: '400', fontSize: '15px' }}>
+                  , {today}
                 </span>
               </h2>
             </div>
@@ -519,32 +524,19 @@ export default function Dashboard({
             </p>
           </div>
 
-          {/* Header Action Buttons & Dark Mode Toggle */}
+          {/* Header Action Buttons & Dark Mode Toggle: 1 primary amber, rest secondary */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <button
               type="button"
               id="dashboard-btn-new-task"
               onClick={() => setShowAddModal(true)}
-              className="btn-touch-target"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
-                borderRadius: '8px',
-                background: 'var(--brand)',
-                color: '#1a162b',
-                fontWeight: '700',
-                fontSize: '12.5px',
-                border: 'none',
-                cursor: 'pointer',
-                transition: 'opacity 0.15s ease',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.9')}
-              onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
+              className="btn-primary-amber"
               aria-label="Add new task or deadline"
             >
-              <span>+</span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M5 12h14" />
+                <path d="M12 5v14" />
+              </svg>
               <span>New Deadline</span>
             </button>
 
@@ -554,23 +546,15 @@ export default function Dashboard({
                   type="button"
                   id="dashboard-btn-open-schedule"
                   onClick={() => onSelectTab('calendar')}
-                  className="btn-touch-target"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    background: 'var(--bg-card)',
-                    color: 'var(--text-primary)',
-                    fontWeight: '600',
-                    fontSize: '12.5px',
-                    border: '1px solid var(--border)',
-                    cursor: 'pointer',
-                  }}
+                  className="btn-secondary"
                   title="Open Schedule & Google Calendar sync"
                 >
-                  <span>🗓️</span>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect width="18" height="18" x="3" y="4" rx="2" />
+                    <path d="M3 10h18" />
+                    <path d="M8 2v4" />
+                    <path d="M16 2v4" />
+                  </svg>
                   <span>Schedule</span>
                 </button>
 
@@ -578,23 +562,13 @@ export default function Dashboard({
                   type="button"
                   id="dashboard-btn-open-compass"
                   onClick={() => onSelectTab('compass')}
-                  className="btn-touch-target"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    background: 'var(--bg-card)',
-                    color: 'var(--text-primary)',
-                    fontWeight: '600',
-                    fontSize: '12.5px',
-                    border: '1px solid var(--border)',
-                    cursor: 'pointer',
-                  }}
+                  className="btn-secondary"
                   title="Open Compass AI Assistant & Planner"
                 >
-                  <span>🧭</span>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10" />
+                    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+                  </svg>
                   <span>Compass</span>
                 </button>
               </>
@@ -604,33 +578,30 @@ export default function Dashboard({
               type="button"
               id="dashboard-btn-refresh"
               onClick={handleManualRefresh}
-              className="btn-touch-target"
+              className="btn-secondary"
               aria-label="Refresh dashboard data"
               title={`Last synced: ${timeSinceUpdate}`}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '6px 10px',
-                borderRadius: '8px',
-                background: 'var(--bg-card)',
-                color: 'var(--text-secondary)',
-                fontWeight: '600',
-                fontSize: '12px',
-                border: '1px solid var(--border)',
-                cursor: 'pointer',
-              }}
             >
-              <span
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
                 style={{
-                  display: 'inline-block',
                   animation: isRefreshing ? 'spin 0.6s linear infinite' : 'none',
-                  fontSize: '14px',
                 }}
               >
-                🔄
-              </span>
-              <span style={{ fontSize: '11px', opacity: 0.8 }}>{timeSinceUpdate}</span>
+                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                <path d="M16 21h5v-5" />
+              </svg>
+              <span style={{ fontSize: '12px' }}>{timeSinceUpdate}</span>
             </button>
 
             <div style={{ flexShrink: 0 }}>
@@ -645,27 +616,32 @@ export default function Dashboard({
       </div>
 
       {/* SECTION: Today's Focus Card */}
-      <div className="dashboard-focus-card" role="region" aria-label="Today's focus area">
+      <div className="dashboard-focus-card" role="region" aria-label="Today's focus area" style={{ borderRadius: '8px', border: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
           <div
             style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
-              background: todayFocus.count > 0 ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+              width: '38px',
+              height: '38px',
+              borderRadius: '6px',
+              background: 'var(--bg-card-soft)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-primary)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '20px',
               flexShrink: 0,
             }}
           >
-            {todayFocus.count > 0 ? '🎯' : '🎉'}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <circle cx="12" cy="12" r="6" />
+              <circle cx="12" cy="12" r="2" />
+            </svg>
           </div>
 
           <div style={{ minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--text-primary)' }}>
+              <span style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)' }}>
                 {todayFocus.count > 0
                   ? `${todayFocus.count} ${todayFocus.count === 1 ? 'task needs' : 'tasks need'} attention today`
                   : "You're all caught up for today!"}
@@ -674,13 +650,14 @@ export default function Dashboard({
                 <span
                   style={{
                     fontSize: '11px',
-                    fontWeight: '700',
+                    fontWeight: '600',
                     padding: '2px 8px',
-                    borderRadius: '12px',
+                    borderRadius: '4px',
                     background: todayFocus.nextUrgency.isOverdue
                       ? 'var(--danger-bg)'
-                      : 'rgba(245, 158, 11, 0.15)',
-                    color: todayFocus.nextUrgency.isOverdue ? '#ef4444' : 'var(--brand)',
+                      : 'var(--bg-card-soft)',
+                    color: todayFocus.nextUrgency.isOverdue ? 'var(--danger-text)' : 'var(--text-primary)',
+                    border: '1px solid var(--border)',
                   }}
                 >
                   {todayFocus.nextUrgency.label}
@@ -690,8 +667,8 @@ export default function Dashboard({
 
             <div
               style={{
-                fontSize: '12.5px',
-                color: 'var(--text-secondary)',
+                fontSize: '13px',
+                color: 'var(--text-muted)',
                 marginTop: '2px',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
@@ -701,7 +678,7 @@ export default function Dashboard({
             >
               {todayFocus.nextItem ? (
                 <>
-                  Next up: <strong>{todayFocus.nextItem.title}</strong>{' '}
+                  Next up: <strong style={{ color: 'var(--text-primary)' }}>{todayFocus.nextItem.title}</strong>{' '}
                   <span style={{ color: 'var(--text-muted)' }}>({todayFocus.nextItem.project || todayFocus.nextItem.domain})</span>
                 </>
               ) : (
@@ -711,33 +688,26 @@ export default function Dashboard({
           </div>
         </div>
 
-        {/* Focus Actions */}
+        {/* Focus Actions: min 44px tap target */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
           {todayFocus.nextItem && (
             <button
               type="button"
-              className="btn-touch-target"
+              className="btn-secondary"
               onClick={() => handleToggleTaskStatus(todayFocus.nextItem.id, false)}
-              style={{
-                background: 'var(--bg-card-soft)',
-                border: '1px solid var(--border)',
-                color: 'var(--code)',
-                fontWeight: '700',
-                fontSize: '12px',
-                padding: '6px 12px',
-                borderRadius: '8px',
-                cursor: 'pointer',
-              }}
               title="Mark this focus task as completed"
             >
-              ✓ Complete
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              <span>Complete</span>
             </button>
           )}
 
           {onOpenCompass && (
             <button
               type="button"
-              className="btn-touch-target"
+              className="btn-secondary"
               onClick={() => {
                 const prompt =
                   todayFocus.count > 0
@@ -745,33 +715,33 @@ export default function Dashboard({
                     : 'Please review my upcoming tasks and projects and propose a focus schedule for this week.'
                 onOpenCompass(prompt)
               }}
-              style={{
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border)',
-                color: 'var(--brand)',
-                fontWeight: '700',
-                fontSize: '12px',
-                padding: '6px 12px',
-                borderRadius: '8px',
-                cursor: 'pointer',
-              }}
             >
-              🧭 Ask Compass to Plan
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+              </svg>
+              <span>Ask Compass to Plan</span>
             </button>
           )}
         </div>
       </div>
+
 
       {/* DOMAIN FILTER BAR */}
       <div className="dashboard-filter-bar" role="tablist" aria-label="Filter dashboard by context domain">
         <button
           type="button"
           onClick={() => setSelectedDomainFilter('all')}
-          className={`dashboard-filter-pill ${selectedDomainFilter === 'all' ? 'active' : ''}`}
+          className={`filter-pill ${selectedDomainFilter === 'all' ? 'active' : ''}`}
           role="tab"
           aria-selected={selectedDomainFilter === 'all'}
         >
-          <span>▦</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect width="7" height="7" x="3" y="3" rx="1" />
+            <rect width="7" height="7" x="14" y="3" rx="1" />
+            <rect width="7" height="7" x="14" y="14" rx="1" />
+            <rect width="7" height="7" x="3" y="14" rx="1" />
+          </svg>
           <span>All Domains ({cleanTasks.length})</span>
         </button>
 
@@ -780,16 +750,11 @@ export default function Dashboard({
             key={item.key}
             type="button"
             onClick={() => setSelectedDomainFilter(item.key)}
-            className={`dashboard-filter-pill ${selectedDomainFilter === item.key ? 'active' : ''}`}
+            className={`filter-pill ${selectedDomainFilter === item.key ? 'active' : ''}`}
             role="tab"
             aria-selected={selectedDomainFilter === item.key}
-            style={
-              selectedDomainFilter === item.key
-                ? { background: item.color, color: '#1a162b', borderColor: item.color }
-                : undefined
-            }
           >
-            <span>{item.icon}</span>
+            <span className="domain-swatch" style={{ background: item.color }} />
             <span>
               {item.label} ({item.count})
             </span>
@@ -803,11 +768,14 @@ export default function Dashboard({
             style={{
               background: 'transparent',
               border: 'none',
-              color: 'var(--brand)',
-              fontSize: '11.5px',
-              fontWeight: '700',
+              color: 'var(--text-muted)',
+              fontSize: '12px',
+              fontWeight: '500',
               cursor: 'pointer',
-              padding: '4px 8px',
+              padding: '0 8px',
+              minHeight: '44px',
+              display: 'inline-flex',
+              alignItems: 'center',
             }}
           >
             Reset filter ✕
@@ -834,15 +802,24 @@ export default function Dashboard({
           title="Click to view all tasks"
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Total Tasks
             </span>
-            <span style={{ fontSize: '18px' }}>📋</span>
+            <span style={{ color: 'var(--text-muted)', display: 'inline-flex' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                <path d="M12 11h4" />
+                <path d="M12 16h4" />
+                <path d="M8 11h.01" />
+                <path d="M8 16h.01" />
+              </svg>
+            </span>
           </div>
-          <div style={{ fontSize: '28px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
+          <div style={{ fontSize: '26px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.3px', lineHeight: 1.2 }}>
             {metrics.total}
           </div>
-          <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '4px' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
             {selectedDomainFilter === 'all' ? 'Across all domains' : `In ${selectedDomainFilter}`}
           </div>
         </div>
@@ -864,26 +841,31 @@ export default function Dashboard({
           title="Click to filter completed tasks"
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Completion Rate
             </span>
-            <span style={{ fontSize: '18px' }}>📈</span>
+            <span style={{ color: 'var(--text-muted)', display: 'inline-flex' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+                <polyline points="16 7 22 7 22 13" />
+              </svg>
+            </span>
           </div>
-          <div style={{ fontSize: '28px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
+          <div style={{ fontSize: '26px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.3px', lineHeight: 1.2 }}>
             {metrics.completionRate}%
           </div>
-          <div style={{ width: '100%', height: '6px', background: 'var(--border-soft)', borderRadius: '3px', marginTop: '8px', overflow: 'hidden' }}>
+          <div style={{ width: '100%', height: '4px', background: 'var(--border)', borderRadius: '2px', marginTop: '8px', overflow: 'hidden' }}>
             <div
               style={{
                 width: `${metrics.completionRate}%`,
                 height: '100%',
-                background: 'var(--code)',
-                borderRadius: '3px',
+                background: 'var(--domain-code)',
+                borderRadius: '2px',
                 transition: 'width 0.3s ease',
               }}
             />
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
             {metrics.completedCount} of {metrics.total} tasks completed
           </div>
         </div>
@@ -905,22 +887,29 @@ export default function Dashboard({
           title="Click to filter overdue tasks"
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Overdue
             </span>
-            <span style={{ fontSize: '18px' }}>⚠️</span>
+            <span style={{ color: metrics.overdueCount > 0 ? 'var(--danger-text)' : 'var(--text-muted)', display: 'inline-flex' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            </span>
           </div>
           <div
             style={{
-              fontSize: '28px',
-              fontWeight: '800',
-              color: metrics.overdueCount > 0 ? '#ef4444' : 'var(--text-primary)',
-              letterSpacing: '-0.5px',
+              fontSize: '26px',
+              fontWeight: '600',
+              color: metrics.overdueCount > 0 ? 'var(--danger-text)' : 'var(--text-primary)',
+              letterSpacing: '-0.3px',
+              lineHeight: 1.2,
             }}
           >
             {metrics.overdueCount}
           </div>
-          <div style={{ fontSize: '11.5px', color: metrics.overdueCount > 0 ? '#ef4444' : 'var(--text-muted)', marginTop: '4px' }}>
+          <div style={{ fontSize: '12px', color: metrics.overdueCount > 0 ? 'var(--danger-text)' : 'var(--text-muted)', marginTop: '4px' }}>
             {metrics.overdueCount > 0 ? 'Requires attention' : 'No overdue items'}
           </div>
         </div>
@@ -942,15 +931,20 @@ export default function Dashboard({
           title="Click to filter today's tasks"
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Completed Today
             </span>
-            <span style={{ fontSize: '18px' }}>✅</span>
+            <span style={{ color: 'var(--text-muted)', display: 'inline-flex' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
+              </svg>
+            </span>
           </div>
-          <div style={{ fontSize: '28px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
+          <div style={{ fontSize: '26px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.3px', lineHeight: 1.2 }}>
             {metrics.completedTodayCount}
           </div>
-          <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '4px' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
             Checked off today
           </div>
         </div>
@@ -961,8 +955,11 @@ export default function Dashboard({
         {/* Tasks by Domain */}
         <div className="dashboard-section-card" role="region" aria-label="Tasks distributed by domain">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>🏷️</span>
+            <h3 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
+                <circle cx="7" cy="7" r=".5" fill="currentColor" />
+              </svg>
               <span>Tasks by Domain</span>
             </h3>
             {onSelectTab && (
@@ -974,15 +971,11 @@ export default function Dashboard({
                   }
                   onSelectTab('timeline')
                 }}
-                className="btn-touch-target"
+                className="btn-secondary"
                 style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--brand)',
+                  minHeight: '36px',
+                  padding: '0 10px',
                   fontSize: '12px',
-                  fontWeight: '700',
-                  cursor: 'pointer',
-                  padding: '4px 8px',
                 }}
               >
                 Timeline view →
@@ -992,32 +985,26 @@ export default function Dashboard({
 
           {cleanTasks.length === 0 ? (
             <div className="dashboard-empty-state">
-              <span style={{ fontSize: '28px', marginBottom: '8px' }}>📭</span>
-              <p style={{ margin: 0, fontSize: '13.5px', fontWeight: '700', color: 'var(--text-primary)' }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginBottom: '8px', color: 'var(--text-muted)' }}>
+                <rect width="20" height="16" x="2" y="4" rx="2" />
+                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+              </svg>
+              <p style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>
                 No tasks tracked yet
               </p>
-              <p style={{ margin: '4px 0 14px 0', fontSize: '12px', color: 'var(--text-muted)', maxWidth: '300px' }}>
+              <p style={{ margin: '4px 0 14px 0', fontSize: '13px', color: 'var(--text-muted)', maxWidth: '300px' }}>
                 Create your first deadline or ask Compass Assistant to synthesize your workload.
               </p>
               <button
                 type="button"
                 onClick={() => setShowAddModal(true)}
-                style={{
-                  background: 'var(--brand)',
-                  border: 'none',
-                  color: '#1a162b',
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  fontWeight: '700',
-                  fontSize: '12.5px',
-                  cursor: 'pointer',
-                }}
+                className="btn-primary-amber"
               >
                 + Create First Task
               </button>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {domainBreakdown.map((item) => (
                 <div
                   key={item.key}
@@ -1026,9 +1013,9 @@ export default function Dashboard({
                   aria-label={`${item.label}: ${item.count} tasks, ${item.pct} percent. Click to filter.`}
                   style={{
                     padding: '10px 12px',
-                    borderRadius: '10px',
-                    background: selectedDomainFilter === item.key ? 'var(--bg-card-soft)' : 'var(--bg-card-soft)',
-                    border: selectedDomainFilter === item.key ? `1.5px solid ${item.color}` : '1px solid var(--border)',
+                    borderRadius: '6px',
+                    background: selectedDomainFilter === item.key ? 'var(--bg-card-soft)' : 'var(--bg-card)',
+                    border: '1px solid var(--border)',
                     cursor: 'pointer',
                     transition: 'all 0.15s ease',
                   }}
@@ -1045,13 +1032,13 @@ export default function Dashboard({
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '15px' }}>{item.icon}</span>
-                      <span style={{ fontSize: '13.5px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                      <span className="domain-swatch" style={{ background: item.color }} />
+                      <span style={{ fontSize: '13.5px', fontWeight: '500', color: 'var(--text-primary)' }}>
                         {item.label}
                       </span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)' }}>
+                      <span style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-secondary)' }}>
                         {item.count} {item.count === 1 ? 'task' : 'tasks'}
                       </span>
                       <span style={{ fontSize: '11px', color: 'var(--text-muted)', minWidth: '34px', textAlign: 'right' }}>
@@ -1059,13 +1046,13 @@ export default function Dashboard({
                       </span>
                     </div>
                   </div>
-                  <div style={{ width: '100%', height: '6px', background: 'var(--border-soft)', borderRadius: '3px', overflow: 'hidden' }}>
+                  <div style={{ width: '100%', height: '4px', background: 'var(--border)', borderRadius: '2px', overflow: 'hidden' }}>
                     <div
                       style={{
                         width: `${item.pct}%`,
                         height: '100%',
                         background: item.color,
-                        borderRadius: '3px',
+                        borderRadius: '2px',
                         transition: 'width 0.3s ease',
                       }}
                     />
@@ -1079,23 +1066,22 @@ export default function Dashboard({
         {/* Upcoming Deadlines */}
         <div className="dashboard-section-card" role="region" aria-label="Upcoming deadlines list">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>⏰</span>
+            <h3 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
               <span>Upcoming Deadlines</span>
             </h3>
             {onSelectTab && (
               <button
                 type="button"
                 onClick={() => onSelectTab('timeline')}
-                className="btn-touch-target"
+                className="btn-secondary"
                 style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--brand)',
+                  minHeight: '36px',
+                  padding: '0 10px',
                   fontSize: '12px',
-                  fontWeight: '700',
-                  cursor: 'pointer',
-                  padding: '4px 8px',
                 }}
               >
                 View all ({upcomingDeadlines.length}) →
@@ -1105,32 +1091,26 @@ export default function Dashboard({
 
           {upcomingDeadlines.length === 0 ? (
             <div className="dashboard-empty-state">
-              <span style={{ fontSize: '28px', marginBottom: '8px' }}>🎉</span>
-              <p style={{ margin: 0, fontSize: '13.5px', fontWeight: '700', color: 'var(--text-primary)' }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginBottom: '8px', color: 'var(--text-muted)' }}>
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
+              </svg>
+              <p style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>
                 No pending deadlines
               </p>
-              <p style={{ margin: '4px 0 14px 0', fontSize: '12px', color: 'var(--text-muted)', maxWidth: '300px' }}>
+              <p style={{ margin: '4px 0 14px 0', fontSize: '13px', color: 'var(--text-muted)', maxWidth: '300px' }}>
                 You have cleared all scheduled deadlines! Take a breather or log a new milestone.
               </p>
               <button
                 type="button"
                 onClick={() => setShowAddModal(true)}
-                style={{
-                  background: 'var(--brand)',
-                  border: 'none',
-                  color: '#1a162b',
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  fontWeight: '700',
-                  fontSize: '12.5px',
-                  cursor: 'pointer',
-                }}
+                className="btn-primary-amber"
               >
                 + Add Deadline
               </button>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {upcomingDeadlines.map((task) => {
                 const meta = getDomainMeta(task.domain)
                 const isOverdue = task.urgency?.isOverdue
@@ -1145,42 +1125,40 @@ export default function Dashboard({
                       justifyContent: 'space-between',
                       gap: '12px',
                       padding: '10px 12px',
-                      borderRadius: '10px',
-                      background: 'var(--bg-card-soft)',
-                      border: isOverdue
-                        ? '1px solid rgba(239, 68, 68, 0.4)'
-                        : isUrgent
-                        ? '1px solid rgba(245, 158, 11, 0.4)'
-                        : '1px solid var(--border)',
+                      borderRadius: '6px',
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border)',
                       transition: 'all 0.15s ease',
                     }}
                   >
-                    {/* Inline Completion Checkbox */}
+                    {/* Inline Completion Checkbox: 6px radius, 44px min tap */}
                     <button
                       type="button"
                       onClick={() => handleToggleTaskStatus(task.id, false)}
                       className="btn-touch-target"
                       style={{
-                        width: '26px',
-                        height: '26px',
-                        minWidth: '26px',
-                        minHeight: '26px',
-                        borderRadius: '50%',
-                        border: '1.5px solid var(--border)',
-                        background: 'var(--bg-card)',
+                        width: '32px',
+                        height: '32px',
+                        minWidth: '32px',
+                        minHeight: '32px',
+                        borderRadius: '6px',
+                        border: '1px solid var(--border)',
+                        background: 'var(--bg-card-soft)',
                         color: 'var(--text-muted)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         cursor: 'pointer',
-                        fontSize: '12px',
+                        padding: 0,
                         flexShrink: 0,
                         transition: 'all 0.15s ease',
                       }}
                       title="Mark as completed"
                       aria-label={`Mark task ${task.title} as completed`}
                     >
-                      ✓
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
                     </button>
 
                     <div
@@ -1190,15 +1168,15 @@ export default function Dashboard({
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                        <span style={{ fontSize: '12px' }}>{meta.icon}</span>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600' }}>
+                        <span className="domain-swatch" style={{ background: meta.color }} />
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' }}>
                           {task.project || meta.label}
                         </span>
                       </div>
                       <div
                         style={{
-                          fontSize: '13px',
-                          fontWeight: '700',
+                          fontSize: '13.5px',
+                          fontWeight: '500',
                           color: 'var(--text-primary)',
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
@@ -1218,23 +1196,17 @@ export default function Dashboard({
                           gap: '4px',
                           background: isOverdue
                             ? 'var(--danger-bg)'
-                            : isUrgent
-                            ? 'rgba(245, 158, 11, 0.15)'
-                            : 'var(--bg-card)',
+                            : 'var(--bg-card-soft)',
                           color: isOverdue
-                            ? '#ef4444'
+                            ? 'var(--danger-text)'
                             : isUrgent
-                            ? 'var(--brand)'
+                            ? 'var(--accent-text)'
                             : 'var(--text-secondary)',
-                          border: isOverdue
-                            ? '1px solid rgba(239, 68, 68, 0.3)'
-                            : isUrgent
-                            ? '1px solid rgba(245, 158, 11, 0.3)'
-                            : '1px solid var(--border)',
-                          padding: '4px 8px',
+                          border: '1px solid var(--border)',
+                          padding: '3px 8px',
                           borderRadius: '6px',
-                          fontSize: '11px',
-                          fontWeight: '700',
+                          fontSize: '11.5px',
+                          fontWeight: '500',
                           whiteSpace: 'nowrap',
                         }}
                       >
@@ -1254,27 +1226,32 @@ export default function Dashboard({
         {/* Recent Activity */}
         <div className="dashboard-section-card" role="region" aria-label="Recent activity feed">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>⚡</span>
+            <h3 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+              </svg>
               <span>Recent Activity</span>
             </h3>
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '600' }}>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '500' }}>
               Latest milestones
             </span>
           </div>
 
           {recentActivity.length === 0 ? (
             <div className="dashboard-empty-state">
-              <span style={{ fontSize: '28px', marginBottom: '8px' }}>📜</span>
-              <p style={{ margin: 0, fontSize: '13.5px', fontWeight: '700', color: 'var(--text-primary)' }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginBottom: '8px', color: 'var(--text-muted)' }}>
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+              </svg>
+              <p style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>
                 No activity to display
               </p>
-              <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+              <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--text-muted)' }}>
                 Completed and created tasks will appear here.
               </p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {recentActivity.map((task) => {
                 const meta = getDomainMeta(task.domain)
                 const isCompleted =
@@ -1291,8 +1268,8 @@ export default function Dashboard({
                       justifyContent: 'space-between',
                       gap: '12px',
                       padding: '10px 12px',
-                      borderRadius: '10px',
-                      background: 'var(--bg-card-soft)',
+                      borderRadius: '6px',
+                      background: 'var(--bg-card)',
                       border: '1px solid var(--border)',
                       opacity: isCompleted ? 0.85 : 1,
                     }}
@@ -1303,43 +1280,48 @@ export default function Dashboard({
                       onClick={() => handleToggleTaskStatus(task.id, isCompleted)}
                       className="btn-touch-target"
                       style={{
-                        width: '26px',
-                        height: '26px',
-                        minWidth: '26px',
-                        minHeight: '26px',
-                        borderRadius: '50%',
-                        border: isCompleted ? '1.5px solid #10b981' : '1.5px solid var(--border)',
-                        background: isCompleted ? '#10b981' : 'var(--bg-card)',
+                        width: '32px',
+                        height: '32px',
+                        minWidth: '32px',
+                        minHeight: '32px',
+                        borderRadius: '6px',
+                        border: '1px solid var(--border)',
+                        background: isCompleted ? 'var(--domain-code)' : 'var(--bg-card-soft)',
                         color: isCompleted ? '#ffffff' : 'var(--text-muted)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         cursor: 'pointer',
-                        fontSize: '12px',
+                        padding: 0,
                         flexShrink: 0,
                         transition: 'all 0.15s ease',
                       }}
                       title={isCompleted ? 'Mark as open' : 'Mark as completed'}
                       aria-label={`Toggle task completion for ${task.title}`}
                     >
-                      ✓
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
                     </button>
 
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px', flexWrap: 'wrap' }}>
                         <span
-                          className={`badge-${task.domain || 'general'}`}
                           style={{
-                            fontSize: '10.5px',
+                            fontSize: '11px',
                             padding: '2px 8px',
-                            borderRadius: '12px',
-                            fontWeight: '700',
-                            background: 'rgba(255, 255, 255, 0.06)',
-                            color: meta.color,
-                            border: `1px solid ${meta.border || 'rgba(255, 255, 255, 0.1)'}`,
+                            borderRadius: '4px',
+                            fontWeight: '500',
+                            background: 'var(--bg-card-soft)',
+                            color: 'var(--text-primary)',
+                            border: '1px solid var(--border)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
                           }}
                         >
-                          {meta.icon} {meta.label}
+                          <span className="domain-swatch" style={{ background: meta.color }} />
+                          <span>{meta.label}</span>
                         </span>
                         <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                           {task.timestamp || 'Recently'}
@@ -1347,8 +1329,8 @@ export default function Dashboard({
                       </div>
                       <div
                         style={{
-                          fontSize: '13px',
-                          fontWeight: '600',
+                          fontSize: '13.5px',
+                          fontWeight: '500',
                           color: isCompleted ? 'var(--text-muted)' : 'var(--text-primary)',
                           textDecoration: isCompleted ? 'line-through' : 'none',
                           whiteSpace: 'nowrap',
@@ -1365,12 +1347,12 @@ export default function Dashboard({
                       <span
                         style={{
                           fontSize: '11px',
-                          fontWeight: '700',
+                          fontWeight: '500',
                           padding: '3px 8px',
                           borderRadius: '6px',
-                          background: isCompleted ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-card)',
-                          color: isCompleted ? 'var(--code)' : 'var(--text-secondary)',
-                          border: `1px solid ${isCompleted ? 'rgba(16, 185, 129, 0.3)' : 'var(--border)'}`,
+                          background: 'var(--bg-card-soft)',
+                          color: isCompleted ? 'var(--domain-code)' : 'var(--text-secondary)',
+                          border: '1px solid var(--border)',
                         }}
                       >
                         {isCompleted ? '✓ Done' : 'Open'}
@@ -1386,8 +1368,13 @@ export default function Dashboard({
         {/* System & Telemetry Status */}
         <div className="dashboard-section-card" role="region" aria-label="System connectivity and model telemetry">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>🖥️</span>
+            <h3 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect width="20" height="8" x="2" y="2" rx="2" ry="2" />
+                <rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
+                <line x1="6" y1="6" x2="6.01" y2="6" />
+                <line x1="6" y1="18" x2="6.01" y2="18" />
+              </svg>
               <span>System & Telemetry</span>
             </h3>
             <span
@@ -1396,12 +1383,12 @@ export default function Dashboard({
                 alignItems: 'center',
                 gap: '6px',
                 fontSize: '11.5px',
-                fontWeight: '700',
+                fontWeight: '500',
                 padding: '3px 8px',
-                borderRadius: '12px',
-                background: isOnline ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                color: isOnline ? 'var(--code)' : 'var(--brand)',
-                border: `1px solid ${isOnline ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                borderRadius: '6px',
+                background: 'var(--bg-card-soft)',
+                color: 'var(--text-primary)',
+                border: '1px solid var(--border)',
               }}
             >
               <span
@@ -1409,7 +1396,7 @@ export default function Dashboard({
                   width: '6px',
                   height: '6px',
                   borderRadius: '50%',
-                  background: isOnline ? '#10b981' : '#f5a623',
+                  background: isOnline ? '#1c8a62' : '#f5a623',
                 }}
               />
               {isOnline ? 'System Online' : 'Connecting'}
@@ -1421,8 +1408,8 @@ export default function Dashboard({
             <div
               style={{
                 padding: '10px 12px',
-                borderRadius: '10px',
-                background: 'var(--bg-card-soft)',
+                borderRadius: '6px',
+                background: 'var(--bg-card)',
                 border: '1px solid var(--border)',
                 display: 'flex',
                 alignItems: 'center',
@@ -1433,22 +1420,28 @@ export default function Dashboard({
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase' }}>
                   Backend Database
                 </div>
-                <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', marginTop: '2px' }}>
+                <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', marginTop: '2px' }}>
                   {backendStatus || 'Online'}
                 </div>
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '1px' }}>
                   PostgreSQL 16 · pgvector HNSW
                 </div>
               </div>
-              <span style={{ fontSize: '18px' }}>🗄️</span>
+              <span style={{ color: 'var(--text-muted)', display: 'inline-flex' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <ellipse cx="12" cy="5" rx="9" ry="3" />
+                  <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+                  <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+                </svg>
+              </span>
             </div>
 
             {/* Workspace & Google Calendar Connection */}
             <div
               style={{
                 padding: '10px 12px',
-                borderRadius: '10px',
-                background: 'var(--bg-card-soft)',
+                borderRadius: '6px',
+                background: 'var(--bg-card)',
                 border: '1px solid var(--border)',
                 display: 'flex',
                 alignItems: 'center',
@@ -1459,7 +1452,7 @@ export default function Dashboard({
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase' }}>
                   Workspace & Calendar
                 </div>
-                <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', marginTop: '2px' }}>
+                <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', marginTop: '2px' }}>
                   {currentUser?.calendar?.connected
                     ? `Google Calendar (${currentUser.calendar.mode === 'live' ? 'Live' : 'Demo'})`
                     : 'Local Sandbox Workspace'}
@@ -1473,22 +1466,24 @@ export default function Dashboard({
                   <button
                     type="button"
                     onClick={onOpenAuth}
-                    className="btn-touch-target"
+                    className="btn-secondary"
                     style={{
-                      background: 'var(--bg-card)',
-                      border: '1px solid var(--border)',
-                      color: 'var(--text-primary)',
+                      minHeight: '36px',
+                      padding: '0 10px',
                       fontSize: '11.5px',
-                      fontWeight: '600',
-                      padding: '4px 8px',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
                     }}
                   >
                     {currentUser?.authenticated ? 'Account' : 'Sign in'}
                   </button>
                 )}
-                <span style={{ fontSize: '18px' }}>🗓️</span>
+                <span style={{ color: 'var(--text-muted)', display: 'inline-flex' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect width="18" height="18" x="3" y="4" rx="2" />
+                    <path d="M3 10h18" />
+                    <path d="M8 2v4" />
+                    <path d="M16 2v4" />
+                  </svg>
+                </span>
               </div>
             </div>
 
@@ -1496,8 +1491,8 @@ export default function Dashboard({
             <div
               style={{
                 padding: '10px 12px',
-                borderRadius: '10px',
-                background: 'var(--bg-card-soft)',
+                borderRadius: '6px',
+                background: 'var(--bg-card)',
                 border: '1px solid var(--border)',
                 display: 'flex',
                 alignItems: 'center',
@@ -1508,7 +1503,7 @@ export default function Dashboard({
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase' }}>
                   Nebius API Telemetry
                 </div>
-                <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', marginTop: '2px' }}>
+                <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', marginTop: '2px' }}>
                   {usageStats?.total_requests ?? 0} calls ·{' '}
                   {usageStats?.total_estimated_cost_usd !== undefined
                     ? `$${Number(usageStats.total_estimated_cost_usd).toFixed(5)}`
@@ -1518,7 +1513,11 @@ export default function Dashboard({
                   Nebius Token Factory · Nemotron-3 MoE
                 </div>
               </div>
-              <span style={{ fontSize: '18px' }}>⚡</span>
+              <span style={{ color: 'var(--text-muted)', display: 'inline-flex' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                </svg>
+              </span>
             </div>
           </div>
         </div>
