@@ -301,6 +301,120 @@ export function filterTasksByView(tasks, view, now = new Date()) {
 }
 
 /**
+ * Filter tasks by combined Status group and Due group.
+ * Preserves 100% equivalence with single-view filterTasksByView when used alone.
+ */
+export function filterTasksByStatusAndDue(tasks, statusFilter = 'all', dueFilter = 'all', now = new Date()) {
+  if (!Array.isArray(tasks)) return []
+  const sf = (statusFilter || 'all').toLowerCase().trim()
+  const df = (dueFilter || 'all').toLowerCase().trim()
+
+  if (sf === 'all' && df === 'all') return tasks
+
+  return tasks.filter((task) => {
+    const c = classifyDeadline(task, now)
+
+    // Status filter
+    if (sf !== 'all') {
+      if (sf === 'pending' && c.lifecycle !== 'pending') return false
+      if (sf === 'in_progress' && c.lifecycle !== 'in_progress') return false
+      if (sf === 'completed' && c.lifecycle !== 'completed') return false
+    }
+
+    // Due filter
+    if (df !== 'all') {
+      if (df === 'overdue' && !(c.timing === 'overdue' && c.isActiveDeadline)) return false
+      if (df === 'due_today' && !(c.timing === 'due_today' && c.isActiveDeadline)) return false
+      if (df === 'urgent' && !((c.timing === 'urgent' || c.timing === 'due_today') && c.isActiveDeadline)) return false
+      if (df === 'due_soon' && !(c.timing === 'due_soon' && c.isActiveDeadline)) return false
+      if (df === 'upcoming' && !(c.timing === 'upcoming' && c.isActiveDeadline)) return false
+    }
+
+    return true
+  })
+}
+
+/**
+ * Calculates accurate cross-group counts for both Status and Due options.
+ * Counts stay accurate when the other group's filter is applied.
+ */
+export function calculateFilterCounts(tasks, statusFilter = 'all', dueFilter = 'all', now = new Date()) {
+  if (!Array.isArray(tasks)) {
+    return {
+      statusCounts: { all: 0, pending: 0, in_progress: 0, completed: 0 },
+      dueCounts: { all: 0, overdue: 0, due_today: 0, urgent: 0, due_soon: 0, upcoming: 0 },
+      baseOverdueCount: 0,
+    }
+  }
+
+  const sf = (statusFilter || 'all').toLowerCase().trim()
+  const df = (dueFilter || 'all').toLowerCase().trim()
+
+  // 1. Status counts: tasks passing current due filter
+  const tasksMatchingDue = tasks.filter((t) => {
+    if (df === 'all') return true
+    const c = classifyDeadline(t, now)
+    if (df === 'overdue') return c.timing === 'overdue' && c.isActiveDeadline
+    if (df === 'due_today') return c.timing === 'due_today' && c.isActiveDeadline
+    if (df === 'urgent') return (c.timing === 'urgent' || c.timing === 'due_today') && c.isActiveDeadline
+    if (df === 'due_soon') return c.timing === 'due_soon' && c.isActiveDeadline
+    if (df === 'upcoming') return c.timing === 'upcoming' && c.isActiveDeadline
+    return true
+  })
+
+  const statusCounts = {
+    all: tasksMatchingDue.length,
+    pending: 0,
+    in_progress: 0,
+    completed: 0,
+  }
+
+  tasksMatchingDue.forEach((t) => {
+    const c = classifyDeadline(t, now)
+    if (c.lifecycle === 'pending') statusCounts.pending++
+    else if (c.lifecycle === 'in_progress') statusCounts.in_progress++
+    else if (c.lifecycle === 'completed') statusCounts.completed++
+  })
+
+  // 2. Due counts: tasks passing current status filter
+  const tasksMatchingStatus = tasks.filter((t) => {
+    if (sf === 'all') return true
+    const c = classifyDeadline(t, now)
+    if (sf === 'pending') return c.lifecycle === 'pending'
+    if (sf === 'in_progress') return c.lifecycle === 'in_progress'
+    if (sf === 'completed') return c.lifecycle === 'completed'
+    return true
+  })
+
+  const dueCounts = {
+    all: tasksMatchingStatus.length,
+    overdue: 0,
+    due_today: 0,
+    urgent: 0,
+    due_soon: 0,
+    upcoming: 0,
+  }
+
+  let baseOverdueCount = 0
+
+  tasks.forEach((t) => {
+    const c = classifyDeadline(t, now)
+    if (c.timing === 'overdue' && c.isActiveDeadline) baseOverdueCount++
+  })
+
+  tasksMatchingStatus.forEach((t) => {
+    const c = classifyDeadline(t, now)
+    if (c.timing === 'overdue' && c.isActiveDeadline) dueCounts.overdue++
+    if (c.timing === 'due_today' && c.isActiveDeadline) dueCounts.due_today++
+    if ((c.timing === 'urgent' || c.timing === 'due_today') && c.isActiveDeadline) dueCounts.urgent++
+    if (c.timing === 'due_soon' && c.isActiveDeadline) dueCounts.due_soon++
+    if (c.timing === 'upcoming' && c.isActiveDeadline) dueCounts.upcoming++
+  })
+
+  return { statusCounts, dueCounts, baseOverdueCount }
+}
+
+/**
  * Priority weighting for consistent sorting: urgent (0) > high (1) > medium (2) > low (3).
  */
 const PRIORITY_WEIGHTS = { urgent: 0, high: 1, medium: 2, low: 3 }

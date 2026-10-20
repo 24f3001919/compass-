@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import {
   deleteTask,
   updateTask,
@@ -12,6 +12,11 @@ import TaskDetailModal from './timeline/TaskDetailModal'
 import AddDeadlineModal from './timeline/AddDeadlineModal'
 import DarkModeToggle from './DarkModeToggle'
 import Logo from './Logo'
+import TimelineFilterBar from './timeline/TimelineFilterBar'
+import {
+  filterTasksByStatusAndDue,
+  calculateFilterCounts,
+} from '../utils/deadlineClassifier'
 
 // Re-export for backward compatibility
 export { getDomainMeta } from './timeline/domainMeta'
@@ -101,6 +106,25 @@ export default function Timeline({
   const filtered = activeDomain === 'all'
     ? tasks
     : tasks.filter(t => (t.domain || 'general').toLowerCase().trim() === activeDomain)
+
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [dueFilter, setDueFilter] = useState('all')
+
+  const filterCounts = useMemo(() => {
+    const now = new Date()
+    return calculateFilterCounts(filtered, statusFilter, dueFilter, now)
+  }, [filtered, statusFilter, dueFilter])
+
+  const displayedTasks = useMemo(() => {
+    const now = new Date()
+    return filterTasksByStatusAndDue(filtered, statusFilter, dueFilter, now)
+  }, [filtered, statusFilter, dueFilter])
+
+  const handleClearFilters = () => {
+    setStatusFilter('all')
+    setDueFilter('all')
+  }
+
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
   const hasFallbackTasks = Array.isArray(tasks) && tasks.some(t => t.is_fallback)
 
@@ -431,6 +455,20 @@ export default function Timeline({
         })()}
       </div>
 
+      {/* Status & Due Filter Bar */}
+      <TimelineFilterBar
+        statusFilter={statusFilter}
+        onStatusChange={setStatusFilter}
+        dueFilter={dueFilter}
+        onDueChange={setDueFilter}
+        statusCounts={filterCounts.statusCounts}
+        dueCounts={filterCounts.dueCounts}
+        baseOverdueCount={filterCounts.baseOverdueCount}
+        totalCount={filtered.length}
+        filteredCount={displayedTasks.length}
+        onClearFilters={handleClearFilters}
+      />
+
       {/* Task Stream Feed */}
       <div className="timeline-feed">
         {filtered.length === 0 ? (
@@ -510,7 +548,42 @@ export default function Timeline({
               </button>
             </div>
           </div>
-        ) : filtered.map(task => (
+        ) : displayedTasks.length === 0 ? (
+          <div style={{
+            padding: '40px 20px',
+            textAlign: 'center',
+            background: 'var(--bg-card)',
+            borderRadius: 'var(--radius-card, 8px)',
+            border: '1px solid var(--border)',
+            color: 'var(--text-secondary)',
+            marginTop: '10px',
+            width: '100%',
+            boxSizing: 'border-box'
+          }}>
+            <p style={{ margin: 0, fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)' }}>
+              No tasks match the selected filters
+            </p>
+            <p style={{ margin: '6px 0 16px 0', fontSize: '13px', color: 'var(--text-muted)' }}>
+              Try adjusting your status or due date filters to see more tasks.
+            </p>
+            <button
+              type="button"
+              id="timeline-btn-empty-clear-filters"
+              onClick={handleClearFilters}
+              className="btn-secondary"
+              style={{
+                minHeight: '44px',
+                padding: '0 16px',
+                fontSize: '13px',
+                fontWeight: '600',
+                borderRadius: 'var(--radius-btn, 6px)',
+                cursor: 'pointer',
+              }}
+            >
+              Clear filters
+            </button>
+          </div>
+        ) : displayedTasks.map(task => (
           <TaskCard
             key={task.id}
             task={task}

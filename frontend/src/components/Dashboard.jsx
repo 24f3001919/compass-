@@ -4,25 +4,16 @@ import { getDomainMeta } from './timeline/domainMeta'
 import AddDeadlineModal from './timeline/AddDeadlineModal'
 import { updateTask, seedJudgeDemoPersona } from '../api/client'
 import Logo from './Logo'
+import TimelineFilterBar from './timeline/TimelineFilterBar'
 import {
   classifyDeadline,
   filterTasksByView,
+  filterTasksByStatusAndDue,
+  calculateFilterCounts,
   sortOverdueDeadlines,
   sortUpcomingDeadlines,
 } from '../utils/deadlineClassifier'
 
-
-const VIEW_OPTIONS = [
-  { key: 'all', label: 'All Tasks', icon: '📋' },
-  { key: 'overdue', label: 'Overdue', icon: '⚠️' },
-  { key: 'due_today', label: 'Due Today', icon: '📅' },
-  { key: 'urgent', label: 'Urgent (<24h)', icon: '🚨' },
-  { key: 'due_soon', label: 'Due Soon (7d)', icon: '⏳' },
-  { key: 'upcoming', label: 'Upcoming (>7d)', icon: '🗓️' },
-  { key: 'pending', label: 'Pending', icon: '📝' },
-  { key: 'in_progress', label: 'In Progress', icon: '⚡' },
-  { key: 'completed', label: 'Completed', icon: '✅' },
-]
 
 export default function Dashboard({
 
@@ -40,13 +31,19 @@ export default function Dashboard({
   customDomains = [],
 }) {
   const [selectedDomainFilter, setSelectedDomainFilter] = useState('all')
-  const [timeFilter, setTimeFilter] = useState('all') // 'all' | 'focus' | 'today' | 'week' | 'overdue' | 'completed'
+  const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'pending' | 'in_progress' | 'completed'
+  const [dueFilter, setDueFilter] = useState('all') // 'all' | 'overdue' | 'due_today' | 'urgent' | 'due_soon' | 'upcoming'
   const [optimisticOverrides, setOptimisticOverrides] = useState({})
   const [showAddModal, setShowAddModal] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [seedingPersona, setSeedingPersona] = useState(false)
   const [seedSuccess, setSeedSuccess] = useState(false)
   const [lastRefreshedAt, setLastRefreshedAt] = useState(() => new Date())
+
+  const handleClearFilters = useCallback(() => {
+    setStatusFilter('all')
+    setDueFilter('all')
+  }, [])
 
   const handleSeedJudgePersona = useCallback(async () => {
     if (seedingPersona) return
@@ -137,11 +134,19 @@ export default function Dashboard({
     return counts
   }, [domainFilteredTasks])
 
-  // Apply deterministic view filter
+  // Accurate dynamic filter counts for Status and Due groups
+  const filterCounts = useMemo(() => {
+    const now = new Date()
+    return calculateFilterCounts(domainFilteredTasks, statusFilter, dueFilter, now)
+  }, [domainFilteredTasks, statusFilter, dueFilter])
+
+  // Apply combined status and due filter
   const displayedTasks = useMemo(() => {
     const now = new Date()
-    return filterTasksByView(domainFilteredTasks, timeFilter, now)
-  }, [domainFilteredTasks, timeFilter])
+    return filterTasksByStatusAndDue(domainFilteredTasks, statusFilter, dueFilter, now)
+  }, [domainFilteredTasks, statusFilter, dueFilter])
+
+  const isFiltered = statusFilter !== 'all' || dueFilter !== 'all'
 
   // Metric calculations
   const metrics = useMemo(() => {
@@ -679,16 +684,16 @@ export default function Dashboard({
       <div className="dashboard-stat-grid" role="region" aria-label="Quick statistics">
         {/* Total Tasks */}
         <div
-          className={`dashboard-stat-card ${timeFilter === 'all' ? 'active-filter' : ''}`}
-          onClick={() => setTimeFilter('all')}
+          className={`dashboard-stat-card ${!isFiltered ? 'active-filter' : ''}`}
+          onClick={handleClearFilters}
           tabIndex={0}
           role="button"
-          aria-pressed={timeFilter === 'all'}
+          aria-pressed={!isFiltered}
           aria-label={`Total tasks: ${metrics.total}. Click to show all tasks.`}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault()
-              setTimeFilter('all')
+              handleClearFilters()
             }
           }}
           title="Click to view all tasks"
@@ -718,16 +723,20 @@ export default function Dashboard({
 
         {/* Completion Rate */}
         <div
-          className={`dashboard-stat-card ${timeFilter === 'completed' ? 'active-filter' : ''}`}
-          onClick={() => setTimeFilter((prev) => (prev === 'completed' ? 'all' : 'completed'))}
+          className={`dashboard-stat-card ${statusFilter === 'completed' ? 'active-filter' : ''}`}
+          onClick={() => {
+            setStatusFilter((prev) => (prev === 'completed' ? 'all' : 'completed'))
+            if (dueFilter !== 'all') setDueFilter('all')
+          }}
           tabIndex={0}
           role="button"
-          aria-pressed={timeFilter === 'completed'}
+          aria-pressed={statusFilter === 'completed'}
           aria-label={`Completion rate: ${metrics.completionRate} percent. Click to filter completed tasks.`}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault()
-              setTimeFilter((prev) => (prev === 'completed' ? 'all' : 'completed'))
+              setStatusFilter((prev) => (prev === 'completed' ? 'all' : 'completed'))
+              if (dueFilter !== 'all') setDueFilter('all')
             }
           }}
           title="Click to filter completed tasks"
@@ -764,16 +773,20 @@ export default function Dashboard({
 
         {/* Overdue Tasks */}
         <div
-          className={`dashboard-stat-card ${timeFilter === 'overdue' ? 'active-filter' : ''}`}
-          onClick={() => setTimeFilter((prev) => (prev === 'overdue' ? 'all' : 'overdue'))}
+          className={`dashboard-stat-card ${dueFilter === 'overdue' ? 'active-filter' : ''}`}
+          onClick={() => {
+            setDueFilter((prev) => (prev === 'overdue' ? 'all' : 'overdue'))
+            if (statusFilter !== 'all') setStatusFilter('all')
+          }}
           tabIndex={0}
           role="button"
-          aria-pressed={timeFilter === 'overdue'}
+          aria-pressed={dueFilter === 'overdue'}
           aria-label={`Overdue tasks: ${metrics.overdueCount}. Click to filter overdue tasks.`}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault()
-              setTimeFilter((prev) => (prev === 'overdue' ? 'all' : 'overdue'))
+              setDueFilter((prev) => (prev === 'overdue' ? 'all' : 'overdue'))
+              if (statusFilter !== 'all') setStatusFilter('all')
             }
           }}
           title="Click to filter overdue tasks"
@@ -808,19 +821,23 @@ export default function Dashboard({
 
         {/* Completed Today */}
         <div
-          className={`dashboard-stat-card ${timeFilter === 'today' ? 'active-filter' : ''}`}
-          onClick={() => setTimeFilter((prev) => (prev === 'today' ? 'all' : 'today'))}
+          className={`dashboard-stat-card ${dueFilter === 'due_today' && statusFilter === 'completed' ? 'active-filter' : ''}`}
+          onClick={() => {
+            setDueFilter((prev) => (prev === 'due_today' ? 'all' : 'due_today'))
+            setStatusFilter('completed')
+          }}
           tabIndex={0}
           role="button"
-          aria-pressed={timeFilter === 'today'}
+          aria-pressed={dueFilter === 'due_today' && statusFilter === 'completed'}
           aria-label={`Completed today: ${metrics.completedTodayCount}. Click to filter today's tasks.`}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault()
-              setTimeFilter((prev) => (prev === 'today' ? 'all' : 'today'))
+              setDueFilter((prev) => (prev === 'due_today' ? 'all' : 'due_today'))
+              setStatusFilter('completed')
             }
           }}
-          title="Click to filter today's tasks"
+          title="Click to filter completed today's tasks"
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -842,84 +859,67 @@ export default function Dashboard({
         </div>
       </div>
 
-      {/* SECTION 1.5: Deadline & Lifecycle Category Views */}
-      <div
-        className="dashboard-filter-bar"
-        role="tablist"
-        aria-label="Filter tasks by lifecycle and deadline status"
-        style={{ marginTop: '14px', marginBottom: '14px', overflowX: 'auto', flexWrap: 'wrap' }}
-      >
-        {VIEW_OPTIONS.map((opt) => {
-          const isActive = timeFilter === opt.key
-          return (
-            <button
-              key={opt.key}
-              type="button"
-              onClick={() => setTimeFilter(opt.key)}
-              className={`filter-pill ${isActive ? 'active' : ''}`}
-              role="tab"
-              aria-selected={isActive}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
-                borderRadius: '20px',
-                fontSize: '12px',
-                fontWeight: isActive ? '600' : '500',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <span>{opt.icon}</span>
-              <span>
-                {opt.label} ({viewCounts[opt.key] ?? 0})
-              </span>
-            </button>
-          )
-        })}
-      </div>
+      {/* SECTION 1.5: Status & Due Timeline Filters */}
+      <TimelineFilterBar
+        statusFilter={statusFilter}
+        onStatusChange={setStatusFilter}
+        dueFilter={dueFilter}
+        onDueChange={setDueFilter}
+        statusCounts={filterCounts.statusCounts}
+        dueCounts={filterCounts.dueCounts}
+        baseOverdueCount={filterCounts.baseOverdueCount}
+        totalCount={domainFilteredTasks.length}
+        filteredCount={displayedTasks.length}
+        onClearFilters={handleClearFilters}
+      />
 
-      {/* FILTERED TASKS EXPANDED CARD (Shown when a specific view category is selected) */}
-      {timeFilter !== 'all' && (
+      {/* FILTERED TASKS EXPANDED CARD (Shown when any status or due filter is active) */}
+      {isFiltered && (
         <div
           className="dashboard-section-card"
           role="region"
-          aria-label={`Filtered view: ${timeFilter}`}
+          aria-label={`Filtered view: status ${statusFilter}, due ${dueFilter}`}
           style={{ marginBottom: '20px' }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>{VIEW_OPTIONS.find((v) => v.key === timeFilter)?.icon || '📌'}</span>
-              <span>
-                {VIEW_OPTIONS.find((v) => v.key === timeFilter)?.label || timeFilter} ({displayedTasks.length})
-              </span>
+              <span>Filtered Tasks ({displayedTasks.length})</span>
             </h3>
             <button
               type="button"
-              onClick={() => setTimeFilter('all')}
+              id="dashboard-btn-clear-expanded-filter"
+              onClick={handleClearFilters}
               className="btn-secondary"
               style={{ minHeight: '32px', padding: '0 10px', fontSize: '12px' }}
             >
-              Show all tasks ✕
+              Clear filters ✕
             </button>
           </div>
 
           {displayedTasks.length === 0 ? (
             <div className="dashboard-empty-state">
               <p style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>
-                No tasks in this category
+                No tasks match the selected filters
               </p>
-              <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--text-muted)' }}>
-                {timeFilter === 'overdue' && 'All clear! You have no overdue deadlines.'}
-                {timeFilter === 'due_today' && 'No tasks due today. Everything is on schedule.'}
-                {timeFilter === 'urgent' && 'No urgent tasks due in the next 24 hours.'}
-                {timeFilter === 'due_soon' && 'No tasks due within the next 7 days.'}
-                {timeFilter === 'upcoming' && 'No distant future deadlines scheduled.'}
-                {timeFilter === 'pending' && 'No pending tasks without deadlines.'}
-                {timeFilter === 'in_progress' && 'No tasks currently marked as in progress.'}
-                {timeFilter === 'completed' && 'No completed tasks yet. Finish a task to see it here.'}
+              <p style={{ margin: '4px 0 16px 0', fontSize: '13px', color: 'var(--text-muted)' }}>
+                Try adjusting your status or due date filters to see more tasks.
               </p>
+              <button
+                type="button"
+                id="dashboard-btn-empty-clear-filters"
+                onClick={handleClearFilters}
+                className="btn-secondary btn-touch-target"
+                style={{
+                  minHeight: '44px',
+                  padding: '0 16px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  borderRadius: 'var(--radius-btn, 6px)',
+                  cursor: 'pointer',
+                }}
+              >
+                Clear filters
+              </button>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -1181,7 +1181,10 @@ export default function Dashboard({
               </h3>
               <button
                 type="button"
-                onClick={() => setTimeFilter('overdue')}
+                onClick={() => {
+                  setDueFilter('overdue')
+                  setStatusFilter('all')
+                }}
                 className="btn-secondary"
                 style={{
                   minHeight: '32px',
@@ -1300,7 +1303,10 @@ export default function Dashboard({
             </h3>
             <button
               type="button"
-              onClick={() => setTimeFilter('upcoming')}
+              onClick={() => {
+                setDueFilter('upcoming')
+                setStatusFilter('all')
+              }}
               className="btn-secondary"
               style={{
                 minHeight: '36px',
