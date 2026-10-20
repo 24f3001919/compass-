@@ -5,9 +5,9 @@ import MobileNavBar from './components/MobileNavBar'
 import Timeline from './components/Timeline'
 import CalendarView from './components/CalendarView'
 import CompassPanel from './components/CompassPanel'
-import InternshipRadar from './components/InternshipRadar'
-import CareerCopilot from './components/CareerCopilot'
 import AuthModal from './components/AuthModal'
+
+const CareerCopilot = React.lazy(() => import('./components/CareerCopilot'))
 import MigrationModal from './components/MigrationModal'
 import NebiusTelemetryModal from './components/NebiusTelemetryModal'
 import { getCustomDomains, removeCustomDomain, getDomainMeta } from './components/timeline/domainMeta'
@@ -580,7 +580,9 @@ export default function App() {
             onOpenTelemetry={() => setShowTelemetryModal(true)}
           />
         ) : (activeTab === 'career' || activeTab === 'radar') ? (
-          <CareerCopilot />
+          <React.Suspense fallback={<div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading Career Copilot…</div>}>
+            <CareerCopilot />
+          </React.Suspense>
         ) : activeTab === 'calendar' ? (
           <CalendarView
             tasks={tasks}

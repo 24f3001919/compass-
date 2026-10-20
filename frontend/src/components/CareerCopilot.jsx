@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
 import InternshipRadar from './InternshipRadar'
-import ResumeStudio from './career/ResumeStudio'
 import ApplicationCenter from './career/ApplicationCenter'
 import RadarProfileModal from './radar/RadarProfileModal'
 import { updateRadarProfile } from '../api/radarApi.js'
+
+const ResumeStudio = React.lazy(() => import('./career/ResumeStudio'))
 
 export default function CareerCopilot() {
   const [activeSubTab, setActiveSubTab] = useState('radar') // 'radar' | 'resumes' | 'applications'
@@ -271,7 +272,11 @@ export default function CareerCopilot() {
             onOpenProfile={() => setShowProfileModal(true)}
           />
         )}
-        {activeSubTab === 'resumes' && <ResumeStudio />}
+        {activeSubTab === 'resumes' && (
+          <React.Suspense fallback={<div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading Resume Studio…</div>}>
+            <ResumeStudio />
+          </React.Suspense>
+        )}
         {activeSubTab === 'applications' && <ApplicationCenter />}
       </div>
 
