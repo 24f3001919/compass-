@@ -1,4 +1,5 @@
 import React from 'react'
+import Logo from './Logo'
 
 /**
  * MobileNavBar
@@ -182,10 +183,7 @@ export default function MobileNavBar({
             background: isCompassActive ? 'var(--bg-card-soft)' : 'transparent',
           }}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="10" />
-            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-          </svg>
+          <Logo size={18} alt="" />
         </span>
         <span
           style={{

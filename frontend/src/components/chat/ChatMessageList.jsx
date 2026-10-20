@@ -4,6 +4,7 @@ import ThinkingBlock from './ThinkingBlock'
 import MarkdownRenderer from './MarkdownRenderer'
 import ChatTaskCard from './ChatTaskCard'
 import { fetchPersonaPhrases } from '../../api/chatApi'
+import Logo from '../Logo'
 
 const DEFAULT_STARTING_PHRASES = [
   "Where should we begin?",
@@ -176,10 +177,7 @@ export default function ChatMessageList({
             marginBottom: '18px',
             color: 'var(--accent, #f5a623)',
           }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-            </svg>
+            <Logo size={28} alt="Compass logo" />
           </div>
 
           <h2 style={{
@@ -258,10 +256,7 @@ export default function ChatMessageList({
                         width: '32px', height: '32px', borderRadius: 'var(--radius-btn, 6px)', background: 'var(--bg-sidebar)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent, #f5a623)', flexShrink: 0
                       }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="10" />
-                          <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-                        </svg>
+                        <Logo size={20} alt="Compass logo" />
                       </div>
                     )}
                     <div className="chat-msg-bubble" style={{
@@ -463,10 +458,7 @@ export default function ChatMessageList({
                   width: '32px', height: '32px', borderRadius: 'var(--radius-btn, 6px)', background: 'var(--bg-sidebar)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent, #f5a623)', flexShrink: 0
                 }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-                  </svg>
+                  <Logo size={20} alt="Compass logo" />
                 </div>
                 <div className="chat-msg-bubble" style={{
                   maxWidth: 'min(85%, 820px)',

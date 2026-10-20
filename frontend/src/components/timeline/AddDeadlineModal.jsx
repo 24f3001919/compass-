@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { createTask, updateTask } from '../../api/client'
 import { DOMAIN_META } from './domainMeta'
-import { Calendar, GitFork, Compass, X } from 'lucide-react'
+import { Calendar, GitFork, X } from 'lucide-react'
+import Logo from '../Logo'
 
 export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain, tasks = [], customDomains = [], onOpenCompass }) {
   const [title, setTitle] = useState('')
@@ -502,7 +503,7 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
                     display: 'flex', alignItems: 'center', gap: '6px'
                   }}
                 >
-                  <span>🧭</span>
+                  <Logo size={14} alt="" />
                   <span>Ask Compass to Look into Schedules & Fix It</span>
                 </button>
               </div>
@@ -600,7 +601,7 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
                     minHeight: '44px'
                   }}
                 >
-                  <Compass size={13} strokeWidth={1.8} />
+                  <Logo size={13} alt="" />
                   <span>Ask Compass to Fix It</span>
                 </button>
               </div>
@@ -627,7 +628,7 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
               }}
               title="Ask Compass to analyze schedules and resolve conflicts before adding"
             >
-              <Compass size={14} strokeWidth={1.8} />
+              <Logo size={14} alt="" />
               <span>Ask Compass to Look into Schedules</span>
             </button>
 

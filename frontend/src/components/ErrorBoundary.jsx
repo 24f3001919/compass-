@@ -1,4 +1,5 @@
 import React from 'react'
+import Logo from './Logo'
 
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -55,7 +56,9 @@ export default class ErrorBoundary extends React.Component {
               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
             }}
           >
-            <div style={{ fontSize: '42px', marginBottom: '12px' }}>🧭</div>
+            <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center' }}>
+              <Logo size={48} alt="Compass logo" />
+            </div>
             <h1 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 8px 0' }}>
               Something went wrong
             </h1>

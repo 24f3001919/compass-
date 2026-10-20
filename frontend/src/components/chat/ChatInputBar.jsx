@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { filterSpecialists, getSpecialistById } from '../../api/specialistRegistry'
 import { AlertTriangle, Brain, Globe, BookOpen, Send, X } from 'lucide-react'
+import Logo from '../Logo'
 
 const QUICK_PROMPTS = [
   { icon: 'warning', text: 'Check my weekend schedule for conflicts across hackathon and coursework', specialistId: 'calendar' },
@@ -201,7 +202,11 @@ export default function ChatInputBar({
                       transition: 'all 0.12s ease',
                     }}
                   >
-                    <span style={{ fontSize: '16px', flexShrink: 0 }}>{spec.icon}</span>
+                    {spec.icon === '🧭' ? (
+                      <Logo size={16} alt="" />
+                    ) : (
+                      <span style={{ fontSize: '16px', flexShrink: 0 }}>{spec.icon}</span>
+                    )}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ fontWeight: '600', fontSize: '13px', color: 'var(--text-primary)' }}>

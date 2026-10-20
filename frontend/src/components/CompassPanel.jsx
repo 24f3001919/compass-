@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import ChatPanel from './ChatPanel'
 import AgentPanel from './AgentPanel'
 import DarkModeToggle from './DarkModeToggle'
+import Logo from './Logo'
 
 export default function CompassPanel({
   initialSubTab = 'assistant',
@@ -52,10 +53,7 @@ export default function CompassPanel({
         flexWrap: 'wrap',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent, #f5a623)' }}>
-            <circle cx="12" cy="12" r="10" />
-            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-          </svg>
+          <Logo size={20} alt="" />
           <span style={{ fontSize: '20px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
             Compass
           </span>

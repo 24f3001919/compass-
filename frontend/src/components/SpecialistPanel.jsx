@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { dispatchSpecialist } from '../api/client'
+import Logo from './Logo'
 
 const SPECIALISTS = [
   {
@@ -120,7 +121,7 @@ export default function SpecialistPanel({ onTaskMutated: _onTaskMutated }) {
             transition: 'all 0.15s ease',
           }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-            <span style={{ fontSize: '16px' }}>🧭</span>
+            <Logo size={16} alt="" />
             <span style={{ fontWeight: '700', fontSize: '13px', color: selectedSpecialist === null ? 'var(--coursework-text)' : 'var(--text-primary)' }}>
               Auto Dispatcher
             </span>
