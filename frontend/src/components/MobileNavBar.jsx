@@ -3,11 +3,7 @@ import React from 'react'
 /**
  * MobileNavBar
  * Fixed bottom navigation bar for mobile viewports (< 768px).
- * Provides one-tap access to primary destinations:
- * 1. Timeline (▦)
- * 2. Compass Assistant (🧭)
- * 3. Schedule (🗓️)
- * 4. More / Context Domains (☰)
+ * Provides one-tap access to primary destinations with clean line icons (1.8 stroke, currentColor).
  */
 export default function MobileNavBar({
   activeTab,
@@ -35,7 +31,7 @@ export default function MobileNavBar({
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         background: 'var(--bg-card)',
         borderTop: '1px solid var(--border)',
-        boxShadow: '0 -2px 12px rgba(0, 0, 0, 0.08)',
+        boxShadow: 'var(--shadow-sm)',
         zIndex: 850,
         display: 'flex',
         alignItems: 'stretch',
@@ -63,37 +59,41 @@ export default function MobileNavBar({
           cursor: 'pointer',
           padding: '6px 0',
           gap: '3px',
-          color: isDashboardActive ? 'var(--brand)' : 'var(--text-muted)',
-          transition: 'color 0.15s ease, transform 0.1s ease',
+          color: isDashboardActive ? 'var(--text-primary)' : 'var(--text-muted)',
+          transition: 'color 0.15s ease',
           minHeight: '48px',
         }}
       >
         <span
           style={{
-            fontSize: '18px',
-            lineHeight: 1,
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
             width: '28px',
             height: '24px',
             borderRadius: '6px',
-            background: isDashboardActive ? 'rgba(245, 166, 35, 0.15)' : 'transparent',
+            background: isDashboardActive ? 'var(--bg-card-soft)' : 'transparent',
           }}
         >
-          📊
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect width="7" height="9" x="3" y="3" rx="1" />
+            <rect width="7" height="5" x="14" y="3" rx="1" />
+            <rect width="7" height="9" x="14" y="12" rx="1" />
+            <rect width="7" height="5" x="3" y="16" rx="1" />
+          </svg>
         </span>
         <span
           style={{
-            fontSize: '10.5px',
-            fontWeight: isDashboardActive ? '700' : '500',
+            fontSize: '11px',
+            fontWeight: isDashboardActive ? '600' : '500',
             letterSpacing: '0.01em',
           }}
         >
           Dashboard
         </span>
       </button>
-      {/* 1. Timeline */}
+
+      {/* 2. Timeline */}
       <button
         id="mobile-tab-timeline"
         type="button"
@@ -112,30 +112,34 @@ export default function MobileNavBar({
           cursor: 'pointer',
           padding: '6px 0',
           gap: '3px',
-          color: isTimelineActive ? 'var(--brand)' : 'var(--text-muted)',
-          transition: 'color 0.15s ease, transform 0.1s ease',
+          color: isTimelineActive ? 'var(--text-primary)' : 'var(--text-muted)',
+          transition: 'color 0.15s ease',
           minHeight: '48px',
         }}
       >
         <span
           style={{
-            fontSize: '18px',
-            lineHeight: 1,
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
             width: '28px',
             height: '24px',
             borderRadius: '6px',
-            background: isTimelineActive ? 'rgba(245, 166, 35, 0.15)' : 'transparent',
+            background: isTimelineActive ? 'var(--bg-card-soft)' : 'transparent',
           }}
         >
-          ▦
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M6 3v18" />
+            <path d="M18 3v18" />
+            <rect width="6" height="7" x="3" y="5" rx="1" />
+            <rect width="6" height="5" x="15" y="5" rx="1" />
+            <rect width="6" height="7" x="15" y="14" rx="1" />
+          </svg>
         </span>
         <span
           style={{
-            fontSize: '10.5px',
-            fontWeight: isTimelineActive ? '700' : '500',
+            fontSize: '11px',
+            fontWeight: isTimelineActive ? '600' : '500',
             letterSpacing: '0.01em',
           }}
         >
@@ -143,7 +147,7 @@ export default function MobileNavBar({
         </span>
       </button>
 
-      {/* 2. Compass Assistant */}
+      {/* 3. Compass Assistant */}
       <button
         id="mobile-tab-compass"
         type="button"
@@ -162,30 +166,31 @@ export default function MobileNavBar({
           cursor: 'pointer',
           padding: '6px 0',
           gap: '3px',
-          color: isCompassActive ? 'var(--brand)' : 'var(--text-muted)',
-          transition: 'color 0.15s ease, transform 0.1s ease',
+          color: isCompassActive ? 'var(--text-primary)' : 'var(--text-muted)',
+          transition: 'color 0.15s ease',
           minHeight: '48px',
         }}
       >
         <span
           style={{
-            fontSize: '18px',
-            lineHeight: 1,
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
             width: '28px',
             height: '24px',
             borderRadius: '6px',
-            background: isCompassActive ? 'rgba(245, 166, 35, 0.15)' : 'transparent',
+            background: isCompassActive ? 'var(--bg-card-soft)' : 'transparent',
           }}
         >
-          🧭
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+          </svg>
         </span>
         <span
           style={{
-            fontSize: '10.5px',
-            fontWeight: isCompassActive ? '700' : '500',
+            fontSize: '11px',
+            fontWeight: isCompassActive ? '600' : '500',
             letterSpacing: '0.01em',
           }}
         >
@@ -193,7 +198,7 @@ export default function MobileNavBar({
         </span>
       </button>
 
-      {/* 3. Schedule / Calendar */}
+      {/* 4. Schedule / Calendar */}
       <button
         id="mobile-tab-calendar"
         type="button"
@@ -212,30 +217,33 @@ export default function MobileNavBar({
           cursor: 'pointer',
           padding: '6px 0',
           gap: '3px',
-          color: isCalendarActive ? 'var(--brand)' : 'var(--text-muted)',
-          transition: 'color 0.15s ease, transform 0.1s ease',
+          color: isCalendarActive ? 'var(--text-primary)' : 'var(--text-muted)',
+          transition: 'color 0.15s ease',
           minHeight: '48px',
         }}
       >
         <span
           style={{
-            fontSize: '18px',
-            lineHeight: 1,
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
             width: '28px',
             height: '24px',
             borderRadius: '6px',
-            background: isCalendarActive ? 'rgba(245, 166, 35, 0.15)' : 'transparent',
+            background: isCalendarActive ? 'var(--bg-card-soft)' : 'transparent',
           }}
         >
-          🗓️
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect width="18" height="18" x="3" y="4" rx="2" />
+            <path d="M3 10h18" />
+            <path d="M8 2v4" />
+            <path d="M16 2v4" />
+          </svg>
         </span>
         <span
           style={{
-            fontSize: '10.5px',
-            fontWeight: isCalendarActive ? '700' : '500',
+            fontSize: '11px',
+            fontWeight: isCalendarActive ? '600' : '500',
             letterSpacing: '0.01em',
           }}
         >
@@ -243,7 +251,7 @@ export default function MobileNavBar({
         </span>
       </button>
 
-      {/* 4. Career Copilot */}
+      {/* 5. Career Copilot */}
       <button
         id="mobile-tab-career"
         type="button"
@@ -262,30 +270,32 @@ export default function MobileNavBar({
           cursor: 'pointer',
           padding: '6px 0',
           gap: '3px',
-          color: isCareerActive ? 'var(--brand)' : 'var(--text-muted)',
-          transition: 'color 0.15s ease, transform 0.1s ease',
+          color: isCareerActive ? 'var(--text-primary)' : 'var(--text-muted)',
+          transition: 'color 0.15s ease',
           minHeight: '48px',
         }}
       >
         <span
           style={{
-            fontSize: '18px',
-            lineHeight: 1,
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
             width: '28px',
             height: '24px',
             borderRadius: '6px',
-            background: isCareerActive ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
+            background: isCareerActive ? 'var(--bg-card-soft)' : 'transparent',
           }}
         >
-          🎯
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <circle cx="12" cy="12" r="6" />
+            <circle cx="12" cy="12" r="2" />
+          </svg>
         </span>
         <span
           style={{
-            fontSize: '10.5px',
-            fontWeight: isCareerActive ? '700' : '500',
+            fontSize: '11px',
+            fontWeight: isCareerActive ? '600' : '500',
             letterSpacing: '0.01em',
           }}
         >
@@ -293,7 +303,7 @@ export default function MobileNavBar({
         </span>
       </button>
 
-      {/* 5. More (Domains, Account, Telemetry) */}
+      {/* 6. More (Domains, Account, Telemetry) */}
       <button
         id="mobile-tab-more"
         type="button"
@@ -312,14 +322,12 @@ export default function MobileNavBar({
           padding: '6px 0',
           gap: '3px',
           color: 'var(--text-muted)',
-          transition: 'color 0.15s ease, transform 0.1s ease',
+          transition: 'color 0.15s ease',
           minHeight: '48px',
         }}
       >
         <span
           style={{
-            fontSize: '18px',
-            lineHeight: 1,
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -328,12 +336,16 @@ export default function MobileNavBar({
             borderRadius: '6px',
           }}
         >
-          ☰
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <line x1="4" x2="20" y1="12" y2="12" />
+            <line x1="4" x2="20" y1="6" y2="6" />
+            <line x1="4" x2="20" y1="18" y2="18" />
+          </svg>
         </span>
         <span
           style={{
-            fontSize: '10.5px',
-            fontWeight: '600',
+            fontSize: '11px',
+            fontWeight: '500',
             letterSpacing: '0.01em',
           }}
         >

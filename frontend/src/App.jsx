@@ -147,7 +147,7 @@ export default function App() {
     if (stats) setUsageStats(stats)
   }, [])
 
-  // P0.1 FIX: Domain-aware task fetcher — fires a NEW server-side request with
+  // P0.1 FIX: Domain-aware task fetcher: fires a NEW server-side request with
   // ?domain=<X> query param every time selectedDomain changes, instead of
   // client-side array filtering on stale data.
   const loadTasks = useCallback(async (domain) => {
@@ -292,7 +292,7 @@ export default function App() {
       }
     }
 
-    // Task Polling (Every 3000ms with Clean State Merge) — uses current domain filter
+    // Task Polling (Every 3000ms with Clean State Merge): uses current domain filter
     const pollTasks = () => {
       if (isMounted) loadTasks(selectedDomain)
     }
@@ -465,7 +465,7 @@ export default function App() {
             style={{
               background: 'var(--bg-card-soft)',
               border: '1px solid var(--border)',
-              borderRadius: '8px',
+              borderRadius: '6px',
               width: '44px',
               height: '44px',
               minWidth: '44px',
@@ -475,25 +475,17 @@ export default function App() {
               justifyContent: 'center',
               color: 'var(--text-primary)',
               cursor: 'pointer',
-              fontSize: '20px',
             }}
           >
-            ☰
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="4" x2="20" y1="12" y2="12" />
+              <line x1="4" x2="20" y1="6" y2="6" />
+              <line x1="4" x2="20" y1="18" y2="18" />
+            </svg>
           </button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-            <span style={{ fontSize: '18px' }}>
-              {activeTab === 'dashboard'
-                ? '📊'
-                : activeTab === 'compass'
-                ? '🧭'
-                : activeTab === 'calendar'
-                ? '🗓️'
-                : (activeTab === 'career' || activeTab === 'radar')
-                ? '🎯'
-                : currentDomainMeta.icon}
-            </span>
-            <span style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <span style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {activeTab === 'dashboard'
                 ? 'Dashboard'
                 : activeTab === 'compass'
@@ -518,7 +510,7 @@ export default function App() {
                 style={{
                   background: 'var(--bg-card-soft)',
                   border: '1px solid var(--border)',
-                  borderRadius: '8px',
+                  borderRadius: '6px',
                   width: '44px',
                   height: '44px',
                   minWidth: '44px',
@@ -528,10 +520,25 @@ export default function App() {
                   justifyContent: 'center',
                   color: 'var(--text-primary)',
                   cursor: 'pointer',
-                  fontSize: '18px',
                 }}
               >
-                {theme === 'dark' ? '🌙' : '☀️'}
+                {theme === 'dark' ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="4" />
+                    <path d="M12 2v2" />
+                    <path d="M12 20v2" />
+                    <path d="m4.93 4.93 1.41 1.41" />
+                    <path d="m17.66 17.66 1.41 1.41" />
+                    <path d="M2 12h2" />
+                    <path d="M20 12h2" />
+                    <path d="m6.34 17.66-1.41 1.41" />
+                    <path d="m19.07 4.93-1.41 1.41" />
+                  </svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+                  </svg>
+                )}
               </button>
             )}
           </div>
@@ -581,7 +588,10 @@ export default function App() {
           />
         ) : (activeTab === 'career' || activeTab === 'radar') ? (
           <React.Suspense fallback={<div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading Career Copilot…</div>}>
-            <CareerCopilot />
+            <CareerCopilot
+              isDarkMode={theme === 'dark'}
+              onToggleDarkMode={toggleTheme}
+            />
           </React.Suspense>
         ) : activeTab === 'calendar' ? (
           <CalendarView

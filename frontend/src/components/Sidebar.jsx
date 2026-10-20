@@ -1,12 +1,65 @@
 import React from 'react'
 import CreateDomainModal from './timeline/CreateDomainModal'
 
+// Simple line icons (1.8 stroke, currentColor)
+function NavIcon({ type }) {
+  if (type === 'dashboard') {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect width="7" height="9" x="3" y="3" rx="1" />
+        <rect width="7" height="5" x="14" y="3" rx="1" />
+        <rect width="7" height="9" x="14" y="12" rx="1" />
+        <rect width="7" height="5" x="3" y="16" rx="1" />
+      </svg>
+    )
+  }
+  if (type === 'timeline') {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M6 3v18" />
+        <path d="M18 3v18" />
+        <rect width="6" height="7" x="3" y="5" rx="1" />
+        <rect width="6" height="5" x="15" y="5" rx="1" />
+        <rect width="6" height="7" x="15" y="14" rx="1" />
+      </svg>
+    )
+  }
+  if (type === 'compass') {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" />
+        <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+      </svg>
+    )
+  }
+  if (type === 'calendar') {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect width="18" height="18" x="3" y="4" rx="2" />
+        <path d="M3 10h18" />
+        <path d="M8 2v4" />
+        <path d="M16 2v4" />
+      </svg>
+    )
+  }
+  if (type === 'career') {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" />
+        <circle cx="12" cy="12" r="6" />
+        <circle cx="12" cy="12" r="2" />
+      </svg>
+    )
+  }
+  return null
+}
+
 const NAV_ITEMS = [
-  { key: 'dashboard', icon: '📊', label: 'Dashboard', sub: 'Overview & metrics' },
-  { key: 'timeline', icon: '▦', label: 'Timeline', sub: 'Tasks & deadlines' },
-  { key: 'compass', icon: '🧭', label: 'Compass', sub: 'Assistant & planner' },
-  { key: 'calendar', icon: '🗓️', label: 'Schedule', sub: 'Calendar & Google sync' },
-  { key: 'career', icon: '🎯', label: 'Career Copilot', sub: 'Radar, Resumes & Apps' },
+  { key: 'dashboard', type: 'dashboard', label: 'Dashboard', sub: 'Overview & metrics' },
+  { key: 'timeline', type: 'timeline', label: 'Timeline', sub: 'Tasks & deadlines' },
+  { key: 'compass', type: 'compass', label: 'Compass', sub: 'Assistant & planner' },
+  { key: 'calendar', type: 'calendar', label: 'Schedule', sub: 'Calendar & Google sync' },
+  { key: 'career', type: 'career', label: 'Career Copilot', sub: 'Radar, Resumes & Apps' },
 ]
 
 export default function Sidebar({
@@ -33,7 +86,6 @@ export default function Sidebar({
     try {
       return localStorage.getItem('compass.sidebar.collapsed') === 'true'
     } catch {
-      /* ignore storage access error */
       return false
     }
   })
@@ -59,12 +111,13 @@ export default function Sidebar({
     backendStatus.toLowerCase().includes('ready')
   const totalActive = Object.values(domainCounts || {}).reduce((sum, n) => sum + (typeof n === 'number' ? n : 0), 0)
 
+  // Step 3 Theme Domain Colors: hackathon #f5a623, coursework #2f64c8, code #1c8a62, general #6b7a86
   const baseDomains = [
-    { key: 'hackathon', label: 'Hackathon', icon: '🚀', color: '#fbbf24' },
-    { key: 'coursework', label: 'Coursework', icon: '📚', color: '#60a5fa' },
-    { key: 'code', label: 'Code', icon: '💻', color: '#34d399' },
-    { key: 'general', label: 'General', icon: '🌐', color: '#94a3b8' },
-    { key: 'other', label: 'Other', icon: '🏷️', color: '#a78bfa' },
+    { key: 'hackathon', label: 'Hackathon', color: '#f5a623' },
+    { key: 'coursework', label: 'Coursework', color: '#2f64c8' },
+    { key: 'code', label: 'Code', color: '#1c8a62' },
+    { key: 'general', label: 'General', color: '#6b7a86' },
+    { key: 'other', label: 'Other', color: '#7e68b5' },
   ]
 
   // Combine user-created custom domains with any discovered domains in active tasks
@@ -75,8 +128,7 @@ export default function Sidebar({
         allCustom.push({
           key: k,
           label: k.charAt(0).toUpperCase() + k.slice(1),
-          icon: '🏷️',
-          color: '#c084fc'
+          color: '#8b5cf6'
         })
       }
     }
@@ -92,11 +144,11 @@ export default function Sidebar({
         minWidth: effectivelyCollapsed ? '68px' : '240px',
         maxWidth: effectivelyCollapsed ? '68px' : '280px',
         flexShrink: 0,
-        borderRight: '1px solid var(--border)',
+        borderRight: '1px solid var(--sidebar-divider)',
         background: 'var(--bg-sidebar)',
         display: 'flex',
         flexDirection: 'column',
-        padding: effectivelyCollapsed ? '18px 8px' : '22px 16px',
+        padding: effectivelyCollapsed ? '18px 8px' : '20px 14px',
         height: '100vh',
         overflowY: 'auto',
         overflowX: 'hidden',
@@ -110,26 +162,25 @@ export default function Sidebar({
           <div
             id="sidebar-brand-header"
             onClick={() => onSelectTab('dashboard')}
-            title="Compass Workspace — Click to return to Dashboard"
+            title="Compass Workspace: Click to return to Dashboard"
             aria-label="Compass Workspace Dashboard"
             style={{
               width: '42px',
               height: '42px',
-              borderRadius: '10px',
+              borderRadius: '6px',
               background: 'var(--brand)',
+              color: 'var(--accent-text)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '20px',
               cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(245, 166, 35, 0.25)',
               flexShrink: 0,
               transition: 'opacity 0.15s ease'
             }}
-            onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
+            onMouseEnter={e => (e.currentTarget.style.opacity = '0.9')}
             onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
           >
-            🧭
+            <NavIcon type="compass" />
           </div>
           <button
             id="sidebar-collapse-toggle"
@@ -137,54 +188,54 @@ export default function Sidebar({
             title="Expand sidebar"
             aria-label="Expand sidebar"
             style={{
-              background: 'rgba(255, 255, 255, 0.04)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
+              background: 'transparent',
+              border: '1px solid var(--sidebar-divider)',
               borderRadius: '6px',
-              color: 'var(--text-muted)',
+              color: 'var(--sidebar-text)',
               cursor: 'pointer',
               width: '28px',
-              height: '24px',
+              height: '28px',
+              minWidth: '28px',
+              minHeight: '28px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '15px',
-              lineHeight: 1,
               padding: 0,
               transition: 'all 0.15s ease'
             }}
             onMouseEnter={e => {
-              e.currentTarget.style.color = 'var(--text-on-dark)'
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+              e.currentTarget.style.color = '#ffffff'
+              e.currentTarget.style.background = 'var(--sidebar-hover)'
             }}
             onMouseLeave={e => {
-              e.currentTarget.style.color = 'var(--text-muted)'
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)'
+              e.currentTarget.style.color = 'var(--sidebar-text)'
+              e.currentTarget.style.background = 'transparent'
             }}
           >
-            ›
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
           </button>
         </div>
       ) : (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', padding: '0 4px', userSelect: 'none' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px', padding: '0 4px', userSelect: 'none' }}>
           <div
             id="sidebar-brand-header"
             onClick={() => {
               onSelectTab('dashboard')
               if (onCloseMobile) onCloseMobile()
             }}
-            style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', transition: 'opacity 0.15s ease', minWidth: 0 }}
-            onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
+            style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', transition: 'opacity 0.15s ease', minWidth: 0 }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = '0.9')}
             onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-            title="Compass Workspace — Click to return to Dashboard"
+            title="Compass Workspace: Click to return to Dashboard"
           >
-            <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0, boxShadow: '0 4px 12px rgba(245, 166, 35, 0.25)' }}>
-              🧭
+            <div style={{ width: '38px', height: '38px', borderRadius: '6px', background: 'var(--brand)', color: 'var(--accent-text)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <NavIcon type="compass" />
             </div>
             <div>
-              <h1 style={{ fontSize: '16px', fontWeight: '800', letterSpacing: '-0.3px', color: 'var(--text-on-dark)', margin: 0 }}>Compass</h1>
-              <p style={{ fontSize: '10.5px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: '600', margin: 0 }}>Workspace</p>
+              <h1 style={{ fontSize: '15px', fontWeight: '600', letterSpacing: '-0.2px', color: 'var(--sidebar-active-text)', margin: 0, lineHeight: 1.2 }}>Compass</h1>
+              <p style={{ fontSize: '11px', color: 'var(--sidebar-text)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: '500', margin: 0, opacity: 0.8 }}>Workspace</p>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -196,10 +247,10 @@ export default function Sidebar({
                 title="Close sidebar"
                 aria-label="Close navigation drawer"
                 style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  color: 'var(--text-on-dark)',
+                  background: 'transparent',
+                  border: '1px solid var(--sidebar-divider)',
+                  borderRadius: '6px',
+                  color: 'var(--sidebar-text)',
                   cursor: 'pointer',
                   width: '44px',
                   height: '44px',
@@ -208,12 +259,13 @@ export default function Sidebar({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '18px',
-                  lineHeight: 1,
                   flexShrink: 0,
                 }}
               >
-                ✕
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
               </button>
             )}
             <button
@@ -223,42 +275,40 @@ export default function Sidebar({
               aria-label="Collapse sidebar"
               style={{
                 background: 'transparent',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
+                border: '1px solid var(--sidebar-divider)',
                 borderRadius: '6px',
-                color: 'var(--text-muted)',
+                color: 'var(--sidebar-text)',
                 cursor: 'pointer',
-                width: '26px',
-                height: '26px',
+                width: '28px',
+                height: '28px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '15px',
-                lineHeight: 1,
                 padding: 0,
                 transition: 'all 0.15s ease',
                 flexShrink: 0
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.color = 'var(--text-on-dark)'
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+                e.currentTarget.style.color = '#ffffff'
+                e.currentTarget.style.background = 'var(--sidebar-hover)'
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.color = 'var(--text-muted)'
+                e.currentTarget.style.color = 'var(--sidebar-text)'
                 e.currentTarget.style.background = 'transparent'
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)'
               }}
             >
-              ‹
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
             </button>
           </div>
         </div>
       )}
 
       {/* Navigation */}
-      <div style={{ marginBottom: effectivelyCollapsed ? '16px' : '24px' }}>
+      <div style={{ marginBottom: effectivelyCollapsed ? '16px' : '22px' }}>
         {!effectivelyCollapsed && (
-          <p style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', fontWeight: '700', marginBottom: '10px', padding: '0 4px' }}>
+          <p style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--sidebar-text)', opacity: 0.75, fontWeight: '600', marginBottom: '8px', padding: '0 4px' }}>
             Navigation
           </p>
         )}
@@ -280,7 +330,7 @@ export default function Sidebar({
                   if (onCloseMobile) onCloseMobile()
                 }}
                 className={`nav-item-collapsed ${isActive ? 'active' : ''}`}
-                title={`${item.label} — ${item.sub}`}
+                title={`${item.label}: ${item.sub}`}
                 aria-label={`${item.label}: ${item.sub}`}
                 style={{
                   width: '44px',
@@ -289,31 +339,30 @@ export default function Sidebar({
                   minHeight: '44px',
                   margin: '0 auto 6px',
                   padding: 0,
-                  borderRadius: '10px',
+                  borderRadius: '6px',
                   border: 'none',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  background: isActive ? 'var(--brand)' : 'transparent',
-                  color: isActive ? '#16152a' : 'var(--text-secondary)',
-                  boxShadow: isActive ? '0 4px 12px rgba(245, 166, 35, 0.3)' : 'none',
+                  background: isActive ? 'var(--sidebar-active)' : 'transparent',
+                  color: isActive ? '#ffffff' : 'var(--sidebar-text)',
                   transition: 'all 0.15s ease',
                 }}
                 onMouseEnter={e => {
                   if (!isActive) {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
-                    e.currentTarget.style.color = 'var(--text-on-dark)'
+                    e.currentTarget.style.background = 'var(--sidebar-hover)'
+                    e.currentTarget.style.color = '#ffffff'
                   }
                 }}
                 onMouseLeave={e => {
                   if (!isActive) {
                     e.currentTarget.style.background = 'transparent'
-                    e.currentTarget.style.color = 'var(--text-secondary)'
+                    e.currentTarget.style.color = 'var(--sidebar-text)'
                   }
                 }}
               >
-                <span style={{ fontSize: '18px', lineHeight: 1 }}>{item.icon}</span>
+                <NavIcon type={item.type} />
               </button>
             )
           }
@@ -328,13 +377,23 @@ export default function Sidebar({
               }}
               className={`nav-item ${isActive ? 'active' : ''}`}
               title={item.label}
+              style={{
+                borderRadius: '6px',
+                minHeight: '44px',
+                padding: '0 10px',
+                background: isActive ? 'var(--sidebar-active)' : 'transparent',
+                color: isActive ? '#ffffff' : 'var(--sidebar-text)',
+                border: 'none',
+              }}
             >
-              <span className="nav-icon">{item.icon}</span>
+              <span className="nav-icon" style={{ color: isActive ? '#ffffff' : 'var(--sidebar-text)' }}>
+                <NavIcon type={item.type} />
+              </span>
               <span>
-                <div style={{ fontSize: '13.5px', fontWeight: '700', color: isActive ? 'var(--text-on-dark)' : 'inherit' }}>
+                <div style={{ fontSize: '13.5px', fontWeight: isActive ? '600' : '500', color: isActive ? '#ffffff' : 'inherit' }}>
                   {item.label}
                 </div>
-                <div style={{ fontSize: '11px', opacity: 0.75 }}>{item.sub}</div>
+                <div style={{ fontSize: '11px', opacity: 0.7 }}>{item.sub}</div>
               </span>
             </button>
           )
@@ -344,9 +403,9 @@ export default function Sidebar({
       {/* Domain Isolation Metrics */}
       <div style={{ marginBottom: 'auto' }}>
         {!effectivelyCollapsed && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', padding: '0 4px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', padding: '0 4px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <p style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', fontWeight: '700', margin: 0 }}>
+              <p style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--sidebar-text)', opacity: 0.75, fontWeight: '600', margin: 0 }}>
                 Context Domains
               </p>
               <button
@@ -356,30 +415,33 @@ export default function Sidebar({
                 aria-label="Add domain"
                 style={{
                   background: 'transparent',
-                  border: 'none',
-                  color: 'var(--text-muted)',
+                  border: '1px solid var(--sidebar-divider)',
+                  color: 'var(--sidebar-text)',
                   cursor: 'pointer',
-                  fontSize: '14px',
-                  lineHeight: 1,
-                  padding: '4px 6px',
-                  borderRadius: '4px',
+                  padding: 0,
+                  borderRadius: '6px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   transition: 'all 0.15s ease',
-                  minWidth: '28px',
-                  minHeight: '28px',
+                  width: '24px',
+                  height: '24px',
+                  minWidth: '24px',
+                  minHeight: '24px',
                 }}
                 onMouseEnter={e => {
-                  e.currentTarget.style.color = 'var(--text-on-dark)'
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
+                  e.currentTarget.style.color = '#ffffff'
+                  e.currentTarget.style.background = 'var(--sidebar-hover)'
                 }}
                 onMouseLeave={e => {
-                  e.currentTarget.style.color = 'var(--text-muted)'
+                  e.currentTarget.style.color = 'var(--sidebar-text)'
                   e.currentTarget.style.background = 'transparent'
                 }}
               >
-                +
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M5 12h14" />
+                  <path d="M12 5v14" />
+                </svg>
               </button>
             </div>
             {activeDomain !== 'all' && (
@@ -388,7 +450,7 @@ export default function Sidebar({
                   onSelectDomain('all')
                   if (onCloseMobile) onCloseMobile()
                 }}
-                style={{ fontSize: '10px', color: 'var(--brand)', cursor: 'pointer', fontWeight: '700', padding: '2px 4px' }}
+                style={{ fontSize: '11px', color: 'var(--brand)', cursor: 'pointer', fontWeight: '600', padding: '2px 4px' }}
               >
                 Reset
               </span>
@@ -413,43 +475,52 @@ export default function Sidebar({
                 title={`${dom.label} (${count} tasks)`}
                 aria-label={`${dom.label}: ${count} tasks`}
                 style={{
-                  width: '40px',
-                  height: '40px',
-                  minWidth: '40px',
-                  minHeight: '40px',
+                  width: '44px',
+                  height: '44px',
+                  minWidth: '44px',
+                  minHeight: '44px',
                   margin: '0 auto 4px',
                   padding: 0,
-                  borderRadius: '10px',
+                  borderRadius: '6px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  background: isSelected ? 'rgba(245, 166, 35, 0.16)' : 'transparent',
-                  border: isSelected ? '1px solid rgba(245, 166, 35, 0.35)' : '1px solid transparent',
+                  background: isSelected ? 'var(--sidebar-active)' : 'transparent',
+                  border: isSelected ? '1px solid var(--sidebar-divider)' : '1px solid transparent',
                   cursor: 'pointer',
                   position: 'relative',
                   transition: 'all 0.15s ease',
                 }}
                 onMouseEnter={e => {
-                  if (!isSelected) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)'
+                  if (!isSelected) e.currentTarget.style.background = 'var(--sidebar-hover)'
                 }}
                 onMouseLeave={e => {
                   if (!isSelected) e.currentTarget.style.background = 'transparent'
                 }}
               >
-                <span style={{ fontSize: '17px', lineHeight: 1 }}>{dom.icon}</span>
+                {/* 8px rounded square swatch */}
+                <span
+                  style={{
+                    width: '10px',
+                    height: '10px',
+                    borderRadius: '2px',
+                    background: dom.color,
+                  }}
+                />
                 {count > 0 && (
                   <span
                     style={{
                       position: 'absolute',
-                      top: '4px',
-                      right: '4px',
-                      width: '6px',
-                      height: '6px',
-                      borderRadius: '50%',
-                      background: dom.color || 'var(--brand)',
-                      boxShadow: '0 0 4px rgba(0, 0, 0, 0.5)',
+                      top: '6px',
+                      right: '6px',
+                      fontSize: '9px',
+                      fontWeight: '600',
+                      color: 'var(--sidebar-text)',
+                      opacity: 0.85,
                     }}
-                  />
+                  >
+                    {count}
+                  </span>
                 )}
               </div>
             )
@@ -465,34 +536,46 @@ export default function Sidebar({
               }}
               title={dom.label}
               style={{
-                padding: '8px 10px',
-                borderRadius: '10px',
+                padding: '0 10px',
+                borderRadius: '6px',
                 marginBottom: '4px',
                 cursor: 'pointer',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                background: isSelected ? 'var(--bg-sidebar-active)' : 'transparent',
+                background: isSelected ? 'var(--sidebar-active)' : 'transparent',
                 transition: 'background 0.15s ease',
                 width: '100%',
                 boxSizing: 'border-box',
-                minHeight: '38px',
+                minHeight: '44px',
               }}
               onMouseEnter={e => {
-                if (!isSelected) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
+                if (!isSelected) e.currentTarget.style.background = 'var(--sidebar-hover)'
               }}
               onMouseLeave={e => {
                 if (!isSelected) e.currentTarget.style.background = 'transparent'
               }}
             >
-              <span style={{ fontSize: '13px', color: isSelected ? 'var(--text-on-dark)' : 'var(--text-secondary)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                <span>{dom.icon}</span>
+              <span style={{ fontSize: '13px', color: isSelected ? '#ffffff' : 'var(--sidebar-text)', fontWeight: isSelected ? '600' : '500', display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {/* Small 8px rounded square swatch */}
+                <span
+                  style={{
+                    width: '8px',
+                    height: '8px',
+                    minWidth: '8px',
+                    minHeight: '8px',
+                    borderRadius: '2px',
+                    background: dom.color,
+                    display: 'inline-block',
+                    flexShrink: 0,
+                  }}
+                />
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{dom.label}</span>
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
                 {isCustom && confirmDeleteKey === dom.key ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }} onClick={e => e.stopPropagation()}>
-                    <span style={{ fontSize: '10px', color: '#f87171', fontWeight: '700' }}>Del?</span>
+                    <span style={{ fontSize: '10px', color: '#f87171', fontWeight: '600' }}>Del?</span>
                     <button
                       id={`btn-confirm-delete-domain-${dom.key}`}
                       onClick={(e) => {
@@ -500,7 +583,7 @@ export default function Sidebar({
                         if (onDomainDeleted) onDomainDeleted(dom.key)
                         setConfirmDeleteKey(null)
                       }}
-                      style={{ background: '#ef4444', border: 'none', color: '#fff', borderRadius: '4px', padding: '2px 5px', fontSize: '10px', cursor: 'pointer', fontWeight: '700' }}
+                      style={{ background: '#b91c1c', border: 'none', color: '#fff', borderRadius: '4px', padding: '2px 6px', fontSize: '11px', cursor: 'pointer', fontWeight: '600' }}
                     >
                       Yes
                     </button>
@@ -509,14 +592,14 @@ export default function Sidebar({
                         e.stopPropagation()
                         setConfirmDeleteKey(null)
                       }}
-                      style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'var(--text-muted)', borderRadius: '4px', padding: '2px 4px', fontSize: '10px', cursor: 'pointer' }}
+                      style={{ background: 'transparent', border: '1px solid var(--sidebar-divider)', color: 'var(--sidebar-text)', borderRadius: '4px', padding: '2px 6px', fontSize: '11px', cursor: 'pointer' }}
                     >
                       No
                     </button>
                   </div>
                 ) : (
                   <>
-                    <span style={{ padding: '2px 7px', borderRadius: '20px', fontSize: '10.5px', fontWeight: '700', background: 'rgba(255, 255, 255, 0.08)', color: dom.color }}>
+                    <span style={{ padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: '500', background: 'rgba(255, 255, 255, 0.08)', color: 'var(--sidebar-text)' }}>
                       {count}
                     </span>
                     {isCustom && (
@@ -528,13 +611,13 @@ export default function Sidebar({
                         }}
                         title={`Remove ${dom.label} domain`}
                         aria-label={`Remove ${dom.label} domain`}
-                        style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '12px', lineHeight: 1, padding: '2px 4px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: 0.6, transition: 'all 0.15s ease' }}
+                        style={{ background: 'transparent', border: 'none', color: 'var(--sidebar-text)', cursor: 'pointer', fontSize: '13px', lineHeight: 1, padding: '2px 4px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: 0.6, transition: 'all 0.15s ease' }}
                         onMouseEnter={e => {
                           e.currentTarget.style.color = '#f87171'
                           e.currentTarget.style.opacity = '1'
                         }}
                         onMouseLeave={e => {
-                          e.currentTarget.style.color = 'var(--text-muted)'
+                          e.currentTarget.style.color = 'var(--sidebar-text)'
                           e.currentTarget.style.opacity = '0.6'
                         }}
                       >
@@ -557,37 +640,38 @@ export default function Sidebar({
               aria-label="Add domain"
               style={{
                 background: 'transparent',
-                border: '1px dashed rgba(255, 255, 255, 0.18)',
-                borderRadius: '10px',
-                color: 'var(--text-muted)',
+                border: '1px dashed var(--sidebar-divider)',
+                borderRadius: '6px',
+                color: 'var(--sidebar-text)',
                 cursor: 'pointer',
-                width: '40px',
-                height: '40px',
+                width: '44px',
+                height: '44px',
+                minWidth: '44px',
+                minHeight: '44px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '18px',
-                lineHeight: 1,
                 transition: 'all 0.15s ease',
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.color = 'var(--text-on-dark)'
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.35)'
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)'
+                e.currentTarget.style.color = '#ffffff'
+                e.currentTarget.style.background = 'var(--sidebar-hover)'
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.color = 'var(--text-muted)'
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.18)'
+                e.currentTarget.style.color = 'var(--sidebar-text)'
                 e.currentTarget.style.background = 'transparent'
               }}
             >
-              +
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M5 12h14" />
+                <path d="M12 5v14" />
+              </svg>
             </button>
           </div>
         )}
       </div>
 
-      {/* Live status card */}
+      {/* Live status card: 8px radius, 1px border */}
       {effectivelyCollapsed ? (
         <div
           id="sidebar-specs-card"
@@ -598,15 +682,17 @@ export default function Sidebar({
               onOpenTelemetry()
             }
           }}
-          title={isOnline ? `${totalActive} tasks synced — ${backendStatus} (Click for telemetry)` : `Reconnecting — ${backendStatus} (Click to wake up)`}
-          aria-label={isOnline ? `${totalActive} tasks synced — ${backendStatus}` : `Reconnecting — ${backendStatus}`}
+          title={isOnline ? `${totalActive} tasks synced: ${backendStatus} (Click for telemetry)` : `Reconnecting: ${backendStatus} (Click to wake up)`}
+          aria-label={isOnline ? `${totalActive} tasks synced: ${backendStatus}` : `Reconnecting: ${backendStatus}`}
           style={{
             width: '44px',
             height: '44px',
+            minWidth: '44px',
+            minHeight: '44px',
             margin: '12px auto 6px',
-            borderRadius: '10px',
-            background: 'rgba(255, 255, 255, 0.04)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: '6px',
+            background: 'transparent',
+            border: '1px solid var(--sidebar-divider)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -614,28 +700,30 @@ export default function Sidebar({
             position: 'relative',
             transition: 'all 0.15s ease',
             flexShrink: 0,
+            color: 'var(--sidebar-text)',
           }}
-          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
-          onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'}
+          onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-hover)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
         >
           <div style={{
-            width: '8px',
-            height: '8px',
+            width: '6px',
+            height: '6px',
             borderRadius: '50%',
-            background: isOnline ? '#34d399' : '#f5a623',
-            boxShadow: isOnline ? '0 0 8px rgba(52, 211, 153, 0.5)' : '0 0 8px rgba(245, 166, 35, 0.5)',
+            background: isOnline ? '#1c8a62' : '#f5a623',
             position: 'absolute',
-            top: '7px',
-            right: '7px',
+            top: '6px',
+            right: '6px',
           }} />
-          <span style={{ fontSize: '17px' }}>⚡</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+          </svg>
         </div>
       ) : (
         <div style={{
-          padding: '13px 14px',
-          borderRadius: '12px',
-          background: 'rgba(255, 255, 255, 0.04)',
-          border: '1px solid rgba(255, 255, 255, 0.06)',
+          padding: '12px 14px',
+          borderRadius: '8px',
+          background: 'transparent',
+          border: '1px solid var(--sidebar-divider)',
           marginTop: '16px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
@@ -644,11 +732,10 @@ export default function Sidebar({
                 width: '7px',
                 height: '7px',
                 borderRadius: '50%',
-                background: isOnline ? '#34d399' : '#f5a623',
-                boxShadow: isOnline ? '0 0 8px rgba(52, 211, 153, 0.5)' : '0 0 8px rgba(245, 166, 35, 0.5)',
+                background: isOnline ? '#1c8a62' : '#f5a623',
                 flexShrink: 0
               }} />
-              <span style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--text-on-dark)' }}>
+              <span style={{ fontSize: '12.5px', fontWeight: '600', color: '#ffffff' }}>
                 {isOnline ? `${totalActive} tasks synced` : 'Reconnecting'}
               </span>
             </div>
@@ -666,20 +753,20 @@ export default function Sidebar({
                   fontWeight: '600',
                   padding: '2px 8px',
                   borderRadius: '6px',
-                  background: 'rgba(251, 191, 36, 0.16)',
-                  border: '1px solid rgba(251, 191, 36, 0.35)',
-                  color: 'var(--brand, #fbbf24)',
+                  background: 'var(--accent)',
+                  border: '1px solid transparent',
+                  color: 'var(--accent-text)',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(251, 191, 36, 0.28)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'rgba(251, 191, 36, 0.16)'}
+                onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
               >
                 Wake up
               </button>
             )}
           </div>
-          <div style={{ fontSize: '10.5px', color: 'var(--text-muted)', paddingLeft: '15px' }}>
+          <div style={{ fontSize: '11px', color: 'var(--sidebar-text)', opacity: 0.8, paddingLeft: '15px' }}>
             {backendStatus}
           </div>
           {usageBadge && (
@@ -688,55 +775,71 @@ export default function Sidebar({
               className="mono"
               onClick={() => onOpenTelemetry && onOpenTelemetry()}
               style={{
-                fontSize: '10.5px',
-                color: 'var(--brand, #fbbf24)',
-                padding: '6px 10px',
+                fontSize: '11px',
+                color: 'var(--sidebar-text)',
+                padding: '6px 8px',
                 marginTop: '8px',
-                borderRadius: '7px',
-                background: 'rgba(245, 166, 35, 0.08)',
-                border: '1px solid rgba(245, 166, 35, 0.22)',
+                borderRadius: '6px',
+                background: 'var(--sidebar-hover)',
+                border: '1px solid var(--sidebar-divider)',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 transition: 'all 0.15s ease',
               }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(245, 166, 35, 0.16)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(245, 166, 35, 0.08)'}
-              title="Click to inspect live Nebius Token Factory & NVIDIA telemetry"
+              onMouseEnter={e => e.currentTarget.style.color = '#ffffff'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--sidebar-text)'}
+              title="Click to inspect live Nebius Token Factory and NVIDIA telemetry"
             >
               <span>{usageBadge}</span>
-              <span style={{ fontSize: '10px', opacity: 0.85 }}>📊</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 20V10" />
+                <path d="M18 20V4" />
+                <path d="M6 20v-4" />
+              </svg>
             </div>
           )}
         </div>
       )}
 
-      {/* Account / Workspace Switcher */}
+      {/* Account / Workspace Switcher: min 44px tap target */}
       {effectivelyCollapsed ? (
         <div
           id="sidebar-account-btn"
           onClick={() => onOpenAuth && onOpenAuth()}
-          title={currentUser?.authenticated ? `Signed in as ${currentUser.email} — Click to switch` : 'Sign in / Account'}
+          title={currentUser?.authenticated ? `Signed in as ${currentUser.email}, Click to switch` : 'Sign in / Account'}
           aria-label={currentUser?.authenticated ? `Signed in as ${currentUser.email}` : 'Sign in / Account'}
           style={{
             width: '44px',
             height: '44px',
-            margin: '4px auto 0',
-            borderRadius: '10px',
-            background: 'rgba(255, 255, 255, 0.04)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
+            minWidth: '44px',
+            minHeight: '44px',
+            margin: '6px auto 0',
+            borderRadius: '6px',
+            background: 'transparent',
+            border: '1px solid var(--sidebar-divider)',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             transition: 'all 0.15s ease',
             flexShrink: 0,
+            color: 'var(--sidebar-text)',
           }}
-          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
-          onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = 'var(--sidebar-hover)'
+            e.currentTarget.style.color = '#ffffff'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'transparent'
+            e.currentTarget.style.color = 'var(--sidebar-text)'
+          }}
         >
-          <span style={{ fontSize: '18px' }}>👤</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
         </div>
       ) : (
         <div
@@ -746,30 +849,36 @@ export default function Sidebar({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '10px 12px',
-            borderRadius: '10px',
-            background: 'rgba(255, 255, 255, 0.04)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
+            padding: '8px 10px',
+            minHeight: '44px',
+            borderRadius: '6px',
+            background: 'transparent',
+            border: '1px solid var(--sidebar-divider)',
             cursor: 'pointer',
-            marginTop: '10px',
+            marginTop: '8px',
             transition: 'all 0.15s ease'
           }}
-          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
-          onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)'}
+          onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-hover)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           title="Manage Account & Google Calendar"
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-            <span style={{ fontSize: '13px' }}>👤</span>
+            <span style={{ color: 'var(--sidebar-text)', display: 'inline-flex', alignItems: 'center' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </span>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: '12px', color: 'var(--text-on-dark)', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div style={{ fontSize: '12px', color: '#ffffff', fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {currentUser?.authenticated ? currentUser.email : 'Sign in / Account'}
               </div>
-              <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: '10.5px', color: 'var(--sidebar-text)', opacity: 0.75 }}>
                 {currentUser?.calendar?.connected ? 'Google Calendar ✓' : 'Isolated Workspace'}
               </div>
             </div>
           </div>
-          <span style={{ fontSize: '11px', color: 'var(--brand)', fontWeight: '700', flexShrink: 0, paddingLeft: '6px' }}>
+          <span style={{ fontSize: '11px', color: 'var(--brand)', fontWeight: '600', flexShrink: 0, paddingLeft: '6px' }}>
             {currentUser?.authenticated ? 'Switch ▾' : 'Login ▾'}
           </span>
         </div>

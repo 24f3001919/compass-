@@ -5,6 +5,7 @@ import {
   importSelectedGuestConversations,
   skipMigration,
 } from '../api/client'
+import { Compass, X, Check } from 'lucide-react'
 
 export default function MigrationModal({
   isOpen,
@@ -117,9 +118,8 @@ export default function MigrationModal({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'rgba(5, 7, 12, 0.75)',
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
+        background: 'rgba(27, 26, 23, 0.45)',
+        backdropFilter: 'blur(3px)',
         padding: '1rem',
       }}
       onClick={(e) => {
@@ -130,15 +130,15 @@ export default function MigrationModal({
     >
       <div
         style={{
-          background: 'var(--bg-card, #121824)',
-          border: '1px solid var(--border, rgba(255, 255, 255, 0.12))',
-          borderRadius: '16px',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-card, 8px)',
           width: '100%',
           maxWidth: view === 'select' ? '620px' : '480px',
           maxHeight: '85vh',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 24px 48px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+          boxShadow: '0 8px 30px rgba(0, 0, 0, 0.12)',
           overflow: 'hidden',
           transition: 'max-width 0.2s ease',
         }}
@@ -147,7 +147,7 @@ export default function MigrationModal({
         <div
           style={{
             padding: '1.25rem 1.5rem',
-            borderBottom: '1px solid var(--border, rgba(255, 255, 255, 0.08))',
+            borderBottom: '1px solid var(--border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -158,16 +158,16 @@ export default function MigrationModal({
               style={{
                 width: '36px',
                 height: '36px',
-                borderRadius: '10px',
-                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.2))',
-                border: '1px solid rgba(139, 92, 246, 0.3)',
+                borderRadius: 'var(--radius-btn, 6px)',
+                background: 'var(--bg-card-soft)',
+                border: '1px solid var(--border)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '1.2rem',
+                color: 'var(--text-primary)',
               }}
             >
-              🧭
+              <Compass size={20} strokeWidth={1.8} />
             </div>
             <div>
               <h2
@@ -175,7 +175,7 @@ export default function MigrationModal({
                   margin: 0,
                   fontSize: '1.1rem',
                   fontWeight: 600,
-                  color: 'var(--text-primary, #ffffff)',
+                  color: 'var(--text-primary)',
                   letterSpacing: '-0.01em',
                 }}
               >
@@ -185,7 +185,7 @@ export default function MigrationModal({
                 style={{
                   margin: '2px 0 0',
                   fontSize: '0.8rem',
-                  color: 'var(--text-secondary, #94a3b8)',
+                  color: 'var(--text-secondary)',
                 }}
               >
                 Seamless anonymous session migration
@@ -195,21 +195,22 @@ export default function MigrationModal({
           {view !== 'importing' && (
             <button
               onClick={handleSkip}
+              className="btn-touch-target btn-secondary"
               style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-secondary, #94a3b8)',
+                color: 'var(--text-muted)',
                 cursor: 'pointer',
-                fontSize: '1.25rem',
-                padding: '4px 8px',
-                borderRadius: '6px',
+                width: '32px',
+                height: '32px',
+                minHeight: '32px',
+                borderRadius: 'var(--radius-btn, 6px)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
               title="Close"
+              aria-label="Close"
             >
-              ✕
+              <X size={16} strokeWidth={1.8} />
             </button>
           )}
         </div>
@@ -277,17 +278,14 @@ export default function MigrationModal({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <button
                   onClick={handleImportAll}
+                  className="btn-touch-target btn-primary-amber"
                   style={{
                     padding: '0.75rem 1rem',
-                    borderRadius: '10px',
-                    border: 'none',
-                    background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
-                    color: '#ffffff',
-                    fontWeight: 600,
+                    borderRadius: 'var(--radius-btn, 6px)',
                     fontSize: '0.9rem',
+                    fontWeight: 600,
                     cursor: 'pointer',
-                    boxShadow: '0 4px 12px rgba(79, 70, 229, 0.35)',
-                    transition: 'all 0.15s ease',
+                    minHeight: '44px',
                   }}
                 >
                   Import All Conversations & Context
@@ -295,16 +293,14 @@ export default function MigrationModal({
 
                 <button
                   onClick={handleOpenSelect}
+                  className="btn-touch-target btn-secondary"
                   style={{
                     padding: '0.75rem 1rem',
-                    borderRadius: '10px',
-                    border: '1px solid var(--border, rgba(255, 255, 255, 0.15))',
-                    background: 'rgba(255, 255, 255, 0.04)',
-                    color: 'var(--text-primary, #ffffff)',
-                    fontWeight: 500,
+                    borderRadius: 'var(--radius-btn, 6px)',
                     fontSize: '0.9rem',
+                    fontWeight: 500,
                     cursor: 'pointer',
-                    transition: 'all 0.15s ease',
+                    minHeight: '44px',
                   }}
                 >
                   Choose Conversations...
@@ -312,15 +308,13 @@ export default function MigrationModal({
 
                 <button
                   onClick={handleSkip}
+                  className="btn-touch-target btn-secondary"
                   style={{
                     padding: '0.6rem 1rem',
-                    borderRadius: '10px',
-                    border: 'none',
-                    background: 'transparent',
-                    color: 'var(--text-secondary, #94a3b8)',
+                    borderRadius: 'var(--radius-btn, 6px)',
                     fontSize: '0.85rem',
                     cursor: 'pointer',
-                    transition: 'color 0.15s ease',
+                    minHeight: '44px',
                   }}
                 >
                   Skip for Now
@@ -527,14 +521,14 @@ export default function MigrationModal({
                     <div style={{ display: 'flex', gap: '0.75rem' }}>
                       <button
                         onClick={handleSkip}
+                        className="btn-touch-target btn-secondary"
                         style={{
                           padding: '0.6rem 1rem',
-                          borderRadius: '8px',
-                          border: 'none',
-                          background: 'transparent',
-                          color: 'var(--text-secondary, #94a3b8)',
+                          borderRadius: 'var(--radius-btn, 6px)',
+                          color: 'var(--text-secondary)',
                           cursor: 'pointer',
                           fontSize: '0.85rem',
+                          minHeight: '44px',
                         }}
                       >
                         Skip
@@ -542,16 +536,15 @@ export default function MigrationModal({
                       <button
                         onClick={handleImportSelected}
                         disabled={selectedIds.size === 0 && !importMemory}
+                        className="btn-touch-target btn-primary-amber"
                         style={{
                           padding: '0.6rem 1.25rem',
-                          borderRadius: '8px',
-                          border: 'none',
-                          background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
-                          color: '#ffffff',
+                          borderRadius: 'var(--radius-btn, 6px)',
                           fontWeight: 600,
                           fontSize: '0.85rem',
                           cursor: (selectedIds.size === 0 && !importMemory) ? 'not-allowed' : 'pointer',
                           opacity: (selectedIds.size === 0 && !importMemory) ? 0.5 : 1,
+                          minHeight: '44px',
                         }}
                       >
                         Import Selected ({selectedIds.size})
@@ -570,17 +563,17 @@ export default function MigrationModal({
                 style={{
                   width: '40px',
                   height: '40px',
-                  border: '3px solid rgba(99, 102, 241, 0.2)',
-                  borderTopColor: '#6366f1',
+                  border: '3px solid var(--border)',
+                  borderTopColor: 'var(--accent)',
                   borderRadius: '50%',
                   animation: 'spin 1s linear infinite',
                   margin: '0 auto 1.25rem',
                 }}
               />
-              <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary, #ffffff)', marginBottom: '0.25rem' }}>
+              <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
                 Importing Conversations...
               </div>
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary, #94a3b8)' }}>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                 Preserving messages, timestamps, and context safely.
               </div>
               <style>{`
@@ -598,38 +591,36 @@ export default function MigrationModal({
                 style={{
                   width: '52px',
                   height: '52px',
-                  borderRadius: '50%',
-                  background: 'rgba(34, 197, 94, 0.15)',
-                  border: '1px solid rgba(34, 197, 94, 0.3)',
+                  borderRadius: 'var(--radius-card, 8px)',
+                  background: 'var(--bg-card-soft)',
+                  border: '1px solid var(--border)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '1.75rem',
                   margin: '0 auto 1rem',
-                  color: '#4ade80',
+                  color: 'var(--code)',
                 }}
               >
-                ✓
+                <Check size={28} strokeWidth={1.8} />
               </div>
-              <div style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary, #ffffff)', marginBottom: '0.5rem' }}>
+              <div style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
                 Import Complete!
               </div>
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary, #94a3b8)', lineHeight: 1.5, marginBottom: '1.5rem' }}>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '1.5rem' }}>
                 {importResult?.imported_count ?? 0} conversation{importResult?.imported_count === 1 ? '' : 's'} successfully brought into your Compass account.
                 <br />
                 Original guest records remain safely preserved in your browser session.
               </div>
               <button
                 onClick={onClose}
+                className="btn-touch-target btn-primary-amber"
                 style={{
                   padding: '0.7rem 1.75rem',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
-                  color: '#ffffff',
+                  borderRadius: 'var(--radius-btn, 6px)',
                   fontWeight: 600,
                   fontSize: '0.9rem',
                   cursor: 'pointer',
+                  minHeight: '44px',
                 }}
               >
                 Continue Chatting

@@ -11,6 +11,8 @@ import {
   commitExtractedResume,
   draftCoverLetter,
 } from '../../api/careerApi'
+import { safeHref } from '../../api/baseClient.js'
+
 import ValidationReportCard from './ValidationReportCard'
 import ResumeImportModal from './ResumeImportModal'
 import ExtractionReviewModal from './ExtractionReviewModal'
@@ -468,7 +470,7 @@ export default function ResumeStudio() {
               {selectedResume && (
                 <>
                   <a
-                    href={getResumeExportUrl(selectedResume.id, resumeTemplate)}
+                    href={safeHref(getResumeExportUrl(selectedResume.id, resumeTemplate))}
                     target="_blank"
                     rel="noreferrer"
                     style={{
@@ -485,9 +487,10 @@ export default function ResumeStudio() {
                     📄 Print / PDF
                   </a>
                   <a
-                    href={getResumeExportDocxUrl(selectedResume.id)}
+                    href={safeHref(getResumeExportDocxUrl(selectedResume.id))}
                     target="_blank"
                     rel="noreferrer"
+
                     style={{
                       background: 'var(--bg-card)',
                       border: '1px solid var(--border)',

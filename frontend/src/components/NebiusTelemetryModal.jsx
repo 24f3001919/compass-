@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Zap, X, RefreshCw, Copy, Check } from 'lucide-react'
 
 export default function NebiusTelemetryModal({ isOpen, onClose, usageStats, onRefresh }) {
   const [copied, setCopied] = useState(false)
@@ -59,7 +60,7 @@ export default function NebiusTelemetryModal({ isOpen, onClose, usageStats, onRe
 
   const handleCopyReport = () => {
     const report = [
-      '# 🧭 Compass — Nebius Token Factory & NVIDIA Telemetry Report',
+      '# 🧭 Compass: Nebius Token Factory & NVIDIA Telemetry Report',
       `Audit Date: ${new Date().toISOString()}`,
       `Total Model Calls: ${totalCalls}`,
       `Total Tokens: ${totalTokens.toLocaleString()} (${inputTokens.toLocaleString()} in / ${outputTokens.toLocaleString()} out)`,
@@ -104,68 +105,67 @@ export default function NebiusTelemetryModal({ isOpen, onClose, usageStats, onRe
         onClick={e => e.stopPropagation()}
         style={{
           background: 'var(--bg-card, #12141a)',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
-          borderRadius: '18px',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-card, 8px)',
           maxWidth: '820px',
           width: '100%',
           maxHeight: '90vh',
           overflowY: 'auto',
-          boxShadow: '0 24px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(245, 166, 35, 0.15)',
+          boxShadow: '0 8px 30px rgba(0, 0, 0, 0.4)',
           display: 'flex',
           flexDirection: 'column',
           gap: '20px',
-          padding: '28px',
-          color: 'var(--text-on-dark, #fff)',
+          padding: '24px',
+          color: 'var(--text-primary)',
         }}
       >
         {/* Modal Header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-              <span style={{ fontSize: '22px' }}>⚡</span>
-              <h2 style={{ fontSize: '19px', fontWeight: '800', letterSpacing: '-0.4px', margin: 0, color: '#fff' }}>
+              <Zap size={20} strokeWidth={1.8} style={{ color: 'var(--accent)' }} />
+              <h2 style={{ fontSize: '18px', fontWeight: '600', letterSpacing: '-0.3px', margin: 0, color: 'var(--text-primary)' }}>
                 Engineered with Nebius Token Factory & NVIDIA
               </h2>
               <span
                 style={{
                   fontSize: '11px',
-                  fontWeight: '700',
+                  fontWeight: '600',
                   padding: '2px 8px',
-                  borderRadius: '12px',
-                  background: 'rgba(16, 185, 129, 0.2)',
-                  color: '#34d399',
-                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                  borderRadius: 'var(--radius-btn, 6px)',
+                  background: 'var(--bg-card-soft)',
+                  color: 'var(--code)',
+                  border: '1px solid var(--border)',
                 }}
               >
                 LIVE TELEMETRY
               </span>
             </div>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted, #94a3b8)', margin: 0, lineHeight: '1.4' }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0, lineHeight: '1.4' }}>
               Real-time token accounting, MoE throughput metrics, and 3-tier NVIDIA Nemotron routing efficiency.
             </p>
           </div>
 
           <button
             onClick={onClose}
+            aria-label="Close"
+            className="btn-touch-target"
             style={{
-              background: 'rgba(255, 255, 255, 0.08)',
-              border: 'none',
-              borderRadius: '8px',
-              width: '32px',
-              height: '32px',
+              background: 'transparent',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-btn, 6px)',
+              width: '36px',
+              height: '36px',
+              minHeight: '36px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#94a3b8',
+              color: 'var(--text-muted)',
               cursor: 'pointer',
-              fontSize: '16px',
               flexShrink: 0,
-              transition: 'all 0.15s ease',
             }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)')}
           >
-            ✕
+            <X size={16} strokeWidth={1.8} />
           </button>
         </div>
 
@@ -325,40 +325,40 @@ export default function NebiusTelemetryModal({ isOpen, onClose, usageStats, onRe
             {onRefresh && (
               <button
                 onClick={onRefresh}
+                className="btn-touch-target btn-secondary"
                 style={{
-                  background: 'rgba(255, 255, 255, 0.06)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  borderRadius: '8px',
+                  borderRadius: 'var(--radius-btn, 6px)',
                   padding: '8px 14px',
-                  color: '#e2e8f0',
-                  fontSize: '12px',
+                  fontSize: '13px',
                   fontWeight: '600',
                   cursor: 'pointer',
-                  transition: 'background 0.15s ease',
+                  minHeight: '44px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
                 }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)')}
               >
-                🔄 Refresh
+                <RefreshCw size={14} strokeWidth={1.8} />
+                <span>Refresh</span>
               </button>
             )}
             <button
               onClick={handleCopyReport}
+              className="btn-touch-target btn-primary-amber"
               style={{
-                background: 'var(--brand, #f5a623)',
-                border: 'none',
-                borderRadius: '8px',
+                borderRadius: 'var(--radius-btn, 6px)',
                 padding: '8px 16px',
-                color: '#000',
-                fontSize: '12px',
-                fontWeight: '700',
+                fontSize: '13px',
+                fontWeight: '600',
                 cursor: 'pointer',
-                transition: 'opacity 0.15s ease',
+                minHeight: '44px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px'
               }}
-              onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
-              onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
             >
-              {copied ? '✓ Report Copied!' : '📋 Copy Telemetry Report'}
+              {copied ? <Check size={14} strokeWidth={1.8} /> : <Copy size={14} strokeWidth={1.8} />}
+              <span>{copied ? 'Report Copied!' : 'Copy Telemetry Report'}</span>
             </button>
           </div>
         </div>

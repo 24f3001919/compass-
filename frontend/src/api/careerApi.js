@@ -7,7 +7,7 @@
  * - Submission adapters & execution
  */
 
-import { API_BASE as BASE_URL, getAuthHeaders, getGuestToken, initGuestSession } from './baseClient.js'
+import { API_BASE as BASE_URL, getAuthHeaders, getGuestToken, initGuestSession, safeHref } from './baseClient.js'
 
 const API_BASE = `${BASE_URL}/api/career`
 
@@ -112,14 +112,15 @@ export async function validateResume(resumeId) {
 
 export function getResumeExportUrl(resumeId, template = null) {
   if (template) {
-    return `${API_BASE}/resumes/${resumeId}/export/html?template=${encodeURIComponent(template)}`
+    return safeHref(`${API_BASE}/resumes/${encodeURIComponent(resumeId)}/export/html?template=${encodeURIComponent(template)}`)
   }
-  return `${API_BASE}/resumes/${resumeId}/export/html`
+  return safeHref(`${API_BASE}/resumes/${encodeURIComponent(resumeId)}/export/html`)
 }
 
 export function getResumeExportDocxUrl(resumeId) {
-  return `${API_BASE}/resumes/${resumeId}/export/docx`
+  return safeHref(`${API_BASE}/resumes/${encodeURIComponent(resumeId)}/export/docx`)
 }
+
 
 export async function parseUploadResume(rawText) {
   await ensureSession()

@@ -41,31 +41,23 @@ export default function OnboardingTour({
         <button
           id="btn-reopen-tour"
           onClick={handleReopen}
+          className="btn-secondary"
           style={{
-            background: 'var(--guide-close-bg)',
-            border: '1px solid var(--guide-close-border)',
-            color: 'var(--text-secondary)',
-            fontSize: '11.5px',
-            fontWeight: '600',
-            padding: '5px 12px',
-            borderRadius: '20px',
+            fontSize: '13px',
+            fontWeight: '500',
+            padding: '0 14px',
+            minHeight: '44px',
             cursor: 'pointer',
-            display: 'flex',
+            display: 'inline-flex',
             alignItems: 'center',
-            gap: '6px',
-            transition: 'all 0.15s ease',
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.borderColor = 'var(--brand)'
-            e.currentTarget.style.color = 'var(--text-primary)'
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.borderColor = 'var(--guide-close-border)'
-            e.currentTarget.style.color = 'var(--text-secondary)'
+            gap: '8px',
           }}
           title="Re-open Hackathon Judge Tour"
         >
-          <span>🧭</span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent, #f5a623)' }}>
+            <circle cx="12" cy="12" r="10" />
+            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+          </svg>
           <span>Judge Guide & Architecture</span>
         </button>
       </div>
@@ -76,42 +68,42 @@ export default function OnboardingTour({
     <div
       id="judge-onboarding-tour"
       style={{
-        background: 'var(--guide-bg)',
-        border: '1px solid var(--guide-border)',
-        boxShadow: 'var(--guide-shadow)',
-        borderRadius: '16px',
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-card, 8px)',
         padding: isCollapsed ? '12px 18px' : '20px 22px',
         marginBottom: '22px',
         position: 'relative',
-        backdropFilter: 'blur(10px)',
-        transition: 'all 0.2s ease',
+        transition: 'all 0.15s ease',
       }}
     >
       {/* Header bar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '20px' }}>🧭</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent, #f5a623)' }}>
+            <circle cx="12" cy="12" r="10" />
+            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+          </svg>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '14.5px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.2px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.2px' }}>
                 Compass Architecture & Evaluation Guide
               </span>
               <span style={{
-                fontSize: '10.5px',
-                fontWeight: '700',
-                background: 'var(--guide-badge-bg)',
-                color: 'var(--guide-badge-text)',
-                border: '1px solid var(--guide-badge-border)',
+                fontSize: '11px',
+                fontWeight: '600',
+                background: 'rgba(245, 166, 35, 0.12)',
+                color: 'var(--text-primary)',
+                border: '1px solid rgba(245, 166, 35, 0.25)',
                 padding: '2px 8px',
-                borderRadius: '12px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
+                borderRadius: 'var(--radius-btn, 6px)',
+                letterSpacing: '0.03em',
               }}>
                 Nebius x NVIDIA
               </span>
             </div>
             {!isCollapsed && (
-              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '3px 0 0 0' }}>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
                 Persistent multi-domain copilot combining 3-tier Nemotron MoE, Tavily schedule drift detection, and pgvector HNSW memory.
               </p>
             )}
@@ -126,9 +118,9 @@ export default function OnboardingTour({
               border: 'none',
               color: 'var(--text-secondary)',
               cursor: 'pointer',
-              fontSize: '12px',
-              padding: '4px 8px',
-              borderRadius: '6px',
+              fontSize: '13px',
+              padding: '6px 10px',
+              borderRadius: 'var(--radius-btn, 6px)',
             }}
             title={isCollapsed ? 'Expand Guide' : 'Collapse Guide'}
           >
@@ -137,14 +129,14 @@ export default function OnboardingTour({
           <button
             onClick={handleDismiss}
             style={{
-              background: 'var(--guide-close-bg)',
-              border: '1px solid var(--guide-close-border)',
+              background: 'transparent',
+              border: '1px solid var(--border)',
               color: 'var(--text-secondary)',
               cursor: 'pointer',
               fontSize: '13px',
-              width: '24px',
-              height: '24px',
-              borderRadius: '6px',
+              width: '32px',
+              height: '32px',
+              borderRadius: 'var(--radius-btn, 6px)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -169,72 +161,86 @@ export default function OnboardingTour({
           }}>
             {/* Pillar 1: NVIDIA Architecture */}
             <div style={{
-              background: 'var(--guide-pillar-bg)',
-              border: '1px solid var(--guide-amber-border)',
-              borderRadius: '12px',
+              background: 'var(--bg-card-soft)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-card, 8px)',
               padding: '14px',
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                <span style={{ fontSize: '15px' }}>⚡</span>
-                <span style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--guide-amber-text)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent, #f5a623)' }}>
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                </svg>
+                <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)' }}>
                   3-Tier NVIDIA MoE
                 </span>
               </div>
-              <p style={{ fontSize: '11.5px', color: 'var(--text-secondary)', lineHeight: '1.45', margin: 0 }}>
-                <strong style={{ color: 'var(--text-primary)', fontWeight: '700' }}>Nemotron-3 Nano</strong> (30B, intent routing) → <strong style={{ color: 'var(--text-primary)', fontWeight: '700' }}>Super</strong> (120B, ReAct planning) → <strong style={{ color: 'var(--text-primary)', fontWeight: '700' }}>Ultra</strong> (550B, cross-domain synthesis) on Nebius Token Factory.
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.45', margin: 0 }}>
+                <strong style={{ color: 'var(--text-primary)', fontWeight: '600' }}>Nemotron-3 Nano</strong> (30B, intent routing) → <strong style={{ color: 'var(--text-primary)', fontWeight: '600' }}>Super</strong> (120B, ReAct planning) → <strong style={{ color: 'var(--text-primary)', fontWeight: '600' }}>Ultra</strong> (550B, cross-domain synthesis) on Nebius Token Factory.
               </p>
             </div>
 
             {/* Pillar 2: Tavily Drift Detection */}
             <div style={{
-              background: 'var(--guide-pillar-bg)',
-              border: '1px solid var(--guide-cyan-border)',
-              borderRadius: '12px',
+              background: 'var(--bg-card-soft)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-card, 8px)',
               padding: '14px',
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                <span style={{ fontSize: '15px' }}>🔍</span>
-                <span style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--guide-cyan-text)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--domain-coursework, #2f64c8)' }}>
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)' }}>
                   Tavily Live Web Drift
                 </span>
               </div>
-              <p style={{ fontSize: '11.5px', color: 'var(--text-secondary)', lineHeight: '1.45', margin: 0 }}>
-                Proactively scrapes official hackathon/coursework portals using Tavily to detect schedule postponements and warn before deadlines slip.
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.45', margin: 0 }}>
+                Proactively scrapes official hackathon and coursework portals using Tavily to detect schedule postponements and warn before deadlines slip.
               </p>
             </div>
 
             {/* Pillar 3: Matryoshka Vector Memory */}
             <div style={{
-              background: 'var(--guide-pillar-bg)',
-              border: '1px solid var(--guide-green-border)',
-              borderRadius: '12px',
+              background: 'var(--bg-card-soft)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-card, 8px)',
               padding: '14px',
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                <span style={{ fontSize: '15px' }}>🧠</span>
-                <span style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--guide-green-text)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--domain-code, #1c8a62)' }}>
+                  <rect x="4" y="4" width="16" height="16" rx="2" />
+                  <rect x="9" y="9" width="6" height="6" />
+                  <line x1="9" y1="1" x2="9" y2="4" />
+                  <line x1="15" y1="1" x2="15" y2="4" />
+                  <line x1="9" y1="20" x2="9" y2="23" />
+                  <line x1="15" y1="20" x2="15" y2="23" />
+                </svg>
+                <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)' }}>
                   Domain-Isolated Recall
                 </span>
               </div>
-              <p style={{ fontSize: '11.5px', color: 'var(--text-secondary)', lineHeight: '1.45', margin: 0 }}>
-                Neon pgvector HNSW with <strong style={{ color: 'var(--text-primary)', fontWeight: '700' }}>768-dim Matryoshka</strong> embeddings. Keeps hackathon, coursework, and code contexts strictly isolated.
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.45', margin: 0 }}>
+                Neon pgvector HNSW with <strong style={{ color: 'var(--text-primary)', fontWeight: '600' }}>768-dim Matryoshka</strong> embeddings. Keeps hackathon, coursework, and code contexts strictly isolated.
               </p>
             </div>
 
             {/* Pillar 4: Feasibility & Safety */}
             <div style={{
-              background: 'var(--guide-pillar-bg)',
-              border: '1px solid var(--guide-purple-border)',
-              borderRadius: '12px',
+              background: 'var(--bg-card-soft)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-card, 8px)',
               padding: '14px',
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                <span style={{ fontSize: '15px' }}>🛡️</span>
-                <span style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--guide-purple-text)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--domain-general, #6b7a86)' }}>
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)' }}>
                   Feasibility & Trust
                 </span>
               </div>
-              <p style={{ fontSize: '11.5px', color: 'var(--text-secondary)', lineHeight: '1.45', margin: 0 }}>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.45', margin: 0 }}>
                 Mathematical capacity load calculations flag impossible schedules; epistemic abstention says <em>"I don't know"</em> instead of hallucinating.
               </p>
             </div>
@@ -247,11 +253,11 @@ export default function OnboardingTour({
             justifyContent: 'space-between',
             flexWrap: 'wrap',
             gap: '10px',
-            borderTop: '1px solid var(--guide-divider)',
-            paddingTop: '12px',
+            borderTop: '1px solid var(--border-soft, var(--border))',
+            paddingTop: '14px',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', letterSpacing: '0.02em' }}>
                 Try 1-Click Tests:
               </span>
 
@@ -259,31 +265,23 @@ export default function OnboardingTour({
                 <button
                   id="btn-tour-verify-tavily"
                   onClick={onVerifyDeadlines}
+                  className="btn-secondary"
                   style={{
-                    background: 'rgba(56, 189, 248, 0.12)',
-                    border: '1px solid var(--guide-cyan-border)',
-                    color: 'var(--guide-cyan-text)',
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                    fontWeight: '700',
+                    fontSize: '13px',
+                    fontWeight: '500',
                     cursor: 'pointer',
-                    display: 'flex',
+                    display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '5px',
-                    transition: 'all 0.15s ease',
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.background = 'rgba(56, 189, 248, 0.22)'
-                    e.currentTarget.style.transform = 'translateY(-1px)'
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.background = 'rgba(56, 189, 248, 0.12)'
-                    e.currentTarget.style.transform = 'translateY(0)'
+                    gap: '6px',
+                    minHeight: '44px',
+                    padding: '0 12px',
                   }}
                   title="Run proactive Tavily web search against tasks to detect schedule drift"
                 >
-                  <span>🔍</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
                   <span>Test Tavily Verification</span>
                 </button>
               )}
@@ -292,31 +290,22 @@ export default function OnboardingTour({
                 <button
                   id="btn-tour-open-telemetry"
                   onClick={onOpenTelemetry}
+                  className="btn-secondary"
                   style={{
-                    background: 'rgba(245, 166, 35, 0.12)',
-                    border: '1px solid var(--guide-amber-border)',
-                    color: 'var(--guide-amber-text)',
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                    fontWeight: '700',
+                    fontSize: '13px',
+                    fontWeight: '500',
                     cursor: 'pointer',
-                    display: 'flex',
+                    display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '5px',
-                    transition: 'all 0.15s ease',
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.background = 'rgba(245, 166, 35, 0.22)'
-                    e.currentTarget.style.transform = 'translateY(-1px)'
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.background = 'rgba(245, 166, 35, 0.12)'
-                    e.currentTarget.style.transform = 'translateY(0)'
+                    gap: '6px',
+                    minHeight: '44px',
+                    padding: '0 12px',
                   }}
                   title="Open live token accounting and GPU inference breakdown"
                 >
-                  <span>⚡</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent, #f5a623)' }}>
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                  </svg>
                   <span>Inspect Nebius Telemetry</span>
                 </button>
               )}
@@ -325,31 +314,23 @@ export default function OnboardingTour({
                 <button
                   id="btn-tour-open-compass"
                   onClick={() => handleOpenCompass("Synthesize a realistic cross-domain roadmap for this weekend")}
+                  className="btn-secondary"
                   style={{
-                    background: 'rgba(167, 139, 250, 0.12)',
-                    border: '1px solid var(--guide-purple-border)',
-                    color: 'var(--guide-purple-text)',
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                    fontWeight: '700',
+                    fontSize: '13px',
+                    fontWeight: '500',
                     cursor: 'pointer',
-                    display: 'flex',
+                    display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '5px',
-                    transition: 'all 0.15s ease',
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.background = 'rgba(167, 139, 250, 0.22)'
-                    e.currentTarget.style.transform = 'translateY(-1px)'
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.background = 'rgba(167, 139, 250, 0.12)'
-                    e.currentTarget.style.transform = 'translateY(0)'
+                    gap: '6px',
+                    minHeight: '44px',
+                    padding: '0 12px',
                   }}
                   title="Test Nemotron Ultra cross-domain roadmap synthesis"
                 >
-                  <span>🧭</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+                  </svg>
                   <span>Compass</span>
                 </button>
               )}
@@ -360,10 +341,11 @@ export default function OnboardingTour({
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: 'var(--guide-link)',
-                fontSize: '11.5px',
+                color: 'var(--text-secondary)',
+                fontSize: '12px',
                 cursor: 'pointer',
                 textDecoration: 'underline',
+                padding: '6px 8px',
               }}
             >
               Don't show this again

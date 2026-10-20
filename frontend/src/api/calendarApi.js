@@ -1,6 +1,6 @@
 // Calendar & Dynamic Scheduling API
 
-import { API_BASE, getAuthHeaders, getCurrentUserId, setCurrentUserId } from './baseClient'
+import { API_BASE, getAuthHeaders, getCurrentUserId, setCurrentUserId, safeHref } from './baseClient'
 
 export async function fetchCalendarStatus() {
   try {
@@ -88,8 +88,9 @@ export function getGoogleOAuthConnectUrl(loginHint = null) {
   let url = `${API_BASE}/api/calendar/connect?redirect=true`
   const hint = (typeof loginHint === 'string' && loginHint) || getCurrentUserId()
   if (typeof hint === 'string' && hint.includes('@')) url += `&login_hint=${encodeURIComponent(hint)}`
-  return url
+  return safeHref(url)
 }
+
 
 export async function disconnectCalendar() {
   try {
@@ -170,8 +171,9 @@ export function getCalendarExportUrl(domain) {
   if (domain && domain !== 'all') params.append('domain', domain)
   if (uid) params.append('user_id', uid)
   const qs = params.toString()
-  return qs ? `${API_BASE}/api/calendar/export.ics?${qs}` : `${API_BASE}/api/calendar/export.ics`
+  return safeHref(qs ? `${API_BASE}/api/calendar/export.ics?${qs}` : `${API_BASE}/api/calendar/export.ics`)
 }
+
 
 export async function checkReactiveSchedule(currentTime = null) {
   const body = currentTime ? { current_time: currentTime } : {}

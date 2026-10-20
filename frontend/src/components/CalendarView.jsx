@@ -10,7 +10,25 @@ import {
   checkReactiveSchedule,
   syncCalendarNow,
   deleteTask,
+  safeHref,
 } from '../api/client'
+
+import {
+  Calendar,
+  RefreshCw,
+  Zap,
+  MoreHorizontal,
+  Download,
+  BookOpen,
+  ExternalLink,
+  Link2,
+  LogOut,
+  CheckCircle2,
+  Trash2,
+  Clock,
+  Settings,
+  X,
+} from 'lucide-react'
 import { CalendarGrid } from './calendar/CalendarGrid'
 import { CalendarSidebar } from './calendar/CalendarSidebar'
 import { ProposedPlanModal, QuickConnectModal, IcsExportModal } from './calendar/CalendarModals'
@@ -18,38 +36,38 @@ import DarkModeToggle from './DarkModeToggle'
 
 const DOMAIN_STYLES = {
   hackathon: {
-    bg: 'rgba(245, 158, 11, 0.15)',
-    border: '1px solid rgba(245, 158, 11, 0.45)',
-    accent: '#f59e0b',
-    text: '#fbbf24',
+    bg: 'var(--hackathon-bg)',
+    border: '1px solid var(--border)',
+    accent: '#f5a623',
+    text: 'var(--text-primary)',
     badgeClass: 'badge-hackathon',
   },
   coursework: {
-    bg: 'rgba(59, 130, 246, 0.15)',
-    border: '1px solid rgba(59, 130, 246, 0.45)',
-    accent: '#3b82f6',
-    text: '#60a5fa',
+    bg: 'var(--coursework-bg)',
+    border: '1px solid var(--border)',
+    accent: '#2f64c8',
+    text: 'var(--text-primary)',
     badgeClass: 'badge-coursework',
   },
   code: {
-    bg: 'rgba(16, 185, 129, 0.15)',
-    border: '1px solid rgba(16, 185, 129, 0.45)',
-    accent: '#10b981',
-    text: '#34d399',
+    bg: 'var(--code-bg)',
+    border: '1px solid var(--border)',
+    accent: '#1c8a62',
+    text: 'var(--text-primary)',
     badgeClass: 'badge-code',
   },
   general: {
-    bg: 'rgba(100, 116, 139, 0.15)',
-    border: '1px solid rgba(100, 116, 139, 0.45)',
-    accent: '#64748b',
-    text: '#94a3b8',
+    bg: 'var(--general-bg)',
+    border: '1px solid var(--border)',
+    accent: '#6b7a86',
+    text: 'var(--text-primary)',
     badgeClass: 'badge-general',
   },
   other: {
-    bg: 'rgba(167, 139, 250, 0.15)',
-    border: '1px solid rgba(167, 139, 250, 0.45)',
-    accent: '#a78bfa',
-    text: '#c084fc',
+    bg: 'var(--bg-card-soft)',
+    border: '1px solid var(--border)',
+    accent: '#6b7a86',
+    text: 'var(--text-primary)',
     badgeClass: 'badge-other',
   },
 }
@@ -304,11 +322,11 @@ export default function CalendarView({
       if (res.slipped_count > 0) {
         setBannerMessage({
           type: 'warning',
-          text: `⚠️ Detected ${res.slipped_count} slipped task(s) past scheduled end time! Reactive re-plan staged with cascading dependencies (Run ID: ${res.run_id || 'staged'}).`
+          text: `Detected ${res.slipped_count} slipped task(s) past scheduled end time! Reactive re-plan staged with cascading dependencies (Run ID: ${res.run_id || 'staged'}).`
         })
         if (onTasksUpdated) onTasksUpdated()
       } else {
-        setBannerMessage({ type: 'success', text: '✅ Schedule is currently on track — no uncompleted tasks have slipped past their end time.' })
+        setBannerMessage({ type: 'success', text: 'Schedule is currently on track: no uncompleted tasks have slipped past their end time.' })
       }
     } catch (e) {
       setBannerMessage({ type: 'error', text: `Error checking schedule slips: ${e.message}` })
@@ -323,9 +341,9 @@ export default function CalendarView({
     try {
       const res = await syncCalendarNow()
       if (res.is_live) {
-        setBannerMessage({ type: 'success', text: `✅ Synced ${res.live_count || res.count || 0} scheduled tasks directly to your Google Calendar (${calendarStatus.account_email})!` })
+        setBannerMessage({ type: 'success', text: `Synced ${res.live_count || res.count || 0} scheduled tasks directly to your Google Calendar (${calendarStatus.account_email})!` })
       } else {
-        setBannerMessage({ type: 'info', text: `ℹ️ ${res.message || `Slotted ${res.count || 0} tasks in Compass.`}` })
+        setBannerMessage({ type: 'info', text: res.message || `Slotted ${res.count || 0} tasks in Compass.` })
         setShowIcsModal(true)
       }
       loadAvailability(weekStart)
@@ -356,19 +374,19 @@ export default function CalendarView({
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--bg-app)' }}>
-      {/* Top Header Bar — Google Calendar Style */}
+      {/* Top Header Bar: Google Calendar Style */}
       <div className="calendar-header-bar" style={{
-        padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'var(--bg-card)',
+        padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-card)',
         flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', minWidth: 0 }}>
             {/* Mobile Calendar Drawer Toggle Button */}
             <button
               id="btn-toggle-calendar-drawer"
               type="button"
               onClick={() => setMobileCalendarDrawerOpen(v => !v)}
-              className="calendar-drawer-toggle-btn btn-touch-target"
+              className="calendar-drawer-toggle-btn btn-touch-target btn-secondary"
               aria-label="Toggle Calendar Drawer"
               title="Open / Close Calendar"
               style={{
@@ -377,32 +395,34 @@ export default function CalendarView({
                 justifyContent: 'center',
                 gap: '6px',
                 padding: '8px 12px',
-                borderRadius: '8px',
-                border: '1px solid var(--border)',
-                background: mobileCalendarDrawerOpen ? 'var(--coursework)' : 'var(--bg-card-soft)',
-                color: mobileCalendarDrawerOpen ? '#ffffff' : 'var(--text-primary)',
-                fontWeight: '700',
+                borderRadius: 'var(--radius-btn, 6px)',
+                background: mobileCalendarDrawerOpen ? 'var(--bg-card-soft)' : 'var(--bg-card)',
+                color: 'var(--text-primary)',
+                fontWeight: '600',
                 fontSize: '13px',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                minHeight: '44px',
               }}
             >
-              <span>📅</span>
+              <Calendar size={15} strokeWidth={1.8} />
               <span>{mobileCalendarDrawerOpen ? 'Hide Cal' : 'View Cal'}</span>
             </button>
 
-            <h2 style={{ fontSize: '17px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.3px', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span>🗓️</span> <span>Schedule</span>
+            <h2 style={{ fontSize: '26px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.3px', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Calendar size={22} strokeWidth={1.8} style={{ color: 'var(--text-primary)' }} />
+              <span>Schedule</span>
             </h2>
             <div
               onClick={() => { if (onOpenAuthModal) onOpenAuthModal(); else setShowQuickModal(true) }}
               title="Click to switch account or manage Google Calendar"
               style={{
-                display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '20px',
-                background: isLive ? 'var(--code-bg)' : 'var(--hackathon-bg)',
-                fontSize: '11px', color: isLive ? 'var(--code-text)' : 'var(--hackathon-text)',
-                fontWeight: '600', cursor: 'pointer', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 10px', borderRadius: 'var(--radius-btn, 6px)',
+                background: 'var(--bg-card-soft)', border: '1px solid var(--border)',
+                fontSize: '12px', color: 'var(--text-primary)',
+                fontWeight: '500', cursor: 'pointer', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                minHeight: '32px',
               }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: isLive ? '#10b981' : '#f5a623', flexShrink: 0 }} />
+              <span className="domain-swatch" style={{ width: '8px', height: '8px', borderRadius: '2px', background: isLive ? 'var(--code)' : 'var(--hackathon)', flexShrink: 0 }} />
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {isLive ? `${calendarStatus.account_email}` : (calendarStatus.account_email || 'demo')}
               </span>
@@ -416,9 +436,9 @@ export default function CalendarView({
           />
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', marginTop: '6px' }}>
-          <p className="calendar-policy-subtext" style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: 0 }}>
-            09:00–18:00 UTC · 15m buffer · deterministic allocation
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', marginTop: '8px' }}>
+          <p className="calendar-policy-subtext" style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
+            09:00 - 18:00 UTC · 15m buffer · deterministic allocation
           </p>
 
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -426,64 +446,78 @@ export default function CalendarView({
               id="btn-check-slipped"
               onClick={handleCheckReactive}
               disabled={checkingReactive}
-              className="btn-touch-target"
+              className="btn-touch-target btn-primary-amber"
               style={{
-                padding: '8px 14px', borderRadius: '8px', background: 'var(--hackathon-bg)', border: 'none',
-                color: 'var(--hackathon-text)', fontSize: '12px', fontWeight: '600', cursor: checkingReactive ? 'wait' : 'pointer'
+                padding: '8px 14px', borderRadius: 'var(--radius-btn, 6px)',
+                fontSize: '13px', fontWeight: '600', cursor: checkingReactive ? 'wait' : 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                minHeight: '44px',
               }}>
-              {checkingReactive ? '🔄 Scanning...' : '⚡ Scan Slip'}
+              {checkingReactive ? <RefreshCw size={14} strokeWidth={1.8} className="animate-spin" /> : <Zap size={14} strokeWidth={1.8} />}
+              <span>{checkingReactive ? 'Scanning...' : 'Scan Slip'}</span>
             </button>
 
             <div ref={moreMenuRef} style={{ position: 'relative' }}>
               <button
                 onClick={() => setShowMoreMenu(v => !v)}
-                className="btn-touch-target"
+                className="btn-touch-target btn-secondary"
+                aria-label="More options"
                 style={{
-                  padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)',
-                  color: 'var(--text-secondary)', fontSize: '13px', fontWeight: '700', cursor: 'pointer'
+                  padding: '8px 12px', borderRadius: 'var(--radius-btn, 6px)',
+                  fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+                  minHeight: '44px', minWidth: '44px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
                 }}>
-                •••
+                <MoreHorizontal size={16} strokeWidth={1.8} />
               </button>
               {showMoreMenu && (
                 <div style={{
                   position: 'absolute', top: '110%', right: 0, background: 'var(--bg-card)', border: '1px solid var(--border)',
-                  borderRadius: '12px', boxShadow: 'var(--shadow-lg)', width: '240px', padding: '8px', zIndex: 50
+                  borderRadius: 'var(--radius-card, 8px)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', width: '240px', padding: '6px', zIndex: 50
                 }}>
                   <button
                     id="btn-sync-gcal"
                     onClick={handleSyncNow}
                     disabled={syncingCalendar}
-                    style={menuItemStyle}>
-                    {syncingCalendar ? '🔄 Syncing...' : (isLive ? '📅 Sync to Google Calendar' : '📅 Slot / Sync Tasks')}
+                    style={{ ...menuItemStyle, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Calendar size={14} strokeWidth={1.8} />
+                    <span>{syncingCalendar ? 'Syncing...' : (isLive ? 'Sync to Google Calendar' : 'Slot / Sync Tasks')}</span>
                   </button>
-                  <a id="btn-export-ics" href={getCalendarExportUrl(activeDomain)} download="compass_schedule.ics" style={{ ...menuItemStyle, textDecoration: 'none', display: 'block' }}>
-                    📥 Export .ics Feed
+                  <a id="btn-export-ics" href={safeHref(getCalendarExportUrl(activeDomain))} download="compass_schedule.ics" style={{ ...menuItemStyle, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Download size={14} strokeWidth={1.8} />
+                    <span>Export .ics Feed</span>
                   </a>
-                  <button onClick={() => { setShowIcsModal(true); setShowMoreMenu(false) }} style={menuItemStyle}>
-                    📘 Sync Guide
+                  <button onClick={() => { setShowIcsModal(true); setShowMoreMenu(false) }} style={{ ...menuItemStyle, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <BookOpen size={14} strokeWidth={1.8} />
+                    <span>Sync Guide</span>
                   </button>
-                  <div style={{ height: '1px', background: 'var(--border-soft)', margin: '6px 0' }} />
+                  <div style={{ height: '1px', background: 'var(--border-soft)', margin: '4px 0' }} />
                   {calendarStatus.connected ? (
                     <>
-                      <a href="https://calendar.google.com" target="_blank" rel="noreferrer" style={{ ...menuItemStyle, textDecoration: 'none', display: 'block' }}>
-                        Open Google Calendar ↗
+                      <a href="https://calendar.google.com" target="_blank" rel="noreferrer" style={{ ...menuItemStyle, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <ExternalLink size={14} strokeWidth={1.8} />
+                        <span>Open Google Calendar ↗</span>
                       </a>
                       {!isLive && (
-                        <a id="btn-connect-google" href={getGoogleOAuthConnectUrl()} style={{ ...menuItemStyle, textDecoration: 'none', display: 'block' }}>
-                          🔗 Sign in with Google
+                        <a id="btn-connect-google" href={safeHref(getGoogleOAuthConnectUrl())} style={{ ...menuItemStyle, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Link2 size={14} strokeWidth={1.8} />
+                          <span>Sign in with Google</span>
                         </a>
                       )}
-                      <button id="btn-disconnect-google" onClick={handleDisconnect} style={{ ...menuItemStyle, color: '#dc2626' }}>
-                        Disconnect
+
+                      <button id="btn-disconnect-google" onClick={handleDisconnect} style={{ ...menuItemStyle, color: '#dc2626', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <LogOut size={14} strokeWidth={1.8} />
+                        <span>Disconnect</span>
                       </button>
                     </>
                   ) : (
                     <>
-                      <button id="btn-connect-google" onClick={() => { if (onOpenAuthModal) onOpenAuthModal(); else setShowQuickModal(true); setShowMoreMenu(false) }} style={menuItemStyle}>
-                        🔗 Connect Google Calendar
+                      <button id="btn-connect-google" onClick={() => { if (onOpenAuthModal) onOpenAuthModal(); else setShowQuickModal(true); setShowMoreMenu(false) }} style={{ ...menuItemStyle, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Link2 size={14} strokeWidth={1.8} />
+                        <span>Connect Google Calendar</span>
                       </button>
-                      <button id="btn-quick-login" onClick={() => { if (onOpenAuthModal) onOpenAuthModal(); else setShowQuickModal(true); setShowMoreMenu(false) }} style={menuItemStyle}>
-                        ⚡ Switch Account
+                      <button id="btn-quick-login" onClick={() => { if (onOpenAuthModal) onOpenAuthModal(); else setShowQuickModal(true); setShowMoreMenu(false) }} style={{ ...menuItemStyle, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Zap size={14} strokeWidth={1.8} />
+                        <span>Switch Account</span>
                       </button>
                     </>
                   )}
@@ -497,36 +531,40 @@ export default function CalendarView({
       {/* Status Notifications Banner */}
       {bannerMessage && (
         <div style={{
-          padding: '10px 24px',
-          background: bannerMessage.type === 'error' ? 'var(--danger-bg)' : 'var(--code-bg)',
-          color: bannerMessage.type === 'error' ? '#b91c1c' : 'var(--code-text)',
-          fontSize: '12.5px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0
+          padding: '10px 16px',
+          margin: '12px 16px 0 16px',
+          borderRadius: 'var(--radius-card, 8px)',
+          border: '1px solid var(--border)',
+          background: bannerMessage.type === 'error' ? 'var(--danger-bg)' : 'var(--bg-card)',
+          color: bannerMessage.type === 'error' ? '#b91c1c' : 'var(--text-primary)',
+          fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0
         }}>
           <span>{bannerMessage.text}</span>
-          <button onClick={() => setBannerMessage(null)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '14px' }}>✕</button>
+          <button onClick={() => setBannerMessage(null)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}>
+            <X size={14} strokeWidth={1.8} />
+          </button>
         </div>
       )}
 
       {/* Mobile Calendar Drawer Overlay / Modal */}
       {mobileCalendarDrawerOpen && (
         <div className="mobile-calendar-drawer-backdrop" onClick={() => setMobileCalendarDrawerOpen(false)}>
-          <div className="mobile-calendar-drawer-content" onClick={e => e.stopPropagation()}>
+          <div className="mobile-calendar-drawer-content" onClick={e => e.stopPropagation()} style={{ borderRadius: 'var(--radius-card, 8px)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', borderBottom: '1px solid var(--border)', paddingBottom: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '18px' }}>🗓️</span>
-                <h3 style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)', margin: 0 }}>Calendar Picker & Overview</h3>
+                <Calendar size={18} strokeWidth={1.8} style={{ color: 'var(--text-primary)' }} />
+                <h3 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', margin: 0 }}>Calendar Picker & Overview</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setMobileCalendarDrawerOpen(false)}
-                className="btn-touch-target"
+                className="btn-touch-target btn-secondary"
                 style={{
-                  background: 'var(--bg-card-soft)', border: '1px solid var(--border)', borderRadius: '8px',
-                  width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '16px', color: 'var(--text-secondary)', cursor: 'pointer'
+                  width: '36px', height: '36px', minHeight: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: 'var(--text-secondary)', cursor: 'pointer', borderRadius: 'var(--radius-btn, 6px)'
                 }}
               >
-                ✕
+                <X size={16} strokeWidth={1.8} />
               </button>
             </div>
 
@@ -634,23 +672,26 @@ export default function CalendarView({
           </section>
 
           {/* Tasks & Policy column: visible directly beside grid on desktop, or stacked full width on tablet/mobile */}
-          <section className="calendar-tasks-section" style={{ width: '320px', flexShrink: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '14px', padding: '16px', overflowY: 'auto', boxShadow: 'var(--shadow-sm)' }}>
+          <section className="calendar-tasks-section" style={{ width: '320px', flexShrink: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-card, 8px)', padding: '16px', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <h3 style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-primary)', fontWeight: '700' }}>
+              <h3 style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-primary)', fontWeight: '600' }}>
                 Pending Tasks ({unscheduledTasks.length})
               </h3>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Unscheduled</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Unscheduled</span>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
               {unscheduledTasks.map(task => {
                 const s = getCalendarDomainStyle(task.domain)
                 return (
-                  <div key={task.id} style={{ padding: '12px 14px', borderRadius: '10px', background: 'var(--bg-card-soft)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div key={task.id} style={{ padding: '12px 14px', borderRadius: 'var(--radius-card, 8px)', background: 'var(--bg-card)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: '600' }}>{task.title}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span className={s.badgeClass} style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: '700' }}>{task.domain}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                          <span className="domain-swatch" style={{ background: s.accent }} />
+                          <span>{task.domain}</span>
+                        </span>
                         <button
                           title="Delete task/deadline"
                           onClick={async (e) => {
@@ -664,31 +705,39 @@ export default function CalendarView({
                               }
                             }
                           }}
-                          style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px 4px', borderRadius: '4px', fontSize: '12px' }}
-                          onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
+                          style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', borderRadius: 'var(--radius-btn, 6px)', display: 'flex', alignItems: 'center' }}
+                          onMouseEnter={e => e.currentTarget.style.color = 'var(--danger-text)'}
                           onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-                        >🗑️</button>
+                        ><Trash2 size={13} strokeWidth={1.8} /></button>
                       </div>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>⏱️ {task.duration_minutes || 60}m · {task.priority || 'medium'}</span>
-                      <span style={{ fontSize: '11px', color: 'var(--hackathon-text)', fontWeight: '600' }}>{task.countdown || 'Needs slot'}</span>
+                      <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Clock size={11} strokeWidth={1.8} />
+                        <span>{task.duration_minutes || 60}m · {task.priority || 'medium'}</span>
+                      </span>
+                      <span style={{ fontSize: '12px', color: 'var(--accent)', fontWeight: '600' }}>{task.countdown || 'Needs slot'}</span>
                     </div>
                   </div>
                 )
               })}
 
               {unscheduledTasks.length === 0 && (
-                <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-muted)', background: 'var(--bg-card-soft)', borderRadius: '10px', border: '1px dashed var(--border)' }}>
-                  <span style={{ fontSize: '22px' }}>🎉</span>
-                  <p style={{ fontSize: '12px', marginTop: '6px' }}>All tasks are scheduled into calendar time slots!</p>
+                <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-muted)', background: 'var(--bg-card-soft)', borderRadius: 'var(--radius-card, 8px)', border: '1px dashed var(--border)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}>
+                    <CheckCircle2 size={24} strokeWidth={1.8} style={{ color: 'var(--code)' }} />
+                  </div>
+                  <p style={{ fontSize: '13px', margin: 0, color: 'var(--text-primary)', fontWeight: '500' }}>All tasks are scheduled into calendar time slots!</p>
                 </div>
               )}
             </div>
 
-            <div style={{ marginTop: 'auto', padding: '14px', borderRadius: '10px', background: 'var(--coursework-bg)' }}>
-              <h4 style={{ fontSize: '12px', fontWeight: '700', color: 'var(--coursework-text)', marginBottom: '8px' }}>⚙️ Deterministic Policy</h4>
-              <ul style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.6', paddingLeft: '14px' }}>
+            <div style={{ marginTop: 'auto', padding: '14px', borderRadius: 'var(--radius-card, 8px)', background: 'var(--bg-card-soft)', border: '1px solid var(--border)' }}>
+              <h4 style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Settings size={14} strokeWidth={1.8} />
+                <span>Deterministic Policy</span>
+              </h4>
+              <ul style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.6', paddingLeft: '16px', margin: 0 }}>
                 <li>Working Window: 09:00 - 18:00 UTC</li>
                 <li>Days: Monday - Friday (workdays)</li>
                 <li>Inter-task buffer: 15 minutes</li>

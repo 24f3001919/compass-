@@ -43,7 +43,7 @@ export default function HandoffKitModal({ activeKit, onClose }) {
 
         <div style={{ marginBottom: '16px' }}>
           <div style={{ fontWeight: '700', color: 'var(--text-primary)', fontSize: '15px' }}>
-            {activeKit.company_name} — {activeKit.role_title}
+            {activeKit.company_name}: {activeKit.role_title}
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
             Target Deadline: {activeKit.deadline || 'Rolling recruitment'}

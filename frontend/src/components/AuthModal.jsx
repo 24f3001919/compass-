@@ -8,7 +8,9 @@ import {
   checkGoogleOAuthStatus,
   quickConnectUser,
   setCurrentUserId,
+  safeHref,
 } from '../api/client'
+
 import GoogleCloudSetupGuide from './auth/GoogleCloudSetupGuide'
 
 export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged }) {
@@ -360,7 +362,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
               <div style={{ textAlign: 'center' }}>
                 {oauthStatus?.configured ? (
                   <a
-                    href={getGoogleOAuthConnectUrl(true)}
+                    href={safeHref(getGoogleOAuthConnectUrl(true))}
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -537,7 +539,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                     <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px' }}>Checking…</div>
                   ) : oauthStatus.configured ? (
                     <a
-                      href={getGoogleOAuthConnectUrl(activeEmail)}
+                      href={safeHref(getGoogleOAuthConnectUrl(activeEmail))}
                       style={{
                         display: 'inline-flex', alignItems: 'center', gap: '6px',
                         padding: '8px 14px', borderRadius: '8px',

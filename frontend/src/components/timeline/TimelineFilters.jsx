@@ -29,7 +29,7 @@ export default function TimelineFilters({
       }}
     >
       {/* Domain Filter Pills */}
-      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
         {uniquePills.map(dom => {
           const pillMeta = dom === 'all' ? { label: 'All Domains' } : getDomainMeta(dom)
           const isSelected = activeDomain === dom
@@ -38,19 +38,26 @@ export default function TimelineFilters({
               key={dom}
               id={`filter-pill-${dom}`}
               onClick={() => onSelectDomain(dom)}
+              className={`filter-pill ${isSelected ? 'active' : ''}`}
               style={{
-                padding: '6px 14px',
-                borderRadius: '20px',
-                fontSize: '12.5px',
-                fontWeight: isSelected ? '700' : '500',
+                padding: '0 14px',
+                borderRadius: 'var(--radius-btn, 6px)',
+                fontSize: '13px',
+                fontWeight: isSelected ? '600' : '400',
                 cursor: 'pointer',
-                border: isSelected ? '1px solid #2563eb' : '1px solid #e2e8f0',
-                background: isSelected ? '#2563eb' : '#ffffff',
-                color: isSelected ? '#ffffff' : '#64748b',
-                boxShadow: isSelected ? '0 2px 6px rgba(37, 99, 235, 0.25)' : 'none',
+                border: '1px solid var(--border)',
+                background: isSelected ? 'var(--bg-card-soft)' : 'var(--bg-card)',
+                color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                minHeight: '44px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
                 transition: 'all 0.15s ease',
               }}
             >
+              {dom !== 'all' && pillMeta.color && (
+                <span className="domain-swatch" style={{ background: pillMeta.color }} />
+              )}
               {pillMeta.label}
             </button>
           )
@@ -63,9 +70,9 @@ export default function TimelineFilters({
         <div
           style={{
             display: 'flex',
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
-            borderRadius: '8px',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-btn, 6px)',
             padding: '2px',
           }}
         >
@@ -79,13 +86,14 @@ export default function TimelineFilters({
               key={st.key}
               onClick={() => setStatusFilter(st.key)}
               style={{
-                padding: '5px 10px',
-                borderRadius: '6px',
+                padding: '0 12px',
+                minHeight: '40px',
+                borderRadius: 'var(--radius-btn, 6px)',
                 border: 'none',
-                fontSize: '12px',
-                fontWeight: statusFilter === st.key ? '700' : '500',
-                background: statusFilter === st.key ? '#f1f5f9' : 'transparent',
-                color: statusFilter === st.key ? '#0f172a' : '#64748b',
+                fontSize: '13px',
+                fontWeight: statusFilter === st.key ? '600' : '400',
+                background: statusFilter === st.key ? 'var(--bg-card-soft)' : 'transparent',
+                color: statusFilter === st.key ? 'var(--text-primary)' : 'var(--text-secondary)',
                 cursor: 'pointer',
                 transition: 'all 0.1s ease',
               }}
@@ -100,15 +108,17 @@ export default function TimelineFilters({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
-            borderRadius: '8px',
-            padding: '6px 12px',
-            width: '210px',
+            gap: '8px',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-btn, 6px)',
+            padding: '0 12px',
+            minHeight: '44px',
+            width: '220px',
+            boxSizing: 'border-box',
           }}
         >
-          <Search size={14} color="#94a3b8" />
+          <Search size={15} color="var(--text-secondary)" />
           <input
             type="text"
             placeholder="Search tasks & tags..."
@@ -117,8 +127,8 @@ export default function TimelineFilters({
             style={{
               border: 'none',
               outline: 'none',
-              fontSize: '12.5px',
-              color: '#0f172a',
+              fontSize: '13px',
+              color: 'var(--text-primary)',
               width: '100%',
               background: 'transparent',
             }}
@@ -129,11 +139,15 @@ export default function TimelineFilters({
               style={{
                 border: 'none',
                 background: 'transparent',
-                color: '#94a3b8',
+                color: 'var(--text-secondary)',
                 cursor: 'pointer',
-                fontSize: '12px',
-                padding: 0,
+                fontSize: '13px',
+                padding: '4px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
+              title="Clear search"
             >
               ✕
             </button>

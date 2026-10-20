@@ -53,6 +53,18 @@ function resolveInitialApiBase() {
 
 export let API_BASE = resolveInitialApiBase()
 
+export function safeHref(url) {
+  if (!url || typeof url !== 'string') return '#'
+  const trimmed = url.trim()
+  if (/^(?:javascript|vbscript|data):/i.test(trimmed)) {
+    return '#'
+  }
+  if (trimmed.startsWith('https://') || trimmed.startsWith('http://') || (trimmed.startsWith('/') && !trimmed.startsWith('//'))) {
+    return trimmed
+  }
+  return '#'
+}
+
 export function setApiBase(newBase) {
   // In production on Vercel, keep same-origin '' to avoid cross-domain ad-blocker triggers
   if (typeof window !== 'undefined' && !isLocalDevHost) {
@@ -102,7 +114,7 @@ export const FALLBACK_TASKS = [
   },
   {
     id: '3',
-    title: 'CS 61C — RISC-V Pipeline Synthesis Report',
+    title: 'CS 61C: RISC-V Pipeline Synthesis Report',
     domain: 'coursework',
     project: 'CS 61C',
     countdown: '1d left (Thursday)',

@@ -463,7 +463,7 @@ export default function ApplicationCenter() {
                               Official Portal ↗
                             </a>
                           ) : (
-                            <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>—</span>
+                            <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>-</span>
                           )}
                         </td>
                       </tr>

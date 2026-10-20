@@ -1,13 +1,13 @@
 import React from 'react'
 
 export default function ChatHeaderToolbar({
-  showHistoryDrawer,
+  showHistoryDrawer: _showHistoryDrawer,
   setShowHistoryDrawer,
   pastConversations = [],
   isOnline,
   tone,
   handleToneChange,
-  showParkedShelf,
+  showParkedShelf: _showParkedShelf,
   setShowParkedShelf,
   parkedThoughts = [],
   showContext,
@@ -37,36 +37,34 @@ export default function ChatHeaderToolbar({
         <button
           id="btn-toggle-history-drawer"
           onClick={() => setShowHistoryDrawer((v) => !v)}
-          className="btn-touch-target"
+          className="btn-secondary"
           style={{
-            padding: '8px 14px',
-            borderRadius: '8px',
-            border: '1px solid var(--border)',
-            background: showHistoryDrawer ? 'var(--primary)' : 'var(--bg-card-soft)',
-            color: showHistoryDrawer ? '#fff' : 'var(--text-primary)',
-            fontSize: '12.5px',
-            fontWeight: '700',
+            padding: '0 14px',
+            minHeight: '44px',
+            borderRadius: 'var(--radius-btn, 6px)',
+            fontSize: '13px',
+            fontWeight: '500',
             cursor: 'pointer',
-            display: 'flex',
+            display: 'inline-flex',
             alignItems: 'center',
-            gap: '6px',
-            transition: 'all 0.15s ease',
-            boxShadow: 'var(--shadow-sm)',
+            gap: '8px',
             flexShrink: 0,
           }}
           title="View previous chats, plans, and long-term memory"
         >
-          <span>📜</span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+          </svg>
           <span>History & Memory</span>
           {pastConversations.length > 0 && (
             <span
               style={{
-                background: showHistoryDrawer ? 'rgba(255,255,255,0.25)' : 'var(--brand)',
-                color: showHistoryDrawer ? '#fff' : '#2a1a00',
-                fontSize: '10.5px',
-                padding: '1px 6px',
-                borderRadius: '10px',
-                fontWeight: '800',
+                background: 'var(--accent, #f5a623)',
+                color: '#1b1a17',
+                fontSize: '11px',
+                padding: '2px 6px',
+                borderRadius: 'var(--radius-btn, 6px)',
+                fontWeight: '600',
               }}
             >
               {pastConversations.length}
@@ -74,13 +72,13 @@ export default function ChatHeaderToolbar({
           )}
         </button>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: 'var(--text-secondary)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
           <span
             style={{
               width: '7px',
               height: '7px',
               borderRadius: '50%',
-              background: isOnline ? '#10b981' : '#f5a623',
+              background: isOnline ? 'var(--domain-code, #1c8a62)' : 'var(--accent, #f5a623)',
               display: 'inline-block',
             }}
           />
@@ -92,20 +90,24 @@ export default function ChatHeaderToolbar({
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
         <div
           style={{
-            display: 'flex',
+            display: 'inline-flex',
             alignItems: 'center',
             gap: '6px',
-            padding: '4px 10px',
-            borderRadius: '12px',
-            background: 'var(--code-bg)',
-            border: '1px solid rgba(16, 185, 129, 0.3)',
+            padding: '0 10px',
+            minHeight: '36px',
+            borderRadius: 'var(--radius-btn, 6px)',
+            background: 'var(--bg-card-soft)',
+            border: '1px solid var(--border)',
             fontSize: '11px',
-            color: 'var(--code-text)',
+            color: 'var(--text-primary)',
             fontWeight: '600',
           }}
           title="Compass long-term memory is active across sessions to prevent schedule clashes"
         >
-          <span>🧠</span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--domain-code, #1c8a62)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="4" y="4" width="16" height="16" rx="2" />
+            <rect x="9" y="9" width="6" height="6" />
+          </svg>
           <span>Memory Active</span>
         </div>
 
@@ -117,7 +119,7 @@ export default function ChatHeaderToolbar({
             alignItems: 'center',
             background: 'var(--bg-card)',
             border: '1px solid var(--border)',
-            borderRadius: '7px',
+            borderRadius: 'var(--radius-btn, 6px)',
             padding: '2px',
             gap: '2px',
           }}
@@ -134,13 +136,14 @@ export default function ChatHeaderToolbar({
               id={`btn-tone-${t.id}`}
               onClick={() => handleToneChange(t.id)}
               style={{
-                padding: '3px 8px',
-                borderRadius: '5px',
+                padding: '0 10px',
+                minHeight: '40px',
+                borderRadius: 'var(--radius-btn, 6px)',
                 border: 'none',
-                background: tone === t.id ? 'var(--coursework)' : 'transparent',
-                color: tone === t.id ? '#ffffff' : 'var(--text-secondary)',
-                fontSize: '11px',
-                fontWeight: tone === t.id ? '700' : '500',
+                background: tone === t.id ? 'var(--bg-card-soft)' : 'transparent',
+                color: tone === t.id ? 'var(--text-primary)' : 'var(--text-secondary)',
+                fontSize: '12px',
+                fontWeight: tone === t.id ? '600' : '400',
                 cursor: 'pointer',
                 transition: 'background 0.15s ease, color 0.15s ease',
               }}
@@ -155,37 +158,36 @@ export default function ChatHeaderToolbar({
           id="btn-toggle-parked"
           type="button"
           onClick={() => setShowParkedShelf((v) => !v)}
-          className="btn-touch-target"
+          className="btn-secondary"
           style={{
-            display: 'flex',
+            display: 'inline-flex',
             alignItems: 'center',
-            gap: '4px',
-            padding: '6px 11px',
-            borderRadius: '7px',
-            border: '1px solid var(--border)',
-            background: showParkedShelf ? 'var(--coursework-bg)' : 'transparent',
-            color: showParkedShelf ? 'var(--coursework)' : 'var(--text-secondary)',
-            fontSize: '11.5px',
-            fontWeight: '600',
+            gap: '6px',
+            padding: '0 12px',
+            minHeight: '44px',
+            borderRadius: 'var(--radius-btn, 6px)',
+            fontSize: '12px',
+            fontWeight: '500',
             cursor: 'pointer',
           }}
           title="Toggle Parked Thoughts Shelf"
         >
-          <span>📌</span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="17" x2="12" y2="22" />
+            <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.89A2 2 0 0 1 15 10.77V6a3 3 0 0 0-6 0v4.77a2 2 0 0 1-1.11 1.79l-1.78.89A2 2 0 0 0 5 15.24Z" />
+          </svg>
           <span>Parked ({parkedThoughts.length})</span>
         </button>
 
         <button
           onClick={() => setShowContext((v) => !v)}
-          className="btn-touch-target"
+          className="btn-secondary"
           style={{
-            padding: '6px 12px',
-            borderRadius: '6px',
-            border: '1px solid var(--border)',
-            background: showContext ? 'var(--bg-card-soft)' : 'transparent',
-            color: 'var(--text-secondary)',
+            padding: '0 12px',
+            minHeight: '44px',
+            borderRadius: 'var(--radius-btn, 6px)',
             fontSize: '12px',
-            fontWeight: '600',
+            fontWeight: '500',
             cursor: 'pointer',
           }}
         >
@@ -197,41 +199,54 @@ export default function ChatHeaderToolbar({
           type="button"
           onClick={handleRecap}
           disabled={isInputDisabled}
-          className="btn-touch-target"
+          className="btn-secondary"
           style={{
-            padding: '6px 12px',
-            borderRadius: '6px',
-            border: '1px solid var(--border)',
-            background: 'transparent',
-            color: 'var(--text-secondary)',
+            padding: '0 12px',
+            minHeight: '44px',
+            borderRadius: 'var(--radius-btn, 6px)',
             fontSize: '12px',
-            fontWeight: '600',
+            fontWeight: '500',
             cursor: isInputDisabled ? 'not-allowed' : 'pointer',
             opacity: isInputDisabled ? 0.5 : 1,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
           }}
           title="Summarize decisions made, open questions, and next steps"
         >
-          📝 Recap
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+            <polyline points="10 9 9 9 8 9" />
+          </svg>
+          <span>Recap</span>
         </button>
 
         <button
           id="btn-chat-new"
           onClick={handleNewChat}
           disabled={isInputDisabled}
-          className="btn-touch-target"
+          className="btn-secondary"
           style={{
-            padding: '6px 14px',
-            borderRadius: '6px',
-            border: '1px solid var(--border)',
-            background: 'transparent',
-            color: 'var(--text-secondary)',
+            padding: '0 14px',
+            minHeight: '44px',
+            borderRadius: 'var(--radius-btn, 6px)',
             fontSize: '12px',
-            fontWeight: '700',
+            fontWeight: '600',
             cursor: isInputDisabled ? 'not-allowed' : 'pointer',
             opacity: isInputDisabled ? 0.5 : 1,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
           }}
         >
-          + New Chat
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          <span>New Chat</span>
         </button>
       </div>
     </div>

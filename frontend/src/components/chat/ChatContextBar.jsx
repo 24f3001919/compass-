@@ -8,45 +8,66 @@ export default function ChatContextBar({
 }) {
   return (
     <div style={{
-      display: 'flex', gap: '10px', padding: '12px 24px', borderBottom: '1px solid var(--border)',
+      display: 'flex', gap: '10px', padding: '12px 20px', borderBottom: '1px solid var(--border)',
       background: 'var(--bg-card)', flexShrink: 0, flexWrap: 'wrap'
     }}>
       <div style={{
-        display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', borderRadius: '10px',
-        background: overdueCount > 0 ? 'var(--danger-bg)' : 'var(--code-bg)', minWidth: '170px'
+        display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', borderRadius: 'var(--radius-card, 8px)',
+        background: 'var(--bg-card-soft)', border: '1px solid var(--border)', minWidth: '170px'
       }}>
-        <span style={{ fontSize: '16px' }}>{overdueCount > 0 ? '⚠️' : '✅'}</span>
+        {overdueCount > 0 ? (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+        ) : (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--domain-code, #1c8a62)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        )}
         <div>
-          <div style={{ fontSize: '12px', fontWeight: '700', color: overdueCount > 0 ? '#b23b3b' : 'var(--code-text)' }}>
+          <div style={{ fontSize: '13px', fontWeight: '600', color: overdueCount > 0 ? '#ef4444' : 'var(--text-primary)' }}>
             {overdueCount > 0 ? `${overdueCount} overdue` : 'On schedule'}
           </div>
-          <div style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>Across all domains</div>
+          <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Across all domains</div>
         </div>
       </div>
 
       <div style={{
-        display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', borderRadius: '10px',
-        background: 'var(--coursework-bg)', minWidth: '170px'
+        display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', borderRadius: 'var(--radius-card, 8px)',
+        background: 'var(--bg-card-soft)', border: '1px solid var(--border)', minWidth: '170px'
       }}>
-        <span style={{ fontSize: '16px' }}>📋</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--domain-coursework, #2f64c8)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+          <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+        </svg>
         <div>
-          <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--coursework-text)' }}>
+          <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)' }}>
             {taskCount} task{taskCount === 1 ? '' : 's'} tracked
           </div>
-          <div style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>Live in Neon</div>
+          <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Live in Neon</div>
         </div>
       </div>
 
       <div style={{
-        display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', borderRadius: '10px',
-        background: isOnline ? 'var(--code-bg)' : 'var(--hackathon-bg)', minWidth: '170px'
+        display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', borderRadius: 'var(--radius-card, 8px)',
+        background: 'var(--bg-card-soft)', border: '1px solid var(--border)', minWidth: '170px'
       }}>
-        <span style={{ fontSize: '16px' }}>{isOnline ? '🟢' : '🟡'}</span>
+        <span
+          style={{
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            background: isOnline ? 'var(--domain-code, #1c8a62)' : 'var(--accent, #f5a623)',
+            display: 'inline-block',
+          }}
+        />
         <div>
-          <div style={{ fontSize: '12px', fontWeight: '700', color: isOnline ? 'var(--code-text)' : 'var(--hackathon-text)' }}>
+          <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)' }}>
             {isOnline ? 'Backend live' : 'Backend offline'}
           </div>
-          <div style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>{backendStatus}</div>
+          <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{backendStatus}</div>
         </div>
       </div>
     </div>

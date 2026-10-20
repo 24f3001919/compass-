@@ -162,22 +162,29 @@ export function ReplanDiffCard({ diff }) {
   return (
     <div style={{
       margin: '10px 0 8px',
-      background: 'rgba(245, 158, 11, 0.08)',
-      border: '1px solid rgba(245,158,11,0.3)',
-      borderRadius: '8px',
+      background: 'rgba(245, 166, 35, 0.08)',
+      border: '1px solid rgba(245, 166, 35, 0.25)',
+      borderRadius: 'var(--radius-card, 8px)',
       padding: '10px 14px',
       fontSize: '13px',
     }}>
-      <div style={{ color: '#b45309', fontWeight: '700', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-        🔄 Change was declined — finding a better approach
+      <div style={{ color: 'var(--accent, #f5a623)', fontWeight: '600', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="23 4 23 10 17 10" />
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+        </svg>
+        <span>Change was declined: finding a better approach</span>
       </div>
       {diff.feedback && (
         <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>
           Your feedback: <span style={{ color: 'var(--text-primary)' }}>"{diff.feedback}"</span>
         </div>
       )}
-      <div style={{ color: '#059669', fontSize: '12px' }}>
-        ✓ Replanning without touching your data
+      <div style={{ color: 'var(--domain-code, #1c8a62)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+        <span>Replanning without touching your data</span>
       </div>
     </div>
   )
@@ -225,7 +232,6 @@ export function ReportCard({ reportCard }) {
 
 export default function StepCard({ step, index: _index }) {
   const style = STEP_STYLES[step.type] || STEP_STYLES.think
-  const isGradient = step.type === 'synthesize'
   const isAbstained = step.metadata?.abstained || (typeof step.content === 'string' && step.content.includes('[ABSTAIN]'))
   const replanDiff = step.metadata?.replan_diff
   let reportCard = step.metadata?.report_card
@@ -241,34 +247,32 @@ export default function StepCard({ step, index: _index }) {
   return (
     <div
       style={{
-        background: isGradient ? style.bg : style.bg,
-        border: `1px solid ${style.border}33`,
-        borderLeft: `3px solid ${style.border}`,
-        borderRadius: '8px',
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-card, 8px)',
         padding: '12px 16px',
         marginBottom: '8px',
-        animation: 'slideIn 0.3s ease-out',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '14px' }}>{style.icon}</span>
         <span style={{
-          fontSize: '11px',
-          fontWeight: '700',
-          color: style.labelColor,
+          fontSize: '12px',
+          fontWeight: '600',
+          color: 'var(--text-primary)',
         }}>
           {style.label}
         </span>
 
         {step.type === 'tool_call' && step.tool && (
-          <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-            — {friendlyTool(step.tool)}
+          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+            : {friendlyTool(step.tool)}
           </span>
         )}
 
         <span style={{
-          fontSize: '10px',
-          color: 'var(--text-muted)',
+          fontSize: '11px',
+          color: 'var(--text-secondary)',
           marginLeft: 'auto',
         }}>
           {step.elapsed_ms > 0 ? `${(step.elapsed_ms / 1000).toFixed(1)}s` : ''}

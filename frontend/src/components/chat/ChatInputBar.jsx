@@ -1,12 +1,28 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { filterSpecialists, getSpecialistById } from '../../api/specialistRegistry'
+import { AlertTriangle, Brain, Globe, BookOpen, Send, X } from 'lucide-react'
 
 const QUICK_PROMPTS = [
-  { icon: '⚠️', text: 'Check my weekend schedule for conflicts across hackathon and coursework', specialistId: 'calendar' },
-  { icon: '🧠', text: 'Why did we choose 768-dim Matryoshka embeddings for pgvector?', specialistId: 'memory' },
-  { icon: '🌐', text: 'Verify the Nebius hackathon deadline on Devpost', specialistId: 'research' },
-  { icon: '📚', text: "Review CS 61C RISC-V pipeline lab notes and coursework tasks", specialistId: 'coursework' }
+  { icon: 'warning', text: 'Check my weekend schedule for conflicts across hackathon and coursework', specialistId: 'calendar' },
+  { icon: 'brain', text: 'Why did we choose 768-dim Matryoshka embeddings for pgvector?', specialistId: 'memory' },
+  { icon: 'globe', text: 'Verify the Nebius hackathon deadline on Devpost', specialistId: 'research' },
+  { icon: 'book', text: "Review CS 61C RISC-V pipeline lab notes and coursework tasks", specialistId: 'coursework' }
 ]
+
+function renderQuickIcon(type) {
+  switch (type) {
+    case 'warning':
+      return <AlertTriangle size={14} strokeWidth={1.8} style={{ color: 'var(--accent, #f5a623)' }} />
+    case 'brain':
+      return <Brain size={14} strokeWidth={1.8} style={{ color: 'var(--domain-coursework, #2f64c8)' }} />
+    case 'globe':
+      return <Globe size={14} strokeWidth={1.8} style={{ color: 'var(--domain-code, #1c8a62)' }} />
+    case 'book':
+      return <BookOpen size={14} strokeWidth={1.8} style={{ color: 'var(--domain-general, #6b7a86)' }} />
+    default:
+      return null
+  }
+}
 
 export default function ChatInputBar({
   input,
@@ -123,7 +139,7 @@ export default function ChatInputBar({
   }, [])
 
   return (
-    <div className="chat-input-container" style={{ padding: '14px 24px 20px', background: 'var(--bg-app)', flexShrink: 0, position: 'relative' }}>
+    <div className="chat-input-container" style={{ padding: '14px 20px 20px', background: 'var(--bg-app)', flexShrink: 0, position: 'relative' }}>
       {/* Slash Command Specialist Picker Modal */}
       {showSlashPicker && (
         <div
@@ -134,16 +150,15 @@ export default function ChatInputBar({
           style={{
             position: 'absolute',
             bottom: '100%',
-            left: '24px',
-            right: '24px',
+            left: '20px',
+            right: '20px',
             marginBottom: '10px',
             background: 'var(--bg-card)',
             border: '1px solid var(--border)',
-            borderRadius: '12px',
-            boxShadow: 'var(--shadow-lg)',
+            borderRadius: 'var(--radius-card, 8px)',
+            boxShadow: 'none',
             zIndex: 100,
             overflow: 'hidden',
-            backdropFilter: 'blur(10px)',
           }}
         >
           <div style={{
@@ -154,10 +169,10 @@ export default function ChatInputBar({
             alignItems: 'center',
             justifyContent: 'space-between',
           }}>
-            <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', letterSpacing: '0.04em' }}>
               SPECIALIST AGENTS
             </span>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
               Use ↑↓ to navigate, Enter to select, Esc to dismiss
             </span>
           </div>
@@ -179,24 +194,24 @@ export default function ChatInputBar({
                       alignItems: 'center',
                       gap: '12px',
                       padding: '10px 12px',
-                      borderRadius: '8px',
-                      background: isSelected ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
-                      border: isSelected ? `1px solid ${spec.border}` : '1px solid transparent',
+                      borderRadius: 'var(--radius-btn, 6px)',
+                      background: isSelected ? 'var(--bg-card-soft)' : 'transparent',
+                      border: isSelected ? '1px solid var(--border)' : '1px solid transparent',
                       cursor: 'pointer',
                       transition: 'all 0.12s ease',
                     }}
                   >
-                    <span style={{ fontSize: '18px', flexShrink: 0 }}>{spec.icon}</span>
+                    <span style={{ fontSize: '16px', flexShrink: 0 }}>{spec.icon}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontWeight: '700', fontSize: '13px', color: spec.color }}>
+                        <span style={{ fontWeight: '600', fontSize: '13px', color: 'var(--text-primary)' }}>
                           {spec.name}
                         </span>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', background: 'var(--bg-card-soft)', padding: '1px 6px', borderRadius: '4px' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--text-secondary)', background: 'var(--bg-card-soft)', padding: '1px 6px', borderRadius: 'var(--radius-btn, 6px)' }}>
                           {spec.command}
                         </span>
                       </div>
-                      <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {spec.description}
                       </div>
                     </div>
@@ -204,7 +219,7 @@ export default function ChatInputBar({
                 )
               })
             ) : (
-              <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12.5px' }}>
+              <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '12px' }}>
                 No specialist agents matching "/{slashQuery}"
               </div>
             )}
@@ -212,7 +227,7 @@ export default function ChatInputBar({
         </div>
       )}
 
-      {/* Quick prompt suggestions */}
+      {/* Quick prompt suggestions: 6px radius, min 44px tap target, line icons */}
       <div className="quick-prompts-scroll" style={{ display: 'flex', gap: '8px', marginBottom: '10px', overflowX: 'auto', overflowY: 'hidden', paddingBottom: '6px' }}>
         {QUICK_PROMPTS.map((item, idx) => (
           <button
@@ -220,37 +235,21 @@ export default function ChatInputBar({
             type="button"
             onClick={() => handleQuickPromptClick(item)}
             disabled={isInputDisabled}
+            className="btn-secondary"
             style={{
-              padding: '6px 12px',
-              borderRadius: '20px',
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border)',
-              color: 'var(--text-secondary)',
-              fontSize: '11.5px',
-              fontWeight: '500',
+              padding: '0 12px',
+              minHeight: '44px',
+              fontSize: '12px',
+              fontWeight: '400',
               cursor: isInputDisabled ? 'not-allowed' : 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
               whiteSpace: 'nowrap',
-              transition: 'all 0.15s ease',
-              boxShadow: 'var(--shadow-sm)',
-              flexShrink: 0
-            }}
-            onMouseEnter={e => {
-              if (!isInputDisabled) {
-                e.currentTarget.style.borderColor = 'var(--brand)'
-                e.currentTarget.style.color = 'var(--text-primary)'
-                e.currentTarget.style.background = 'var(--bg-card-soft)'
-              }
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.borderColor = 'var(--border)'
-              e.currentTarget.style.color = 'var(--text-secondary)'
-              e.currentTarget.style.background = 'var(--bg-card)'
+              flexShrink: 0,
             }}
           >
-            <span>{item.icon}</span>
+            {renderQuickIcon(item.icon)}
             <span>{item.text}</span>
           </button>
         ))}
@@ -266,34 +265,33 @@ export default function ChatInputBar({
             alignSelf: 'flex-start',
             gap: '8px',
             padding: '4px 10px',
-            borderRadius: '6px',
-            background: activeSpecialist.bg,
-            border: `1px solid ${activeSpecialist.border}`,
+            borderRadius: 'var(--radius-btn, 6px)',
+            background: 'var(--bg-card-soft)',
+            border: '1px solid var(--border)',
             fontSize: '12px',
-            fontWeight: '700',
-            color: activeSpecialist.color,
+            fontWeight: '600',
+            color: 'var(--text-primary)',
           }}>
             <span>{activeSpecialist.icon}</span>
             <span>{activeSpecialist.name}</span>
-            <span style={{ fontSize: '11px', opacity: 0.7, fontWeight: '500' }}>({activeSpecialist.command})</span>
+            <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '400' }}>({activeSpecialist.command})</span>
             <button
               type="button"
               onClick={() => setActiveSpecialist(null)}
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: activeSpecialist.color,
+                color: 'var(--text-secondary)',
                 fontSize: '14px',
                 cursor: 'pointer',
                 padding: '0 2px',
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                lineHeight: 1,
               }}
               title="Remove specialist (switch to standard Chat Copilot)"
             >
-              ✕
+              <X size={13} strokeWidth={1.8} />
             </button>
           </div>
         )}
@@ -316,35 +314,36 @@ export default function ChatInputBar({
             disabled={isInputDisabled}
             style={{
               flex: 1,
-              padding: '13px 17px',
-              borderRadius: '10px',
+              padding: '0 16px',
+              minHeight: '44px',
+              borderRadius: 'var(--radius-btn, 6px)',
               background: isInputDisabled ? 'var(--bg-card-soft)' : 'var(--bg-card)',
-              border: activeSpecialist ? `1px solid ${activeSpecialist.border}` : '1px solid var(--border)',
-              color: isInputDisabled ? 'var(--text-muted)' : 'var(--text-primary)',
-              fontSize: '13.5px',
+              border: '1px solid var(--border)',
+              color: isInputDisabled ? 'var(--text-secondary)' : 'var(--text-primary)',
+              fontSize: '13px',
               outline: 'none',
               cursor: isInputDisabled ? 'not-allowed' : 'text',
-              boxShadow: activeSpecialist ? `0 0 12px ${activeSpecialist.bg}` : 'none',
-              transition: 'all 0.15s ease',
+              boxSizing: 'border-box',
             }}
           />
           <button
             type="submit"
-            className="chat-send-btn btn-touch-target"
+            className="btn-primary-amber"
             disabled={isInputDisabled || !input.trim()}
             style={{
-              padding: '0 24px',
-              borderRadius: '10px',
-              background: activeSpecialist ? activeSpecialist.color : 'var(--brand)',
-              border: 'none',
-              color: '#18181b',
-              fontWeight: '700',
+              padding: '0 20px',
+              minHeight: '44px',
+              borderRadius: 'var(--radius-btn, 6px)',
+              fontWeight: '600',
               fontSize: '13px',
               cursor: (isInputDisabled || !input.trim()) ? 'not-allowed' : 'pointer',
               opacity: (!input.trim() || isInputDisabled) ? 0.5 : 1,
-              transition: 'opacity 0.15s ease, background 0.15s ease'
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
             }}>
-            Send
+            <span>Send</span>
+            <Send size={14} strokeWidth={1.8} />
           </button>
         </div>
       </form>

@@ -11,6 +11,8 @@ import {
   getResumeExportDocxUrl,
   fetchJobAnalysis,
 } from '../../api/careerApi'
+import { safeHref } from '../../api/baseClient.js'
+
 import {
   loadWorkspaceDraft,
   saveWorkspaceDraft,
@@ -976,8 +978,9 @@ export default function ApplicationWorkspaceModal({
                       {resume?.id && (
                         <>
                           <a
-                            href={getResumeExportDocxUrl(resume.id)}
+                            href={safeHref(getResumeExportDocxUrl(resume.id))}
                             download
+
                             onClick={() => {
                               setChecklist(prev => ({ ...prev, resumeDownloaded: true }))
                               showNotification('Downloading clean ATS Word (.docx) document.')

@@ -40,7 +40,7 @@ export default function CompassPanel({
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden', background: 'var(--bg-app)' }}>
       {/* Header Sub-bar */}
       <div style={{
-        minHeight: '48px',
+        minHeight: '52px',
         borderBottom: '1px solid var(--border)',
         background: 'var(--bg-card)',
         display: 'flex',
@@ -48,62 +48,79 @@ export default function CompassPanel({
         justifyContent: 'space-between',
         padding: '0 16px',
         flexShrink: 0,
-        gap: '10px',
+        gap: '12px',
         flexWrap: 'wrap',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-          <span style={{ fontSize: '18px' }}>🧭</span>
-          <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.2px' }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent, #f5a623)' }}>
+            <circle cx="12" cy="12" r="10" />
+            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+          </svg>
+          <span style={{ fontSize: '20px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
             Compass
           </span>
-          <span className="sidebar-specs-card" style={{
+          <span style={{
             fontSize: '11px',
-            color: 'var(--text-muted)',
+            color: 'var(--text-secondary)',
             background: 'var(--bg-card-soft)',
             border: '1px solid var(--border)',
-            padding: '2px 8px',
-            borderRadius: '10px',
-            whiteSpace: 'nowrap'
+            padding: '3px 8px',
+            borderRadius: 'var(--radius-btn, 6px)',
+            whiteSpace: 'nowrap',
+            fontWeight: '500',
           }}>
             Assistant & Planner
           </span>
         </div>
 
         {/* View Toggle */}
-        <div style={{ display: 'flex', background: 'var(--bg-card-soft)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', background: 'var(--bg-card-soft)', padding: '2px', borderRadius: 'var(--radius-btn, 6px)', border: '1px solid var(--border)', flexShrink: 0, gap: '2px' }}>
           <button
             id="compass-subtab-chat"
             onClick={() => setActiveSubTab('assistant')}
             style={{
-              padding: '5px 14px',
-              borderRadius: '6px',
+              padding: '0 14px',
+              minHeight: '44px',
+              borderRadius: 'var(--radius-btn, 6px)',
               border: 'none',
               background: activeSubTab === 'assistant' ? 'var(--bg-card)' : 'transparent',
               color: activeSubTab === 'assistant' ? 'var(--text-primary)' : 'var(--text-secondary)',
-              boxShadow: activeSubTab === 'assistant' ? 'var(--shadow-sm)' : 'none',
-              fontSize: '12.5px',
-              fontWeight: activeSubTab === 'assistant' ? '700' : '500',
+              fontSize: '13px',
+              fontWeight: activeSubTab === 'assistant' ? '600' : '400',
               cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
               transition: 'all 0.15s ease',
             }}>
-            💬 Chat
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            <span>Chat</span>
           </button>
           <button
             id="compass-subtab-planner"
             onClick={() => setActiveSubTab('planner')}
             style={{
-              padding: '5px 14px',
-              borderRadius: '6px',
+              padding: '0 14px',
+              minHeight: '44px',
+              borderRadius: 'var(--radius-btn, 6px)',
               border: 'none',
               background: activeSubTab === 'planner' ? 'var(--bg-card)' : 'transparent',
               color: activeSubTab === 'planner' ? 'var(--text-primary)' : 'var(--text-secondary)',
-              boxShadow: activeSubTab === 'planner' ? 'var(--shadow-sm)' : 'none',
-              fontSize: '12.5px',
-              fontWeight: activeSubTab === 'planner' ? '700' : '500',
+              fontSize: '13px',
+              fontWeight: activeSubTab === 'planner' ? '600' : '400',
               cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
               transition: 'all 0.15s ease',
             }}>
-            📋 Planner
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+            </svg>
+            <span>Planner</span>
           </button>
         </div>
         <DarkModeToggle

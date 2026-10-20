@@ -86,7 +86,7 @@ export default function GoogleCloudSetupGuide() {
           </div>
         </li>
         <li>
-          Restart the backend server — then come back and click{' '}
+          Restart the backend server, then come back and click{' '}
           <strong style={{ color: 'var(--text-primary)' }}>"Connect Google"</strong>
         </li>
       </ol>

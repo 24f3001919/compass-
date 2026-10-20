@@ -1,11 +1,18 @@
 import React from 'react'
+import { ChevronLeft, ChevronRight, Zap, RefreshCw, Calendar, Check, Clock } from 'lucide-react'
 
-const pillBtnStyle = {
-  padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)',
-  color: 'var(--text-secondary)', fontSize: '12px', fontWeight: '600', cursor: 'pointer'
-}
 const iconBtnStyle = {
-  background: 'none', border: 'none', cursor: 'pointer', fontSize: '15px', color: 'var(--text-secondary)', padding: '2px 6px'
+  background: 'var(--bg-card)',
+  border: '1px solid var(--border)',
+  cursor: 'pointer',
+  color: 'var(--text-secondary)',
+  padding: '6px',
+  borderRadius: 'var(--radius-btn, 6px)',
+  minWidth: '44px',
+  minHeight: '44px',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center'
 }
 
 export function CalendarGrid({
@@ -32,36 +39,72 @@ export function CalendarGrid({
   isSameDay,
 }) {
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '14px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-card, 8px)', overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', gap: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button onClick={() => setSelectedDate(toIso(today))} className="btn-touch-target" style={{ ...pillBtnStyle, minHeight: '38px', padding: '6px 14px' }}>Today</button>
-          <button onClick={() => setSelectedDate(toIso(addDays(selectedDateObj, -7)))} className="btn-touch-target" style={{ ...iconBtnStyle, minWidth: '38px', minHeight: '38px', fontSize: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
-          <button onClick={() => setSelectedDate(toIso(addDays(selectedDateObj, 7)))} className="btn-touch-target" style={{ ...iconBtnStyle, minWidth: '38px', minHeight: '38px', fontSize: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
-          <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)' }}>{weekLabel}</div>
+          <button
+            onClick={() => setSelectedDate(toIso(today))}
+            className="btn-touch-target btn-secondary"
+            style={{ borderRadius: 'var(--radius-btn, 6px)', minHeight: '44px', padding: '8px 14px', fontSize: '13px', fontWeight: '500' }}>
+            Today
+          </button>
+          <button
+            onClick={() => setSelectedDate(toIso(addDays(selectedDateObj, -7)))}
+            className="btn-touch-target"
+            aria-label="Previous Week"
+            style={iconBtnStyle}>
+            <ChevronLeft size={16} strokeWidth={1.8} />
+          </button>
+          <button
+            onClick={() => setSelectedDate(toIso(addDays(selectedDateObj, 7)))}
+            className="btn-touch-target"
+            aria-label="Next Week"
+            style={iconBtnStyle}>
+            <ChevronRight size={16} strokeWidth={1.8} />
+          </button>
+          <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)', marginLeft: '4px' }}>{weekLabel}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 'var(--radius-btn, 6px)', overflow: 'hidden' }}>
             {['week', 'agenda'].map(m => (
-              <button key={m} onClick={() => setViewMode(m)} className="btn-touch-target" style={{
-                padding: '6px 14px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: '600',
-                background: viewMode === m ? 'var(--coursework)' : 'var(--bg-card)',
-                color: viewMode === m ? '#fff' : 'var(--text-secondary)', textTransform: 'capitalize'
-              }}>{m}</button>
+              <button
+                key={m}
+                onClick={() => setViewMode(m)}
+                className="btn-touch-target"
+                style={{
+                  padding: '8px 14px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  minHeight: '44px',
+                  background: viewMode === m ? 'var(--bg-card-soft)' : 'var(--bg-card)',
+                  color: viewMode === m ? 'var(--text-primary)' : 'var(--text-muted)',
+                  textTransform: 'capitalize'
+                }}>
+                {m}
+              </button>
             ))}
           </div>
           <button
             id="btn-auto-schedule"
             onClick={handleAutoSchedule}
             disabled={proposing}
-            className="btn-touch-target"
+            className="btn-touch-target btn-secondary"
             style={{
-              padding: '8px 16px', borderRadius: '8px', border: 'none',
-              background: 'linear-gradient(135deg, #6c5ce7, #8b5cf6)', color: '#fff',
-              fontSize: '12.5px', fontWeight: '700', cursor: proposing ? 'wait' : 'pointer',
-              opacity: proposing ? 0.7 : 1
+              padding: '8px 16px',
+              borderRadius: 'var(--radius-btn, 6px)',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: proposing ? 'wait' : 'pointer',
+              opacity: proposing ? 0.7 : 1,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              minHeight: '44px',
             }}>
-            {proposing ? '⚡ Optimizing…' : '⚡ Auto-Schedule'}
+            {proposing ? <RefreshCw size={14} strokeWidth={1.8} className="animate-spin" /> : <Zap size={14} strokeWidth={1.8} />}
+            <span>{proposing ? 'Optimizing…' : 'Auto-Schedule'}</span>
           </button>
         </div>
       </div>
@@ -76,14 +119,15 @@ export function CalendarGrid({
               return (
                 <div key={i} onClick={() => setSelectedDate(iso)} style={{
                   padding: '8px 6px', textAlign: 'center', borderLeft: '1px solid var(--border-soft)', cursor: 'pointer',
-                  background: iso === selectedDate ? 'var(--coursework-bg)' : 'transparent'
+                  background: iso === selectedDate ? 'var(--bg-card-soft)' : 'transparent'
                 }}>
-                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: '600' }}>{d.toLocaleDateString('en-US', { weekday: 'short' })}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' }}>{d.toLocaleDateString('en-US', { weekday: 'short' })}</div>
                   <div style={{
-                    fontSize: '13px', fontWeight: '700', color: isCurrToday ? 'var(--coursework)' : 'var(--text-primary)',
-                    width: '24px', height: '24px', borderRadius: '50%', margin: '2px auto 0',
+                    fontSize: '13px', fontWeight: '600', color: isCurrToday ? 'var(--accent)' : 'var(--text-primary)',
+                    width: '26px', height: '26px', borderRadius: 'var(--radius-btn, 6px)', margin: '2px auto 0',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: isCurrToday ? 'var(--coursework-bg)' : 'transparent'
+                    background: isCurrToday ? 'var(--bg-card-soft)' : 'transparent',
+                    border: isCurrToday ? '1px solid var(--accent)' : 'none'
                   }}>{d.getDate()}</div>
                 </div>
               )
@@ -93,7 +137,7 @@ export function CalendarGrid({
           <div style={{ display: 'grid', gridTemplateColumns: '48px repeat(7, 1fr)', position: 'relative' }}>
             <div>
               {HOURS.map(h => (
-                <div key={h} style={{ height: `${HOUR_ROW_HEIGHT}px`, textAlign: 'right', paddingRight: '6px', fontSize: '9.5px', color: 'var(--text-muted)', transform: 'translateY(-6px)', fontFamily: 'JetBrains Mono, monospace' }}>
+                <div key={h} style={{ height: `${HOUR_ROW_HEIGHT}px`, textAlign: 'right', paddingRight: '6px', fontSize: '11px', color: 'var(--text-muted)', transform: 'translateY(-6px)', fontFamily: 'inherit' }}>
                   {String(h).padStart(2, '0')}:00
                 </div>
               ))}
@@ -115,15 +159,16 @@ export function CalendarGrid({
                     return (
                       <div key={ev.id} style={{
                         position: 'absolute', left: '3px', right: '3px', top: pos.top, height: pos.height,
-                        background: isSimulated ? 'rgba(245, 166, 35, 0.08)' : 'rgba(31,27,46,0.04)',
-                        border: isSimulated ? '1px dashed #f5a623' : '1px dashed var(--border)',
-                        borderRadius: '6px',
+                        background: isSimulated ? 'var(--bg-card-soft)' : 'var(--bg-card-soft)',
+                        border: isSimulated ? '1px dashed var(--accent)' : '1px dashed var(--border)',
+                        borderRadius: 'var(--radius-btn, 6px)',
                         padding: '3px 6px', overflow: 'hidden', zIndex: 2
                       }}>
-                        <div style={{ fontSize: '9.5px', color: isSimulated ? '#b45309' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                          <span>📅 {ev.title}</span>
+                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                          <Calendar size={11} strokeWidth={1.8} />
+                          <span>{ev.title}</span>
                           {isSimulated && (
-                            <span style={{ fontSize: '8px', padding: '1px 4px', borderRadius: '4px', background: '#fef3c7', color: '#b45309', fontWeight: '700' }}>
+                            <span style={{ fontSize: '10px', padding: '1px 4px', borderRadius: 'var(--radius-btn, 4px)', background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontWeight: '500' }}>
                               Simulated
                             </span>
                           )}
@@ -138,15 +183,18 @@ export function CalendarGrid({
                     return (
                       <div key={t.id} style={{
                         position: 'absolute', left: '3px', right: '3px', top: pos.top, height: pos.height,
-                        background: s.bg, border: s.border, borderRadius: '6px', padding: '4px 7px',
-                        overflow: 'hidden', zIndex: 4, boxShadow: 'var(--shadow-sm)'
+                        background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-btn, 6px)', padding: '4px 6px',
+                        overflow: 'hidden', zIndex: 4, display: 'flex', flexDirection: 'column', justifyContent: 'center'
                       }}>
-                        <div style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {t.title}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span className="domain-swatch" style={{ background: s.accent, width: '6px', height: '6px' }} />
+                          <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {t.title}
+                          </span>
                         </div>
-                        <div style={{ fontSize: '9px', color: s.text }}>
-                          {t.scheduled_start.slice(11, 16)}
-                          {isLive ? ' ✓' : ' ⏱'}
+                        <div style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
+                          <span>{t.scheduled_start.slice(11, 16)}</span>
+                          {isLive ? <Check size={10} strokeWidth={1.8} /> : <Clock size={10} strokeWidth={1.8} />}
                         </div>
                       </div>
                     )
@@ -158,9 +206,11 @@ export function CalendarGrid({
 
           {allScheduledTasks.filter(t => weekDays.some(d => toIso(d) === t.scheduled_start.split('T')[0])).length === 0 && (
             <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
-              <div style={{ fontSize: '28px', marginBottom: '8px' }}>🗓️</div>
-              <p style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)' }}>No tasks or events scheduled this week</p>
-              <p style={{ fontSize: '11.5px', marginTop: '4px' }}>Click "Auto-Schedule" to automatically place open tasks into working hours.</p>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}>
+                <Calendar size={28} strokeWidth={1.8} style={{ color: 'var(--text-muted)' }} />
+              </div>
+              <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>No tasks or events scheduled this week</p>
+              <p style={{ fontSize: '13px', marginTop: '4px' }}>Click "Auto-Schedule" to automatically place open tasks into working hours.</p>
             </div>
           )}
         </div>
@@ -179,15 +229,15 @@ export function CalendarGrid({
                   const s = getCalendarDomainStyle(t.domain)
                   const start = new Date(t.scheduled_start)
                   return (
-                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', background: 'var(--bg-card-soft)', border: '1px solid var(--border)', borderRadius: '10px' }}>
-                      <div style={{ width: '64px', flexShrink: 0, textAlign: 'center' }}>
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700' }}>{start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
-                        <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{t.scheduled_start.slice(11, 16)} UTC</div>
+                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-card, 8px)' }}>
+                      <div style={{ width: '70px', flexShrink: 0, textAlign: 'center' }}>
+                        <div style={{ fontSize: '12px', color: 'var(--text-primary)', fontWeight: '600' }}>{start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t.scheduled_start.slice(11, 16)} UTC</div>
                       </div>
-                      <div style={{ width: '3px', height: '32px', background: s.accent, borderRadius: '2px', flexShrink: 0 }} />
+                      <span className="domain-swatch" style={{ background: s.accent }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>{t.title}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t.domain} · {t.duration_minutes || 60}min</div>
+                        <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)' }}>{t.title}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t.domain} · {t.duration_minutes || 60}min</div>
                       </div>
                     </div>
                   )
