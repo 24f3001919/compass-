@@ -116,12 +116,19 @@ async def _extract_content_from_response(response: Any, default_text: str = "") 
     return default_text
 
 
-def _build_agent_system_prompt(tool_names: List[str], abstain_first: bool = False) -> str:
+def _build_agent_system_prompt(tool_names: List[str], abstain_first: bool = False, current_time: Optional[Any] = None) -> str:
     """Build the system prompt that makes Super behave as a ReAct agent."""
+    from datetime import datetime
+    now_dt = current_time or datetime.now().astimezone()
+    today_str = now_dt.strftime("%A, %B %d, %Y (%Z)")
+
     tool_list = ", ".join(tool_names)
     prompt = (
         "You are Compass Agent, an autonomous planning and scheduling assistant. "
         "You help users manage tasks, deadlines, and code context across hackathon, coursework, and code domains.\n\n"
+        f"### Dynamic Runtime Clock:\n"
+        f"Current trusted server date & time: {today_str}.\n"
+        "All relative dates ('today', 'tomorrow', 'this weekend', 'next week') must be computed relative to this date.\n\n"
         "You have access to these tools: " + tool_list + ".\n\n"
         "### Operational Instructions:\n"
         "1. For each step, decide whether to call a tool or produce a final answer.\n"
@@ -131,6 +138,10 @@ def _build_agent_system_prompt(tool_names: List[str], abstain_first: bool = Fals
         "5. State-mutating tools (add_task, edit_task, update_task_status, delete_task, log_code_snippet, log_code_context, ingest_url, apply_triage_plan, commit_schedule) "
         "will request user confirmation before modifying data. Plan cleanly.\n"
         "6. Focus on grounded facts from stored memory and tools.\n"
+        "7. Temporal & Event Consistency:\n"
+        f"   - Compare event dates directly against {today_str}.\n"
+        "   - An event whose end date or submission deadline is before today MUST be designated as [ENDED] or past; never claim it is 'starting today' or 'one week away'.\n"
+        "   - Distinguish event dates from registration deadlines and submission deadlines.\n"
     )
     if abstain_first:
         prompt += (

@@ -269,7 +269,7 @@ async def run_agent(
                 tools=filtered_tools or None,
                 tool_choice=tool_choice_param,
                 temperature=0.2,
-                max_tokens=1024,
+                max_tokens=int(getattr(settings, "MAX_REASONING_TOKENS", 4096)),
                 stream=False,
             )
 

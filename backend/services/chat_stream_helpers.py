@@ -25,6 +25,7 @@ def validate_direct_tool_dispatch(
         SEARCH_WEB_TOOL,
         INGEST_URL_TOOL,
         VERIFY_DEADLINE_TOOL,
+        VERIFY_WITH_TAVILY_TOOL,
         DEEP_RESEARCH_TOOL,
         SAVE_VERIFIED_FINDING_TOOL,
     )
@@ -48,6 +49,7 @@ def validate_direct_tool_dispatch(
         SEARCH_WEB_TOOL,
         INGEST_URL_TOOL,
         VERIFY_DEADLINE_TOOL,
+        VERIFY_WITH_TAVILY_TOOL,
         DEEP_RESEARCH_TOOL,
         SAVE_VERIFIED_FINDING_TOOL,
     ]

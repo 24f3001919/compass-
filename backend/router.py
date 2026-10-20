@@ -26,6 +26,8 @@ from backend.router_helpers import (
     message_needs_tools,
     is_greeting_intent,
     is_schedule_or_agent_intent,
+    is_tavily_verification_intent,
+    extract_verification_target,
     _fallback_route,
 )
 
@@ -76,7 +78,9 @@ async def route_message(
         extracted = _extract_task_creation_args(message)
         if not extracted.get("title"):
             return None, None, "What would you like to name this task? Please provide a title or description."
-        return "add_task", extracted, ""
+    if is_tavily_verification_intent(message):
+        target = extract_verification_target(message, history)
+        return "verify_with_tavily", {"claim": target}, ""
     if is_schedule_or_agent_intent(message):
         return "agent", {"goal": message}, ""
 

@@ -27,7 +27,7 @@ from backend.memory.db import get_pool as db_get_pool
 from backend.models import StreamChatRequest
 import backend.orchestrator as orchestrator
 from backend.router import TOOLS, message_needs_tools
-from backend.router_helpers import is_greeting_intent, is_schedule_or_agent_intent
+from backend.router_helpers import is_greeting_intent, is_schedule_or_agent_intent, is_tavily_verification_intent
 from backend.services.usage import record_usage
 
 logger = logging.getLogger("compass.services.chat_stream")
@@ -335,7 +335,7 @@ async def generate_chat_events(
             or _settings.NEBIUS_API_KEY in ("mock", "mock-key-not-used-in-tests")
         )
 
-        if (not is_mocked and is_placeholder_key) or is_schedule_or_agent_intent(message):
+        if (not is_mocked and is_placeholder_key) or is_schedule_or_agent_intent(message) or is_tavily_verification_intent(message):
             result = await orchestrator.handle_message(
                 conversation_id=req.conversation_id,
                 message=message,
@@ -375,15 +375,22 @@ async def generate_chat_events(
                 valid_tasks = [t for t in raw_data if isinstance(t, dict) and 'title' in t][:6]
                 if valid_tasks:
                     done_payload['tasks'] = valid_tasks
+            elif isinstance(raw_data, dict):
+                evidence = raw_data.get('evidence')
+                if evidence:
+                    done_payload['evidence'] = evidence
+            if result.get('is_truncated') or (isinstance(raw_data, dict) and raw_data.get('is_truncated')):
+                done_payload['is_truncated'] = True
             yield f"data: {json.dumps(done_payload)}\n\n"
             _schedule_stream_persistence(conv_id, message, response_text, user_id, guest_id, skill_used)
             return
 
         logger.info("Serving chat stream request with model=%s", _settings.ROUTER_MODEL)
+        max_synth_budget = int(getattr(_settings, "MAX_SYNTHESIS_TOKENS", 8192))
         call_kwargs: dict[str, Any] = {
             "model": _settings.ROUTER_MODEL,
             "messages": messages,
-            "max_tokens": 10000,
+            "max_tokens": max_synth_budget,
             "temperature": 0.7,
             "stream": True,
             "stream_options": {"include_usage": True},
@@ -429,6 +436,7 @@ async def generate_chat_events(
         emitted_text = ""
         tool_call_detected = False
         usage_data = None
+        last_finish_reason: Optional[str] = None
         think_filter = StreamingThinkFilter()
         accumulated_tool_calls: Dict[int, Dict[str, str]] = {}
 
@@ -447,6 +455,8 @@ async def generate_chat_events(
                 if choices:
                     delta = choices[0].delta
                     finish_reason = choices[0].finish_reason
+                    if finish_reason:
+                        last_finish_reason = finish_reason
 
                     tcs = getattr(delta, "tool_calls", None) if delta else None
                     if tcs:
@@ -485,6 +495,62 @@ async def generate_chat_events(
                             emitted_text += filtered_token
                             yield f"data: {json.dumps({'type': 'token', 'value': filtered_token})}\n\n"
 
+            # Bounded continuation if output token limit was reached
+            continuation_attempts = 0
+            max_cont_attempts = int(getattr(_settings, "MAX_CONTINUATION_ATTEMPTS", 2))
+            while last_finish_reason == "length" and not tool_call_detected and continuation_attempts < max_cont_attempts:
+                if await request.is_disconnected():
+                    break
+                continuation_attempts += 1
+                logger.info("Direct stream hit token limit (length). Continuing response (%d/%d)...", continuation_attempts, max_cont_attempts)
+                yield f"data: {json.dumps({'type': 'status', 'stage': 'generating', 'label': f'Continuing response ({continuation_attempts}/{max_cont_attempts})…'})}\n\n"
+
+                cont_messages = list(messages)
+                cont_messages.append({"role": "assistant", "content": full_text})
+                cont_messages.append({
+                    "role": "user",
+                    "content": (
+                        "Your previous response was cut off by the token limit. "
+                        "Continue generating EXACTLY where you left off. "
+                        "Do not repeat prior paragraphs, table rows, citations, or greetings."
+                    ),
+                })
+                cont_kwargs = {
+                    "model": _settings.ROUTER_MODEL,
+                    "messages": cont_messages,
+                    "max_tokens": max_synth_budget,
+                    "temperature": 0.7,
+                    "stream": True,
+                }
+                try:
+                    cont_stream = cast(
+                        openai.AsyncStream[ChatCompletionChunk],
+                        await client.chat.completions.create(**cont_kwargs),
+                    )
+                    last_finish_reason = None
+                    cont_think_filter = StreamingThinkFilter()
+                    async for c_chunk in cont_stream:
+                        if await request.is_disconnected():
+                            if hasattr(cont_stream, "aclose"):
+                                await cont_stream.aclose()
+                            return
+                        c_choices = c_chunk.choices or []
+                        if c_choices:
+                            c_delta = c_choices[0].delta
+                            c_fr = c_choices[0].finish_reason
+                            if c_fr:
+                                last_finish_reason = c_fr
+                            c_token = (c_delta.content if c_delta else None) or ""
+                            if c_token:
+                                c_filtered = cont_think_filter.process(c_token)
+                                if c_filtered:
+                                    full_text += c_filtered
+                                    emitted_text += c_filtered
+                                    yield f"data: {json.dumps({'type': 'token', 'value': c_filtered})}\n\n"
+                except Exception as cont_err:
+                    logger.warning("Continuation attempt %d failed: %s", continuation_attempts, cont_err)
+                    break
+
         except asyncio.CancelledError:
             logger.info("Chat SSE stream cancelled; closing upstream model stream.")
             if stream and hasattr(stream, "aclose"):
@@ -515,7 +581,7 @@ async def generate_chat_events(
                 if pre_routed_skill in ("search_web", "deep_research"):
                     q = (pre_routed_args or {}).get("query") or (pre_routed_args or {}).get("topic") or "sources"
                     yield f"data: {json.dumps({'type': 'status', 'stage': 'searching', 'label': f'Searching web for {q}…'})}\n\n"
-                elif pre_routed_skill in ("verify_deadline", "detect_deadline_conflicts"):
+                elif pre_routed_skill in ("verify_deadline", "detect_deadline_conflicts", "verify_with_tavily"):
                     yield f"data: {json.dumps({'type': 'status', 'stage': 'reading_sources', 'label': 'Verifying official deadline sources…'})}\n\n"
                 else:
                     yield f"data: {json.dumps({'type': 'status', 'stage': 'reasoning', 'label': f'Executing {pre_routed_skill}…'})}\n\n"
@@ -572,6 +638,12 @@ async def generate_chat_events(
                 valid_tasks2 = [t for t in raw_data2 if isinstance(t, dict) and 'title' in t][:6]
                 if valid_tasks2:
                     done_payload2['tasks'] = valid_tasks2
+            elif isinstance(raw_data2, dict):
+                evidence2 = raw_data2.get('evidence')
+                if evidence2:
+                    done_payload2['evidence'] = evidence2
+            if result.get('is_truncated') or (isinstance(raw_data2, dict) and raw_data2.get('is_truncated')):
+                done_payload2['is_truncated'] = True
             yield f"data: {json.dumps(done_payload2)}\n\n"
             _schedule_stream_persistence(conv_id, message, response_text, user_id, guest_id, skill_used)
             return
@@ -609,7 +681,15 @@ async def generate_chat_events(
                 is_first = False
                 yield f"data: {json.dumps({'type': 'token', 'value': sc_token})}\n\n"
 
-            yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used})}\n\n"
+            done_payload_orchestrator: dict[str, Any] = {'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used}
+            raw_data_orch = result.get('data')
+            if isinstance(raw_data_orch, dict):
+                ev = raw_data_orch.get('evidence')
+                if ev:
+                    done_payload_orchestrator['evidence'] = ev
+            if result.get('is_truncated') or (isinstance(raw_data_orch, dict) and raw_data_orch.get('is_truncated')):
+                done_payload_orchestrator['is_truncated'] = True
+            yield f"data: {json.dumps(done_payload_orchestrator)}\n\n"
             _schedule_stream_persistence(conv_id, message, response_text, user_id, guest_id, skill_used)
             return
 
@@ -622,7 +702,10 @@ async def generate_chat_events(
             completion_est = len(full_text.split())
             record_usage(_settings.ROUTER_MODEL, prompt_est, completion_est)
 
-        yield f"data: {json.dumps({'type': 'done', 'conversation_id': conv_id, 'skill_used': 'chat'})}\n\n"
+        done_payload_final: dict[str, Any] = {'type': 'done', 'conversation_id': conv_id, 'skill_used': 'chat'}
+        if last_finish_reason == "length":
+            done_payload_final['is_truncated'] = True
+        yield f"data: {json.dumps(done_payload_final)}\n\n"
 
     except asyncio.CancelledError:
         logger.info("Chat SSE stream cancelled by client disconnect.")

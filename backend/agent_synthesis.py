@@ -18,6 +18,9 @@ from backend.services.usage import compute_step_cost, record_usage
 logger = logging.getLogger("compass.agent_synthesis")
 
 
+from datetime import datetime
+
+
 async def force_final_synthesis(
     client: AsyncOpenAI,
     settings: Any,
@@ -27,20 +30,31 @@ async def force_final_synthesis(
     run_id: str,
     active_replan_diff: Optional[Dict[str, Any]],
 ) -> Tuple[AgentStep, float, bool]:
-    """Force final synthesis with Nemotron-3 Ultra (550B) when hitting max_steps."""
+    """Force final synthesis with Nemotron-3 Ultra (550B) with dynamic clock and bounded continuation."""
+    now_dt = datetime.now().astimezone()
+    today_str = now_dt.strftime("%A, %B %d, %Y (%Z)")
+
     messages.append({
         "role": "user",
         "content": (
-            "You've gathered enough information. Please produce your final comprehensive answer now. "
-            "Never emit literal bracketed placeholders such as '[time]' or '[date]' if an exact value was not shown in the source text; "
-            "explicitly state 'time not shown in the retrieved excerpt' instead."
+            "You've gathered enough information. Please produce your final comprehensive answer now.\n\n"
+            f"### Temporal & Completeness Guidelines (Current Date: {today_str}):\n"
+            f"- Current reference date is {today_str}. Compare all event dates against this date.\n"
+            "- Any event whose submission deadline or end date is in the past MUST be designated as [ENDED] or past; never claim it is 'starting today' or 'one week away'.\n"
+            "- For tables, include full rows with complete details and closing markdown pipes (|).\n"
+            "- For factual claims, cite the verified source URL and status.\n"
+            "- Never emit literal bracketed placeholders such as '[time]' or '[date]'; explicitly state 'time not shown in source' instead."
         ),
     })
+
+    synth_tokens = int(getattr(settings, "MAX_SYNTHESIS_TOKENS", 8192))
+    max_continuations = int(getattr(settings, "MAX_CONTINUATION_ATTEMPTS", 2))
+
     completions = client.chat.completions
     response = await completions.create(
         model=str(settings.SYNTHESIS_MODEL),
         messages=cast(Any, messages),
-        max_tokens=1024,
+        max_tokens=synth_tokens,
         temperature=0.5,
         stream=False,
     )
@@ -51,6 +65,56 @@ async def force_final_synthesis(
     forced_cost = compute_step_cost(settings.SYNTHESIS_MODEL, p_tok, c_tok)
 
     raw_text = await _extract_content_from_response(response, default_text="Agent completed analysis.")
+    first_choice = response.choices[0] if getattr(response, "choices", None) else None
+    finish_reason = getattr(first_choice, "finish_reason", None)
+    is_truncated = (finish_reason == "length")
+
+    # Bounded continuation if response was cut off by length limit
+    continuation_attempts = 0
+    while is_truncated and continuation_attempts < max_continuations:
+        continuation_attempts += 1
+        logger.info(
+            "Final synthesis hit length cap (attempt %d/%d). Initiating bounded continuation for run_id=%s",
+            continuation_attempts,
+            max_continuations,
+            run_id,
+        )
+        cont_messages = list(messages)
+        cont_messages.append({"role": "assistant", "content": raw_text})
+        cont_messages.append({
+            "role": "user",
+            "content": "Continue exactly where you left off. Do not repeat previously generated headings, text, or table rows.",
+        })
+        try:
+            cont_resp = await completions.create(
+                model=str(settings.SYNTHESIS_MODEL),
+                messages=cast(Any, cont_messages),
+                max_tokens=synth_tokens,
+                temperature=0.5,
+                stream=False,
+            )
+            c_usage = getattr(cont_resp, "usage", None)
+            c_p_tok = c_usage.prompt_tokens if c_usage else 500
+            c_c_tok = c_usage.completion_tokens if c_usage else 200
+            record_usage(settings.SYNTHESIS_MODEL, c_p_tok, c_c_tok)
+            forced_cost += compute_step_cost(settings.SYNTHESIS_MODEL, c_p_tok, c_c_tok)
+
+            cont_text = await _extract_content_from_response(cont_resp, default_text="")
+            cont_choice = cont_resp.choices[0] if getattr(cont_resp, "choices", None) else None
+            finish_reason = getattr(cont_choice, "finish_reason", None)
+            is_truncated = (finish_reason == "length")
+
+            if cont_text:
+                raw_text = raw_text.rstrip() + "\n" + cont_text.lstrip()
+            else:
+                break
+        except Exception as cont_err:
+            logger.warning("Continuation request failed: %s; stopping continuation.", cont_err)
+            break
+
+    if is_truncated:
+        raw_text += "\n\n*[Note: Response reached maximum token budget; generation concluded.]*"
+
     is_abstained = any(k in raw_text.upper() for k in ("[ABSTAIN]", "[ABSTENTION]", "ABSTAIN:")) or raw_text.strip().startswith("[ABSTAIN]")
     final_text = _clean_synthesis_text(raw_text)
 
@@ -65,6 +129,9 @@ async def force_final_synthesis(
         metadata={
             "abstained": is_abstained,
             "replan_diff": active_replan_diff,
+            "is_truncated": is_truncated,
+            "finish_reason": finish_reason,
+            "continuation_attempts": continuation_attempts,
         },
     )
     return forced_synth, forced_cost, is_abstained

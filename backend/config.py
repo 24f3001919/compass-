@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "Qwen/Qwen3-Embedding-8B"
     EMBEDDING_DIMENSION: int = 768
 
+    # --- Output Token Budgets & Response Lifecycles ---
+    MAX_DEFAULT_OUTPUT_TOKENS: int = 4096
+    MAX_SYNTHESIS_TOKENS: int = 8192
+    MAX_REASONING_TOKENS: int = 4096
+    MAX_CONTINUATION_ATTEMPTS: int = 2
+
     # --- Environment & Security ---
     ENVIRONMENT: str = "production"  # development | test | production (must be explicitly 'development' to expose docs)
     DEFAULT_DEV_TOKEN: str = "dev-token"

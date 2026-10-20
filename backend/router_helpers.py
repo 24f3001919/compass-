@@ -519,6 +519,60 @@ def is_greeting_intent(message: str) -> bool:
     return any(p in clean_msg for p in greeting_phrases)
 
 
+def is_tavily_verification_intent(message: str) -> bool:
+    """Determine whether message is an explicit request to verify facts, deadlines, or claims with Tavily."""
+    if not message or not message.strip():
+        return False
+    msg_l = message.lower().strip()
+    verify_patterns = (
+        "verify it with tavily",
+        "verify this with tavily",
+        "verify with tavily",
+        "check this deadline with tavily",
+        "check this with tavily",
+        "check it with tavily",
+        "fact-check this answer using tavily",
+        "fact check this answer using tavily",
+        "fact-check this using tavily",
+        "fact check this using tavily",
+        "fact-check with tavily",
+        "fact check with tavily",
+        "fact-check using tavily",
+        "fact check using tavily",
+    )
+    if any(p in msg_l for p in verify_patterns):
+        return True
+    if "tavily" in msg_l and any(k in msg_l for k in ("verify", "fact-check", "fact check", "factcheck", "check")):
+        return True
+    return False
+
+
+def extract_verification_target(message: str, history: Optional[list[dict[str, str]]] = None) -> str:
+    """Extract the specific statement or claim to verify, resolving 'it'/'this' against prior assistant messages."""
+    import re
+    msg_clean = message.strip()
+    m = re.search(
+        r"(?:verify(?:\s+it|\s+this)?\s+with\s+tavily|fact-?check(?:\s+this\s+answer|\s+this)?\s+using\s+tavily|check\s+(?:this\s+deadline|this|it)\s+with\s+tavily)[:\s]+(.+)",
+        msg_clean,
+        re.IGNORECASE,
+    )
+    if m and m.group(1).strip():
+        extracted = m.group(1).strip().strip('"\'')
+        if len(extracted) > 5:
+            return extracted
+
+    # Fallback to resolving 'it' / 'this' against the latest assistant message
+    if history:
+        for prev in reversed(history):
+            if isinstance(prev, dict) and prev.get("role") == "assistant":
+                content = (prev.get("content") or "").strip()
+                if content:
+                    # Take the first 300 chars of the assistant's previous message
+                    return content[:300].strip()
+
+    return msg_clean
+
+
 def is_schedule_or_agent_intent(message: str) -> bool:
     """Determine whether message is an autonomous calendar schedule, slot allocation, or conflict rebalancing intent."""
     if not message or not message.strip():
