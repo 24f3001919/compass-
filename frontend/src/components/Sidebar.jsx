@@ -1,6 +1,10 @@
 import React from 'react'
 import CreateDomainModal from './timeline/CreateDomainModal'
 import Logo from './Logo'
+import { parseUsageBadge } from '../utils/usageBadgeParser'
+
+// Re-export for convenience
+export { parseUsageBadge } from '../utils/usageBadgeParser'
 
 // Simple line icons (1.8 stroke, currentColor)
 function NavIcon({ type }) {
@@ -765,40 +769,106 @@ export default function Sidebar({
           <div style={{ fontSize: '11px', color: 'var(--sidebar-text)', opacity: 0.8, paddingLeft: '15px' }}>
             {backendStatus}
           </div>
-          {usageBadge && (
-            <div
-              id="sidebar-usage-badge"
-              className="mono"
-              onClick={() => onOpenTelemetry && onOpenTelemetry()}
-              style={{
-                fontSize: '8px',
-                letterSpacing: '-0.3px',
-                whiteSpace: 'nowrap',
-                color: 'var(--sidebar-text)',
-                padding: '4px 6px',
-                marginTop: '8px',
-                borderRadius: '6px',
-                background: 'var(--sidebar-hover)',
-                border: '1px solid var(--sidebar-divider)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '3px',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={e => e.currentTarget.style.color = '#ffffff'}
-              onMouseLeave={e => e.currentTarget.style.color = 'var(--sidebar-text)'}
-              title="Click to inspect live Nebius Token Factory and NVIDIA telemetry"
-            >
-              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{usageBadge}</span>
-              <svg style={{ flexShrink: 0 }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 20V10" />
-                <path d="M18 20V4" />
-                <path d="M6 20v-4" />
-              </svg>
-            </div>
-          )}
+          {usageBadge && (() => {
+            const parsed = parseUsageBadge(usageBadge)
+            const fullText = parsed?.isUsage ? parsed.fullText : usageBadge
+            const titleTooltip = `Nebius Telemetry: ${fullText} (Click to open telemetry inspection)`
+            const ariaLabel = `Nebius Telemetry: ${fullText}. Click to view details.`
+
+            return (
+              <div
+                id="sidebar-usage-badge"
+                className="mono"
+                role="button"
+                tabIndex={0}
+                onClick={() => onOpenTelemetry && onOpenTelemetry()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    onOpenTelemetry && onOpenTelemetry()
+                  }
+                }}
+                title={titleTooltip}
+                aria-label={ariaLabel}
+                style={{
+                  fontFamily: 'var(--font-mono, "JetBrains Mono", monospace)',
+                  fontVariantNumeric: 'tabular-nums',
+                  fontSize: '10.5px',
+                  lineHeight: '1.4',
+                  color: 'var(--sidebar-text)',
+                  padding: '6px 8px',
+                  marginTop: '8px',
+                  borderRadius: '6px',
+                  background: 'var(--sidebar-hover)',
+                  border: '1px solid var(--sidebar-divider)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '8px',
+                  transition: 'all 0.15s ease',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                }}
+                onMouseEnter={e => e.currentTarget.style.color = '#ffffff'}
+                onMouseLeave={e => e.currentTarget.style.color = 'var(--sidebar-text)'}
+              >
+                {parsed?.isUsage ? (
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                      gap: '2px 8px',
+                      minWidth: 0,
+                      flex: 1,
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <span style={{ color: 'var(--accent, #f5a623)', fontSize: '11px', lineHeight: 1 }} aria-hidden="true">⚡</span>
+                      <span>{parsed.calls}</span>
+                    </span>
+                    <span
+                      style={{
+                        whiteSpace: 'nowrap',
+                        color: 'var(--sidebar-active-text, #ffffff)',
+                        fontWeight: '600',
+                      }}
+                    >
+                      {parsed.cost}
+                    </span>
+                  </div>
+                ) : (
+                  <span style={{ minWidth: 0, flex: 1, wordBreak: 'break-word' }}>
+                    {usageBadge}
+                  </span>
+                )}
+                <svg
+                  style={{ flexShrink: 0, opacity: 0.85 }}
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 20V10" />
+                  <path d="M18 20V4" />
+                  <path d="M6 20v-4" />
+                </svg>
+              </div>
+            )
+          })()}
         </div>
       )}
 
