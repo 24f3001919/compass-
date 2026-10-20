@@ -165,9 +165,19 @@ async def handle_message(
 
     # 1. Route via Nemotron-3 Nano (bypass if already resolved upstream)
     if pre_routed_skill is not None:
-        skill_name = pre_routed_skill
-        args = dict(pre_routed_args) if isinstance(pre_routed_args, dict) else {}
-        text_reply = None
+        from backend.skills.registry import SKILL_REGISTRY
+        allowed_tools = frozenset(SKILL_REGISTRY.keys()) | {"add_task", "undo", "agent"}
+        if pre_routed_skill in allowed_tools:
+            skill_name = pre_routed_skill
+            args = dict(pre_routed_args) if isinstance(pre_routed_args, dict) else {}
+            text_reply = None
+        else:
+            logger.warning("Orchestrator rejected unauthorized pre_routed_skill '%s'; falling back to route_message", pre_routed_skill)
+            skill_name, args, text_reply = await route_message(
+                message,
+                history=history if history else None,
+                memory_context=memory_context if memory_context else None,
+            )
     else:
         skill_name, args, text_reply = await route_message(
             message,
