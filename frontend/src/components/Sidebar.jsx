@@ -775,9 +775,11 @@ export default function Sidebar({
               className="mono"
               onClick={() => onOpenTelemetry && onOpenTelemetry()}
               style={{
-                fontSize: '11px',
+                fontSize: '9.5px',
+                letterSpacing: '-0.2px',
+                whiteSpace: 'nowrap',
                 color: 'var(--sidebar-text)',
-                padding: '6px 8px',
+                padding: '5px 7px',
                 marginTop: '8px',
                 borderRadius: '6px',
                 background: 'var(--sidebar-hover)',
@@ -786,14 +788,15 @@ export default function Sidebar({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                gap: '4px',
                 transition: 'all 0.15s ease',
               }}
               onMouseEnter={e => e.currentTarget.style.color = '#ffffff'}
               onMouseLeave={e => e.currentTarget.style.color = 'var(--sidebar-text)'}
               title="Click to inspect live Nebius Token Factory and NVIDIA telemetry"
             >
-              <span>{usageBadge}</span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{usageBadge}</span>
+              <svg style={{ flexShrink: 0 }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M12 20V10" />
                 <path d="M18 20V4" />
                 <path d="M6 20v-4" />
