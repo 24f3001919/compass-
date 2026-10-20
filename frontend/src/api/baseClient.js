@@ -6,9 +6,8 @@ export const RENDER_BACKEND_URL = 'https://compass-backend-qryu.onrender.com'
 // Proactively clear obsolete compass_user_id cookie from browser on script initialization
 if (typeof document !== 'undefined') {
   try {
-    const expired = '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+    const expired = '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure'
     document.cookie = `compass_user_id${expired}`
-    document.cookie = `compass_user_id${expired}; SameSite=Lax; Secure`
     document.cookie = `compass_user_id${expired}; domain=${window.location.hostname}`
     document.cookie = `compass_user_id${expired}; domain=.${window.location.hostname}`
   } catch {
