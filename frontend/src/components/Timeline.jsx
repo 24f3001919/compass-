@@ -11,6 +11,7 @@ import TaskCard from './timeline/TaskCard'
 import TaskDetailModal from './timeline/TaskDetailModal'
 import AddDeadlineModal from './timeline/AddDeadlineModal'
 import DarkModeToggle from './DarkModeToggle'
+import Logo from './Logo'
 
 // Re-export for backward compatibility
 export { getDomainMeta } from './timeline/domainMeta'
@@ -446,11 +447,8 @@ export default function Timeline({
           }}>
             {!localStorage.getItem('compass_demo_seeded') ? (
               <>
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px', color: 'var(--accent, #f5a623)' }}>
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-                  </svg>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
+                  <Logo size={32} alt="Compass logo" />
                 </div>
                 <div style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '6px' }}>
                   Setting up your workspace...

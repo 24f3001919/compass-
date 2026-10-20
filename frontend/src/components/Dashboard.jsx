@@ -3,6 +3,7 @@ import DarkModeToggle from './DarkModeToggle'
 import { getDomainMeta } from './timeline/domainMeta'
 import AddDeadlineModal from './timeline/AddDeadlineModal'
 import { updateTask } from '../api/client'
+import Logo from './Logo'
 
 /**
  * Robust timezone-safe local date parser.
@@ -565,10 +566,7 @@ export default function Dashboard({
                   className="btn-secondary"
                   title="Open Compass AI Assistant & Planner"
                 >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <circle cx="12" cy="12" r="10" />
-                    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-                  </svg>
+                  <Logo size={15} alt="" />
                   <span>Compass</span>
                 </button>
               </>
@@ -716,10 +714,7 @@ export default function Dashboard({
                 onOpenCompass(prompt)
               }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="10" />
-                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-              </svg>
+              <Logo size={14} alt="" />
               <span>Ask Compass to Plan</span>
             </button>
           )}

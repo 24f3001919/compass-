@@ -5,7 +5,8 @@ import {
   importSelectedGuestConversations,
   skipMigration,
 } from '../api/client'
-import { Compass, X, Check } from 'lucide-react'
+import { X, Check } from 'lucide-react'
+import Logo from './Logo'
 
 export default function MigrationModal({
   isOpen,
@@ -167,7 +168,7 @@ export default function MigrationModal({
                 color: 'var(--text-primary)',
               }}
             >
-              <Compass size={20} strokeWidth={1.8} />
+              <Logo size={22} alt="" />
             </div>
             <div>
               <h2
