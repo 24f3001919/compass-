@@ -12,14 +12,16 @@ from fastapi import HTTPException
 from backend.memory import structured
 from backend.models import CreateTaskRequest, FrontendTaskOut
 
+from backend.services.deadline_classifier import classify_deadline
+
 logger = logging.getLogger("compass.services.task_service")
 
 
-def format_countdown(due_date: Optional[date]) -> str:
-    """Format human-readable countdown string for a due date."""
+def format_countdown(due_date: Optional[date], ref_date: Optional[date] = None) -> str:
+    """Format human-readable countdown string for a due date using deterministic rules."""
     if not due_date:
         return "Active"
-    today = date.today()
+    today = ref_date or date.today()
     delta = (due_date - today).days
     day_name = due_date.strftime("%A")
     if delta < 0:
@@ -37,10 +39,13 @@ def build_frontend_task(
     proj_name: str = "General",
     cognitive_conflict: Optional[dict] = None,
     duration_minutes: Optional[int] = None,
+    now: Optional[datetime] = None,
 ) -> FrontendTaskOut:
-    """Convert a database task row into FrontendTaskOut."""
+    """Convert a database task row into FrontendTaskOut with deterministic classification."""
     due_d = row.get("due_date")
-    countdown_str = format_countdown(due_d)
+    c = classify_deadline(row, now=now)
+    countdown_str = c["label"]
+
     created_at = row.get("created_at") or datetime.now()
     if isinstance(created_at, (datetime, date)):
         ts_str = created_at.strftime("%b %d, %H:%M")
@@ -53,6 +58,9 @@ def build_frontend_task(
         tags.append(proj_name.lower().replace(" ", "-"))
     if row.get("priority") == "urgent":
         tags.append("urgent")
+    if row.get("is_demo") or (row.get("trusted_event_url") and "demo" in str(row.get("trusted_event_url")).lower()):
+        if "demo" not in tags:
+            tags.append("demo")
 
     s_start = row.get("scheduled_start")
     s_end = row.get("scheduled_end")

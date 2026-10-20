@@ -144,12 +144,16 @@ async def get_tasks(
 
 # ---- GET /dashboard ---------------------------------------------------
 @router.get("/dashboard", response_model=DashboardResponse)
-async def get_dashboard(_token: str = Depends(verify_token)):
+async def get_dashboard(
+    ref_date: Optional[date] = Query(None, description="Optional reference date for deterministic classification"),
+    _token: str = Depends(verify_token),
+):
     """Aggregate live counts via SQL (total open tasks, tasks due within 72 hours, project counts by domain)."""
     domains = {
         d: DomainStats(project_count=0, open_task_count=0, nearest_deadline=None, last_activity=None)
         for d in ("hackathon", "coursework", "code", "general")
     }
+    target_date = ref_date or date.today()
 
     try:
         pool = await get_pool()
@@ -163,7 +167,7 @@ async def get_dashboard(_token: str = Depends(verify_token)):
                     domains[d].project_count = r["count"]
 
             task_rows = await conn.fetch(
-                "SELECT domain, COUNT(*) AS count FROM tasks WHERE status = 'open' GROUP BY domain"
+                "SELECT domain, COUNT(*) AS count FROM tasks WHERE status NOT IN ('completed', 'done', 'cancelled') GROUP BY domain"
             )
             for r in task_rows:
                 d = r["domain"]
@@ -174,9 +178,12 @@ async def get_dashboard(_token: str = Depends(verify_token)):
                 """
                 SELECT DISTINCT ON (domain) id, domain, title, due_date
                 FROM tasks
-                WHERE status = 'open' AND due_date IS NOT NULL
+                WHERE status NOT IN ('completed', 'done', 'cancelled')
+                  AND due_date IS NOT NULL
+                  AND due_date >= $1
                 ORDER BY domain, due_date ASC
-                """
+                """,
+                target_date,
             )
             for r in nearest_rows:
                 d = r["domain"]
@@ -186,6 +193,7 @@ async def get_dashboard(_token: str = Depends(verify_token)):
                         title=r["title"],
                         due_date=str(r["due_date"]),
                     )
+
 
             activity_rows = await conn.fetch(
                 "SELECT domain, MAX(updated_at) AS last_act FROM tasks GROUP BY domain"
