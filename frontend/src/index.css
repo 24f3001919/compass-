@@ -20,6 +20,7 @@
   --text-muted: #5f5a52; /* Keeps >= 4.5:1 contrast against #ffffff and #f7f5ef */
 
   --bg-sidebar: #14161d;
+  --bg-sidebar-active: #232733;
   --sidebar-text: #c9ccd6;
   --sidebar-hover: #1d212c;
   --sidebar-active: #232733;
@@ -135,11 +136,13 @@
   --text-muted: #a6a095; /* Keeps >= 4.5:1 contrast against #1e1e1b and #151513 */
 
   --bg-sidebar: #14161d;
+  --bg-sidebar-active: #232733;
   --sidebar-text: #c9ccd6;
   --sidebar-hover: #1d212c;
   --sidebar-active: #232733;
   --sidebar-active-text: #ffffff;
   --sidebar-divider: #232733;
+
 
   --accent: #f5a623;
   --accent-text: #1b1a17;
