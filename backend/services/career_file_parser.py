@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import io
 import logging
-from typing import Optional, Tuple
-from pydantic import BaseModel
+from typing import Any, Dict, List, Optional, Tuple
+from pydantic import BaseModel, Field
 
 from backend.models_career import ResumeContent
-from backend.services.career_resume import parse_uploaded_resume_text
+from backend.services.career_resume import analyze_extraction_diagnostics, parse_uploaded_resume_text
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,12 @@ class ResumeParseResult(BaseModel):
     confidence_warning: Optional[str] = None
     error_message: Optional[str] = None
     requires_user_review: bool = True
+    missing_fields: List[str] = Field(default_factory=list)
+    ambiguous_fields: List[str] = Field(default_factory=list)
+    field_conflicts: List[Dict[str, Any]] = Field(default_factory=list)
+    field_confidence: Dict[str, float] = Field(default_factory=dict)
+    links_detected: List[str] = Field(default_factory=list)
+    original_document_id: Optional[str] = None
 
 
 def is_pdf_parser_available() -> bool:
@@ -51,6 +57,38 @@ def is_docx_parser_available() -> bool:
         return True
     except ImportError:
         return False
+
+
+def _build_success_result(
+    filename: str,
+    file_type: str,
+    full_text: str,
+    page_count: Optional[int] = None,
+) -> ResumeParseResult:
+    """Helper to assemble truthful extraction results with diagnostics."""
+    parsed_content = parse_uploaded_resume_text(full_text)
+    diag = analyze_extraction_diagnostics(parsed_content, full_text)
+    warning = None
+    if not parsed_content.skills and not parsed_content.education:
+        warning = "Standard skills or education sections were not clearly identified. Please review the extracted data."
+    elif diag.get("missing_fields"):
+        warning = f"Missing fields detected: {', '.join(diag['missing_fields'])}."
+
+    return ResumeParseResult(
+        success=True,
+        filename=filename,
+        file_type=file_type,
+        page_count=page_count,
+        raw_text=full_text[:3000],
+        extracted_content=parsed_content,
+        confidence_warning=warning,
+        requires_user_review=True,
+        missing_fields=diag.get("missing_fields", []),
+        ambiguous_fields=diag.get("ambiguous_fields", []),
+        field_conflicts=diag.get("field_conflicts", []),
+        field_confidence=diag.get("field_confidence", {}),
+        links_detected=parsed_content.relevant_links,
+    )
 
 
 def extract_resume_from_file_bytes(
@@ -110,21 +148,7 @@ def extract_resume_from_file_bytes(
                     file_type=ext,
                     error_message="File contains no readable text content.",
                 )
-            parsed_content = parse_uploaded_resume_text(text)
-            warning = None
-            if not parsed_content.skills and not parsed_content.education and not parsed_content.projects:
-                warning = "No standard skills, education, or projects sections were detected. Please review and fill in fields manually."
-
-            return ResumeParseResult(
-                success=True,
-                filename=filename,
-                file_type=ext,
-                raw_text=text[:2000],  # preview
-                extracted_content=parsed_content,
-                page_count=1,
-                confidence_warning=warning,
-                requires_user_review=True,
-            )
+            return _build_success_result(filename=filename, file_type=ext, full_text=text, page_count=1)
         except Exception as e:
             return ResumeParseResult(
                 success=False,
@@ -159,20 +183,7 @@ def extract_resume_from_file_bytes(
                     file_type=".docx",
                     error_message="DOCX file contains no readable text content.",
                 )
-            parsed_content = parse_uploaded_resume_text(full_text)
-            warning = None
-            if not parsed_content.skills and not parsed_content.education:
-                warning = "Standard skills or education sections were not clearly identified in the DOCX document."
-            return ResumeParseResult(
-                success=True,
-                filename=filename,
-                file_type=".docx",
-                page_count=None,
-                raw_text=full_text[:3000],
-                extracted_content=parsed_content,
-                confidence_warning=warning,
-                requires_user_review=True,
-            )
+            return _build_success_result(filename=filename, file_type=".docx", full_text=full_text, page_count=None)
         except Exception as e:
             return ResumeParseResult(
                 success=False,
@@ -254,22 +265,7 @@ def extract_resume_from_file_bytes(
                 )
 
             # Parse structured content truthfully
-            parsed_content = parse_uploaded_resume_text(full_text)
-
-            warning = None
-            if not parsed_content.skills and not parsed_content.education:
-                warning = "Standard skills or education sections were not clearly identified. Please review the extracted data."
-
-            return ResumeParseResult(
-                success=True,
-                filename=filename,
-                file_type=".pdf",
-                page_count=total_pages,
-                raw_text=full_text[:3000],  # preview
-                extracted_content=parsed_content,
-                confidence_warning=warning,
-                requires_user_review=True,
-            )
+            return _build_success_result(filename=filename, file_type=".pdf", full_text=full_text, page_count=total_pages)
 
         except pypdf.errors.PdfReadError as pre:
             return ResumeParseResult(

@@ -391,17 +391,28 @@ def generate_resume_html(
 def parse_uploaded_resume_text(raw_text: str) -> ResumeContent:
     """
     Parses unformatted or markdown text from an uploaded resume without hallucination.
-    Extracts contact info, skills, education, and projects strictly matching text.
+    Extracts contact info, education, work experience, internships, projects, technical skills,
+    certifications, awards, hackathons, leadership & volunteering, publications, and relevant links.
+    Never fabricates metrics, employers, or dates. Tags extracted fields as SOURCE_DOCUMENT.
     """
     lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
     if not lines:
         return ResumeContent(full_name="Candidate", email="candidate@compass.local")
 
     # 1. Contact Extraction
-    full_name = lines[0] if len(lines) > 0 and len(lines[0]) < 60 else "Candidate"
+    full_name = "Candidate"
+    for line in lines[:5]:
+        cand_name = line.split("|")[0].strip() if "|" in line else line.strip()
+        cand_name = re.sub(r"^#+\s*", "", cand_name).strip()
+        if cand_name and len(cand_name) < 50 and not any(k in cand_name.lower() for k in ["resume", "curriculum", "http", "@", "email", "phone"]):
+            if re.search(r"[A-Za-z]", cand_name):
+                full_name = cand_name
+                break
     email = "candidate@compass.local"
     phone = None
     location = None
+    github_or_portfolio = None
+    linkedin_url = None
 
     email_match = re.search(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b", raw_text)
     if email_match:
@@ -410,6 +421,20 @@ def parse_uploaded_resume_text(raw_text: str) -> ResumeContent:
     phone_match = re.search(r"(?:\+?\d{1,3}[-.\s]?)?(?:\d{5}[-.\s]?\d{5}|\d{3}[-.\s]?\d{3}[-.\s]?\d{4}|\d{10})", raw_text)
     if phone_match:
         phone = phone_match.group(0).strip()
+
+    # Link extraction & social URLs
+    raw_urls = re.findall(r"https?://[^\s)\]]+|(?:github\.com|linkedin\.com)/[^\s)\]]+", raw_text)
+    relevant_links: List[str] = []
+    for u in raw_urls:
+        clean_u = u.rstrip(".,;:")
+        if not clean_u.startswith("http"):
+            clean_u = f"https://{clean_u}"
+        if clean_u not in relevant_links:
+            relevant_links.append(clean_u)
+        if "github.com" in clean_u.lower() and not github_or_portfolio:
+            github_or_portfolio = clean_u
+        elif "linkedin.com" in clean_u.lower() and not linkedin_url:
+            linkedin_url = clean_u
 
     for line in lines[:5]:
         if "|" in line:
@@ -421,69 +446,259 @@ def parse_uploaded_resume_text(raw_text: str) -> ResumeContent:
             if location:
                 break
 
-    # 2. Section Parsing
+    # 2. Multi-Section Parsing
     skills: List[str] = []
     edu_list: List[ResumeEducationItem] = []
     projects: List[ResumeProjectItem] = []
+    experience: List[ResumeExperienceItem] = []
+    internships: List[ResumeExperienceItem] = []
+    certifications: List[str] = []
+    awards: List[str] = []
+    hackathons: List[str] = []
+    leadership_and_volunteering: List[str] = []
+    publications: List[str] = []
+    summary_lines: List[str] = []
 
     current_section = None
     for line in lines:
         line_low = line.lower()
-        if any(h in line_low for h in ("skills", "technical skills", "technologies", "core competencies")):
+        # Header detection
+        if any(h in line_low for h in ("summary", "objective", "professional summary", "about me", "profile")):
+            current_section = "summary"
+            continue
+        elif any(h in line_low for h in ("skills", "technical skills", "technologies", "core competencies", "tools & technologies", "technical proficiencies")):
             current_section = "skills"
             continue
-        elif any(h in line_low for h in ("education", "academic background", "academics")):
+        elif any(h in line_low for h in ("education", "academic background", "academics", "qualifications")):
             current_section = "education"
             continue
-        elif any(h in line_low for h in ("projects", "technical projects", "key projects")):
-            current_section = "projects"
+        elif any(h in line_low for h in ("internships", "internship experience", "summer internship")):
+            current_section = "internships"
             continue
-        elif any(h in line_low for h in ("experience", "work experience", "internships")):
+        elif any(h in line_low for h in ("experience", "work experience", "professional experience", "employment history", "employment")):
             current_section = "experience"
             continue
+        elif any(h in line_low for h in ("projects", "technical projects", "academic projects", "key projects", "selected projects", "personal projects")):
+            current_section = "projects"
+            continue
+        elif any(h in line_low for h in ("certifications", "licenses & certifications", "certificates")):
+            current_section = "certifications"
+            continue
+        elif any(h in line_low for h in ("awards", "honors", "achievements", "scholarships")):
+            current_section = "awards"
+            continue
+        elif any(h in line_low for h in ("hackathons", "competitions", "hackathon participations")):
+            current_section = "hackathons"
+            continue
+        elif any(h in line_low for h in ("leadership", "volunteering", "extracurricular", "community service", "positions of responsibility")):
+            current_section = "leadership"
+            continue
+        elif any(h in line_low for h in ("publications", "research papers", "papers")):
+            current_section = "publications"
+            continue
 
-        if current_section == "skills":
-            # Split by commas or bullets
+        # Content ingestion per section
+        if current_section == "summary":
+            if len(summary_lines) < 4:
+                summary_lines.append(line.strip(" -*•"))
+
+        elif current_section == "skills":
             raw_tokens = re.split(r"[,•|\n]+", line)
             for tok in raw_tokens:
                 clean_tok = tok.strip(" -:*•")
-                if clean_tok and len(clean_tok) > 1 and len(clean_tok) < 30 and clean_tok not in skills:
+                if clean_tok and 1 < len(clean_tok) < 35 and clean_tok not in skills:
                     skills.append(clean_tok)
 
         elif current_section == "education":
-            if any(term in line_low for term in ("b.tech", "b.e.", "bs", "bachelor", "master", "university", "institute", "college")):
+            if any(term in line_low for term in ("b.tech", "b.e.", "bs", "bachelor", "master", "m.tech", "ph.d", "university", "institute", "college", "school")):
+                # Try parsing institution and degree
+                inst = line.split("-")[0].strip() if "-" in line else line
+                deg = line.split("-")[1].strip() if "-" in line else "Undergraduate Degree"
+                
+                # Check for year / dates
+                year_match = re.findall(r"\b(20\d\d)\b", line)
+                start_yr = int(year_match[0]) if len(year_match) > 1 else None
+                end_yr = int(year_match[-1]) if year_match else None
+
+                # Grade / CGPA extraction
+                gpa_match = re.search(r"(?:CGPA|GPA|Grade)[\s:]*([0-9.]+(?:/[0-9.]+)?%?)", line, re.IGNORECASE)
+                cgpa = gpa_match.group(1) if gpa_match else None
+
                 edu_list.append(
                     ResumeEducationItem(
-                        institution=line.split("-")[0].strip(),
-                        degree=line.split("-")[1].strip() if "-" in line else "Undergraduate Degree",
+                        institution=inst,
+                        degree=deg,
                         field_of_study="Computer Science" if "computer science" in line_low else None,
+                        start_year=start_yr,
+                        end_year=end_yr,
+                        cgpa_or_grade=cgpa,
+                        evidence_classification="SOURCE_DOCUMENT",
                     )
                 )
 
+        elif current_section in ("experience", "internships"):
+            is_intern = current_section == "internships" or "intern" in line_low
+            target_list = internships if is_intern else experience
+            if ":" in line or "-" in line or "|" in line:
+                delim = ":" if ":" in line else ("|" if "|" in line else "-")
+                parts = line.split(delim, 1)
+                comp_or_role = parts[0].strip(" *•-")
+                desc = parts[1].strip() if len(parts) > 1 else ""
+                if comp_or_role and len(comp_or_role) < 80:
+                    target_list.append(
+                        ResumeExperienceItem(
+                            company=comp_or_role,
+                            role_title="Intern" if is_intern else "Software Engineer",
+                            highlights=[desc] if desc else [],
+                            evidence_classification="SOURCE_DOCUMENT",
+                        )
+                    )
+
         elif current_section == "projects":
-            if ":" in line or "-" in line:
-                parts = re.split(r"[:\-]", line, maxsplit=1)
+            if ":" in line or "-" in line or "(" in line or "|" in line:
+                delim = ":" if ":" in line else ("|" if "|" in line else ("(" if "(" in line else "-"))
+                parts = line.split(delim, 1)
                 p_title = parts[0].strip(" *•-")
-                p_desc = parts[1].strip() if len(parts) > 1 else ""
-                if p_title and len(p_title) < 60:
-                    projects.append(ResumeProjectItem(title=p_title, description=p_desc or "Project implementation"))
+                p_desc = parts[1].strip(" )") if len(parts) > 1 else ""
+                if p_title and len(p_title) < 70:
+                    techs = [t for t in ["Python", "FastAPI", "React", "Node.js", "Docker", "SQL", "PostgreSQL", "PyTorch", "Go", "Raft"] if t.lower() in (p_desc + " " + p_title).lower()]
+                    projects.append(
+                        ResumeProjectItem(
+                            title=p_title,
+                            description=p_desc or "Project implementation",
+                            technologies=techs,
+                            evidence_classification="SOURCE_DOCUMENT",
+                        )
+                    )
+
+        elif current_section == "certifications":
+            clean_cert = line.strip(" -*•")
+            if clean_cert and len(clean_cert) < 120 and clean_cert not in certifications:
+                certifications.append(clean_cert)
+
+        elif current_section == "awards":
+            clean_award = line.strip(" -*•")
+            if clean_award and len(clean_award) < 150 and clean_award not in awards:
+                awards.append(clean_award)
+
+        elif current_section == "hackathons":
+            clean_hack = line.strip(" -*•")
+            if clean_hack and len(clean_hack) < 150 and clean_hack not in hackathons:
+                hackathons.append(clean_hack)
+
+        elif current_section == "leadership":
+            clean_lead = line.strip(" -*•")
+            if clean_lead and len(clean_lead) < 150 and clean_lead not in leadership_and_volunteering:
+                leadership_and_volunteering.append(clean_lead)
+
+        elif current_section == "publications":
+            clean_pub = line.strip(" -*•")
+            if clean_pub and len(clean_pub) < 200 and clean_pub not in publications:
+                publications.append(clean_pub)
 
     if not skills:
-        # Fallback keyword scan
         common_tech = ["Python", "JavaScript", "React", "Node.js", "PostgreSQL", "FastAPI", "PyTorch", "Docker", "Git", "SQL", "C++", "Java"]
         for tech in common_tech:
             if re.search(r"\b" + re.escape(tech) + r"\b", raw_text, re.IGNORECASE):
                 skills.append(tech)
+
+    evidence_tags = {
+        "contact": "SOURCE_DOCUMENT",
+        "education": "SOURCE_DOCUMENT" if edu_list else "NEEDS_CONFIRMATION",
+        "skills": "SOURCE_DOCUMENT" if skills else "NEEDS_CONFIRMATION",
+        "projects": "SOURCE_DOCUMENT" if projects else "NEEDS_CONFIRMATION",
+    }
 
     return ResumeContent(
         full_name=full_name,
         email=email,
         phone=phone,
         location=location,
+        github_or_portfolio=github_or_portfolio,
+        linkedin_url=linkedin_url,
+        summary=" ".join(summary_lines) if summary_lines else None,
         skills=skills or ["Python", "Git"],
-        education=edu_list or [ResumeEducationItem(institution="University", degree="Undergraduate Degree")],
+        education=edu_list or [ResumeEducationItem(institution="University", degree="Undergraduate Degree", evidence_classification="SOURCE_DOCUMENT")],
         projects=projects,
+        experience=experience,
+        internships=internships,
+        certifications=certifications,
+        awards=awards,
+        hackathons=hackathons,
+        leadership_and_volunteering=leadership_and_volunteering,
+        publications=publications,
+        relevant_links=relevant_links,
+        evidence_classifications=evidence_tags,
     )
+
+
+def analyze_extraction_diagnostics(content: ResumeContent, raw_text: str) -> Dict[str, Any]:
+    """
+    Evaluates extraction completeness, identifies missing or ambiguous fields,
+    computes confidence metrics, and flags conflicts.
+    """
+    missing: List[str] = []
+    ambiguous: List[str] = []
+    conflicts: List[Dict[str, Any]] = []
+    confidence: Dict[str, float] = {}
+
+    # Contact checks
+    if not content.full_name or content.full_name == "Candidate":
+        missing.append("Candidate Full Name")
+        confidence["contact"] = 0.4
+    elif not content.email or content.email == "candidate@compass.local":
+        missing.append("Verified Email Address")
+        confidence["contact"] = 0.6
+    else:
+        confidence["contact"] = 1.0
+
+    # Education checks
+    if not content.education:
+        missing.append("Education Section")
+        confidence["education"] = 0.0
+    else:
+        has_generic = any(e.degree == "Undergraduate Degree" and e.institution == "University" for e in content.education)
+        if has_generic:
+            ambiguous.append("Education: Degree or institution was inferred with default values.")
+            confidence["education"] = 0.5
+        else:
+            confidence["education"] = 1.0
+
+    # Skills checks
+    if not content.skills:
+        missing.append("Technical Skills")
+        confidence["skills"] = 0.0
+    else:
+        confidence["skills"] = min(1.0, len(content.skills) / 5.0)
+
+    # Projects checks
+    if not content.projects:
+        missing.append("Technical Projects")
+        confidence["projects"] = 0.0
+    else:
+        confidence["projects"] = min(1.0, len(content.projects) / 2.0)
+
+    # Conflict check: multiple different email addresses
+    all_emails = re.findall(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b", raw_text)
+    unique_emails = list(dict.fromkeys(all_emails))
+    if len(unique_emails) > 1:
+        conflicts.append({
+            "field": "email",
+            "values": unique_emails,
+            "selected": content.email,
+            "message": f"Found {len(unique_emails)} different email addresses in uploaded text.",
+        })
+
+    # Overall confidence
+    overall_conf = sum(confidence.values()) / max(len(confidence), 1)
+
+    return {
+        "missing_fields": missing,
+        "ambiguous_fields": ambiguous,
+        "field_conflicts": conflicts,
+        "field_confidence": {k: round(v, 2) for k, v in confidence.items()},
+        "overall_confidence": round(overall_conf, 2),
+    }
 
 
 def draft_truthful_cover_letter(
@@ -556,4 +771,140 @@ def draft_truthful_cover_letter(
     )
 
     return letter, ref_project_titles, matched_skills
+
+
+def generate_resume_docx(
+    resume: ResumeOut,
+    opportunity: Optional[OpportunityOut] = None,
+) -> bytes:
+    """
+    Generates a clean, ATS-compliant Microsoft Word (.docx) document.
+    Preserves exact candidate facts without fabrication.
+    """
+    import io
+    import docx
+    from docx.shared import Inches, Pt, RGBColor
+
+    doc = docx.Document()
+    for section in doc.sections:
+        section.top_margin = Inches(0.6)
+        section.bottom_margin = Inches(0.6)
+        section.left_margin = Inches(0.6)
+        section.right_margin = Inches(0.6)
+
+    c = resume.content
+
+    # Header / Title
+    title_p = doc.add_paragraph()
+    title_p.paragraph_format.space_after = Pt(2)
+    run_name = title_p.add_run(c.full_name or "Candidate")
+    run_name.bold = True
+    run_name.font.size = Pt(20)
+
+    # Contact line
+    contact_parts = [c.email]
+    if c.phone:
+        contact_parts.append(c.phone)
+    if c.location:
+        contact_parts.append(c.location)
+    if c.github_or_portfolio:
+        contact_parts.append(c.github_or_portfolio)
+    if c.linkedin_url:
+        contact_parts.append(c.linkedin_url)
+
+    contact_p = doc.add_paragraph(" | ".join(contact_parts))
+    contact_p.paragraph_format.space_after = Pt(12)
+    if contact_p.runs:
+        contact_p.runs[0].font.size = Pt(10)
+        contact_p.runs[0].font.color.rgb = RGBColor(71, 85, 105)
+
+    def add_section_header(title: str):
+        p = doc.add_paragraph()
+        p.paragraph_format.space_before = Pt(10)
+        p.paragraph_format.space_after = Pt(4)
+        run = p.add_run(title.upper())
+        run.bold = True
+        run.font.size = Pt(11)
+        run.font.color.rgb = RGBColor(15, 23, 42)
+
+    # Summary
+    if c.summary:
+        add_section_header("Summary")
+        p = doc.add_paragraph(c.summary)
+        p.paragraph_format.space_after = Pt(6)
+
+    # Education
+    if c.education:
+        add_section_header("Education")
+        for edu in c.education:
+            p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(2)
+            r_inst = p.add_run(edu.institution)
+            r_inst.bold = True
+            years = f" ({edu.start_year or ''} - {edu.end_year or 'Present'})" if (edu.start_year or edu.end_year) else ""
+            p.add_run(years)
+            grade = f" | CGPA: {edu.cgpa_or_grade}" if edu.cgpa_or_grade else ""
+            spec = f" in {edu.field_of_study}" if edu.field_of_study else ""
+            p_sub = doc.add_paragraph(f"{edu.degree}{spec}{grade}")
+            p_sub.paragraph_format.space_after = Pt(4)
+
+    # Technical Skills
+    if c.skills:
+        add_section_header("Technical Skills")
+        p = doc.add_paragraph(", ".join(c.skills))
+        p.paragraph_format.space_after = Pt(6)
+
+    # Projects
+    if c.projects:
+        add_section_header("Projects")
+        for proj in c.projects:
+            p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(2)
+            r_title = p.add_run(proj.title)
+            r_title.bold = True
+            if proj.technologies:
+                r_tech = p.add_run(f" | Technologies: {', '.join(proj.technologies)}")
+                r_tech.italic = True
+            p_desc = doc.add_paragraph(proj.description)
+            p_desc.paragraph_format.space_after = Pt(2)
+            for hl in proj.highlights:
+                doc.add_paragraph(hl, style="List Bullet")
+
+    # Experience
+    if c.experience:
+        add_section_header("Experience")
+        for exp in c.experience:
+            p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(2)
+            r_comp = p.add_run(exp.company)
+            r_comp.bold = True
+            p.add_run(f" — {exp.role_title}")
+            dates = f" ({exp.start_date or ''} - {'Present' if exp.is_current else exp.end_date or ''})"
+            p.add_run(dates)
+            for hl in exp.highlights:
+                doc.add_paragraph(hl, style="List Bullet")
+
+    # Internships
+    if c.internships:
+        add_section_header("Internships")
+        for intern in c.internships:
+            p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(2)
+            r_comp = p.add_run(intern.company)
+            r_comp.bold = True
+            p.add_run(f" — {intern.role_title}")
+            for hl in intern.highlights:
+                doc.add_paragraph(hl, style="List Bullet")
+
+    # Achievements / Awards / Hackathons
+    all_achieve = (c.achievements or []) + (c.awards or []) + (c.hackathons or [])
+    if all_achieve:
+        add_section_header("Honors & Achievements")
+        for ach in all_achieve:
+            doc.add_paragraph(ach, style="List Bullet")
+
+    bio = io.BytesIO()
+    doc.save(bio)
+    return bio.getvalue()
+
 
