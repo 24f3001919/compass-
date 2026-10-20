@@ -71,6 +71,7 @@ export default function CareerCopilot() {
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
+        minHeight: 0,
         height: '100%',
         overflowY: 'auto',
         background: 'var(--bg-app)',
@@ -82,12 +83,13 @@ export default function CareerCopilot() {
         style={{
           background: 'var(--bg-card)',
           borderBottom: '1px solid var(--border)',
-          padding: '16px 20px',
+          padding: '16px 24px',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: '12px',
+          flexShrink: 0,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -149,7 +151,7 @@ export default function CareerCopilot() {
           aria-live="polite"
           id="career-copilot-notification"
           style={{
-            margin: '12px 20px 0 20px',
+            margin: '12px 24px 0 24px',
             padding: '10px 16px',
             borderRadius: '8px',
             fontSize: '13px',
@@ -158,6 +160,7 @@ export default function CareerCopilot() {
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: '12px',
+            flexShrink: 0,
             background:
               notification.type === 'warning'
                 ? 'rgba(245, 158, 11, 0.12)'
@@ -225,49 +228,34 @@ export default function CareerCopilot() {
       )}
 
       {/* Sub-Tabs Switcher */}
-      <div
-        style={{
-          display: 'flex',
-          gap: '10px',
-          padding: '14px 20px',
-          background: 'var(--bg-app)',
-          borderBottom: '1px solid var(--border)',
-          overflowX: 'auto',
-        }}
+      <nav
+        id="career-subtabs-nav"
+        className="career-subtab-nav"
+        aria-label="Career Copilot Navigation"
       >
-        {SUB_TABS.map((tab) => {
-          const isActive = activeSubTab === tab.key
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveSubTab(tab.key)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '9px 18px',
-                borderRadius: '9px',
-                border: isActive ? '1px solid var(--primary, #2563eb)' : '1px solid var(--border)',
-                background: isActive ? 'var(--primary, #2563eb)' : 'var(--bg-card)',
-                color: isActive ? '#ffffff' : 'var(--text-secondary)',
-                fontWeight: isActive ? '700' : '600',
-                fontSize: '13px',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.15s ease',
-                boxShadow: isActive ? '0 3px 10px rgba(37, 99, 235, 0.3)' : '0 1px 2px rgba(15, 23, 42, 0.04)',
-              }}
-            >
-              <span>{tab.icon}</span>
-              <span>{tab.label}</span>
-            </button>
-          )
-        })}
-      </div>
+        <div className="career-subtab-tray" role="tablist">
+          {SUB_TABS.map((tab) => {
+            const isActive = activeSubTab === tab.key
+            return (
+              <button
+                key={tab.key}
+                role="tab"
+                id={`career-subtab-${tab.key}`}
+                aria-selected={isActive}
+                type="button"
+                onClick={() => setActiveSubTab(tab.key)}
+                className={`career-subtab-btn ${isActive ? 'active' : ''}`}
+              >
+                <span style={{ fontSize: '15px', lineHeight: 1 }}>{tab.icon}</span>
+                <span>{tab.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      </nav>
 
       {/* Main Tab Area */}
-      <div style={{ flex: 1, padding: '20px 16px' }}>
+      <div style={{ flex: 1, minHeight: 0, padding: activeSubTab === 'radar' ? '0' : '20px 24px' }}>
         {activeSubTab === 'radar' && (
           <InternshipRadar
             refreshTrigger={profileRefreshTrigger}
