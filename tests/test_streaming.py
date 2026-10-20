@@ -201,3 +201,147 @@ async def test_persist_stream_messages_forced_failure_is_logged(caplog):
             assert success is False
             assert "Failed to persist streamed messages for conversation test-conv-456" in caplog.text
             assert "Simulated Neon network timeout during write" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_streaming_conversational_chunks(client: AsyncClient, monkeypatch):
+    """Test multi-chunk conversational token streaming and final metadata done event."""
+    chunks = ["Hello", " there!", " How", " can", " I", " help", " you", " today?"]
+
+    class MockStream:
+        def __aiter__(self):
+            return self._gen()
+
+        async def _gen(self):
+            for ch in chunks:
+                choice = MagicMock()
+                choice.delta.content = ch
+                choice.delta.tool_calls = None
+                choice.finish_reason = None
+                chunk = MagicMock()
+                chunk.choices = [choice]
+                chunk.usage = None
+                yield chunk
+
+        async def aclose(self):
+            pass
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=MockStream())
+    monkeypatch.setattr("backend.services.chat_stream.openai.AsyncOpenAI", lambda **kwargs: mock_client)
+
+    events = []
+    payload = {"message": "Hello Compass"}
+    async with client.stream("POST", "/api/chat/stream", json=payload, timeout=15.0) as resp:
+        assert resp.status_code == 200
+        async for line in resp.aiter_lines():
+            if line.startswith("data: "):
+                events.append(json.loads(line[6:]))
+
+    token_events = [e for e in events if e.get("type") == "token"]
+    assert len(token_events) == len(chunks)
+    reconstructed = "".join(e.get("value", "") for e in token_events)
+    assert reconstructed == "Hello there! How can I help you today?"
+
+    done_events = [e for e in events if e.get("type") == "done"]
+    assert len(done_events) == 1
+    # Verify done event is metadata-only and does not duplicate text
+    assert "response" not in done_events[0]
+    assert done_events[0].get("skill_used") == "chat"
+    assert "conversation_id" in done_events[0]
+
+
+@pytest.mark.asyncio
+async def test_streaming_replace_event_on_tool_switch(client: AsyncClient, monkeypatch):
+    """Test that tool-call path emits a replace event when leaked tokens must be cleanly replaced."""
+    class MockStream:
+        def __aiter__(self):
+            return self._gen()
+
+        async def _gen(self):
+            # First emit a token that leaked
+            choice1 = MagicMock()
+            choice1.delta.content = "Leaked markup token "
+            choice1.delta.tool_calls = None
+            choice1.finish_reason = None
+            chunk1 = MagicMock()
+            chunk1.choices = [choice1]
+            chunk1.usage = None
+            yield chunk1
+
+            # Then tool call occurs
+            choice2 = MagicMock()
+            choice2.delta.content = None
+            choice2.delta.tool_calls = [MagicMock()]
+            choice2.finish_reason = "tool_calls"
+            chunk2 = MagicMock()
+            chunk2.choices = [choice2]
+            chunk2.usage = None
+            yield chunk2
+
+        async def aclose(self):
+            pass
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=MockStream())
+    monkeypatch.setattr("backend.services.chat_stream.openai.AsyncOpenAI", lambda **kwargs: mock_client)
+    monkeypatch.setattr("backend.services.chat_stream.is_schedule_or_agent_intent", lambda msg: False)
+    monkeypatch.setattr(
+        "backend.orchestrator.handle_message",
+        AsyncMock(return_value={"response": "Clean synthesized response after tool execution.", "skill_used": "schedule_agent", "data": None}),
+    )
+
+    events = []
+    payload = {"message": "Plan my schedule for tomorrow"}
+    async with client.stream("POST", "/api/chat/stream", json=payload, timeout=15.0) as resp:
+        assert resp.status_code == 200
+        async for line in resp.aiter_lines():
+            if line.startswith("data: "):
+                events.append(json.loads(line[6:]))
+
+    replace_events = [e for e in events if e.get("type") == "replace"]
+    assert len(replace_events) == 1
+    assert replace_events[0]["value"] == "Clean synthesized response after tool execution."
+
+
+@pytest.mark.asyncio
+async def test_streaming_mid_stream_model_error(client: AsyncClient, monkeypatch):
+    """Test that mid-stream exception from model stream yields terminal error event."""
+    class FailingStream:
+        def __aiter__(self):
+            return self._gen()
+
+        async def _gen(self):
+            choice = MagicMock()
+            choice.delta.content = "Initial tokens..."
+            choice.delta.tool_calls = None
+            choice.finish_reason = None
+            chunk = MagicMock()
+            chunk.choices = [choice]
+            chunk.usage = None
+            yield chunk
+            raise RuntimeError("Upstream provider socket timed out mid-stream")
+
+        async def aclose(self):
+            pass
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=FailingStream())
+    monkeypatch.setattr("backend.services.chat_stream.openai.AsyncOpenAI", lambda **kwargs: mock_client)
+
+    events = []
+    payload = {"message": "Tell me a story"}
+    async with client.stream("POST", "/api/chat/stream", json=payload, timeout=15.0) as resp:
+        assert resp.status_code == 200
+        async for line in resp.aiter_lines():
+            if line.startswith("data: "):
+                events.append(json.loads(line[6:]))
+
+    token_events = [e for e in events if e.get("type") == "token"]
+    assert len(token_events) == 1
+    assert token_events[0]["value"] == "Initial tokens..."
+
+    error_events = [e for e in events if e.get("type") == "error"]
+    assert len(error_events) == 1
+    assert error_events[0]["terminal"] is True
+

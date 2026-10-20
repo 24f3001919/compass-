@@ -627,6 +627,8 @@ async def generate_chat_events(
 
     except asyncio.CancelledError:
         logger.info("Chat SSE stream cancelled by client disconnect.")
+        if full_text.strip():
+            _schedule_stream_persistence(conv_id, message, full_text.strip(), user_id, guest_id, "chat")
         if stream and hasattr(stream, "aclose"):
             await stream.aclose()
         raise

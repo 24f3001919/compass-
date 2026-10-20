@@ -9,6 +9,7 @@ Provides authenticated endpoints for:
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -27,10 +28,13 @@ from backend.memory.career import (
     get_career_application_by_id,
     get_career_application_by_opportunity,
     get_master_resume,
+    get_original_resume_document,
     get_resume_by_id,
     list_career_applications,
+    list_original_resume_documents,
     list_resumes,
     log_application_event,
+    save_original_resume_document,
     update_career_application,
     update_resume,
     upsert_master_resume,
@@ -44,8 +48,14 @@ from backend.models_career import (
     BatchSubmitResultOut,
     CareerApplicationOut,
     CareerApplicationStatus,
+    CommitExtractedResumeRequest,
     CoverLetterOut,
     DraftCoverLetterRequest,
+    ExternalProfileImportRequest,
+    GitHubImportRequest,
+    GitHubProfileIntelligence,
+    JobAnalysisReport,
+    OriginalResumeDocument,
     ResumeContent,
     ResumeOut,
     ResumeParseUploadRequest,
@@ -57,9 +67,13 @@ from backend.models_career import (
     TailorResumeRequest,
     UpdateApplicationStatusRequest,
 )
+from backend.services.career_github import analyze_github_profile
+from backend.services.career_job_match import analyze_job_and_match
+from backend.services.career_profile_sources import ingest_external_profile
 from backend.services.career_resume import (
     build_default_master_from_profile,
     draft_truthful_cover_letter,
+    generate_resume_docx,
     generate_resume_html,
     parse_uploaded_resume_text,
     tailor_resume_for_opportunity,
@@ -243,6 +257,92 @@ async def export_resume_html_endpoint(
     return HTMLResponse(content=html, status_code=200)
 
 
+@router.get("/resumes/{resume_id}/export/docx")
+async def export_resume_docx_endpoint(
+    resume_id: int,
+    request: Request,
+):
+    """Export clean, ATS-compliant Microsoft Word (.docx) document."""
+    user_id = _get_or_create_user_id(request)
+    res = await get_resume_by_id(resume_id, user_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    opp = None
+    if res.opportunity_id:
+        opp = await get_opportunity_by_id(res.opportunity_id, user_id)
+
+    docx_bytes = generate_resume_docx(res, opp)
+    filename = re.sub(r"[^\w\s-]", "", res.title).strip().replace(" ", "_") or "Resume"
+    return Response(
+        content=docx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}.docx"'},
+    )
+
+
+# ===========================================================================
+# Profile Intelligence Endpoints (GitHub, External Sources, Job Matching)
+# ===========================================================================
+
+@router.post("/intelligence/github", response_model=GitHubProfileIntelligence)
+async def analyze_github_endpoint(body: GitHubImportRequest, request: Request):
+    """
+    Extracts verifiable engineering evidence from candidate's public GitHub profile.
+    Distinguishes owned repos from forks, detects verified tech stack/tests, and applies
+    prompt-injection defenses.
+    """
+    _get_or_create_user_id(request)
+    return await analyze_github_profile(
+        username_or_url=body.username_or_url,
+        token=body.personal_access_token,
+        excluded_repos=body.excluded_repos,
+    )
+
+
+@router.post("/intelligence/external-profile", response_model=ResumeContent)
+async def ingest_external_profile_endpoint(body: ExternalProfileImportRequest, request: Request):
+    """
+    Ingests candidate-provided external profile information (pasted LinkedIn text or data export).
+    Never performs unauthorized scraping. Records provenance and evidence classification.
+    """
+    _get_or_create_user_id(request)
+    content, notes = ingest_external_profile(body)
+    return content
+
+
+@router.get("/opportunities/{opportunity_id}/job-analysis", response_model=JobAnalysisReport)
+async def analyze_opportunity_job_endpoint(
+    opportunity_id: int,
+    request: Request,
+    custom_desc: Optional[str] = Query(None),
+):
+    """
+    Analyzes job description requirements (mandatory, preferred, responsibilities, eligibility)
+    and maps supporting evidence from the candidate's verified Master Profile.
+    """
+    user_id = _get_or_create_user_id(request)
+    opp = await get_opportunity_by_id(opportunity_id, user_id)
+    if not opp:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+
+    master = await get_master_resume(user_id)
+    if not master:
+        profile = await get_user_opportunity_profile(user_id)
+        if not profile:
+            from backend.models_radar import UserOpportunityProfileIn
+            profile = UserOpportunityProfileIn()
+        default_content = build_default_master_from_profile(profile, user_name="Compass Candidate")
+        master = await upsert_master_resume(user_id, default_content, "Master Resume")
+
+    return analyze_job_and_match(
+        opportunity=opp,
+        master=master.content,
+        custom_description=custom_desc,
+    )
+
+
+
 
 @router.post("/resumes/parse-upload", response_model=ResumeContent)
 async def parse_resume_upload_endpoint(body: ResumeParseUploadRequest, request: Request):
@@ -262,9 +362,10 @@ async def parse_resume_file_endpoint(
     """
     Safely extract and parse structured resume data from uploaded PDF, TXT, or MD file.
     Does NOT automatically save or overwrite the master resume.
-    Returns structured content and status for explicit candidate review and confirmation.
+    Preserves original uploaded resume document separately for provenance audit.
+    Returns structured content, diagnostic warnings, and field confidence for review.
     """
-    _get_or_create_user_id(request)
+    user_id = _get_or_create_user_id(request)
     content = await file.read()
     result = extract_resume_from_file_bytes(
         content,
@@ -276,7 +377,54 @@ async def parse_resume_file_endpoint(
             status_code=400,
             detail=result.error_message or "Failed to extract text from resume file.",
         )
+
+    # Preserve original uploaded file text separately from generated resumes
+    if result.raw_text:
+        orig_doc = await save_original_resume_document(
+            user_id=user_id,
+            filename=result.filename,
+            file_type=result.file_type,
+            raw_text=result.raw_text,
+            metadata={"page_count": result.page_count, "confidence": result.field_confidence},
+        )
+        result.original_document_id = orig_doc.id
+
     return result
+
+
+@router.post("/resumes/commit-extracted", response_model=ResumeOut)
+async def commit_extracted_resume_endpoint(
+    body: CommitExtractedResumeRequest,
+    request: Request,
+):
+    """
+    Commits user-reviewed and edited extracted resume content to the master resume.
+    Marks confirmed sections as USER_CONFIRMED to record explicit candidate audit.
+    """
+    user_id = _get_or_create_user_id(request)
+    reviewed_content = body.content
+    reviewed_content.evidence_classifications["user_review_status"] = "USER_CONFIRMED"
+    reviewed_content.evidence_notes["review_timestamp"] = "CONFIRMED"
+
+    if body.target == "master":
+        return await upsert_master_resume(user_id, reviewed_content, "Master Resume")
+    else:
+        report = validate_resume_against_master(reviewed_content, reviewed_content)
+        return await create_tailored_resume(
+            user_id=user_id,
+            opportunity_id=0,
+            title="Imported Resume Draft",
+            content=reviewed_content,
+            validation_report=report,
+            validation_status=ResumeValidationStatus.READY_FOR_REVIEW,
+        )
+
+
+@router.get("/resumes/original-documents", response_model=List[OriginalResumeDocument])
+async def list_original_resume_documents_endpoint(request: Request):
+    """Retrieve all preserved original uploaded resume documents for the candidate."""
+    user_id = _get_or_create_user_id(request)
+    return await list_original_resume_documents(user_id)
 
 
 @router.post("/cover-letters/draft", response_model=CoverLetterOut)

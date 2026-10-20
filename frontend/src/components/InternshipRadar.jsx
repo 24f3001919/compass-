@@ -4,7 +4,8 @@ import RadarFilters from './radar/RadarFilters'
 import RadarOpportunityCard from './radar/RadarOpportunityCard'
 import RadarDetailModal from './radar/RadarDetailModal'
 import RadarProfileModal from './radar/RadarProfileModal'
-import ApplicationWorkspaceModal from './career/ApplicationWorkspaceModal'
+
+const ApplicationWorkspaceModal = React.lazy(() => import('./career/ApplicationWorkspaceModal'))
 import {
   fetchOpportunities,
   fetchRecommendedOpportunities,
@@ -541,16 +542,18 @@ export default function InternshipRadar({
 
       {/* Internal Application Workspace Modal */}
       {activeWorkspaceOpp && (
-        <ApplicationWorkspaceModal
-          opportunity={activeWorkspaceOpp}
-          onClose={() => setActiveWorkspaceOpp(null)}
-          onApplicationUpdated={(updatedApp) => {
-            setOpportunities(prev =>
-              prev.map(o => (o.id === activeWorkspaceOpp.id ? { ...o, application_status: updatedApp.status } : o))
-            )
-            loadMetadata()
-          }}
-        />
+        <React.Suspense fallback={null}>
+          <ApplicationWorkspaceModal
+            opportunity={activeWorkspaceOpp}
+            onClose={() => setActiveWorkspaceOpp(null)}
+            onApplicationUpdated={(updatedApp) => {
+              setOpportunities(prev =>
+                prev.map(o => (o.id === activeWorkspaceOpp.id ? { ...o, application_status: updatedApp.status } : o))
+              )
+              loadMetadata()
+            }}
+          />
+        </React.Suspense>
       )}
 
       {/* Academic Profile Modal */}

@@ -69,7 +69,7 @@ function sanitizeActivityMilestones(rawText) {
       lower.includes('analysis complete') ||
       lower.includes('analyz')
     ) {
-      milestones.push(line.replace(/^[•\-\*]\s*/, '').trim())
+      milestones.push(line.replace(/^[•\-*]\s*/, '').trim())
       continue
     }
 

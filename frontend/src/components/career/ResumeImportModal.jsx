@@ -26,7 +26,7 @@ export default function ResumeImportModal({
       const res = await parseResumeFile(file)
       if (res.success && res.extracted_content) {
         if (onFileExtracted) {
-          onFileExtracted(res.extracted_content)
+          onFileExtracted(res)
         }
       } else {
         setFileError(res.error_message || 'Failed to extract text from document.')

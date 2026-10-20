@@ -34,7 +34,7 @@ function resolveInitialApiBase() {
     return ''
   }
 
-  if (import.meta.env.VITE_API_BASE_URL && isLocalDevHost) {
+  if (import.meta?.env?.VITE_API_BASE_URL && isLocalDevHost) {
     return import.meta.env.VITE_API_BASE_URL.replace(/\/$/, '')
   }
   try {

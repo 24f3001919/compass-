@@ -1,15 +1,22 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
   fetchMasterResume,
   updateMasterResume,
   fetchResumes,
+  updateResume,
   validateResume,
   getResumeExportUrl,
+  getResumeExportDocxUrl,
   parseUploadResume,
+  commitExtractedResume,
   draftCoverLetter,
 } from '../../api/careerApi'
 import ValidationReportCard from './ValidationReportCard'
 import ResumeImportModal from './ResumeImportModal'
+import ExtractionReviewModal from './ExtractionReviewModal'
+import ExternalProfileImportModal from './ExternalProfileImportModal'
+
+const GitHubIntelligenceModal = React.lazy(() => import('./GitHubIntelligenceModal'))
 
 export default function ResumeStudio() {
   const [masterResume, setMasterResume] = useState(null)
@@ -29,20 +36,24 @@ export default function ResumeStudio() {
   const [summary, setSummary] = useState('')
   const [skillsText, setSkillsText] = useState('')
 
-  // Cover Letter & Import states
+  // Modals & Intelligence states
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [showExtractionModal, setShowExtractionModal] = useState(false)
+  const [parseResult, setParseResult] = useState(null)
+  const [committingExtraction, setCommittingExtraction] = useState(false)
+  const [showGitHubModal, setShowGitHubModal] = useState(false)
+  const [showExternalProfileModal, setShowExternalProfileModal] = useState(false)
+
+  // Review & Export customization
+  const [resumeTemplate, setResumeTemplate] = useState('ats_classic') // ats_classic | modern | minimal
+  const [viewMode, setViewMode] = useState('editor') // 'editor' | 'diff'
   const [activeTab, setActiveTab] = useState('resume') // 'resume' | 'cover_letter'
   const [coverLetterText, setCoverLetterText] = useState('')
   const [draftingLetter, setDraftingLetter] = useState(false)
-  const [showImportModal, setShowImportModal] = useState(false)
   const [importText, setImportText] = useState('')
   const [importing, setImporting] = useState(false)
-  const [importSuccess, setImportSuccess] = useState(false)
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -60,7 +71,11 @@ export default function ResumeStudio() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const populateForm = (res) => {
     if (!res || !res.content) return
@@ -79,26 +94,35 @@ export default function ResumeStudio() {
     populateForm(res)
     setValidationReport(res.validation_report || null)
     setSaveSuccess(false)
+    setViewMode('editor')
   }
 
-  const handleImportResume = async () => {
+  // Handle uploaded file or pasted text -> opens Extraction Review Screen
+  const handleFileExtracted = (result) => {
+    setParseResult(result)
+    setShowImportModal(false)
+    setShowExtractionModal(true)
+  }
+
+  const handleImportPastedText = async () => {
     if (!importText.trim()) return
     setImporting(true)
     setError(null)
     try {
       const parsed = await parseUploadResume(importText)
-      if (parsed.full_name) setFullName(parsed.full_name)
-      if (parsed.email) setEmail(parsed.email)
-      if (parsed.phone) setPhone(parsed.phone)
-      if (parsed.location) setLocation(parsed.location)
-      if (parsed.summary) setSummary(parsed.summary)
-      if (parsed.skills?.length) setSkillsText(parsed.skills.join(', '))
-      setImportSuccess(true)
-      setTimeout(() => {
-        setShowImportModal(false)
-        setImportSuccess(false)
-        setImportText('')
-      }, 1000)
+      const fakeResult = {
+        success: true,
+        filename: 'Pasted Text Document',
+        file_type: '.txt',
+        raw_text: importText,
+        extracted_content: parsed,
+        missing_fields: [],
+        field_confidence: { overall: 0.85 },
+      }
+      setParseResult(fakeResult)
+      setShowImportModal(false)
+      setShowExtractionModal(true)
+      setImportText('')
     } catch (err) {
       setError(err.message || 'Failed to parse resume text')
     } finally {
@@ -106,15 +130,75 @@ export default function ResumeStudio() {
     }
   }
 
-  const handleFileExtracted = (extracted) => {
-    if (!extracted) return
-    if (extracted.full_name) setFullName(extracted.full_name)
-    if (extracted.email) setEmail(extracted.email)
-    if (extracted.phone) setPhone(extracted.phone)
-    if (extracted.location) setLocation(extracted.location)
-    if (extracted.summary) setSummary(extracted.summary)
-    if (extracted.skills?.length) setSkillsText(extracted.skills.join(', '))
-    setShowImportModal(false)
+  // Commit from Extraction Review Modal
+  const handleCommitExtraction = async (editedContent, docId, target = 'master') => {
+    setCommittingExtraction(true)
+    setError(null)
+    try {
+      const saved = await commitExtractedResume(editedContent, docId, target)
+      setShowExtractionModal(false)
+      setSaveSuccess(true)
+      await loadData()
+      if (saved) {
+        handleSelectResume(saved)
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to commit extracted resume data')
+    } finally {
+      setCommittingExtraction(false)
+    }
+  }
+
+  // GitHub Intelligence imports
+  const handleImportGitHubRepo = async (repo) => {
+    if (!masterResume?.content) return
+    try {
+      const currentProjects = masterResume.content.projects || []
+      const newProject = {
+        title: repo.repo_name,
+        description: repo.description || 'Open source software repository implementation.',
+        technologies: repo.detected_technologies || [],
+        project_url: repo.repo_url,
+        highlights: repo.implementation_evidence || [],
+        evidence_classification: 'REPOSITORY_EVIDENCE',
+      }
+      const updatedContent = {
+        ...masterResume.content,
+        projects: [newProject, ...currentProjects.filter(p => p.title !== repo.repo_name)],
+      }
+      const updated = await updateMasterResume(updatedContent)
+      setMasterResume(updated)
+      if (selectedResume?.is_master) {
+        setSelectedResume(updated)
+        populateForm(updated)
+      }
+      setSaveSuccess(true)
+      alert(`✓ Repository "${repo.repo_name}" imported into Master Profile projects!`)
+    } catch (err) {
+      setError(err.message || 'Failed to import repository')
+    }
+  }
+
+  const handleImportGitHubSkills = async (skills) => {
+    if (!masterResume?.content) return
+    try {
+      const currentSkills = new Set(masterResume.content.skills || [])
+      skills.forEach(s => currentSkills.add(s))
+      const updatedContent = {
+        ...masterResume.content,
+        skills: Array.from(currentSkills),
+      }
+      const updated = await updateMasterResume(updatedContent)
+      setMasterResume(updated)
+      if (selectedResume?.is_master) {
+        setSelectedResume(updated)
+        populateForm(updated)
+      }
+      setSaveSuccess(true)
+      alert(`✓ Added ${skills.length} verified technologies to Master Profile!`)
+    } catch (err) {
+      setError(err.message || 'Failed to import skills')
+    }
   }
 
   const handleDraftCoverLetter = async () => {
@@ -132,7 +216,8 @@ export default function ResumeStudio() {
     }
   }
 
-  const handleSaveMaster = async (e) => {
+  // Save handler enforcing Master Resume Immutability
+  const handleSaveResume = async (e) => {
     e.preventDefault()
     setSaving(true)
     setError(null)
@@ -153,9 +238,20 @@ export default function ResumeStudio() {
         skills: skillsArray,
       }
 
-      const updated = await updateMasterResume(updatedContent)
-      setMasterResume(updated)
-      setSelectedResume(updated)
+      if (selectedResume?.is_master) {
+        const updated = await updateMasterResume(updatedContent)
+        setMasterResume(updated)
+        setSelectedResume(updated)
+      } else if (selectedResume) {
+        // Tailored variant save - strictly preserves master resume unmodified
+        const updated = await updateResume(selectedResume.id, {
+          title: selectedResume.title,
+          content: updatedContent,
+          cover_letter: coverLetterText,
+        })
+        setSelectedResume(updated)
+      }
+
       setSaveSuccess(true)
       const list = await fetchResumes()
       setResumesList(list)
@@ -178,27 +274,31 @@ export default function ResumeStudio() {
 
   if (loading) {
     return (
-      <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
+      <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
         <div className="spinner" style={{ margin: '0 auto 12px' }} />
-        <p>Loading Resume Studio...</p>
+        <p>Loading Evidence-Based Resume Studio...</p>
       </div>
     )
   }
 
+  // Diff comparison data
+  const isTailored = selectedResume && !selectedResume.is_master
+  const diffSummary = selectedResume?.validation_report?.diff_summary || {}
+
   return (
-    <div style={{ padding: '0 8px 32px', maxWidth: '1200px', margin: '0 auto' }}>
-      {/* Header bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
+    <div style={{ padding: '0 8px 36px', maxWidth: '1240px', margin: '0 auto' }}>
+      {/* Header Bar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
         <div>
           <h2 style={{ margin: '0 0 6px', fontSize: '22px', fontWeight: '800', color: 'var(--text-primary)' }}>
-            📄 Resume Studio
+            📄 Evidence-Based Resume Studio
           </h2>
           <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-muted)' }}>
-            Manage your verified master resume and tailor role-specific variants without qualification hallucination.
+            Anchor your master career profile to verified evidence and generate tailored ATS resumes without qualification hallucination.
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <button
             type="button"
             onClick={() => setShowImportModal(true)}
@@ -206,80 +306,74 @@ export default function ResumeStudio() {
               background: 'var(--bg-card-soft)',
               border: '1px solid var(--border)',
               color: 'var(--text-primary)',
-              padding: '8px 14px',
+              padding: '8px 12px',
               borderRadius: '8px',
-              fontSize: '13px',
+              fontSize: '12px',
               fontWeight: '600',
               cursor: 'pointer',
             }}
           >
-            📋 Import / Paste Resume
+            📥 Import Resume (.pdf / .docx)
           </button>
-
-          {selectedResume && (
-            <>
-              <button
-                type="button"
-                onClick={handleRunValidation}
-                style={{
-                  background: 'var(--bg-card-soft)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--text-primary)',
-                  padding: '8px 14px',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                }}
-              >
-                🔍 Validate Factual Integrity
-              </button>
-              <a
-                href={getResumeExportUrl(selectedResume.id)}
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  background: 'var(--primary)',
-                  color: '#fff',
-                  padding: '8px 14px',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  textDecoration: 'none',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}
-              >
-                📥 Export ATS Resume
-              </a>
-            </>
-          )}
+          <button
+            type="button"
+            onClick={() => setShowGitHubModal(true)}
+            style={{
+              background: 'var(--bg-card-soft)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-primary)',
+              padding: '8px 12px',
+              borderRadius: '8px',
+              fontSize: '12px',
+              fontWeight: '600',
+              cursor: 'pointer',
+            }}
+          >
+            🐙 GitHub Intelligence
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowExternalProfileModal(true)}
+            style={{
+              background: 'var(--bg-card-soft)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-primary)',
+              padding: '8px 12px',
+              borderRadius: '8px',
+              fontSize: '12px',
+              fontWeight: '600',
+              cursor: 'pointer',
+            }}
+          >
+            🔗 LinkedIn / External
+          </button>
         </div>
       </div>
 
       {error && (
-        <div style={{ background: '#fee2e2', color: '#991b1b', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px', fontSize: '13px' }}>
+        <div style={{ background: '#fee2e2', color: '#991b1b', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px' }}>
           ⚠️ {error}
         </div>
       )}
 
       {saveSuccess && (
-        <div style={{ background: '#dcfce7', color: '#166534', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px', fontSize: '13px' }}>
-          ✅ Master resume updated and factually anchored!
+        <div style={{ background: '#dcfce7', color: '#166534', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px' }}>
+          ✅ Resume changes successfully saved and factually anchored!
         </div>
       )}
 
-      {/* Main Grid: Selector Sidebar & Editor/Report */}
+      {/* Main Grid: Left sidebar versions / validation card, Right editor / diff */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px', alignItems: 'start' }}>
-        {/* Left Column: Version Selector & Factual Report Card */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* Versions Card */}
+        {/* Left Column: Versions & Integrity Card */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          {/* Versions Selector */}
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '18px' }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)' }}>
-              Resume Versions ({resumesList.length})
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '240px', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                Resume Versions ({resumesList.length})
+              </h3>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '250px', overflowY: 'auto' }}>
               {resumesList.map((res) => {
                 const isSelected = selectedResume?.id === res.id
                 return (
@@ -293,14 +387,14 @@ export default function ResumeStudio() {
                       alignItems: 'center',
                       padding: '10px 12px',
                       borderRadius: '8px',
-                      border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
+                      border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border)',
                       background: isSelected ? 'var(--primary-soft, #eff6ff)' : 'var(--bg-card-soft)',
                       cursor: 'pointer',
                       textAlign: 'left',
                     }}
                   >
                     <div>
-                      <div style={{ fontWeight: '600', fontSize: '13px', color: 'var(--text-primary)' }}>
+                      <div style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)' }}>
                         {res.title}
                       </div>
                       <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
@@ -309,7 +403,7 @@ export default function ResumeStudio() {
                     </div>
                     <span
                       style={{
-                        fontSize: '11px',
+                        fontSize: '10px',
                         padding: '2px 8px',
                         borderRadius: '12px',
                         fontWeight: '700',
@@ -325,31 +419,85 @@ export default function ResumeStudio() {
             </div>
           </div>
 
-          {/* Factual Integrity & Validation Report Card */}
+          {/* Validation Report Card */}
           <ValidationReportCard validationReport={validationReport} />
         </div>
 
-        {/* Right Column: Resume Editor & Cover Letter Studio */}
+        {/* Right Column: Editor / Diff Viewer */}
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)' }}>
-              {selectedResume?.is_master ? 'Master Profile Information' : selectedResume?.title}
-            </h3>
-            {selectedResume?.opportunity_id && (
-              <span style={{ fontSize: '11px', color: 'var(--primary)', background: '#eff6ff', padding: '2px 8px', borderRadius: '6px', fontWeight: '600' }}>
-                Role Specific
-              </span>
-            )}
+          {/* Header & Mode Switcher */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '800', color: 'var(--text-primary)' }}>
+                {selectedResume?.is_master ? 'Master Profile Information' : selectedResume?.title}
+              </h3>
+              {isTailored && (
+                <span style={{ fontSize: '11px', color: 'var(--primary)', background: '#eff6ff', padding: '2px 8px', borderRadius: '6px', fontWeight: '600' }}>
+                  Tailored Variant (Master Profile is Immutable)
+                </span>
+              )}
+            </div>
+
+            {/* Template Selector & Export Dropdowns */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <select
+                value={resumeTemplate}
+                onChange={(e) => setResumeTemplate(e.target.value)}
+                style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border)', fontSize: '12px', background: 'var(--bg-card)' }}
+              >
+                <option value="ats_classic">ATS Classic</option>
+                <option value="modern">Modern Clean</option>
+                <option value="minimal">Minimalist</option>
+              </select>
+
+              {selectedResume && (
+                <>
+                  <a
+                    href={getResumeExportUrl(selectedResume.id, resumeTemplate)}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      background: 'var(--primary, #2563eb)',
+                      color: '#fff',
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: '700',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    📄 Print / PDF
+                  </a>
+                  <a
+                    href={getResumeExportDocxUrl(selectedResume.id)}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      background: 'var(--bg-card-soft, #f8fafc)',
+                      border: '1px solid var(--border)',
+                      color: 'var(--text-primary)',
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: '700',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    📝 Word (.docx)
+                  </a>
+                </>
+              )}
+            </div>
           </div>
 
-          {/* Sub-tabs: Resume Profile vs Cover Letter */}
+          {/* Sub-tabs: Resume Profile vs Cover Letter vs Diff */}
           <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border)', paddingBottom: '10px', marginBottom: '16px' }}>
             <button
               type="button"
-              onClick={() => setActiveTab('resume')}
+              onClick={() => { setActiveTab('resume'); setViewMode('editor'); }}
               style={{
-                background: activeTab === 'resume' ? 'var(--primary)' : 'transparent',
-                color: activeTab === 'resume' ? '#fff' : 'var(--text-muted)',
+                background: activeTab === 'resume' && viewMode === 'editor' ? 'var(--primary)' : 'transparent',
+                color: activeTab === 'resume' && viewMode === 'editor' ? '#fff' : 'var(--text-muted)',
                 border: 'none',
                 padding: '6px 14px',
                 borderRadius: '6px',
@@ -358,14 +506,34 @@ export default function ResumeStudio() {
                 cursor: 'pointer',
               }}
             >
-              📄 Resume Profile
+              📄 Resume Editor
             </button>
+
+            {isTailored && (
+              <button
+                type="button"
+                onClick={() => setViewMode('diff')}
+                style={{
+                  background: viewMode === 'diff' ? 'var(--primary)' : 'transparent',
+                  color: viewMode === 'diff' ? '#fff' : 'var(--text-muted)',
+                  border: 'none',
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                }}
+              >
+                ⚖️ Master vs Tailored Diff
+              </button>
+            )}
+
             <button
               type="button"
-              onClick={() => setActiveTab('cover_letter')}
+              onClick={() => { setActiveTab('cover_letter'); setViewMode('editor'); }}
               style={{
-                background: activeTab === 'cover_letter' ? 'var(--primary)' : 'transparent',
-                color: activeTab === 'cover_letter' ? '#fff' : 'var(--text-muted)',
+                background: activeTab === 'cover_letter' && viewMode === 'editor' ? 'var(--primary)' : 'transparent',
+                color: activeTab === 'cover_letter' && viewMode === 'editor' ? '#fff' : 'var(--text-muted)',
                 border: 'none',
                 padding: '6px 14px',
                 borderRadius: '6px',
@@ -378,8 +546,46 @@ export default function ResumeStudio() {
             </button>
           </div>
 
-          {activeTab === 'resume' ? (
-            <form onSubmit={handleSaveMaster} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Body Content */}
+          {viewMode === 'diff' && isTailored ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                <h4 style={{ margin: '0 0 8px', fontSize: '13px', fontWeight: '800' }}>Skills Alignment Breakdown</h4>
+                <div style={{ marginBottom: '8px' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>🎯 Emphasized & Re-ordered for Opportunity:</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {(diffSummary.highlighted_skills || []).map((s, idx) => (
+                      <span key={idx} style={{ background: '#dcfce7', color: '#166534', padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: '600' }}>
+                        ✓ {s}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>💤 Deprioritized / Omitted Master Skills (not required by role):</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {(diffSummary.omitted_master_skills || []).map((s, idx) => (
+                      <span key={idx} style={{ background: '#f1f5f9', color: '#64748b', padding: '3px 8px', borderRadius: '4px', fontSize: '12px' }}>
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                <h4 style={{ margin: '0 0 8px', fontSize: '13px', fontWeight: '800' }}>Targeted Project Relevance Order</h4>
+                <ol style={{ margin: 0, paddingLeft: '20px', fontSize: '13px' }}>
+                  {(diffSummary.project_order || []).map((pTitle, idx) => (
+                    <li key={idx} style={{ marginBottom: '4px' }}>
+                      <strong>{pTitle}</strong>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+          ) : activeTab === 'resume' ? (
+            <form onSubmit={handleSaveResume} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '4px' }}>
@@ -390,18 +596,9 @@ export default function ResumeStudio() {
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     required
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid var(--border)',
-                      background: 'var(--bg-card-soft)',
-                      color: 'var(--text-primary)',
-                      boxSizing: 'border-box',
-                    }}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card-soft)', color: 'var(--text-primary)' }}
                   />
                 </div>
-
                 <div>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '4px' }}>
                     Contact Email
@@ -411,108 +608,72 @@ export default function ResumeStudio() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid var(--border)',
-                      background: 'var(--bg-card-soft)',
-                      color: 'var(--text-primary)',
-                      boxSizing: 'border-box',
-                    }}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card-soft)', color: 'var(--text-primary)' }}
                   />
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                    Phone
-                  </label>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '4px' }}>Phone</label>
                   <input
                     type="text"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+91 98765 43210"
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid var(--border)',
-                      background: 'var(--bg-card-soft)',
-                      color: 'var(--text-primary)',
-                      boxSizing: 'border-box',
-                    }}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card-soft)', color: 'var(--text-primary)' }}
                   />
                 </div>
-
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                    Location
-                  </label>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '4px' }}>Location</label>
                   <input
                     type="text"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    placeholder="Bengaluru, India"
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid var(--border)',
-                      background: 'var(--bg-card-soft)',
-                      color: 'var(--text-primary)',
-                      boxSizing: 'border-box',
-                    }}
+                    placeholder="Bangalore, India"
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card-soft)', color: 'var(--text-primary)' }}
                   />
                 </div>
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                  Professional Summary
-                </label>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '4px' }}>Summary</label>
                 <textarea
                   value={summary}
                   onChange={(e) => setSummary(e.target.value)}
                   rows={3}
-                  placeholder="Undergraduate computer science scholar specializing in AI/ML systems and backend engineering..."
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--border)',
-                    background: 'var(--bg-card-soft)',
-                    color: 'var(--text-primary)',
-                    boxSizing: 'border-box',
-                    fontSize: '13px',
-                  }}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card-soft)', color: 'var(--text-primary)' }}
                 />
               </div>
 
               <div>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                  Technical Skills (Comma separated — strict factual ground)
+                  Technical Skills (comma-separated, verified against factual grounding)
                 </label>
                 <textarea
                   value={skillsText}
                   onChange={(e) => setSkillsText(e.target.value)}
                   rows={2}
-                  placeholder="Python, PyTorch, C++, FastAPI, Docker, SQL, Git"
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--border)',
-                    background: 'var(--bg-card-soft)',
-                    color: 'var(--text-primary)',
-                    boxSizing: 'border-box',
-                    fontSize: '13px',
-                  }}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card-soft)', color: 'var(--text-primary)' }}
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+                <button
+                  type="button"
+                  onClick={handleRunValidation}
+                  style={{
+                    background: 'var(--bg-card-soft)',
+                    border: '1px solid var(--border)',
+                    padding: '8px 14px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                  }}
+                >
+                  🔍 Verify Factual Claims
+                </button>
                 <button
                   type="submit"
                   disabled={saving}
@@ -520,14 +681,14 @@ export default function ResumeStudio() {
                     background: 'var(--primary)',
                     color: '#fff',
                     border: 'none',
-                    padding: '10px 20px',
+                    padding: '10px 22px',
                     borderRadius: '8px',
                     fontSize: '14px',
                     fontWeight: '700',
                     cursor: saving ? 'not-allowed' : 'pointer',
                   }}
                 >
-                  {saving ? 'Saving...' : 'Save Master Anchor'}
+                  {saving ? 'Saving...' : (selectedResume?.is_master ? 'Save Master Anchor' : 'Save Tailored Resume')}
                 </button>
               </div>
             </form>
@@ -562,7 +723,7 @@ export default function ResumeStudio() {
                 value={coverLetterText}
                 onChange={(e) => setCoverLetterText(e.target.value)}
                 rows={12}
-                placeholder="No cover letter drafted yet. Click 'Generate Truthful Cover Letter' or paste custom content anchored to your real projects..."
+                placeholder="No cover letter drafted yet. Click 'Generate Truthful Cover Letter'..."
                 style={{
                   width: '100%',
                   padding: '12px',
@@ -570,7 +731,6 @@ export default function ResumeStudio() {
                   border: '1px solid var(--border)',
                   background: 'var(--bg-card-soft)',
                   color: 'var(--text-primary)',
-                  boxSizing: 'border-box',
                   fontSize: '13px',
                   lineHeight: '1.6',
                   fontFamily: 'monospace',
@@ -587,7 +747,6 @@ export default function ResumeStudio() {
                   style={{
                     background: 'var(--bg-card-soft)',
                     border: '1px solid var(--border)',
-                    color: 'var(--text-primary)',
                     padding: '8px 16px',
                     borderRadius: '8px',
                     fontSize: '13px',
@@ -602,17 +761,51 @@ export default function ResumeStudio() {
         </div>
       </div>
 
-      {/* Import / Paste Resume Text Modal */}
+      {/* Modals */}
       <ResumeImportModal
         show={showImportModal}
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
         importText={importText}
         setImportText={setImportText}
-        onImport={handleImportResume}
+        onImport={handleImportPastedText}
         importing={importing}
-        importSuccess={importSuccess}
         onFileExtracted={handleFileExtracted}
+      />
+
+      <ExtractionReviewModal
+        show={showExtractionModal}
+        onClose={() => setShowExtractionModal(false)}
+        parseResult={parseResult}
+        onCommit={handleCommitExtraction}
+        committing={committingExtraction}
+      />
+
+      {showGitHubModal && (
+        <React.Suspense fallback={null}>
+          <GitHubIntelligenceModal
+            show={showGitHubModal}
+            onClose={() => setShowGitHubModal(false)}
+            onImportRepoToMaster={handleImportGitHubRepo}
+            onImportSkillsToMaster={handleImportGitHubSkills}
+          />
+        </React.Suspense>
+      )}
+
+      <ExternalProfileImportModal
+        show={showExternalProfileModal}
+        onClose={() => setShowExternalProfileModal(false)}
+        onProfileIngested={(content, source) => {
+          setParseResult({
+            success: true,
+            filename: `External Source (${source})`,
+            file_type: 'profile_import',
+            extracted_content: content,
+            missing_fields: [],
+            field_confidence: { overall: 0.9 },
+          })
+          setShowExtractionModal(true)
+        }}
       />
     </div>
   )

@@ -22,6 +22,7 @@ from backend.memory.db import get_pool as _raw_get_pool
 from backend.models_career import (
     CareerApplicationOut,
     CareerApplicationStatus,
+    OriginalResumeDocument,
     ResumeContent,
     ResumeOut,
     ResumeValidationReport,
@@ -32,6 +33,7 @@ from backend.models_career import (
 logger = logging.getLogger("compass.memory.career")
 
 _in_memory_resumes: Dict[int, Dict[str, Any]] = {}
+_in_memory_original_resumes: Dict[str, Dict[str, Any]] = {}
 _in_memory_applications: Dict[int, Dict[str, Any]] = {}
 _in_memory_batches: Dict[str, Dict[str, Any]] = {}
 _in_memory_events: List[Dict[str, Any]] = []
@@ -128,7 +130,7 @@ async def get_master_resume(user_id: str) -> Optional[ResumeOut]:
 
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT * FROM resumes WHERE user_id = $1 AND is_master IS TRUE LIMIT 1",
+            "SELECT * FROM resumes WHERE user_id = $1 AND is_master IS TRUE ORDER BY updated_at DESC, id DESC LIMIT 1",
             user_id,
         )
         return _parse_resume_row(dict(row), is_persisted=True) if row else None
@@ -165,21 +167,36 @@ async def upsert_master_resume(user_id: str, content: ResumeContent, title: str 
         return _parse_resume_row(record, is_persisted=False)
 
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            INSERT INTO resumes (user_id, is_master, title, version, content, validation_status, validation_report, created_at, updated_at)
-            VALUES ($1, TRUE, $2, 1, $3::jsonb, 'APPROVED', '{"is_valid": true}'::jsonb, now(), now())
-            ON CONFLICT (id) DO UPDATE SET
-                title = EXCLUDED.title,
-                content = EXCLUDED.content,
-                version = resumes.version + 1,
-                updated_at = now()
-            RETURNING *;
-            """,
+        existing = await conn.fetchrow(
+            "SELECT id, version FROM resumes WHERE user_id = $1 AND is_master IS TRUE ORDER BY updated_at DESC, id DESC LIMIT 1",
             user_id,
-            title,
-            json.dumps(content_dict),
         )
+        if existing:
+            row = await conn.fetchrow(
+                """
+                UPDATE resumes
+                SET title = $2,
+                    content = $3::jsonb,
+                    version = version + 1,
+                    updated_at = now()
+                WHERE id = $1
+                RETURNING *;
+                """,
+                existing["id"],
+                title,
+                json.dumps(content_dict),
+            )
+        else:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO resumes (user_id, is_master, title, version, content, validation_status, validation_report, created_at, updated_at)
+                VALUES ($1, TRUE, $2, 1, $3::jsonb, 'APPROVED', '{"is_valid": true}'::jsonb, now(), now())
+                RETURNING *;
+                """,
+                user_id,
+                title,
+                json.dumps(content_dict),
+            )
         return _parse_resume_row(dict(row), is_persisted=True)
 
 
@@ -235,6 +252,118 @@ async def create_tailored_resume(
         return _parse_resume_row(dict(row), is_persisted=True)
 
 
+async def save_original_resume_document(
+    user_id: str,
+    filename: str,
+    file_type: str,
+    raw_text: str,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> OriginalResumeDocument:
+    """Preserves raw original uploaded resume file text separately from generated resumes."""
+    doc_id = f"doc_{uuid.uuid4().hex[:12]}"
+    now = datetime.now(timezone.utc)
+    rec = {
+        "id": doc_id,
+        "user_id": user_id,
+        "filename": filename,
+        "file_type": file_type,
+        "raw_text": raw_text,
+        "uploaded_at": now,
+        "metadata": metadata or {},
+    }
+    _in_memory_original_resumes[doc_id] = rec
+
+    pool = await get_pool()
+    if pool:
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO original_resume_documents (id, user_id, filename, file_type, raw_text, metadata, uploaded_at)
+                    VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
+                    ON CONFLICT (id) DO UPDATE SET raw_text = EXCLUDED.raw_text, metadata = EXCLUDED.metadata;
+                    """,
+                    doc_id,
+                    user_id,
+                    filename,
+                    file_type,
+                    raw_text,
+                    json.dumps(metadata or {}),
+                    now,
+                )
+        except Exception as e:
+            logger.warning(f"Database error saving original resume doc ({e}); preserved in memory store.")
+
+    return OriginalResumeDocument(**rec)
+
+
+async def get_original_resume_document(doc_id: str, user_id: str) -> Optional[OriginalResumeDocument]:
+    """Retrieve original uploaded document by id ensuring tenant isolation."""
+    pool = await get_pool()
+    if pool:
+        try:
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT * FROM original_resume_documents WHERE id = $1 AND user_id = $2",
+                    doc_id,
+                    user_id,
+                )
+                if row:
+                    meta = row["metadata"] if isinstance(row["metadata"], dict) else json.loads(row["metadata"] or "{}")
+                    return OriginalResumeDocument(
+                        id=row["id"],
+                        user_id=row["user_id"],
+                        filename=row["filename"],
+                        file_type=row["file_type"],
+                        raw_text=row["raw_text"],
+                        uploaded_at=row["uploaded_at"],
+                        metadata=meta,
+                    )
+        except Exception:
+            pass
+
+    rec = _in_memory_original_resumes.get(doc_id)
+    if rec and rec["user_id"] == user_id:
+        return OriginalResumeDocument(**rec)
+    return None
+
+
+async def list_original_resume_documents(user_id: str) -> List[OriginalResumeDocument]:
+    """List all original uploaded resume documents for a user."""
+    pool = await get_pool()
+    if pool:
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT * FROM original_resume_documents WHERE user_id = $1 ORDER BY uploaded_at DESC",
+                    user_id,
+                )
+                if rows:
+                    res = []
+                    for row in rows:
+                        meta = row["metadata"] if isinstance(row["metadata"], dict) else json.loads(row["metadata"] or "{}")
+                        res.append(
+                            OriginalResumeDocument(
+                                id=row["id"],
+                                user_id=row["user_id"],
+                                filename=row["filename"],
+                                file_type=row["file_type"],
+                                raw_text=row["raw_text"],
+                                uploaded_at=row["uploaded_at"],
+                                metadata=meta,
+                            )
+                        )
+                    return res
+        except Exception:
+            pass
+
+    return [
+        OriginalResumeDocument(**r)
+        for r in _in_memory_original_resumes.values()
+        if r["user_id"] == user_id
+    ]
+
+
 async def get_resume_by_id(resume_id: int, user_id: str) -> Optional[ResumeOut]:
     pool = await get_pool()
     if not pool:
@@ -267,10 +396,29 @@ async def list_resumes(user_id: str) -> List[ResumeOut]:
 
 async def update_resume(resume_id: int, user_id: str, updates: Dict[str, Any]) -> Optional[ResumeOut]:
     pool = await get_pool()
+    content_val = updates.get("content")
+    content_json = (
+        json.dumps(content_val.model_dump() if hasattr(content_val, "model_dump") else content_val)
+        if content_val is not None
+        else None
+    )
+
+    report_val = updates.get("validation_report")
+    report_json = (
+        json.dumps(report_val.model_dump() if hasattr(report_val, "model_dump") else report_val)
+        if report_val is not None
+        else None
+    )
+
     if not pool:
         record = _in_memory_resumes.get(resume_id)
         if record and record["user_id"] == user_id:
-            record.update(updates)
+            safe_updates = dict(updates)
+            if content_val is not None and hasattr(content_val, "model_dump"):
+                safe_updates["content"] = content_val.model_dump()
+            if report_val is not None and hasattr(report_val, "model_dump"):
+                safe_updates["validation_report"] = report_val.model_dump()
+            record.update(safe_updates)
             record["updated_at"] = datetime.now(timezone.utc)
             return _parse_resume_row(record, is_persisted=False)
         return None
@@ -290,9 +438,9 @@ async def update_resume(resume_id: int, user_id: str, updates: Dict[str, Any]) -
             resume_id,
             user_id,
             updates.get("title"),
-            json.dumps(updates["content"].model_dump()) if "content" in updates else None,
+            content_json,
             updates.get("validation_status"),
-            json.dumps(updates["validation_report"].model_dump()) if "validation_report" in updates else None,
+            report_json,
         )
         return _parse_resume_row(dict(row), is_persisted=True) if row else None
 

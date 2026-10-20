@@ -59,11 +59,11 @@ async def test_schema_and_migration_consistency():
             """
             SELECT table_name FROM information_schema.tables
             WHERE table_schema = 'public'
-            AND table_name IN ('resumes', 'career_applications', 'application_batches', 'application_events', 'opportunities')
+            AND table_name IN ('resumes', 'career_applications', 'application_batches', 'application_events', 'opportunities', 'original_resume_documents')
             """
         )
         found_tables = {r["table_name"] for r in tables}
-        expected = {'resumes', 'career_applications', 'application_batches', 'application_events', 'opportunities'}
+        expected = {'resumes', 'career_applications', 'application_batches', 'application_events', 'opportunities', 'original_resume_documents'}
         assert expected.issubset(found_tables), f"Missing tables: {expected - found_tables}"
 
 

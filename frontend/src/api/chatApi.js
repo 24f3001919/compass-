@@ -1,6 +1,6 @@
 // Chat & Memory History API
 
-import { API_BASE, getAuthHeaders } from './baseClient'
+import { API_BASE, getAuthHeaders } from './baseClient.js'
 
 /**
  * Send a chat message to the Nebius-powered assistant.
@@ -74,7 +74,9 @@ export function sanitizeModesMarker(text) {
  * Dispatches incremental tokens via onToken, completion metadata via onComplete,
  * and errors via onError.
  */
-export async function streamQueryFromAssistant(prompt, conversationId, { onToken, onThought, onComplete, onError, tone = null, mode = null, specialistId = null } = {}) {
+export async function streamQueryFromAssistant(prompt, conversationId, { onToken, onThought, onComplete, onError, tone = null, mode = null, specialistId = null, signal = null } = {}) {
+  let fullResponse = ''
+  let reader = null
   try {
     const body = { message: prompt }
     if (conversationId) {
@@ -94,6 +96,7 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
       method: 'POST',
       headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(body),
+      signal,
     })
 
     if (!res.ok) {
@@ -107,65 +110,89 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
       throw new Error(`SSE endpoint returned ${errText}`)
     }
 
-    const reader = res.body.getReader()
+    reader = res.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
-    let fullResponse = ''
     let lastConvId = conversationId || null
     let lastSkill = null
     let lastTasks = null
+    let sawDoneEvent = false
 
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
+    const processLine = (line) => {
+      const trimmed = line.trim()
+      if (!trimmed || !trimmed.startsWith('data:')) return
+      const jsonStr = trimmed.slice(5).trim()
+      if (!jsonStr) return
 
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
+      let evt
+      try {
+        evt = JSON.parse(jsonStr)
+      } catch (e) {
+        console.warn('[Compass SSE Parse Error]', e, jsonStr)
+        return
+      }
 
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed || !trimmed.startsWith('data:')) continue
-        const jsonStr = trimmed.slice(5).trim()
-        if (!jsonStr) continue
-
-        let evt = null
-        try {
-          evt = JSON.parse(jsonStr)
-        } catch (e) {
-          console.warn('[Compass SSE Parse Error]', e, jsonStr)
-          continue
-        }
-
-        if (evt.type === 'thought') {
-          if (onThought) onThought(evt.value)
-        } else if (evt.type === 'token') {
+      if (evt.type === 'thought') {
+        if (onThought) onThought(evt.value)
+      } else if (evt.type === 'token') {
+        if (typeof evt.value === 'string') {
           fullResponse += evt.value
           if (onToken) onToken(evt.value, sanitizeModesMarker(fullResponse))
-        } else if (evt.type === 'replace') {
-          // Server detected a tool call after partial streaming —
-          // discard any leaked markup and replace with the clean response.
-          fullResponse = evt.value || ''
-          if (onToken) onToken(fullResponse, sanitizeModesMarker(fullResponse))
-        } else if (evt.type === 'done') {
-          if (evt.conversation_id) lastConvId = evt.conversation_id
-          if (evt.skill_used) lastSkill = evt.skill_used
-          if (evt.tasks) lastTasks = evt.tasks
-        } else if (evt.type === 'error') {
-          const errMsg = evt.detail || evt.message || 'Stream error'
-          const errObj = new Error(errMsg)
-          if (evt.can_retry !== undefined) errObj.can_retry = evt.can_retry
-          throw errObj
         }
+      } else if (evt.type === 'replace') {
+        // Server detected a tool call or need to replace streamed markup with clean response
+        if (typeof evt.value === 'string' && evt.value.trim().length > 0) {
+          fullResponse = evt.value
+          if (onToken) onToken(fullResponse, sanitizeModesMarker(fullResponse))
+        }
+      } else if (evt.type === 'done') {
+        sawDoneEvent = true
+        if (evt.conversation_id) lastConvId = evt.conversation_id
+        if (evt.skill_used) lastSkill = evt.skill_used
+        if (evt.tasks) lastTasks = evt.tasks
+      } else if (evt.type === 'error') {
+        const errMsg = evt.detail || evt.message || 'Stream error'
+        const errObj = new Error(errMsg)
+        if (evt.can_retry !== undefined) errObj.can_retry = evt.can_retry
+        errObj.partialResponse = fullResponse
+        throw errObj
       }
     }
 
-    if (!fullResponse.trim()) {
-      throw new Error('Empty stream response from assistant')
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        // Process any residual data in buffer when stream ends
+        if (buffer && buffer.trim()) {
+          const remainingLines = buffer.split(/\r?\n/)
+          for (const line of remainingLines) {
+            processLine(line)
+          }
+          buffer = ''
+        }
+        break
+      }
+
+      buffer += decoder.decode(value, { stream: true })
+      // Handle both CRLF and LF line breaks
+      const lines = buffer.split(/\r?\n/)
+      // The last element is an incomplete line or empty string
+      buffer = lines.pop() ?? ''
+
+      for (const line of lines) {
+        processLine(line)
+      }
+    }
+
+    const cleanResponse = sanitizeModesMarker(fullResponse).trim()
+    if (!cleanResponse && !sawDoneEvent) {
+      const emptyErr = new Error('Connection closed before assistant response was received.')
+      emptyErr.partialResponse = ''
+      throw emptyErr
     }
 
     if (onComplete) {
-      onComplete({
+      await onComplete({
         response: fullResponse,
         conversation_id: lastConvId,
         skill_used: lastSkill,
@@ -178,10 +205,21 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
       skill_used: lastSkill,
     }
   } catch (err) {
+    if (err && typeof err === 'object') {
+      err.partialResponse = fullResponse
+    }
     if (onError) {
-      onError(err)
+      await onError(err)
     } else {
       throw err
+    }
+  } finally {
+    if (reader) {
+      try {
+        reader.releaseLock()
+      } catch {
+        /* ignore */
+      }
     }
   }
 }
