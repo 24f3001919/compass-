@@ -87,6 +87,30 @@ export default function InternshipRadar({
 
       if (activeTab === 'recommended') {
         items = await fetchRecommendedOpportunities(30, selectedEmployerType)
+      } else if (activeTab === 'recent_24h') {
+        const res = await fetchOpportunities({
+          category: selectedCategory,
+          employer_type: selectedEmployerType,
+          work_arrangement: workArrangement,
+          search: searchQuery,
+          india_only: indiaOnly,
+          page: 1,
+          pageSize: 50,
+        })
+        const allOpps = res.opportunities || []
+        // Strict 24h verified filter: confirmed within 24h or posted today/yesterday with verified source
+        const now = new Date()
+        items = allOpps.filter(o => {
+          if (o.verification_evidence && o.verification_evidence.includes('VERIFIED_WITHIN_24H')) {
+            return true
+          }
+          if (o.confirmed_open_date) {
+            const openD = new Date(o.confirmed_open_date)
+            const diffHours = (now - openD) / (1000 * 60 * 60)
+            return diffHours >= 0 && diffHours <= 28
+          }
+          return false
+        })
       } else if (activeTab === 'open') {
         items = await fetchOpenOpportunities({
           category: selectedCategory,

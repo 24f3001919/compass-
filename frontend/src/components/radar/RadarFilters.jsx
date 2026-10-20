@@ -22,6 +22,7 @@ const EMPLOYER_TYPES = [
 
 const TABS = [
   { id: 'recommended', label: 'Recommended for You', icon: '✨' },
+  { id: 'recent_24h', label: 'Posted in Last 24 Hours — Verified', icon: '⚡' },
   { id: 'open', label: 'Open Now', icon: '🟢' },
   { id: 'upcoming', label: 'Opening Soon', icon: '⏱️' },
   { id: 'all', label: 'All Listings', icon: '📑' },
