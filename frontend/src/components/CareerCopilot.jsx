@@ -93,25 +93,26 @@ export default function CareerCopilot() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div
             style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '10px',
-              background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-              color: '#fff',
+              width: '42px',
+              height: '42px',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+              color: '#ffffff',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '20px',
+              fontSize: '22px',
               fontWeight: 'bold',
+              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
             }}
           >
             🎯
           </div>
           <div>
-            <h1 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)' }}>
+            <h1 style={{ margin: 0, fontSize: '19px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
               Career Copilot
             </h1>
-            <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
               Autonomous discovery, truthful resume tailoring, and authorized application management.
             </p>
           </div>
@@ -122,17 +123,19 @@ export default function CareerCopilot() {
           type="button"
           onClick={() => setShowProfileModal(true)}
           style={{
-            background: 'var(--bg-card-soft)',
+            background: 'var(--bg-card)',
             border: '1px solid var(--border)',
             color: 'var(--text-primary)',
-            padding: '6px 14px',
-            borderRadius: '8px',
-            fontSize: '12px',
+            padding: '8px 16px',
+            borderRadius: '9px',
+            fontSize: '12.5px',
             fontWeight: '600',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
+            gap: '8px',
+            boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)',
+            transition: 'all 0.15s ease',
           }}
         >
           ⚙️ Candidate Profile
@@ -225,8 +228,8 @@ export default function CareerCopilot() {
       <div
         style={{
           display: 'flex',
-          gap: '8px',
-          padding: '12px 20px',
+          gap: '10px',
+          padding: '14px 20px',
           background: 'var(--bg-app)',
           borderBottom: '1px solid var(--border)',
           overflowX: 'auto',
@@ -243,16 +246,17 @@ export default function CareerCopilot() {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '8px',
-                padding: '8px 16px',
-                borderRadius: '8px',
-                border: isActive ? '1px solid var(--primary)' : '1px solid var(--border)',
-                background: isActive ? 'var(--primary)' : 'var(--bg-card)',
-                color: isActive ? '#fff' : 'var(--text-primary)',
-                fontWeight: isActive ? '700' : '500',
+                padding: '9px 18px',
+                borderRadius: '9px',
+                border: isActive ? '1px solid var(--primary, #2563eb)' : '1px solid var(--border)',
+                background: isActive ? 'var(--primary, #2563eb)' : 'var(--bg-card)',
+                color: isActive ? '#ffffff' : 'var(--text-secondary)',
+                fontWeight: isActive ? '700' : '600',
                 fontSize: '13px',
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
                 transition: 'all 0.15s ease',
+                boxShadow: isActive ? '0 3px 10px rgba(37, 99, 235, 0.3)' : '0 1px 2px rgba(15, 23, 42, 0.04)',
               }}
             >
               <span>{tab.icon}</span>

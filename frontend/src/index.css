@@ -7,15 +7,22 @@
 :root, :root[data-theme="light"] {
   color-scheme: light;
 
-  --bg-app: #faf8f3;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-active: #1e40af;
+  --primary-soft: #eff6ff;
+  --primary-border: #bfdbfe;
+  --primary-text: #ffffff;
+
+  --bg-app: #f8fafc;
   --bg-card: #ffffff;
-  --bg-card-soft: #fdfaf3;
+  --bg-card-soft: #f1f5f9;
   --bg-sidebar: #16152a;
   --bg-sidebar-active: #232145;
 
-  --text-primary: #1f1b2e;
-  --text-secondary: #6b6478;
-  --text-muted: #9993a3;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
 
   --brand: #f5a623;
   --brand-dark: #d9890a;
@@ -23,16 +30,16 @@
   --hackathon: #f5a623;
   --coursework: #6c5ce7;
   --code: #14b884;
-  --general: #7a92a3;
+  --general: #475569;
 
-  --border: #ece7dc;
-  --border-soft: #f1ede3;
-  --shadow-sm: 0 1px 2px rgba(31, 27, 46, 0.04);
-  --shadow-md: 0 4px 16px rgba(31, 27, 46, 0.06);
-  --shadow-lg: 0 12px 32px rgba(31, 27, 46, 0.10);
+  --border: #e2e8f0;
+  --border-soft: #cbd5e1;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 16px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.12);
 
-  --text-on-dark: #f4f1fb;
-  --text-on-dark-muted: #8e8aa6;
+  --text-on-dark: #f8fafc;
+  --text-on-dark-muted: #94a3b8;
 
   --hackathon-bg: #fef3dd;
   --hackathon-text: #9a6208;
@@ -40,12 +47,12 @@
   --coursework-text: #4b3fc9;
   --code-bg: #e1f8ee;
   --code-text: #0d8a63;
-  --general-bg: #eef2f4;
-  --general-text: #52717f;
+  --general-bg: #f1f5f9;
+  --general-text: #334155;
   --danger-bg: #fdeaea;
 
   /* Compatibility aliases for legacy/subagent component tokens */
-  --text-main: #1f1b2e;
+  --text-main: #0f172a;
   --bg-input: #ffffff;
   --bg-modal: #ffffff;
 
@@ -62,8 +69,8 @@
   --guide-bg: var(--bg-card);
   --guide-border: var(--border);
   --guide-shadow: var(--shadow-md);
-  --guide-badge-bg: rgba(59, 130, 246, 0.10);
-  --guide-badge-border: rgba(59, 130, 246, 0.25);
+  --guide-badge-bg: rgba(37, 99, 235, 0.10);
+  --guide-badge-border: rgba(37, 99, 235, 0.25);
   --guide-badge-text: #1d4ed8;
   --guide-close-bg: var(--bg-card-soft);
   --guide-close-border: var(--border);
@@ -83,15 +90,22 @@
 :root[data-theme="dark"], html.dark {
   color-scheme: dark;
 
-  --bg-app: #0f0f1a;
-  --bg-card: #1a1a2e;
-  --bg-card-soft: #151528;
+  --primary: #3b82f6;
+  --primary-hover: #60a5fa;
+  --primary-active: #2563eb;
+  --primary-soft: rgba(59, 130, 246, 0.16);
+  --primary-border: rgba(59, 130, 246, 0.35);
+  --primary-text: #ffffff;
+
+  --bg-app: #090d16;
+  --bg-card: #111827;
+  --bg-card-soft: #1e293b;
   --bg-sidebar: #0d0c18;
   --bg-sidebar-active: #1f1d38;
 
-  --text-primary: #f4f1fb;
-  --text-secondary: #b8b4cc;
-  --text-muted: #7a7688;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
 
   --brand: #f5a623;
   --brand-dark: #ffd966;
@@ -101,14 +115,14 @@
   --code: #34d399;
   --general: #94a3b8;
 
-  --border: #2d2a42;
-  --border-soft: #25223a;
+  --border: #334155;
+  --border-soft: #475569;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45);
   --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.65);
 
-  --text-on-dark: #f4f1fb;
-  --text-on-dark-muted: #8e8aa6;
+  --text-on-dark: #f8fafc;
+  --text-on-dark-muted: #94a3b8;
 
   --hackathon-bg: #332b0d;
   --hackathon-text: #ffd966;
@@ -121,9 +135,9 @@
   --danger-bg: #4a1f1f;
 
   /* Compatibility aliases */
-  --text-main: #f4f1fb;
-  --bg-input: #1a1a2e;
-  --bg-modal: #1a1a2e;
+  --text-main: #f8fafc;
+  --bg-input: #1e293b;
+  --bg-modal: #111827;
 
   --pad-sm: 8px;
   --pad-md: 16px;

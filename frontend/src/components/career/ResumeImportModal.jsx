@@ -44,7 +44,8 @@ export default function ResumeImportModal({
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0, 0, 0, 0.65)',
+        background: 'rgba(15, 23, 42, 0.65)',
+        backdropFilter: 'blur(6px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -56,39 +57,53 @@ export default function ResumeImportModal({
         style={{
           background: 'var(--bg-card)',
           border: '1px solid var(--border)',
-          borderRadius: '16px',
+          borderRadius: '18px',
           maxWidth: '640px',
           width: '100%',
-          padding: '24px',
-          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)',
+          padding: '28px',
+          boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.25)',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)' }}>
-            📥 Import Resume File or Paste Text
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>📥</span>
+            <span>Import Resume File or Paste Text</span>
           </h3>
           <button
             type="button"
             onClick={onClose}
-            style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '18px', cursor: 'pointer' }}
+            style={{
+              background: 'var(--bg-card-soft)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-secondary)',
+              fontSize: '16px',
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           >
             ✕
           </button>
         </div>
 
-        <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--text-muted)' }}>
-          Upload a resume file or paste raw text. Supported formats: <strong>PDF (.pdf)</strong>, <strong>Word (.docx)</strong>, <strong>Plain Text (.txt)</strong>, <strong>Markdown (.md)</strong>. Scanned images require OCR.
+        <p style={{ margin: '0 0 16px', fontSize: '13.5px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+          Upload a resume file or paste raw text. Supported formats: <strong style={{ color: 'var(--text-primary)' }}>PDF (.pdf)</strong>, <strong style={{ color: 'var(--text-primary)' }}>Word (.docx)</strong>, <strong style={{ color: 'var(--text-primary)' }}>Plain Text (.txt)</strong>, <strong style={{ color: 'var(--text-primary)' }}>Markdown (.md)</strong>.
         </p>
 
         {/* File Upload Area */}
         <div
           style={{
-            border: '2px dashed var(--border)',
-            borderRadius: '10px',
-            padding: '16px',
+            border: '2px dashed var(--primary-border, #bfdbfe)',
+            borderRadius: '12px',
+            padding: '22px 18px',
             textAlign: 'center',
-            background: 'var(--bg-card-soft)',
-            marginBottom: '16px',
+            background: 'var(--primary-soft, #eff6ff)',
+            marginBottom: '18px',
+            transition: 'all 0.2s ease',
           }}
         >
           <input
@@ -103,31 +118,36 @@ export default function ResumeImportModal({
             onClick={() => fileInputRef.current?.click()}
             disabled={uploadingFile}
             style={{
-              background: 'var(--primary)',
-              color: '#fff',
+              background: 'var(--primary, #2563eb)',
+              color: '#ffffff',
               border: 'none',
-              padding: '8px 16px',
-              borderRadius: '8px',
-              fontSize: '13px',
-              fontWeight: '600',
+              padding: '10px 22px',
+              borderRadius: '10px',
+              fontSize: '13.5px',
+              fontWeight: '700',
               cursor: uploadingFile ? 'wait' : 'pointer',
-              marginBottom: '6px',
+              marginBottom: '8px',
+              boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'transform 0.15s ease, background 0.15s ease',
             }}
           >
             {uploadingFile ? '⏳ Parsing Document...' : '📎 Choose Resume File (.pdf, .docx, .txt)'}
           </button>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '500' }}>
             Max size: 5 MB. Documents are parsed securely in-memory and never silently overwrite master data.
           </div>
         </div>
 
         {fileError && (
-          <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: '8px', marginBottom: '14px', fontSize: '12px' }}>
+          <div style={{ background: '#fee2e2', border: '1px solid #fecaca', color: '#991b1b', padding: '10px 14px', borderRadius: '8px', marginBottom: '14px', fontSize: '13px', fontWeight: '500' }}>
             ⚠️ {fileError}
           </div>
         )}
 
-        <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '6px' }}>
+        <div style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '8px' }}>
           Or paste raw resume text:
         </div>
 
@@ -138,20 +158,22 @@ export default function ResumeImportModal({
           placeholder="Paste raw resume text here..."
           style={{
             width: '100%',
-            padding: '10px',
-            borderRadius: '8px',
+            padding: '12px',
+            borderRadius: '10px',
             border: '1px solid var(--border)',
-            background: 'var(--bg-card-soft)',
+            background: 'var(--bg-card)',
             color: 'var(--text-primary)',
             boxSizing: 'border-box',
             fontSize: '13px',
-            lineHeight: '1.4',
-            marginBottom: '14px',
+            lineHeight: '1.5',
+            marginBottom: '16px',
+            outline: 'none',
+            fontFamily: 'inherit',
           }}
         />
 
         {importSuccess && (
-          <div style={{ background: '#dcfce7', color: '#166534', padding: '10px 14px', borderRadius: '8px', marginBottom: '14px', fontSize: '13px' }}>
+          <div style={{ background: '#dcfce7', border: '1px solid #bbf7d0', color: '#166534', padding: '10px 14px', borderRadius: '8px', marginBottom: '14px', fontSize: '13px', fontWeight: '600' }}>
             ✓ Structured resume extracted successfully! Populating review fields...
           </div>
         )}
@@ -161,11 +183,13 @@ export default function ResumeImportModal({
             type="button"
             onClick={onClose}
             style={{
-              background: 'transparent',
+              background: 'var(--bg-card)',
               border: '1px solid var(--border)',
-              color: 'var(--text-muted)',
-              padding: '8px 16px',
+              color: 'var(--text-primary)',
+              padding: '9px 18px',
               borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: '600',
               cursor: 'pointer',
             }}
           >
@@ -176,14 +200,15 @@ export default function ResumeImportModal({
             onClick={onImport}
             disabled={!importText.trim() || importing}
             style={{
-              background: (!importText.trim() || importing) ? '#94a3b8' : 'var(--primary)',
-              color: '#fff',
+              background: (!importText.trim() || importing) ? '#94a3b8' : 'var(--primary, #2563eb)',
+              color: '#ffffff',
               border: 'none',
-              padding: '8px 18px',
+              padding: '9px 20px',
               borderRadius: '8px',
               fontSize: '13px',
               fontWeight: '700',
               cursor: (!importText.trim() || importing) ? 'not-allowed' : 'pointer',
+              boxShadow: (!importText.trim() || importing) ? 'none' : '0 4px 14px rgba(37, 99, 235, 0.3)',
             }}
           >
             {importing ? 'Extracting...' : 'Extract & Populate Review'}

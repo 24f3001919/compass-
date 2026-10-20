@@ -288,29 +288,34 @@ export default function ResumeStudio() {
   return (
     <div style={{ padding: '0 8px 36px', maxWidth: '1240px', margin: '0 auto' }}>
       {/* Header Bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '22px' }}>
         <div>
-          <h2 style={{ margin: '0 0 6px', fontSize: '22px', fontWeight: '800', color: 'var(--text-primary)' }}>
+          <h2 style={{ margin: '0 0 6px', fontSize: '22px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
             📄 Evidence-Based Resume Studio
           </h2>
-          <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-muted)' }}>
+          <p style={{ margin: 0, fontSize: '13.5px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
             Anchor your master career profile to verified evidence and generate tailored ATS resumes without qualification hallucination.
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button
             type="button"
             onClick={() => setShowImportModal(true)}
             style={{
-              background: 'var(--bg-card-soft)',
-              border: '1px solid var(--border)',
-              color: 'var(--text-primary)',
-              padding: '8px 12px',
-              borderRadius: '8px',
-              fontSize: '12px',
-              fontWeight: '600',
+              background: 'var(--primary, #2563eb)',
+              border: 'none',
+              color: '#ffffff',
+              padding: '9px 16px',
+              borderRadius: '9px',
+              fontSize: '13px',
+              fontWeight: '700',
               cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
+              transition: 'transform 0.15s ease, background 0.15s ease',
             }}
           >
             📥 Import Resume (.pdf / .docx)
@@ -319,14 +324,18 @@ export default function ResumeStudio() {
             type="button"
             onClick={() => setShowGitHubModal(true)}
             style={{
-              background: 'var(--bg-card-soft)',
+              background: 'var(--bg-card)',
               border: '1px solid var(--border)',
               color: 'var(--text-primary)',
-              padding: '8px 12px',
-              borderRadius: '8px',
-              fontSize: '12px',
+              padding: '9px 15px',
+              borderRadius: '9px',
+              fontSize: '13px',
               fontWeight: '600',
               cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)',
             }}
           >
             🐙 GitHub Intelligence
@@ -335,14 +344,18 @@ export default function ResumeStudio() {
             type="button"
             onClick={() => setShowExternalProfileModal(true)}
             style={{
-              background: 'var(--bg-card-soft)',
+              background: 'var(--bg-card)',
               border: '1px solid var(--border)',
               color: 'var(--text-primary)',
-              padding: '8px 12px',
-              borderRadius: '8px',
-              fontSize: '12px',
+              padding: '9px 15px',
+              borderRadius: '9px',
+              fontSize: '13px',
               fontWeight: '600',
               cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)',
             }}
           >
             🔗 LinkedIn / External
@@ -385,26 +398,28 @@ export default function ResumeStudio() {
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      padding: '10px 12px',
-                      borderRadius: '8px',
-                      border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border)',
-                      background: isSelected ? 'var(--primary-soft, #eff6ff)' : 'var(--bg-card-soft)',
+                      padding: '11px 13px',
+                      borderRadius: '10px',
+                      border: isSelected ? '2px solid var(--primary, #2563eb)' : '1px solid var(--border)',
+                      background: isSelected ? 'var(--primary-soft, #eff6ff)' : 'var(--bg-card)',
                       cursor: 'pointer',
                       textAlign: 'left',
+                      transition: 'all 0.15s ease',
+                      boxShadow: isSelected ? '0 2px 8px rgba(37, 99, 235, 0.15)' : 'none',
                     }}
                   >
                     <div>
-                      <div style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)' }}>
+                      <div style={{ fontWeight: '700', fontSize: '13.5px', color: 'var(--text-primary)' }}>
                         {res.title}
                       </div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      <div style={{ fontSize: '11.5px', color: isSelected ? 'var(--primary, #2563eb)' : 'var(--text-secondary)', fontWeight: isSelected ? '600' : '400', marginTop: '2px' }}>
                         {res.is_master ? '★ Master Source of Truth' : `v${res.version} Tailored`}
                       </div>
                     </div>
                     <span
                       style={{
-                        fontSize: '10px',
-                        padding: '2px 8px',
+                        fontSize: '11px',
+                        padding: '3px 8px',
                         borderRadius: '12px',
                         fontWeight: '700',
                         background: res.validation_status === 'APPROVED' ? '#dcfce7' : '#fef3c7',
@@ -424,15 +439,15 @@ export default function ResumeStudio() {
         </div>
 
         {/* Right Column: Editor / Diff Viewer */}
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '24px' }}>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '14px', padding: '26px', boxShadow: 'var(--shadow-sm)' }}>
           {/* Header & Mode Switcher */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '18px' }}>
             <div>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '800', color: 'var(--text-primary)' }}>
+              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: '800', color: 'var(--text-primary)' }}>
                 {selectedResume?.is_master ? 'Master Profile Information' : selectedResume?.title}
               </h3>
               {isTailored && (
-                <span style={{ fontSize: '11px', color: 'var(--primary)', background: '#eff6ff', padding: '2px 8px', borderRadius: '6px', fontWeight: '600' }}>
+                <span style={{ fontSize: '11.5px', color: 'var(--primary, #2563eb)', background: 'var(--primary-soft, #eff6ff)', padding: '3px 10px', borderRadius: '6px', fontWeight: '600', display: 'inline-block', marginTop: '4px' }}>
                   Tailored Variant (Master Profile is Immutable)
                 </span>
               )}
@@ -443,7 +458,7 @@ export default function ResumeStudio() {
               <select
                 value={resumeTemplate}
                 onChange={(e) => setResumeTemplate(e.target.value)}
-                style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border)', fontSize: '12px', background: 'var(--bg-card)' }}
+                style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '12.5px', background: 'var(--bg-card)', color: 'var(--text-primary)', fontWeight: '500' }}
               >
                 <option value="ats_classic">ATS Classic</option>
                 <option value="modern">Modern Clean</option>
@@ -458,12 +473,13 @@ export default function ResumeStudio() {
                     rel="noreferrer"
                     style={{
                       background: 'var(--primary, #2563eb)',
-                      color: '#fff',
-                      padding: '6px 12px',
-                      borderRadius: '6px',
-                      fontSize: '12px',
+                      color: '#ffffff',
+                      padding: '7px 14px',
+                      borderRadius: '8px',
+                      fontSize: '12.5px',
                       fontWeight: '700',
                       textDecoration: 'none',
+                      boxShadow: '0 2px 8px rgba(37, 99, 235, 0.25)',
                     }}
                   >
                     📄 Print / PDF
@@ -473,12 +489,12 @@ export default function ResumeStudio() {
                     target="_blank"
                     rel="noreferrer"
                     style={{
-                      background: 'var(--bg-card-soft, #f8fafc)',
+                      background: 'var(--bg-card)',
                       border: '1px solid var(--border)',
                       color: 'var(--text-primary)',
-                      padding: '6px 12px',
-                      borderRadius: '6px',
-                      fontSize: '12px',
+                      padding: '7px 14px',
+                      borderRadius: '8px',
+                      fontSize: '12.5px',
                       fontWeight: '700',
                       textDecoration: 'none',
                     }}
@@ -491,19 +507,20 @@ export default function ResumeStudio() {
           </div>
 
           {/* Sub-tabs: Resume Profile vs Cover Letter vs Diff */}
-          <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border)', paddingBottom: '10px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border)', paddingBottom: '12px', marginBottom: '18px' }}>
             <button
               type="button"
               onClick={() => { setActiveTab('resume'); setViewMode('editor'); }}
               style={{
-                background: activeTab === 'resume' && viewMode === 'editor' ? 'var(--primary)' : 'transparent',
-                color: activeTab === 'resume' && viewMode === 'editor' ? '#fff' : 'var(--text-muted)',
-                border: 'none',
-                padding: '6px 14px',
-                borderRadius: '6px',
+                background: activeTab === 'resume' && viewMode === 'editor' ? 'var(--primary, #2563eb)' : 'var(--bg-card-soft)',
+                color: activeTab === 'resume' && viewMode === 'editor' ? '#ffffff' : 'var(--text-secondary)',
+                border: activeTab === 'resume' && viewMode === 'editor' ? 'none' : '1px solid var(--border)',
+                padding: '7px 16px',
+                borderRadius: '8px',
                 fontSize: '13px',
-                fontWeight: '600',
+                fontWeight: '700',
                 cursor: 'pointer',
+                boxShadow: activeTab === 'resume' && viewMode === 'editor' ? '0 2px 8px rgba(37, 99, 235, 0.25)' : 'none',
               }}
             >
               📄 Resume Editor
@@ -514,14 +531,15 @@ export default function ResumeStudio() {
                 type="button"
                 onClick={() => setViewMode('diff')}
                 style={{
-                  background: viewMode === 'diff' ? 'var(--primary)' : 'transparent',
-                  color: viewMode === 'diff' ? '#fff' : 'var(--text-muted)',
-                  border: 'none',
-                  padding: '6px 14px',
-                  borderRadius: '6px',
+                  background: viewMode === 'diff' ? 'var(--primary, #2563eb)' : 'var(--bg-card-soft)',
+                  color: viewMode === 'diff' ? '#ffffff' : 'var(--text-secondary)',
+                  border: viewMode === 'diff' ? 'none' : '1px solid var(--border)',
+                  padding: '7px 16px',
+                  borderRadius: '8px',
                   fontSize: '13px',
-                  fontWeight: '600',
+                  fontWeight: '700',
                   cursor: 'pointer',
+                  boxShadow: viewMode === 'diff' ? '0 2px 8px rgba(37, 99, 235, 0.25)' : 'none',
                 }}
               >
                 ⚖️ Master vs Tailored Diff
@@ -532,14 +550,15 @@ export default function ResumeStudio() {
               type="button"
               onClick={() => { setActiveTab('cover_letter'); setViewMode('editor'); }}
               style={{
-                background: activeTab === 'cover_letter' && viewMode === 'editor' ? 'var(--primary)' : 'transparent',
-                color: activeTab === 'cover_letter' && viewMode === 'editor' ? '#fff' : 'var(--text-muted)',
-                border: 'none',
-                padding: '6px 14px',
-                borderRadius: '6px',
+                background: activeTab === 'cover_letter' && viewMode === 'editor' ? 'var(--primary, #2563eb)' : 'var(--bg-card-soft)',
+                color: activeTab === 'cover_letter' && viewMode === 'editor' ? '#ffffff' : 'var(--text-secondary)',
+                border: activeTab === 'cover_letter' && viewMode === 'editor' ? 'none' : '1px solid var(--border)',
+                padding: '7px 16px',
+                borderRadius: '8px',
                 fontSize: '13px',
-                fontWeight: '600',
+                fontWeight: '700',
                 cursor: 'pointer',
+                boxShadow: activeTab === 'cover_letter' && viewMode === 'editor' ? '0 2px 8px rgba(37, 99, 235, 0.25)' : 'none',
               }}
             >
               ✍️ Truthful Cover Letter
@@ -549,23 +568,23 @@ export default function ResumeStudio() {
           {/* Body Content */}
           {viewMode === 'diff' && isTailored ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid var(--border)' }}>
-                <h4 style={{ margin: '0 0 8px', fontSize: '13px', fontWeight: '800' }}>Skills Alignment Breakdown</h4>
-                <div style={{ marginBottom: '8px' }}>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>🎯 Emphasized & Re-ordered for Opportunity:</div>
+              <div style={{ background: 'var(--bg-card-soft)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                <h4 style={{ margin: '0 0 10px', fontSize: '13.5px', fontWeight: '800', color: 'var(--text-primary)' }}>Skills Alignment Breakdown</h4>
+                <div style={{ marginBottom: '10px' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', marginBottom: '6px' }}>🎯 Emphasized & Re-ordered for Opportunity:</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                     {(diffSummary.highlighted_skills || []).map((s, idx) => (
-                      <span key={idx} style={{ background: '#dcfce7', color: '#166534', padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: '600' }}>
+                      <span key={idx} style={{ background: '#dcfce7', color: '#166534', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: '600' }}>
                         ✓ {s}
                       </span>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>💤 Deprioritized / Omitted Master Skills (not required by role):</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', marginBottom: '6px' }}>💤 Deprioritized / Omitted Master Skills (not required by role):</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                     {(diffSummary.omitted_master_skills || []).map((s, idx) => (
-                      <span key={idx} style={{ background: '#f1f5f9', color: '#64748b', padding: '3px 8px', borderRadius: '4px', fontSize: '12px' }}>
+                      <span key={idx} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)', padding: '3px 8px', borderRadius: '6px', fontSize: '12px' }}>
                         {s}
                       </span>
                     ))}
@@ -573,11 +592,11 @@ export default function ResumeStudio() {
                 </div>
               </div>
 
-              <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid var(--border)' }}>
-                <h4 style={{ margin: '0 0 8px', fontSize: '13px', fontWeight: '800' }}>Targeted Project Relevance Order</h4>
-                <ol style={{ margin: 0, paddingLeft: '20px', fontSize: '13px' }}>
+              <div style={{ background: 'var(--bg-card-soft)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                <h4 style={{ margin: '0 0 10px', fontSize: '13.5px', fontWeight: '800', color: 'var(--text-primary)' }}>Targeted Project Relevance Order</h4>
+                <ol style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: 'var(--text-primary)' }}>
                   {(diffSummary.project_order || []).map((pTitle, idx) => (
-                    <li key={idx} style={{ marginBottom: '4px' }}>
+                    <li key={idx} style={{ marginBottom: '6px' }}>
                       <strong>{pTitle}</strong>
                     </li>
                   ))}
@@ -585,10 +604,10 @@ export default function ResumeStudio() {
               </div>
             </div>
           ) : activeTab === 'resume' ? (
-            <form onSubmit={handleSaveResume} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+            <form onSubmit={handleSaveResume} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>
                     Full Name
                   </label>
                   <input
@@ -596,11 +615,11 @@ export default function ResumeStudio() {
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     required
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card-soft)', color: 'var(--text-primary)' }}
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: '13px' }}
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>
                     Contact Email
                   </label>
                   <input
@@ -608,68 +627,70 @@ export default function ResumeStudio() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card-soft)', color: 'var(--text-primary)' }}
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: '13px' }}
                   />
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '4px' }}>Phone</label>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>Phone</label>
                   <input
                     type="text"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+91 98765 43210"
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card-soft)', color: 'var(--text-primary)' }}
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: '13px' }}
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '4px' }}>Location</label>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>Location</label>
                   <input
                     type="text"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
                     placeholder="Bangalore, India"
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card-soft)', color: 'var(--text-primary)' }}
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: '13px' }}
                   />
                 </div>
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '4px' }}>Summary</label>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>Summary</label>
                 <textarea
                   value={summary}
                   onChange={(e) => setSummary(e.target.value)}
                   rows={3}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card-soft)', color: 'var(--text-primary)' }}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: '13px', lineHeight: 1.5 }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>
                   Technical Skills (comma-separated, verified against factual grounding)
                 </label>
                 <textarea
                   value={skillsText}
                   onChange={(e) => setSkillsText(e.target.value)}
                   rows={2}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card-soft)', color: 'var(--text-primary)' }}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: '13px', lineHeight: 1.5 }}
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '14px' }}>
                 <button
                   type="button"
                   onClick={handleRunValidation}
                   style={{
-                    background: 'var(--bg-card-soft)',
+                    background: 'var(--bg-card)',
                     border: '1px solid var(--border)',
-                    padding: '8px 14px',
+                    padding: '9px 16px',
                     borderRadius: '8px',
                     fontSize: '13px',
                     fontWeight: '600',
+                    color: 'var(--text-primary)',
                     cursor: 'pointer',
+                    boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)',
                   }}
                 >
                   🔍 Verify Factual Claims
@@ -678,14 +699,16 @@ export default function ResumeStudio() {
                   type="submit"
                   disabled={saving}
                   style={{
-                    background: 'var(--primary)',
-                    color: '#fff',
+                    background: 'var(--primary, #2563eb)',
+                    color: '#ffffff',
                     border: 'none',
-                    padding: '10px 22px',
+                    padding: '10px 24px',
                     borderRadius: '8px',
                     fontSize: '14px',
                     fontWeight: '700',
                     cursor: saving ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
+                    transition: 'all 0.15s ease',
                   }}
                 >
                   {saving ? 'Saving...' : (selectedResume?.is_master ? 'Save Master Anchor' : 'Save Tailored Resume')}
@@ -695,7 +718,7 @@ export default function ResumeStudio() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                <div style={{ fontSize: '13.5px', color: 'var(--text-secondary)', fontWeight: '500' }}>
                   Grounded strictly in verified master projects and skills.
                 </div>
                 {selectedResume?.opportunity_id && (
@@ -704,14 +727,15 @@ export default function ResumeStudio() {
                     onClick={handleDraftCoverLetter}
                     disabled={draftingLetter}
                     style={{
-                      background: 'var(--primary)',
-                      color: '#fff',
+                      background: 'var(--primary, #2563eb)',
+                      color: '#ffffff',
                       border: 'none',
-                      padding: '6px 14px',
-                      borderRadius: '6px',
-                      fontSize: '12px',
+                      padding: '8px 16px',
+                      borderRadius: '8px',
+                      fontSize: '12.5px',
                       fontWeight: '700',
                       cursor: draftingLetter ? 'not-allowed' : 'pointer',
+                      boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
                     }}
                   >
                     {draftingLetter ? 'Drafting...' : '✨ Generate Truthful Cover Letter'}

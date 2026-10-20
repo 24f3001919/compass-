@@ -35,7 +35,8 @@ export default function ExtractionReviewModal({
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0, 0, 0, 0.75)',
+        background: 'rgba(15, 23, 42, 0.65)',
+        backdropFilter: 'blur(6px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -47,20 +48,20 @@ export default function ExtractionReviewModal({
         style={{
           background: 'var(--bg-card, #ffffff)',
           border: '1px solid var(--border, #e2e8f0)',
-          borderRadius: '16px',
-          maxWidth: '820px',
+          borderRadius: '18px',
+          maxWidth: '840px',
           width: '100%',
           maxHeight: '90vh',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.25)',
           overflow: 'hidden',
         }}
       >
         {/* Header */}
         <div
           style={{
-            padding: '18px 24px',
+            padding: '20px 26px',
             borderBottom: '1px solid var(--border, #e2e8f0)',
             display: 'flex',
             justifyContent: 'space-between',
@@ -75,9 +76,9 @@ export default function ExtractionReviewModal({
               </h3>
               <span
                 style={{
-                  fontSize: '11px',
+                  fontSize: '11.5px',
                   fontWeight: '700',
-                  padding: '3px 8px',
+                  padding: '3px 9px',
                   borderRadius: '12px',
                   background: confidence >= 0.8 ? '#dcfce7' : '#fef9c3',
                   color: confidence >= 0.8 ? '#166534' : '#854d0e',
@@ -86,19 +87,25 @@ export default function ExtractionReviewModal({
                 {Math.round(confidence * 100)}% Confidence
               </span>
             </div>
-            <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-muted, #64748b)' }}>
-              Source: <strong>{diag.filename || 'Uploaded Document'}</strong> ({diag.file_type || 'file'}) — Please verify accuracy before committing.
+            <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-secondary, #334155)' }}>
+              Source: <strong style={{ color: 'var(--text-primary)' }}>{diag.filename || 'Uploaded Document'}</strong> ({diag.file_type || 'file'}) — Please verify accuracy before committing.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             style={{
-              background: 'transparent',
-              border: 'none',
-              fontSize: '18px',
-              color: 'var(--text-muted, #64748b)',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
+              fontSize: '16px',
+              color: 'var(--text-secondary, #334155)',
               cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
             ✕
@@ -107,19 +114,19 @@ export default function ExtractionReviewModal({
 
         {/* Diagnostics Alerts */}
         {(missing.length > 0 || conflicts.length > 0 || ambiguous.length > 0) && (
-          <div style={{ padding: '12px 24px', background: '#fffbeb', borderBottom: '1px solid #fef3c7' }}>
+          <div style={{ padding: '12px 26px', background: '#fffbeb', borderBottom: '1px solid #fef3c7' }}>
             {missing.length > 0 && (
-              <div style={{ fontSize: '12px', color: '#b45309', marginBottom: conflicts.length ? '4px' : '0' }}>
+              <div style={{ fontSize: '12.5px', color: '#b45309', marginBottom: conflicts.length ? '4px' : '0', fontWeight: '500' }}>
                 ⚠️ <strong>Missing Fields:</strong> {missing.join(', ')} — you can complete these below.
               </div>
             )}
             {conflicts.map((conf, idx) => (
-              <div key={idx} style={{ fontSize: '12px', color: '#b45309' }}>
+              <div key={idx} style={{ fontSize: '12.5px', color: '#b45309', fontWeight: '500' }}>
                 ⚡ <strong>Conflict:</strong> {conf.message} (Selected: {conf.selected})
               </div>
             ))}
             {ambiguous.map((amb, idx) => (
-              <div key={idx} style={{ fontSize: '12px', color: '#78350f' }}>
+              <div key={idx} style={{ fontSize: '12.5px', color: '#78350f', fontWeight: '500' }}>
                 ℹ️ {amb}
               </div>
             ))}
@@ -127,7 +134,7 @@ export default function ExtractionReviewModal({
         )}
 
         {/* Navigation Tabs */}
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border, #e2e8f0)', padding: '0 24px', background: 'var(--bg-card, #ffffff)' }}>
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--border, #e2e8f0)', padding: '0 26px', background: 'var(--bg-card, #ffffff)' }}>
           {[
             { id: 'contact', label: '👤 Contact & Summary' },
             { id: 'skills', label: '🛠️ Technical Skills' },
@@ -140,14 +147,15 @@ export default function ExtractionReviewModal({
               type="button"
               onClick={() => setActiveTab(tab.id)}
               style={{
-                padding: '12px 14px',
+                padding: '13px 16px',
                 fontSize: '13px',
-                fontWeight: activeTab === tab.id ? '700' : '500',
-                color: activeTab === tab.id ? 'var(--primary, #2563eb)' : 'var(--text-muted, #64748b)',
+                fontWeight: activeTab === tab.id ? '700' : '600',
+                color: activeTab === tab.id ? 'var(--primary, #2563eb)' : 'var(--text-secondary, #334155)',
                 border: 'none',
                 background: 'transparent',
                 borderBottom: activeTab === tab.id ? '2px solid var(--primary, #2563eb)' : '2px solid transparent',
                 cursor: 'pointer',
+                transition: 'color 0.15s ease',
               }}
             >
               {tab.label}
@@ -160,66 +168,66 @@ export default function ExtractionReviewModal({
           {activeTab === 'contact' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '4px' }}>Full Name</label>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '5px' }}>Full Name</label>
                 <input
                   type="text"
                   value={content.full_name || ''}
                   onChange={(e) => setContent({ ...content, full_name: e.target.value })}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border)' }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: '13px' }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '4px' }}>Email Address</label>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '5px' }}>Email Address</label>
                 <input
                   type="email"
                   value={content.email || ''}
                   onChange={(e) => setContent({ ...content, email: e.target.value })}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border)' }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: '13px' }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '4px' }}>Phone Number</label>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '5px' }}>Phone Number</label>
                 <input
                   type="text"
                   value={content.phone || ''}
                   onChange={(e) => setContent({ ...content, phone: e.target.value })}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border)' }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: '13px' }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '4px' }}>Location</label>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '5px' }}>Location</label>
                 <input
                   type="text"
                   value={content.location || ''}
                   onChange={(e) => setContent({ ...content, location: e.target.value })}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border)' }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: '13px' }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '4px' }}>GitHub / Portfolio</label>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '5px' }}>GitHub / Portfolio</label>
                 <input
                   type="text"
                   value={content.github_or_portfolio || ''}
                   onChange={(e) => setContent({ ...content, github_or_portfolio: e.target.value })}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border)' }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: '13px' }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '4px' }}>LinkedIn Profile</label>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '5px' }}>LinkedIn Profile</label>
                 <input
                   type="text"
                   value={content.linkedin_url || ''}
                   onChange={(e) => setContent({ ...content, linkedin_url: e.target.value })}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border)' }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: '13px' }}
                 />
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '4px' }}>Professional Summary</label>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '5px' }}>Professional Summary</label>
                 <textarea
                   value={content.summary || ''}
                   onChange={(e) => setContent({ ...content, summary: e.target.value })}
                   rows={3}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border)' }}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: '13px', lineHeight: 1.5 }}
                 />
               </div>
             </div>
@@ -227,7 +235,7 @@ export default function ExtractionReviewModal({
 
           {activeTab === 'skills' && (
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>
                 Technical Skills (comma-separated)
               </label>
               <textarea
