@@ -60,7 +60,7 @@ export default function NebiusTelemetryModal({ isOpen, onClose, usageStats, onRe
 
   const handleCopyReport = () => {
     const report = [
-      '# 🧭 Compass: Nebius Token Factory & NVIDIA Telemetry Report',
+      '# Compass: Nebius Token Factory & NVIDIA Telemetry Report',
       `Audit Date: ${new Date().toISOString()}`,
       `Total Model Calls: ${totalCalls}`,
       `Total Tokens: ${totalTokens.toLocaleString()} (${inputTokens.toLocaleString()} in / ${outputTokens.toLocaleString()} out)`,

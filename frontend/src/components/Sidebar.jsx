@@ -1,5 +1,6 @@
 import React from 'react'
 import CreateDomainModal from './timeline/CreateDomainModal'
+import Logo from './Logo'
 
 // Simple line icons (1.8 stroke, currentColor)
 function NavIcon({ type }) {
@@ -25,12 +26,7 @@ function NavIcon({ type }) {
     )
   }
   if (type === 'compass') {
-    return (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="10" />
-        <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-      </svg>
-    )
+    return <Logo size={18} alt="" />
   }
   if (type === 'calendar') {
     return (
@@ -180,7 +176,7 @@ export default function Sidebar({
             onMouseEnter={e => (e.currentTarget.style.opacity = '0.9')}
             onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
           >
-            <NavIcon type="compass" />
+            <Logo size={24} alt="Compass logo" />
           </div>
           <button
             id="sidebar-collapse-toggle"
@@ -231,7 +227,7 @@ export default function Sidebar({
             title="Compass Workspace: Click to return to Dashboard"
           >
             <div style={{ width: '38px', height: '38px', borderRadius: '6px', background: 'var(--brand)', color: 'var(--accent-text)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <NavIcon type="compass" />
+              <Logo size={24} alt="" />
             </div>
             <div>
               <h1 style={{ fontSize: '15px', fontWeight: '600', letterSpacing: '-0.2px', color: 'var(--sidebar-active-text)', margin: 0, lineHeight: 1.2 }}>Compass</h1>

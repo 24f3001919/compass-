@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import ChatPanel from './ChatPanel'
 import AgentPanel from './AgentPanel'
 import DarkModeToggle from './DarkModeToggle'
+import Logo from './Logo'
 
 export default function NorthstarPanel({
   initialSubTab = 'assistant',
@@ -52,7 +53,7 @@ export default function NorthstarPanel({
         flexWrap: 'wrap',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-          <span style={{ fontSize: '18px' }}>🧭</span>
+          <Logo size={18} alt="Compass logo" />
           <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.2px' }}>
             Northstar AI
           </span>

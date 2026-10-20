@@ -5,6 +5,7 @@ import ConfirmationGate from './agent/ConfirmationGate'
 import ActivityFeed from './agent/ActivityFeed'
 import RunHistoryDrawer from './agent/RunHistoryDrawer'
 import AgentHeader from './agent/AgentHeader'
+import Logo from './Logo'
 
 export default function AgentPanel({ onTaskMutated, conversationId }) {
   const [goal, setGoal] = useState('')
@@ -141,7 +142,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
 
   const copyTraceAsMarkdown = () => {
     const mdLines = [
-      `# 🧭 Compass Plan: ${goal || 'Question'}`,
+      `# Compass Plan: ${goal || 'Question'}`,
       `**Total Steps**: ${steps.length}`,
       '',
       '---',
@@ -503,11 +504,8 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
             padding: '60px 20px',
             color: 'var(--text-muted)',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px', color: 'var(--accent, #f5a623)' }}>
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-              </svg>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
+              <Logo size={40} alt="" />
             </div>
             <div style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '8px' }}>
               Your Compass Assistant
@@ -527,10 +525,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
             color: 'var(--accent, #f5a623)',
           }}>
             <div style={{ fontSize: '15px', fontWeight: '500', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-              </svg>
+              <Logo size={18} alt="Compass logo" />
               <span>Getting started…</span>
             </div>
           </div>

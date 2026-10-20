@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { fetchSharedConversation } from '../api/client'
+import Logo from './Logo'
 
 export default function SharedChatView({ shareId, onGoToApp }) {
   const [data, setData] = useState(null)
@@ -125,9 +126,9 @@ export default function SharedChatView({ shareId, onGoToApp }) {
           <div style={{
             width: '34px', height: '34px', borderRadius: '9px',
             background: 'var(--brand)', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', fontSize: '18px', boxShadow: '0 2px 8px rgba(245, 166, 35, 0.3)'
+            justifyContent: 'center', boxShadow: '0 2px 8px rgba(245, 166, 35, 0.3)'
           }}>
-            🧭
+            <Logo size={22} alt="" />
           </div>
           <div>
             <div style={{ fontSize: '15px', fontWeight: '800', letterSpacing: '-0.3px', color: 'var(--text-primary)' }}>
@@ -211,7 +212,9 @@ export default function SharedChatView({ shareId, onGoToApp }) {
         <div style={{ width: '100%', maxWidth: '780px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
           {loading ? (
             <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-muted)' }}>
-              <div style={{ fontSize: '28px', marginBottom: '12px', animation: 'spin 1.5s infinite linear' }}>🧭</div>
+              <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'center' }}>
+                <Logo size={32} alt="Compass logo" />
+              </div>
               <div style={{ fontSize: '14px', fontWeight: '600' }}>Loading shared conversation...</div>
             </div>
           ) : error ? (
@@ -318,7 +321,7 @@ export default function SharedChatView({ shareId, onGoToApp }) {
                 gap: '12px',
                 boxShadow: 'var(--shadow-md)',
               }}>
-                <div style={{ fontSize: '24px' }}>🧭</div>
+                <Logo size={32} alt="" />
                 <div>
                   <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '800' }}>
                     Supercharge your productivity with Compass
