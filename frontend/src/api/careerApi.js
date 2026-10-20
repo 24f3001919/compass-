@@ -7,21 +7,22 @@
  * - Submission adapters & execution
  */
 
-import { API_BASE as BASE_URL } from './baseClient'
+import { API_BASE as BASE_URL, getAuthHeaders, getGuestToken, initGuestSession } from './baseClient.js'
 
 const API_BASE = `${BASE_URL}/api/career`
 
-function getHeaders() {
-  const headers = { 'Content-Type': 'application/json' }
-  try {
-    const token = localStorage.getItem('compass_token')
-    if (token) headers['Authorization'] = `Bearer ${token}`
-    const guestId = localStorage.getItem('compass_guest_id')
-    if (guestId) headers['x-guest-id'] = guestId
-  } catch {
-    /* ignore storage access error */
+async function ensureSession() {
+  if (!getGuestToken()) {
+    try {
+      await initGuestSession()
+    } catch {
+      /* ignore storage access error */
+    }
   }
-  return headers
+}
+
+function getJsonHeaders() {
+  return getAuthHeaders({ 'Content-Type': 'application/json' })
 }
 
 // ---------------------------------------------------------------------------
@@ -29,15 +30,21 @@ function getHeaders() {
 // ---------------------------------------------------------------------------
 
 export async function fetchMasterResume() {
-  const res = await fetch(`${API_BASE}/resumes/master`, { headers: getHeaders() })
+  await ensureSession()
+  const res = await fetch(`${API_BASE}/resumes/master`, {
+    headers: getAuthHeaders(),
+    credentials: 'include',
+  })
   if (!res.ok) throw new Error(`Failed to fetch master resume: ${res.statusText}`)
   return res.json()
 }
 
 export async function updateMasterResume(content) {
+  await ensureSession()
   const res = await fetch(`${API_BASE}/resumes/master`, {
     method: 'PUT',
-    headers: getHeaders(),
+    headers: getJsonHeaders(),
+    credentials: 'include',
     body: JSON.stringify(content),
   })
   if (!res.ok) throw new Error(`Failed to update master resume: ${res.statusText}`)
@@ -45,15 +52,21 @@ export async function updateMasterResume(content) {
 }
 
 export async function fetchResumes() {
-  const res = await fetch(`${API_BASE}/resumes`, { headers: getHeaders() })
+  await ensureSession()
+  const res = await fetch(`${API_BASE}/resumes`, {
+    headers: getAuthHeaders(),
+    credentials: 'include',
+  })
   if (!res.ok) throw new Error(`Failed to list resumes: ${res.statusText}`)
   return res.json()
 }
 
 export async function tailorResume(opportunityId, customTitle = null, targetSkills = null) {
+  await ensureSession()
   const res = await fetch(`${API_BASE}/resumes/tailor`, {
     method: 'POST',
-    headers: getHeaders(),
+    headers: getJsonHeaders(),
+    credentials: 'include',
     body: JSON.stringify({
       opportunity_id: opportunityId,
       custom_title: customTitle,
@@ -65,15 +78,21 @@ export async function tailorResume(opportunityId, customTitle = null, targetSkil
 }
 
 export async function fetchResume(resumeId) {
-  const res = await fetch(`${API_BASE}/resumes/${resumeId}`, { headers: getHeaders() })
+  await ensureSession()
+  const res = await fetch(`${API_BASE}/resumes/${resumeId}`, {
+    headers: getAuthHeaders(),
+    credentials: 'include',
+  })
   if (!res.ok) throw new Error(`Failed to fetch resume: ${res.statusText}`)
   return res.json()
 }
 
 export async function updateResume(resumeId, payload) {
+  await ensureSession()
   const res = await fetch(`${API_BASE}/resumes/${resumeId}`, {
     method: 'PUT',
-    headers: getHeaders(),
+    headers: getJsonHeaders(),
+    credentials: 'include',
     body: JSON.stringify(payload),
   })
   if (!res.ok) throw new Error(`Failed to update resume: ${res.statusText}`)
@@ -81,9 +100,11 @@ export async function updateResume(resumeId, payload) {
 }
 
 export async function validateResume(resumeId) {
+  await ensureSession()
   const res = await fetch(`${API_BASE}/resumes/${resumeId}/validate`, {
     method: 'POST',
-    headers: getHeaders(),
+    headers: getJsonHeaders(),
+    credentials: 'include',
   })
   if (!res.ok) throw new Error(`Failed to validate resume: ${res.statusText}`)
   return res.json()
@@ -91,16 +112,21 @@ export async function validateResume(resumeId) {
 
 export function getResumeExportUrl(resumeId, template = null) {
   if (template) {
-    return `${API_BASE}/resumes/${resumeId}/export?template=${encodeURIComponent(template)}`
+    return `${API_BASE}/resumes/${resumeId}/export/html?template=${encodeURIComponent(template)}`
   }
-  return `${API_BASE}/resumes/${resumeId}/export`
+  return `${API_BASE}/resumes/${resumeId}/export/html`
 }
 
+export function getResumeExportDocxUrl(resumeId) {
+  return `${API_BASE}/resumes/${resumeId}/export/docx`
+}
 
 export async function parseUploadResume(rawText) {
+  await ensureSession()
   const res = await fetch(`${API_BASE}/resumes/parse-upload`, {
     method: 'POST',
-    headers: getHeaders(),
+    headers: getJsonHeaders(),
+    credentials: 'include',
     body: JSON.stringify({ raw_text: rawText }),
   })
   if (!res.ok) throw new Error(`Failed to parse resume text: ${res.statusText}`)
@@ -108,20 +134,15 @@ export async function parseUploadResume(rawText) {
 }
 
 export async function parseResumeFile(file) {
+  await ensureSession()
   const formData = new FormData()
   formData.append('file', file)
-  const headers = {}
-  try {
-    const token = localStorage.getItem('compass_token')
-    if (token) headers['Authorization'] = `Bearer ${token}`
-    const guestId = localStorage.getItem('compass_guest_id')
-    if (guestId) headers['x-guest-id'] = guestId
-  } catch {
-    /* ignore storage access error */
-  }
+  const headers = getAuthHeaders()
+  delete headers['Content-Type'] // Let the browser set multipart/form-data boundary automatically
   const res = await fetch(`${API_BASE}/resumes/parse-file`, {
     method: 'POST',
     headers,
+    credentials: 'include',
     body: formData,
   })
   if (!res.ok) {
@@ -131,10 +152,89 @@ export async function parseResumeFile(file) {
   return res.json()
 }
 
+export const uploadResumeFile = parseResumeFile
+
+export async function commitExtractedResume(content, originalDocumentId = null, target = 'master') {
+  await ensureSession()
+  const res = await fetch(`${API_BASE}/resumes/commit-extracted`, {
+    method: 'POST',
+    headers: getJsonHeaders(),
+    credentials: 'include',
+    body: JSON.stringify({
+      content,
+      original_document_id: originalDocumentId,
+      target,
+    }),
+  })
+  if (!res.ok) throw new Error(`Failed to commit extracted resume: ${res.statusText}`)
+  return res.json()
+}
+
+export async function fetchOriginalResumeDocuments() {
+  await ensureSession()
+  const res = await fetch(`${API_BASE}/resumes/original-documents`, {
+    headers: getAuthHeaders(),
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error(`Failed to fetch original documents: ${res.statusText}`)
+  return res.json()
+}
+
+export async function analyzeGitHubProfile(usernameOrUrl, personalAccessToken = null, excludedRepos = []) {
+  await ensureSession()
+  const res = await fetch(`${API_BASE}/intelligence/github`, {
+    method: 'POST',
+    headers: getJsonHeaders(),
+    credentials: 'include',
+    body: JSON.stringify({
+      username_or_url: usernameOrUrl,
+      personal_access_token: personalAccessToken,
+      excluded_repos: excludedRepos,
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `GitHub analysis failed: ${res.statusText}`)
+  }
+  return res.json()
+}
+
+export async function ingestExternalProfile(sourceType, rawContent, sourceUrl = null) {
+  await ensureSession()
+  const res = await fetch(`${API_BASE}/intelligence/external-profile`, {
+    method: 'POST',
+    headers: getJsonHeaders(),
+    credentials: 'include',
+    body: JSON.stringify({
+      source_type: sourceType,
+      raw_content: rawContent,
+      source_url: sourceUrl,
+    }),
+  })
+  if (!res.ok) throw new Error(`Failed to ingest external profile: ${res.statusText}`)
+  return res.json()
+}
+
+export async function fetchJobAnalysis(opportunityId, customDesc = null) {
+  await ensureSession()
+  let url = `${API_BASE}/opportunities/${opportunityId}/job-analysis`
+  if (customDesc) {
+    url += `?custom_desc=${encodeURIComponent(customDesc)}`
+  }
+  const res = await fetch(url, {
+    headers: getAuthHeaders(),
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error(`Failed to fetch job requirement analysis: ${res.statusText}`)
+  return res.json()
+}
+
 export async function draftCoverLetter(opportunityId, emphasisProjects = null) {
+  await ensureSession()
   const res = await fetch(`${API_BASE}/cover-letters/draft`, {
     method: 'POST',
-    headers: getHeaders(),
+    headers: getJsonHeaders(),
+    credentials: 'include',
     body: JSON.stringify({
       opportunity_id: opportunityId,
       emphasis_projects: emphasisProjects,
@@ -145,9 +245,11 @@ export async function draftCoverLetter(opportunityId, emphasisProjects = null) {
 }
 
 export async function setApplicationCoverLetter(appId, coverLetter) {
+  await ensureSession()
   const res = await fetch(`${API_BASE}/applications/${appId}/cover-letter`, {
     method: 'POST',
-    headers: getHeaders(),
+    headers: getJsonHeaders(),
+    credentials: 'include',
     body: JSON.stringify({ cover_letter: coverLetter }),
   })
   if (!res.ok) throw new Error(`Failed to attach cover letter: ${res.statusText}`)
@@ -159,16 +261,22 @@ export async function setApplicationCoverLetter(appId, coverLetter) {
 // ---------------------------------------------------------------------------
 
 export async function fetchApplications(status = null) {
+  await ensureSession()
   const url = status ? `${API_BASE}/applications?status=${encodeURIComponent(status)}` : `${API_BASE}/applications`
-  const res = await fetch(url, { headers: getHeaders() })
+  const res = await fetch(url, {
+    headers: getAuthHeaders(),
+    credentials: 'include',
+  })
   if (!res.ok) throw new Error(`Failed to list applications: ${res.statusText}`)
   return res.json()
 }
 
 export async function fetchPreparedApplication(opportunityId) {
+  await ensureSession()
   const res = await fetch(`${API_BASE}/applications/prepare?opportunity_id=${opportunityId}`, {
     method: 'GET',
-    headers: getHeaders(),
+    headers: getAuthHeaders(),
+    credentials: 'include',
   })
   if (!res.ok) {
     if (res.status === 404) return null
@@ -178,19 +286,22 @@ export async function fetchPreparedApplication(opportunityId) {
 }
 
 export async function prepareApplication(opportunityId) {
+  await ensureSession()
   const res = await fetch(`${API_BASE}/applications/prepare?opportunity_id=${opportunityId}`, {
     method: 'POST',
-    headers: getHeaders(),
+    headers: getJsonHeaders(),
+    credentials: 'include',
   })
   if (!res.ok) throw new Error(`Failed to prepare application: ${res.statusText}`)
   return res.json()
 }
 
-
 export async function updateApplication(appId, updates) {
+  await ensureSession()
   const res = await fetch(`${API_BASE}/applications/${appId}`, {
     method: 'PATCH',
-    headers: getHeaders(),
+    headers: getJsonHeaders(),
+    credentials: 'include',
     body: JSON.stringify(updates),
   })
   if (!res.ok) throw new Error(`Failed to update application: ${res.statusText}`)
@@ -198,9 +309,11 @@ export async function updateApplication(appId, updates) {
 }
 
 export async function prepareBatch(opportunityIds) {
+  await ensureSession()
   const res = await fetch(`${API_BASE}/applications/batch/prepare`, {
     method: 'POST',
-    headers: getHeaders(),
+    headers: getJsonHeaders(),
+    credentials: 'include',
     body: JSON.stringify({ opportunity_ids: opportunityIds }),
   })
   if (!res.ok) throw new Error(`Failed to prepare batch: ${res.statusText}`)
@@ -208,15 +321,21 @@ export async function prepareBatch(opportunityIds) {
 }
 
 export async function fetchBatch(batchId) {
-  const res = await fetch(`${API_BASE}/applications/batch/${batchId}`, { headers: getHeaders() })
+  await ensureSession()
+  const res = await fetch(`${API_BASE}/applications/batch/${batchId}`, {
+    headers: getAuthHeaders(),
+    credentials: 'include',
+  })
   if (!res.ok) throw new Error(`Failed to fetch batch: ${res.statusText}`)
   return res.json()
 }
 
 export async function approveBatch(batchId, attestations = {}) {
+  await ensureSession()
   const res = await fetch(`${API_BASE}/applications/batch/${batchId}/approve`, {
     method: 'POST',
-    headers: getHeaders(),
+    headers: getJsonHeaders(),
+    credentials: 'include',
     body: JSON.stringify({
       batch_id: batchId,
       attestation_confirmed: attestations.attestation_confirmed ?? true,
@@ -232,9 +351,11 @@ export async function approveBatch(batchId, attestations = {}) {
 }
 
 export async function submitBatch(batchId, preferredMethod = 'manual_handoff') {
+  await ensureSession()
   const res = await fetch(`${API_BASE}/applications/batch/${batchId}/submit`, {
     method: 'POST',
-    headers: getHeaders(),
+    headers: getJsonHeaders(),
+    credentials: 'include',
     body: JSON.stringify({
       batch_id: batchId,
       preferred_method: preferredMethod,
@@ -248,7 +369,11 @@ export async function submitBatch(batchId, preferredMethod = 'manual_handoff') {
 }
 
 export async function fetchAdapters() {
-  const res = await fetch(`${API_BASE}/adapters`, { headers: getHeaders() })
+  await ensureSession()
+  const res = await fetch(`${API_BASE}/adapters`, {
+    headers: getAuthHeaders(),
+    credentials: 'include',
+  })
   if (!res.ok) throw new Error(`Failed to fetch adapters: ${res.statusText}`)
   return res.json()
 }
