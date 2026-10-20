@@ -65,7 +65,7 @@ def replan_slipped_tasks(
     dep_map: Dict[int, List[int]] = {}
     if dependencies:
         for k, v in dependencies.items():
-            dep_map[int(k)] = [int(x) for x in v]
+            dep_map[k] = list(v)
 
     for t in all_tasks:
         tid = t.get("id")

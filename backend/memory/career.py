@@ -963,6 +963,16 @@ async def log_application_event(application_id: int, event_type: str, details: D
         return
 
     async with pool.acquire() as conn:
+        exists = await conn.fetchval("SELECT 1 FROM career_applications WHERE id = $1", application_id)
+        if not exists:
+            _in_memory_events.append({
+                "application_id": application_id,
+                "event_type": event_type,
+                "details": details,
+                "created_at": datetime.now(timezone.utc),
+            })
+            return
+
         await conn.execute(
             "INSERT INTO application_events (application_id, event_type, details, created_at) VALUES ($1, $2, $3::jsonb, now())",
             application_id,

@@ -11,7 +11,7 @@ import logging
 import sys
 import uuid
 from datetime import date
-from typing import Any, AsyncGenerator, List, Optional, cast
+from typing import Any, AsyncGenerator, Dict, List, Optional, cast
 
 import openai
 from fastapi import Request
@@ -235,6 +235,9 @@ async def generate_chat_events(
         yield f"data: {json.dumps({'type': 'done', 'conversation_id': conv_id, 'skill_used': f'specialist_{valid_id}'})}\n\n"
         return
 
+    yield f"data: {json.dumps({'type': 'ping'})}\n\n"
+    yield f"data: {json.dumps({'type': 'status', 'stage': 'thinking', 'label': 'Understanding your request…'})}\n\n"
+
     needs_tools = message_needs_tools(message)
 
     history_items: List[dict[str, str]] = []
@@ -325,6 +328,7 @@ async def generate_chat_events(
         parked_items = []
 
     stream = None
+    full_text = ""
     try:
         if not isinstance(openai.AsyncOpenAI, type) or hasattr(openai.AsyncOpenAI, "_mock_return_value"):
             client = openai.AsyncOpenAI(
@@ -472,6 +476,7 @@ async def generate_chat_events(
         tool_call_detected = False
         usage_data = None
         think_filter = StreamingThinkFilter()
+        accumulated_tool_calls: Dict[int, Dict[str, str]] = {}
 
         try:
             async for stream_chunk in stream:
@@ -489,7 +494,21 @@ async def generate_chat_events(
                     delta = choices[0].delta
                     finish_reason = choices[0].finish_reason
 
-                    if finish_reason in ("tool_calls", "function_call") or (delta and getattr(delta, "tool_calls", None)):
+                    tcs = getattr(delta, "tool_calls", None) if delta else None
+                    if tcs:
+                        tool_call_detected = True
+                        for tc in tcs:
+                            idx = getattr(tc, "index", 0)
+                            if idx not in accumulated_tool_calls:
+                                accumulated_tool_calls[idx] = {"name": "", "arguments": ""}
+                            fn = getattr(tc, "function", None)
+                            if fn:
+                                if getattr(fn, "name", None):
+                                    accumulated_tool_calls[idx]["name"] += fn.name
+                                if getattr(fn, "arguments", None):
+                                    accumulated_tool_calls[idx]["arguments"] += fn.arguments
+
+                    if finish_reason in ("tool_calls", "function_call") or (tool_call_detected and finish_reason):
                         tool_call_detected = True
                         if hasattr(stream, "aclose"):
                             await stream.aclose()
@@ -506,6 +525,8 @@ async def generate_chat_events(
                     if token:
                         filtered_token = think_filter.process(token)
                         if filtered_token:
+                            if not emitted_text:
+                                yield f"data: {json.dumps({'type': 'status', 'stage': 'generating', 'label': 'Generating response…'})}\n\n"
                             full_text += filtered_token
                             emitted_text += filtered_token
                             yield f"data: {json.dumps({'type': 'token', 'value': filtered_token})}\n\n"
@@ -523,6 +544,28 @@ async def generate_chat_events(
             return
 
         if tool_call_detected:
+            pre_routed_skill = None
+            pre_routed_args = None
+            if accumulated_tool_calls:
+                first_tc = accumulated_tool_calls[min(accumulated_tool_calls.keys())]
+                raw_name = (first_tc.get("name") or "").strip()
+                raw_args_str = (first_tc.get("arguments") or "").strip()
+                if raw_name:
+                    pre_routed_skill = raw_name
+                    try:
+                        pre_routed_args = json.loads(raw_args_str) if raw_args_str else {}
+                    except Exception:
+                        pre_routed_args = {}
+
+            if pre_routed_skill:
+                if pre_routed_skill in ("search_web", "deep_research"):
+                    q = (pre_routed_args or {}).get("query") or (pre_routed_args or {}).get("topic") or "sources"
+                    yield f"data: {json.dumps({'type': 'status', 'stage': 'searching', 'label': f'Searching web for {q}…'})}\n\n"
+                elif pre_routed_skill in ("verify_deadline", "detect_deadline_conflicts"):
+                    yield f"data: {json.dumps({'type': 'status', 'stage': 'reading_sources', 'label': 'Verifying official deadline sources…'})}\n\n"
+                else:
+                    yield f"data: {json.dumps({'type': 'status', 'stage': 'reasoning', 'label': f'Executing {pre_routed_skill}…'})}\n\n"
+
             result = await orchestrator.handle_message(
                 conversation_id=req.conversation_id,
                 message=message,
@@ -531,6 +574,8 @@ async def generate_chat_events(
                 history=history_items if history_items else None,
                 memory_context=memory_context if memory_context else None,
                 persist=False,
+                pre_routed_skill=pre_routed_skill,
+                pre_routed_args=pre_routed_args,
             )
             response_text = result.get("response", "")
             skill_used = result.get("skill_used") or "agent"

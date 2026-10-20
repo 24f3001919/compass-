@@ -246,21 +246,22 @@ def test_neutral_ranking_prioritizes_skill_and_eligibility_over_brand():
     startup_class, _, _ = evaluate_eligibility(startup_opp, student_profile)
     mnc_class, _, _ = evaluate_eligibility(famous_mnc_opp, student_profile)
 
-    assert "eligible" in str(startup_class).lower()
-    assert "ineligible" in str(mnc_class).lower()
+    assert "eligible" in startup_class.lower()
+    assert "ineligible" in mnc_class.lower()
 
     # Define neutral ranking comparator matching backend/routers/radar.py
-    def compute_rank_score(opp, profile, elig_class):
+    def compute_rank_score(opp, profile, elig_class: str):
         score = 0
         if opp.current_status == OpportunityStatus.OPEN_CONFIRMED:
             score += 1000
-        if "eligible" in str(elig_class).lower() and "ineligible" not in str(elig_class).lower():
+        elig_lower = elig_class.lower()
+        if "eligible" in elig_lower and "ineligible" not in elig_lower:
             score += 500
-        elif "potential" in str(elig_class).lower():
+        elif "potential" in elig_lower:
             score += 200
 
         # Skill match
-        req_skills = [s.lower() for s in (opp.requirements.required_skills or [])]
+        req_skills = [s.lower() for s in (opp.requirements.required_skills or [])] if opp.requirements else []
         user_skills = [s.lower() for s in (profile.skills or [])]
         overlap = len(set(req_skills) & set(user_skills))
         score += overlap * 50

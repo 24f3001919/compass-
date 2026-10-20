@@ -111,6 +111,7 @@ async def test_no_duplicate_tool_calls_on_retry():
         skill_name, args, text_reply = await route_message("Search codebase for auth tokens")
         assert mock_client.chat.completions.create.call_count == 1
         assert skill_name == "query_code_context"
+        assert args is not None
         assert args["query"] == "auth tokens"
 
 

@@ -149,6 +149,7 @@ async def test_multi_tenant_isolation_in_database():
 
     # Verify User A's data was not touched
     app_a_check = await get_career_application_by_id(app_a.id, user_a)
+    assert app_a_check is not None
     assert app_a_check.private_notes != "Hacked"
 
 
@@ -294,6 +295,7 @@ async def test_crash_recovery_and_submission_outcome_unknown_persistence():
     # Set timestamps to 20 minutes ago directly in PostgreSQL
     stale_time = datetime.now(timezone.utc) - timedelta(minutes=20)
     pool = await get_pool()
+    assert pool is not None
     async with pool.acquire() as conn:
         await conn.execute("UPDATE career_applications SET updated_at = $1 WHERE id = $2", stale_time, app_rec.id)
         await conn.execute("UPDATE application_batches SET updated_at = $1 WHERE id = $2", stale_time, batch_id)
@@ -305,10 +307,12 @@ async def test_crash_recovery_and_submission_outcome_unknown_persistence():
 
     # Verify durable state in PostgreSQL
     recovered_app = await get_career_application_by_id(app_rec.id, user_id)
+    assert recovered_app is not None
     assert recovered_app.status == CareerApplicationStatus.SUBMISSION_OUTCOME_UNKNOWN.value
     assert recovered_app.is_persisted is True
 
     recovered_batch = await get_application_batch(batch_id, user_id)
+    assert recovered_batch is not None
     assert recovered_batch["status"] == "READY_FOR_REVIEW"
     assert recovered_batch["approval_token"] is None
     assert recovered_batch["is_persisted"] is True

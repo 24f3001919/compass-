@@ -203,6 +203,7 @@ def extract_resume_from_file_bytes(
             )
 
         import pypdf
+        import pypdf.errors
 
         try:
             stream = io.BytesIO(file_bytes)
@@ -281,3 +282,10 @@ def extract_resume_from_file_bytes(
                 file_type=".pdf",
                 error_message=f"Unexpected error parsing PDF file: {e}",
             )
+
+    return ResumeParseResult(
+        success=False,
+        filename=filename,
+        file_type=ext or "unknown",
+        error_message=f"Unhandled or unsupported file format '{ext}'.",
+    )

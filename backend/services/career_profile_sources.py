@@ -33,7 +33,7 @@ def parse_pasted_linkedin_text(raw_text: str) -> Tuple[ResumeContent, List[str]]
     Extracts structured Experience, Education, Skills, and Summary with clear source attribution.
     """
     notes: List[str] = ["Source: User-pasted LinkedIn profile data"]
-    lines = [l.strip() for l in raw_text.splitlines() if l.strip()]
+    lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
 
     full_name = "Candidate"
     summary_lines: List[str] = []

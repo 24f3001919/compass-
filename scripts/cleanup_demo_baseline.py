@@ -22,7 +22,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-sys.stdout.reconfigure(encoding="utf-8")
+_reconfig = getattr(sys.stdout, "reconfigure", None)
+if callable(_reconfig):
+    try:
+        _reconfig(encoding="utf-8")
+    except Exception:
+        pass
 
 KEEP_CONVERSATION_IDS = [
     "85854a45-2e6e-4667-9787-db154e19d9fb",

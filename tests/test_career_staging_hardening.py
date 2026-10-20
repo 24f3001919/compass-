@@ -100,6 +100,7 @@ def test_docx_corrupt_file_handling():
 
     assert res.success is False
     assert res.file_type == ".docx"
+    assert res.error_message is not None
     assert "Malformed or corrupted DOCX file" in res.error_message
 
 
@@ -112,6 +113,7 @@ def test_docx_empty_document_handling():
     res = extract_resume_from_file_bytes(buf.getvalue(), "empty.docx")
     assert res.success is False
     assert res.file_type == ".docx"
+    assert res.error_message is not None
     assert "contains no readable text" in res.error_message
 
 
@@ -361,6 +363,7 @@ async def test_in_memory_persistence_transparency_and_security_invariants():
 
         # When database pool is unavailable/unconfigured in test, records must declare is_persisted=False
         batch = await get_application_batch(batch_id, user)
+        assert batch is not None
         assert "is_persisted" in batch
         assert batch["is_persisted"] is False
 
@@ -423,10 +426,12 @@ async def test_reconcile_stale_submission_claims_recovers_crashed_worker():
 
     # Invariant: App is SUBMISSION_OUTCOME_UNKNOWN (preventing duplicate retry)
     recovered_app = await get_career_application_by_id(app_rec.id, user)
+    assert recovered_app is not None
     assert recovered_app.status == CareerApplicationStatus.SUBMISSION_OUTCOME_UNKNOWN.value
 
     # Invariant: Batch reverted to READY_FOR_REVIEW with cleared token
     recovered_batch = await get_application_batch(batch_id, user)
+    assert recovered_batch is not None
     assert recovered_batch["status"] == "READY_FOR_REVIEW"
     assert recovered_batch["approval_token"] is None
 

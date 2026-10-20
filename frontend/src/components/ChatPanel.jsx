@@ -50,6 +50,7 @@ export default function ChatPanel({
   })
   const [convMode, setConvMode] = useState(null)
   const [streamingThought, setStreamingThought] = useState('')
+  const [streamingStatus, setStreamingStatus] = useState(null)
 
   const handleToneChange = (newTone) => {
     setTone(newTone)
@@ -262,6 +263,7 @@ export default function ChatPanel({
     setIsStreaming(true)
     setStreamingText('')
     setStreamingThought('')
+    setStreamingStatus({ stage: 'thinking', label: 'Understanding your request…' })
 
     let receivedTokens = ''
     let receivedThought = ''
@@ -272,6 +274,11 @@ export default function ChatPanel({
         mode: activeMode,
         specialistId: specialistIdToUse,
         signal: abortController.signal,
+        onStatus: (statusEvt) => {
+          if (requestId !== activeRequestIdRef.current) return
+          setStreamingStatus(statusEvt)
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        },
         onThought: (thoughtChunk) => {
           if (requestId !== activeRequestIdRef.current) return
           receivedThought = receivedThought ? (receivedThought + '\n' + thoughtChunk) : thoughtChunk
@@ -290,6 +297,7 @@ export default function ChatPanel({
           setIsStreaming(false)
           setStreamingText('')
           setStreamingThought('')
+          setStreamingStatus(null)
           isSendingRef.current = false
           if (finalText) {
             setMessages(prev => [...prev, {
@@ -325,6 +333,7 @@ export default function ChatPanel({
           setIsStreaming(false)
           setStreamingText('')
           setStreamingThought('')
+          setStreamingStatus(null)
           isSendingRef.current = false
           const errMsg = err?.message || "I encountered an issue connecting to Compass. Please verify the service is running and try again."
           const partialText = (err?.partialResponse || receivedTokens || '').trim()
@@ -397,6 +406,7 @@ export default function ChatPanel({
     setIsStreaming(false)
     setStreamingText('')
     setStreamingThought('')
+    setStreamingStatus(null)
     isSendingRef.current = false
     setConvMode(null)
     setMessages([
@@ -417,6 +427,7 @@ export default function ChatPanel({
     setIsStreaming(false)
     setStreamingText('')
     setStreamingThought('')
+    setStreamingStatus(null)
     isSendingRef.current = false
     setConvMode(null)
     try {
@@ -537,6 +548,7 @@ export default function ChatPanel({
             isStreaming={isStreaming}
             streamingText={streamingText}
             streamingThought={streamingThought}
+            streamingStatus={streamingStatus}
             isTyping={isTyping}
             messagesEndRef={messagesEndRef}
             profileFacts={profileFacts}

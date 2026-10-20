@@ -227,7 +227,7 @@ def check_proactive_cognitive_conflicts(
         return None
 
     overcommit_hrs = max(0.0, round(total_demand - capacity_limit, 1))
-    overcommit_pct = int(round((total_demand / max(1.0, capacity_limit)) * 100))
+    overcommit_pct = round((total_demand / max(1.0, capacity_limit)) * 100)
 
     timeframe_str = "weekend" if is_weekend else f"day ({target_d.strftime('%a, %b %d')})"
     alert_lines = [

@@ -74,7 +74,7 @@ SPECIALIST_ALIAS_MAP: Dict[str, str] = {
 }
 
 
-def get_specialist(specialist_id: str) -> Optional[SpecialistDefinition]:
+def get_specialist(specialist_id: Optional[str]) -> Optional[SpecialistDefinition]:
     """Retrieve SpecialistDefinition by normalized ID or alias."""
     if not specialist_id:
         return None
@@ -83,7 +83,7 @@ def get_specialist(specialist_id: str) -> Optional[SpecialistDefinition]:
     return SPECIALIST_REGISTRY.get(resolved_id)
 
 
-def validate_specialist_id(specialist_id: str) -> Optional[str]:
+def validate_specialist_id(specialist_id: Optional[str]) -> Optional[str]:
     """Validate and return canonical specialist ID, or None if invalid."""
     spec = get_specialist(specialist_id)
     return spec.id if spec else None

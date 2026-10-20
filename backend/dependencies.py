@@ -334,14 +334,14 @@ def _get_current_identity(request: Request) -> Optional[Identity]:
 
     # 5. Fallback unverified cookie / dev header
     cookie_user = request.cookies.get("compass_user_id")
-    if (user_header and user_header.strip()) or (cookie_user and cookie_user.strip()):
+    candidate_raw = (user_header or "").strip() or (cookie_user or "").strip()
+    if candidate_raw:
         if not (settings.is_development() or settings.is_test()):
             raise HTTPException(
                 status_code=403,
                 detail="x-user-id / compass_user_id impersonation is strictly forbidden outside development or test environments",
             )
-        dev_candidate = (user_header and user_header.strip()) or (cookie_user and cookie_user.strip())
-        target = dev_candidate.strip().lower()
+        target = candidate_raw.lower()
         return Identity(id=target, is_admin=(target == "admin"), is_guest=False, user_id=target, guest_id=verified_guest)
 
     return None

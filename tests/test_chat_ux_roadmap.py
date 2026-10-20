@@ -136,6 +136,7 @@ def test_roadmap_intent_detection_and_fallback():
 
     skill, args, text = _fallback_route(repro_user_query)
     assert skill == "agent"
+    assert args is not None
     assert args.get("goal") == repro_user_query
 
 
@@ -146,4 +147,5 @@ def test_fallback_task_query_with_roadmap_intent():
     # Routed to agent or query_tasks with roadmap intent
     assert skill in ("agent", "query_tasks")
     if skill == "query_tasks":
+        assert args is not None
         assert args.get("intent") == "roadmap"

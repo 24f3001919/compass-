@@ -128,7 +128,9 @@ def test_parse_uploaded_resume_text_all_sections():
     # Basic Info
     assert content.full_name == "Alex Rivera"
     assert content.email == "alex.rivera@example.com"
+    assert content.location is not None
     assert "San Francisco" in content.location
+    assert content.summary is not None
     assert "Software Engineer" in content.summary
 
     # Skills
@@ -181,6 +183,7 @@ def test_build_success_result_diagnostics():
     file_bytes = raw_text.encode("utf-8")
     parsed = extract_resume_from_file_bytes(file_bytes, "resume.txt", "text/plain")
     assert parsed.success is True
+    assert parsed.extracted_content is not None
     assert parsed.extracted_content.full_name == "Jane Doe"
     assert "Python" in parsed.extracted_content.skills
 
@@ -267,6 +270,7 @@ async def test_analyze_github_profile_success():
         assert owned.is_fork is False
         assert owned.has_tests is True
         assert owned.has_ci_cd is True
+        assert owned.primary_language is not None
         assert "Go" in owned.primary_language
 
         # Forked repo verification
@@ -495,6 +499,7 @@ async def test_master_resume_immutability():
         current_status=OpportunityStatus.OPEN_CONFIRMED,
     )
     opp = await get_opportunity_by_id(opp_id, user_id)
+    assert opp is not None
 
     tailored_content, report, status = tailor_resume_for_opportunity(master.content, opp)
     tailored = await create_tailored_resume(
@@ -521,6 +526,7 @@ async def test_master_resume_immutability():
 
     # 4. Invariant Assertion: Master resume MUST NOT have changed
     refetched_master = await get_master_resume(user_id)
+    assert refetched_master is not None
     assert refetched_master.id == master_id
     assert refetched_master.content.skills == original_skills
     assert "Kubernetes" not in refetched_master.content.skills

@@ -74,7 +74,7 @@ export function sanitizeModesMarker(text) {
  * Dispatches incremental tokens via onToken, completion metadata via onComplete,
  * and errors via onError.
  */
-export async function streamQueryFromAssistant(prompt, conversationId, { onToken, onThought, onComplete, onError, tone = null, mode = null, specialistId = null, signal = null } = {}) {
+export async function streamQueryFromAssistant(prompt, conversationId, { onToken, onThought, onStatus, onComplete, onError, tone = null, mode = null, specialistId = null, signal = null } = {}) {
   let fullResponse = ''
   let reader = null
   try {
@@ -132,7 +132,9 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
         return
       }
 
-      if (evt.type === 'thought') {
+      if (evt.type === 'status' || evt.type === 'activity') {
+        if (onStatus) onStatus(evt)
+      } else if (evt.type === 'thought') {
         if (onThought) onThought(evt.value)
       } else if (evt.type === 'token') {
         if (typeof evt.value === 'string') {

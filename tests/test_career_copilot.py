@@ -383,10 +383,12 @@ async def test_batch_approval_security_gate():
 
     # Verify application status transitioned
     app1_approved = await get_career_application_by_id(app1.id, "user_batch_test")
+    assert app1_approved is not None
     assert app1_approved.status == CareerApplicationStatus.APPROVED_FOR_SUBMISSION
 
     # 5. Execute approved batch -> Succeeds safely with adapter execution
     batch_data_approved = await get_application_batch(batch_id, "user_batch_test")
+    assert batch_data_approved is not None
     results = await execute_batch_submission("user_batch_test", batch_data_approved, SubmissionMethod.MANUAL_HANDOFF)
     assert len(results) == 2
     assert results[0].status == CareerApplicationStatus.MANUAL_SUBMISSION_REQUIRED.value

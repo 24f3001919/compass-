@@ -19,6 +19,14 @@ if (typeof document !== 'undefined') {
 const isLocalDevHost = typeof window !== 'undefined' &&
   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
 
+if (typeof window !== 'undefined' && isLocalDevHost) {
+  try {
+    localStorage.removeItem('compass_active_api_base')
+  } catch {
+    /* ignore storage access error */
+  }
+}
+
 function resolveInitialApiBase() {
   // If hosted on a public domain (Vercel, custom domain, anything other than localhost),
   // ALWAYS use '' (same-origin relative URL) so that:
@@ -34,16 +42,10 @@ function resolveInitialApiBase() {
     return ''
   }
 
-  if (import.meta?.env?.VITE_API_BASE_URL && isLocalDevHost) {
-    return import.meta.env.VITE_API_BASE_URL.replace(/\/$/, '')
-  }
-  try {
-    const saved = localStorage.getItem('compass_active_api_base')
-    if (saved && isLocalDevHost) return saved.replace(/\/$/, '')
-  } catch {
-    /* ignore storage access error */
-  }
   if (isLocalDevHost) {
+    if (import.meta?.env?.VITE_API_BASE_URL) {
+      return import.meta.env.VITE_API_BASE_URL.replace(/\/$/, '')
+    }
     return 'http://localhost:8000'
   }
   return ''
@@ -65,7 +67,7 @@ export function setApiBase(newBase) {
 
   API_BASE = (newBase || '').replace(/\/$/, '')
   try {
-    if (API_BASE) {
+    if (API_BASE && (!isLocalDevHost || API_BASE !== RENDER_BACKEND_URL)) {
       localStorage.setItem('compass_active_api_base', API_BASE)
     } else {
       localStorage.removeItem('compass_active_api_base')

@@ -178,7 +178,7 @@ async def setup_career_e2e_environment():
                 "is_india_eligible": True,
                 "canonical_url": f"https://testcompany{opp_id}.com/careers/intern",
                 "official_application_url": f"https://testcompany{opp_id}.com/careers/intern",
-                "current_status": OpportunityStatus.DISCOVERED.value,
+                "current_status": OpportunityStatus.DISCOVERED,
                 "description": "Test opportunity description",
                 "requirements": None,
                 "created_at": datetime.now(timezone.utc),
@@ -275,6 +275,7 @@ async def test_complete_career_copilot_end_to_end_workflow():
     opp = await get_opportunity_by_id(opp_id, user_id)
     assert opp is not None
     assert opp.company_name == "Acme Robotics India"
+    assert opp.official_application_url is not None
 
     # Step 3: Verify opportunity status
     # Inconclusive/unreachable page does not prematurely promote to OPEN_CONFIRMED
@@ -382,6 +383,7 @@ async def test_complete_career_copilot_end_to_end_workflow():
             },
         },
     )
+    assert app_record is not None
     assert app_record.resume_id == tailored_resume.id
     assert app_record.status == CareerApplicationStatus.READY_FOR_REVIEW
 
@@ -397,7 +399,9 @@ async def test_complete_career_copilot_end_to_end_workflow():
     assert "not been explicitly reviewed and approved" in blocked_result.message
 
     # Step 12: Explicitly approve the exact reviewed batch
-    apps_data = [(await get_career_application_by_id(app_record.id, user_id)).model_dump()]
+    fetched_app = await get_career_application_by_id(app_record.id, user_id)
+    assert fetched_app is not None
+    apps_data = [fetched_app.model_dump()]
     content_hash = compute_batch_content_hash(apps_data)
     approval_token = generate_batch_approval_token(user_id, batch_id, [app_record.id], content_hash)
 
@@ -406,10 +410,12 @@ async def test_complete_career_copilot_end_to_end_workflow():
 
     # Confirm application transitioned to APPROVED_FOR_SUBMISSION
     app_after_approval = await get_career_application_by_id(app_record.id, user_id)
+    assert app_after_approval is not None
     assert app_after_approval.status == CareerApplicationStatus.APPROVED_FOR_SUBMISSION
 
     # Step 13: Exercise submission via adapter
     batch_approved = await get_application_batch(batch_id, user_id)
+    assert batch_approved is not None
     results = await execute_batch_submission(user_id, batch_approved, SubmissionMethod.MANUAL_HANDOFF)
     assert len(results) == 1
     assert results[0].status == CareerApplicationStatus.MANUAL_SUBMISSION_REQUIRED.value
@@ -422,9 +428,12 @@ async def test_complete_career_copilot_end_to_end_workflow():
 
     # Step 15: Reload records and confirm complete consistency
     reloaded_batch = await get_application_batch(batch_id, user_id)
+    assert reloaded_batch is not None
     assert reloaded_batch["status"] == "SUBMITTED"
     reloaded_app = await get_career_application_by_id(app_record.id, user_id)
+    assert reloaded_app is not None
     assert reloaded_app.submission_method == SubmissionMethod.MANUAL_HANDOFF
+    assert reloaded_app.submission_result is not None
     assert reloaded_app.submission_result.get("result") == "manual_package_generated"
 
 
@@ -719,6 +728,7 @@ async def test_adapter_browser_assisted_prefill_kit():
     assert result.status == CareerApplicationStatus.MANUAL_SUBMISSION_REQUIRED.value
     assert result.submission_method == "browser_assisted"
     kit = result.manual_package
+    assert kit is not None
     assert "prefill_data" in kit
     assert "dom_selector_hints" in kit
     # Safety invariant: Never attempts to bypass CAPTCHA
@@ -831,6 +841,7 @@ def test_resume_file_pdf_encrypted_handled_clearly():
 
     res = extract_resume_from_file_bytes(stream.getvalue(), "locked.pdf")
     assert res.success is False
+    assert res.error_message is not None
     assert "password-protected or encrypted" in res.error_message
 
 
@@ -840,6 +851,7 @@ def test_resume_file_pdf_malformed_handled_clearly():
 
     res = extract_resume_from_file_bytes(b"corrupt non-pdf header bytes", "corrupted.pdf")
     assert res.success is False
+    assert res.error_message is not None
     assert "Malformed or corrupted" in res.error_message or "Failed" in res.error_message
 
 
@@ -849,6 +861,7 @@ def test_resume_file_empty_bytes_handled_clearly():
 
     res = extract_resume_from_file_bytes(b"", "empty.pdf")
     assert res.success is False
+    assert res.error_message is not None
     assert "empty" in res.error_message.lower()
 
 
@@ -858,6 +871,7 @@ def test_resume_file_unsupported_format_rejected():
 
     res = extract_resume_from_file_bytes(b"\x89PNG\r\n\x1a\nfake image content", "resume.png")
     assert res.success is False
+    assert res.error_message is not None
     assert "Unsupported file format" in res.error_message
     assert "PDF" in res.error_message
     assert "Word (.docx)" in res.error_message
@@ -870,6 +884,7 @@ def test_resume_file_oversized_rejected():
     oversized = b"a" * (5 * 1024 * 1024 + 10)
     res = extract_resume_from_file_bytes(oversized, "huge.txt")
     assert res.success is False
+    assert res.error_message is not None
     assert "exceeds maximum allowed size" in res.error_message
 
 
@@ -903,6 +918,7 @@ async def test_resume_file_upload_api_does_not_silently_overwrite_master():
 
         # Invariant: Master resume must NOT have been changed
         persisted_master = await get_master_resume("user_parse_test")
+        assert persisted_master is not None
         assert persisted_master.content.full_name == "Original Name"
         assert persisted_master.content.skills == ["OriginalSkill"]
 
@@ -943,6 +959,7 @@ async def test_submission_adapter_ats_outcome_unknown_on_network_timeout():
 
             # Verify persisted application status is SUBMISSION_OUTCOME_UNKNOWN
             updated_app = await get_career_application_by_id(app_rec.id, user)
+            assert updated_app is not None
             assert updated_app.status == CareerApplicationStatus.SUBMISSION_OUTCOME_UNKNOWN.value
 
             # Verify automated retry is blocked
@@ -982,7 +999,8 @@ async def test_submission_adapter_ats_confirmed_200():
             assert "confirmed by partner ATS" in result.message
 
             updated_app = await get_career_application_by_id(app_rec.id, user)
-            assert updated_app.status == CareerApplicationStatus.SUBMITTED.value
+            assert updated_app is not None
+            assert updated_app.status == CareerApplicationStatus.SUBMISSION_SUBMITTED.value if hasattr(CareerApplicationStatus, 'SUBMISSION_SUBMITTED') else updated_app.status == CareerApplicationStatus.SUBMITTED.value
             assert updated_app.submitted_at is not None
 
 

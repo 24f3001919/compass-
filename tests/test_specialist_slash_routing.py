@@ -41,14 +41,19 @@ def test_specialist_registry_unique_ids_and_metadata():
 
 def test_specialist_alias_lookup():
     """Verify get_specialist resolves canonical IDs and common command aliases."""
-    assert get_specialist("calendar").id == "calendar"
-    assert get_specialist("/calendar").id == "calendar"
-    assert get_specialist("schedule").id == "calendar"
-    assert get_specialist("auto").id == "auto-dispatcher"
-    assert get_specialist("/auto").id == "auto-dispatcher"
-    assert get_specialist("academic").id == "coursework"
-    assert get_specialist("web").id == "research"
-    assert get_specialist("vector").id == "memory"
+    def _id(name: str) -> str:
+        s = get_specialist(name)
+        assert s is not None
+        return s.id
+
+    assert _id("calendar") == "calendar"
+    assert _id("/calendar") == "calendar"
+    assert _id("schedule") == "calendar"
+    assert _id("auto") == "auto-dispatcher"
+    assert _id("/auto") == "auto-dispatcher"
+    assert _id("academic") == "coursework"
+    assert _id("web") == "research"
+    assert _id("vector") == "memory"
 
 
 # ---------------------------------------------------------------------------

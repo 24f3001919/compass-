@@ -2,6 +2,7 @@ import os
 import json
 import time
 import urllib.request
+import urllib.error
 import dotenv
 
 dotenv.load_dotenv()

@@ -15,6 +15,8 @@ import os
 import sys
 import json
 from pathlib import Path
+from typing import Any, cast
+from openai.types.chat import ChatCompletion
 
 if sys.platform == "win32":
     if hasattr(sys.stdout, "reconfigure"):
@@ -136,9 +138,10 @@ def verify_tool_calling(client: OpenAI) -> bool | None:
             tools=tools,
             tool_choice="auto",
             max_tokens=256,
+            stream=False,
         )
 
-        choice = response.choices[0]
+        choice = cast(ChatCompletion, response).choices[0]
         if choice.message.tool_calls:
             tc: Any = choice.message.tool_calls[0]
             func_name = getattr(getattr(tc, "function", None), "name", None) or getattr(tc, "name", "unknown")

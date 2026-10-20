@@ -26,7 +26,7 @@ def extract_job_sections(job_text: str) -> Dict[str, List[str]]:
     Extracts structured requirements from raw job description text.
     Distinguishes mandatory requirements from preferred qualifications and responsibilities.
     """
-    lines = [l.strip() for l in job_text.splitlines() if l.strip()]
+    lines = [line.strip() for line in job_text.splitlines() if line.strip()]
 
     mandatory: List[str] = []
     preferred: List[str] = []
@@ -145,7 +145,7 @@ def analyze_job_and_match(
                     category="technical_skill",
                     is_mandatory=True,
                     match_status="partial",
-                    supporting_facts=[f"Mentioned in project implementations."],
+                    supporting_facts=["Mentioned in project implementations."],
                     reasoning=f"Skill {skill} is applied in verified project work but not highlighted in primary skills.",
                     confidence=0.8,
                 )

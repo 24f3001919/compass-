@@ -225,6 +225,7 @@ async def test_pending_action_tampering_and_cross_user():
         pool, action_id=action_id, run_id="run_100", caller_identity="usr_owner", confirmed_args=args
     )
     assert ok is True
+    assert orig is not None
     assert orig["task_id"] == "tsk_99"
 
     # 4. Replay attempt -> rejected (single-use)

@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 from openai import AsyncOpenAI
+from openai.types.chat import ChatCompletion
 
 from backend.config import get_settings
 from eval.models import Scenario, RUBRIC_CRITERIA, CRITERIA_DESCRIPTIONS
@@ -159,9 +160,11 @@ class AIJudge:
                 temperature=0.0,
                 max_tokens=800,
                 response_format={"type": "json_object"},
+                stream=False,
             )
 
-            raw_content = response.choices[0].message.content or "{}"
+            completion = cast(ChatCompletion, response)
+            raw_content = completion.choices[0].message.content or "{}"
             data = json.loads(raw_content)
 
             raw_scores = data.get("scores", {})

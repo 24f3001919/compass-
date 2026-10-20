@@ -351,4 +351,5 @@ def test_roadmap_intent_positive_and_negative_matching():
     # Positive fallback routing
     skill, args, _ = _fallback_route("what should I do today?")
     assert skill == "agent"
+    assert args is not None
     assert args.get("goal") == "what should I do today?"

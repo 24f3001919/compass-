@@ -49,6 +49,7 @@ def test_past_date_roll_forward_with_frozen_clock():
         msg_past = "add a deadline on 5th of October 23:59 with the name finish report"
         skill, args, resp = _fallback_route(msg_past)
         assert skill == "add_task"
+        assert args is not None
         assert args["title"] == "Finish report"
         assert "2027-10-05" in args["due_date"]
         assert "has passed this year; scheduled for 2027" in args.get("roll_forward_note", "")
@@ -57,6 +58,7 @@ def test_past_date_roll_forward_with_frozen_clock():
         msg_future = "add a deadline on 10th of October 23:59 with the name finish report"
         skill_fut, args_fut, resp_fut = _fallback_route(msg_future)
         assert skill_fut == "add_task"
+        assert args_fut is not None
         assert args_fut["title"] == "Finish report"
         assert "2026-10-10" in args_fut["due_date"]
         assert "roll_forward_note" not in args_fut
@@ -65,6 +67,7 @@ def test_past_date_roll_forward_with_frozen_clock():
         msg_explicit = "add a deadline on 5th of October 2025 with the name historic task"
         skill_exp, args_exp, resp_exp = _fallback_route(msg_explicit)
         assert skill_exp == "add_task"
+        assert args_exp is not None
         assert args_exp["title"] == "Historic task"
 
 

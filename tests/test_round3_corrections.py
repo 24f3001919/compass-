@@ -212,6 +212,7 @@ async def test_pending_action_state_transitions():
     )
     assert ok is True
     assert msg == "ok"
+    assert orig_args is not None
     assert orig_args["task_id"] == 42
 
     # 2. Mark executed

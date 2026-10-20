@@ -82,7 +82,9 @@ async def test_scenario_1_ats_rejects_submission():
 
     assert res.status == CareerApplicationStatus.SUBMISSION_FAILED.value
     updated = await get_career_application_by_id(app_rec.id, user)
+    assert updated is not None
     assert updated.status == CareerApplicationStatus.SUBMISSION_FAILED.value
+    assert updated.submission_result is not None
     assert "Invalid candidate data" in updated.submission_result.get("error", "")
 
 
@@ -107,7 +109,9 @@ async def test_scenario_2_ats_accepts_submission():
 
     assert res.status == CareerApplicationStatus.SUBMISSION_SUBMITTED.value if hasattr(CareerApplicationStatus, 'SUBMISSION_SUBMITTED') else res.status == CareerApplicationStatus.SUBMITTED.value
     updated = await get_career_application_by_id(app_rec.id, user)
+    assert updated is not None
     assert updated.status == CareerApplicationStatus.SUBMITTED.value
+    assert updated.submission_result is not None
     assert updated.submission_result.get("reference_id") == "ATS-REF-9999"
     assert updated.submitted_at is not None
 
@@ -131,6 +135,7 @@ async def test_scenario_3_ats_times_out_unknown_outcome():
 
     assert res.status == CareerApplicationStatus.SUBMISSION_OUTCOME_UNKNOWN.value
     updated = await get_career_application_by_id(app_rec.id, user)
+    assert updated is not None
     assert updated.status == CareerApplicationStatus.SUBMISSION_OUTCOME_UNKNOWN.value
 
     # Verify automated retry is BLOCKED
@@ -168,6 +173,7 @@ async def test_scenario_4_ats_accepted_but_local_save_crashes():
     assert reconciled["reconciled_applications"] >= 1
 
     recovered = await get_career_application_by_id(app_rec.id, user)
+    assert recovered is not None
     assert recovered.status == CareerApplicationStatus.SUBMISSION_OUTCOME_UNKNOWN.value
 
 
@@ -210,6 +216,7 @@ async def test_scenario_6_db_fails_after_external_submission():
     res = await reconcile_stale_submission_claims(user, max_age_seconds=600)
     assert res["reconciled_applications"] >= 1
     recovered = await get_career_application_by_id(app_rec.id, user)
+    assert recovered is not None
     assert recovered.status == CareerApplicationStatus.SUBMISSION_OUTCOME_UNKNOWN.value
 
 
@@ -239,6 +246,7 @@ async def test_scenario_7_worker_crashes_holding_claim():
     assert rec["reconciled_batches"] >= 1
 
     recovered_batch = await get_application_batch(batch_id, user)
+    assert recovered_batch is not None
     assert recovered_batch["status"] == "READY_FOR_REVIEW"
     assert recovered_batch["approval_token"] is None
 

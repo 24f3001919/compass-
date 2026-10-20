@@ -223,3 +223,5 @@ async def route_message(
             if is_schedule_or_agent_intent(message):
                 return "agent", {"goal": message}, ""
             return _fallback_route(message, history)
+
+    return _fallback_route(message, history)

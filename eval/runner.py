@@ -20,12 +20,13 @@ from typing import Any, Dict, List, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
 # Ensure stdout/stderr safely handle utf-8 on Windows cp1252 consoles
-if hasattr(sys.stdout, "reconfigure"):
-    try:
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-    except Exception:
-        pass
+for _stream in (sys.stdout, sys.stderr):
+    _reconfig = getattr(_stream, "reconfigure", None)
+    if callable(_reconfig):
+        try:
+            _reconfig(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
 
 from eval.deterministic import evaluate_deterministic, sanitize_diagnostic_output
 from eval.judge import AIJudge

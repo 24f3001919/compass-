@@ -113,6 +113,7 @@ export default function ChatMessageList({
   isStreaming,
   streamingText,
   streamingThought = '',
+  streamingStatus = null,
   isTyping,
   messagesEndRef,
   profileFacts = {},
@@ -412,11 +413,15 @@ export default function ChatMessageList({
                   border: '1px solid var(--border)',
                   boxShadow: 'var(--shadow-md)'
                 }}>
-                  {streamingThought && (
-                    <ThinkingBlock thought={streamingThought} isLive={true} />
+                  {(streamingThought || !streamingText) && (
+                    <ThinkingBlock thought={streamingThought} status={streamingStatus} isLive={true} />
                   )}
-                  <MarkdownRenderer content={streamingText} />
-                  <span className="streaming-caret" style={{ background: 'var(--coursework)' }} />
+                  {streamingText ? (
+                    <>
+                      <MarkdownRenderer content={streamingText} />
+                      <span className="streaming-caret" style={{ background: 'var(--coursework)' }} />
+                    </>
+                  ) : null}
                 </div>
               </div>
             )}

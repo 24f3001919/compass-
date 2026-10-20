@@ -57,12 +57,14 @@ async def test_schedule_intents_route_to_agent():
     repro1 = "Please review my upcoming tasks and projects and propose a focus schedule for this week."
     skill, args, text = await route_message(repro1)
     assert skill == "agent"
+    assert args is not None
     assert args.get("goal") == repro1
     assert text == ""
 
     repro2 = "Check my weekend schedule for conflicts across hackathon and coursework."
     skill, args, text = await route_message(repro2)
     assert skill == "agent"
+    assert args is not None
     assert args.get("goal") == repro2
     assert text == ""
 

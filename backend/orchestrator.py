@@ -63,6 +63,8 @@ async def handle_message(
     persist: bool = True,
     tone: Optional[str] = None,
     conv_mode: Optional[str] = None,
+    pre_routed_skill: Optional[str] = None,
+    pre_routed_args: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Process an incoming user message through router and skill handlers."""
     start_time = time.perf_counter()
@@ -161,12 +163,17 @@ async def handle_message(
         except Exception as e:
             logger.debug(f"Could not load cross-conversation memory: {e}")
 
-    # 1. Route via Nemotron-3 Nano
-    skill_name, args, text_reply = await route_message(
-        message,
-        history=history if history else None,
-        memory_context=memory_context if memory_context else None,
-    )
+    # 1. Route via Nemotron-3 Nano (bypass if already resolved upstream)
+    if pre_routed_skill is not None:
+        skill_name = pre_routed_skill
+        args = dict(pre_routed_args) if isinstance(pre_routed_args, dict) else {}
+        text_reply = None
+    else:
+        skill_name, args, text_reply = await route_message(
+            message,
+            history=history if history else None,
+            memory_context=memory_context if memory_context else None,
+        )
     effective_user_id = user_id or guest_id
     if effective_user_id and isinstance(args, dict):
         args["user_id"] = effective_user_id
@@ -612,8 +619,8 @@ async def handle_message(
 
             succeeded = bool(skill_result.get("success", True))
             summary = (
-                skill_result.get("summary")
-                or skill_result.get("response")
+                skill_result.get("response")
+                or skill_result.get("summary")
                 or ("Action completed." if succeeded else "")
             )
             data = skill_result.get("data")
@@ -674,6 +681,8 @@ async def handle_message(
             chat_error = "empty_model_response"
             text_reply = "I encountered an empty response from the model. Please retry."
 
+    safe_reply = text_reply or ""
+
     if persist and chat_success:
         try:
             pool = await get_pool()
@@ -682,7 +691,7 @@ async def handle_message(
                     conn, conv_id, user_id=user_id, guest_id=guest_id
                 )
                 await conversations.add_message(conn, real_cid, role="user", content=message)
-                await conversations.add_message(conn, real_cid, role="assistant", content=text_reply, skill_called="chat")
+                await conversations.add_message(conn, real_cid, role="assistant", content=safe_reply, skill_called="chat")
                 conv_id = real_cid
         except Exception as e:
             logger.debug(f"Could not persist message history: {e}")
@@ -690,8 +699,8 @@ async def handle_message(
     latency_ms = int((time.perf_counter() - start_time) * 1000)
     return {
         "conversation_id": conv_id,
-        "response": text_reply,
-        "message": text_reply,
+        "response": safe_reply,
+        "message": safe_reply,
         "skill_used": "chat",
         "success": chat_success,
         "error": chat_error,

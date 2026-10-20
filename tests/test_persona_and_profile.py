@@ -5,6 +5,7 @@ Tests the warm thinking partner persona prompts, signature phrase pools,
 profile facts extraction, storage, and API endpoints.
 """
 
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import AsyncClient
@@ -152,18 +153,21 @@ def test_fallback_route_extracts_facts():
     # Remember name
     skill, args, _ = _fallback_route("My name is Taylor")
     assert skill == "remember_fact"
+    assert args is not None
     assert args.get("key") == "name"
     assert args.get("value") == "Taylor"
 
     # Call me X
     skill, args, _ = _fallback_route("Please call me Alex")
     assert skill == "remember_fact"
+    assert args is not None
     assert args.get("key") == "name"
     assert args.get("value") == "Alex"
 
     # Forget fact
     skill, args, _ = _fallback_route("Please forget my goal")
     assert skill == "forget_fact"
+    assert args is not None
     assert args.get("key") == "goal"
 
 
@@ -181,17 +185,20 @@ def test_router_false_positives_regression():
     # 3. "forget my goal" -> forget_fact
     skill_forget, args_forget, _ = _fallback_route("forget my goal")
     assert skill_forget == "forget_fact"
+    assert args_forget is not None
     assert args_forget.get("key") == "goal"
 
     # 4. "call me Sam" -> remember_fact (name)
     skill_name, args_name, _ = _fallback_route("call me Sam")
     assert skill_name == "remember_fact"
+    assert args_name is not None
     assert args_name.get("key") == "name"
     assert args_name.get("value") == "Sam"
 
     # 5. "my name is Alex and my goal is to win the hackathon" -> remember_fact
     skill_compound, args_compound, _ = _fallback_route("my name is Alex and my goal is to win the hackathon")
     assert skill_compound == "remember_fact"
+    assert args_compound is not None
     assert args_compound.get("key") == "name"
     assert args_compound.get("value") == "Alex"
 
@@ -348,7 +355,7 @@ def test_persona_tone_validation_and_prompt_injection():
     assert validate_tone("random_junk") is None
     assert validate_tone("") is None
     assert validate_tone(None) is None
-    assert validate_tone(123) is None
+    assert validate_tone(cast(Any, 123)) is None
 
     # 2. Prompt injection for 'brief'
     prompt_brief = build_persona_system_prompt(tone="brief")
@@ -496,10 +503,12 @@ def test_parked_thoughts_router_detection():
     # 1. Actionable park deferrals -> park_thought
     s1, a1, _ = _fallback_route("park that we should refactor database queries")
     assert s1 == "park_thought"
+    assert a1 is not None
     assert "we should refactor database queries" in a1["text"]
 
     s2, a2, _ = _fallback_route("park this for later: evaluate model latency")
     assert s2 == "park_thought"
+    assert a2 is not None
     assert "evaluate model latency" in a2["text"]
 
     s3, _, _ = _fallback_route("park it")
@@ -524,6 +533,7 @@ def test_parked_thoughts_router_detection():
 
     s9, a9, _ = _fallback_route("mark parked 7 done")
     assert s9 == "resolve_parked"
+    assert a9 is not None
     assert a9["thought_id"] == 7
 
 

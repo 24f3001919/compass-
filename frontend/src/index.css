@@ -485,7 +485,7 @@ code, pre, .mono {
   box-shadow: var(--shadow-sm);
   display: flex;
   align-items: center;
-  justifyContent: space-between;
+  justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
 }
@@ -667,14 +667,109 @@ code, pre, .mono {
   50% { opacity: 0; }
 }
 
+@keyframes thinking-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes wave-dot {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+.thinking-pill-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 9999px;
+  background: var(--bg-card-soft, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  transition: all 0.25s ease;
+  user-select: none;
+  margin-bottom: 6px;
+}
+
+.thinking-shimmer-text {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  background: linear-gradient(
+    90deg,
+    var(--text-secondary) 0%,
+    var(--text-primary) 35%,
+    var(--coursework, #6366f1) 50%,
+    var(--text-primary) 65%,
+    var(--text-secondary) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: thinking-shimmer 2.8s linear infinite;
+}
+
+.thinking-wave-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.thinking-wave-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--coursework, #6366f1);
+  display: inline-block;
+}
+
+.thinking-wave-dot:nth-child(1) {
+  animation: wave-dot 1.3s ease-in-out infinite 0s;
+}
+.thinking-wave-dot:nth-child(2) {
+  animation: wave-dot 1.3s ease-in-out infinite 0.2s;
+}
+.thinking-wave-dot:nth-child(3) {
+  animation: wave-dot 1.3s ease-in-out infinite 0.4s;
+}
+
 .streaming-caret {
   display: inline-block;
   width: 2px;
   height: 14px;
-  background-color: #818cf8;
+  background-color: var(--coursework, #818cf8);
   margin-left: 2px;
   vertical-align: middle;
-  animation: blink 0.7s infinite;
+  border-radius: 1px;
+  animation: blink 0.75s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-shimmer-text {
+    animation: none;
+    background: none;
+    -webkit-text-fill-color: var(--text-primary);
+    color: var(--text-primary);
+  }
+  .thinking-wave-dot {
+    animation: none;
+    opacity: 0.8;
+  }
+  .streaming-caret {
+    animation: none;
+    opacity: 1;
+  }
 }
 
 /* ==========================================================================

@@ -96,40 +96,35 @@ function sanitizeActivityMilestones(rawText) {
  * Replaces raw chain-of-thought and tool parameter dumps with a clean status pill
  * and optional expandable milestone checklist.
  */
-export default function ThinkingBlock({ thought, isLive = false }) {
+export default function ThinkingBlock({ thought, status, isLive = false }) {
   const [isOpen, setIsOpen] = useState(false)
 
   const milestones = useMemo(() => sanitizeActivityMilestones(thought), [thought])
 
+  // Resolve user-facing activity label
+  const activeLabel = useMemo(() => {
+    if (status?.label) return status.label
+    if (status?.stage === 'searching') return 'Searching the web…'
+    if (status?.stage === 'reading_sources') return 'Verifying official sources…'
+    if (status?.stage === 'reasoning') return 'Analyzing…'
+    if (status?.stage === 'generating') return 'Generating response…'
+    if (milestones && milestones.length > 0) return milestones[milestones.length - 1]
+    return 'Understanding your request…'
+  }, [status, milestones])
+
   if (!milestones || milestones.length === 0) {
     if (!isLive) return null
     return (
-      <div style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '6px',
-        padding: '3px 9px',
-        borderRadius: '12px',
-        background: 'var(--bg-card-soft, rgba(0, 0, 0, 0.04))',
-        border: '1px solid var(--border)',
-        fontSize: '11.5px',
-        color: 'var(--text-secondary)',
-        marginBottom: '8px',
-      }}>
-        <span style={{
-          display: 'inline-block',
-          width: '6px',
-          height: '6px',
-          borderRadius: '50%',
-          background: 'var(--coursework, #3b82f6)',
-          animation: 'pulse 1.5s infinite',
-        }} />
-        <span>Understanding your request…</span>
+      <div className="thinking-pill-container" role="status" aria-live="polite">
+        <div className="thinking-wave-dots">
+          <span className="thinking-wave-dot" />
+          <span className="thinking-wave-dot" />
+          <span className="thinking-wave-dot" />
+        </div>
+        <span className="thinking-shimmer-text">{activeLabel}</span>
       </div>
     )
   }
-
-  const latestMilestone = milestones[milestones.length - 1]
 
   return (
     <div style={{
@@ -158,21 +153,18 @@ export default function ThinkingBlock({ thought, isLive = false }) {
           fontSize: '11.5px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
           {isLive ? (
-            <span style={{
-              display: 'inline-block',
-              width: '6px',
-              height: '6px',
-              borderRadius: '50%',
-              background: 'var(--coursework, #3b82f6)',
-              animation: 'pulse 1.5s infinite',
-            }} />
+            <div className="thinking-wave-dots">
+              <span className="thinking-wave-dot" />
+              <span className="thinking-wave-dot" />
+              <span className="thinking-wave-dot" />
+            </div>
           ) : (
             <span style={{ color: 'var(--coursework, #3b82f6)', fontSize: '11px' }}>✦</span>
           )}
-          <span>
-            {isLive ? `${latestMilestone}…` : `Activity: ${milestones.length} step${milestones.length > 1 ? 's' : ''} completed`}
+          <span className={isLive ? 'thinking-shimmer-text' : ''}>
+            {isLive ? `${activeLabel}` : `Activity: ${milestones.length} step${milestones.length > 1 ? 's' : ''} completed`}
           </span>
         </div>
         <span style={{

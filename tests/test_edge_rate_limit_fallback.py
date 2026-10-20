@@ -13,6 +13,7 @@ import hashlib
 import hmac
 import time
 import pytest
+from fastapi import HTTPException
 from starlette.requests import Request
 
 from backend.services.security import get_client_ip, is_edge_ip_trusted
@@ -67,8 +68,9 @@ async def test_edge_rate_limit_with_and_without_valid_signature(monkeypatch):
     await enforce_rate_limit(req_alice, action="test_action", identity_capacity=2.0, identity_refill_per_sec=0.0001, ip_capacity=2.0)
 
     # Alice's 3rd request should fail with 429 for identity
-    with pytest.raises(Exception) as excinfo:
+    with pytest.raises(HTTPException) as excinfo:
         await enforce_rate_limit(req_alice, action="test_action", identity_capacity=2.0, identity_refill_per_sec=0.0001, ip_capacity=2.0)
+    assert isinstance(excinfo.value, HTTPException)
     assert excinfo.value.status_code == 429
     assert "identity" in excinfo.value.detail.lower()
 

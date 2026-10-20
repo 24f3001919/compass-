@@ -28,6 +28,7 @@ import os
 import sys
 import argparse
 from pathlib import Path
+from typing import Any
 
 # Dependency and environment directories
 DEPENDENCY_DIRS = {
@@ -167,7 +168,7 @@ def count_lines(path: Path) -> int:
 
 
 def audit_repository(root: Path, max_lines: int = 700, warn_lines: int = 500):
-    categories = {
+    categories: dict[str, list[Any]] = {
         'IN_SCOPE': [],
         'GENERATED': [],
         'VENDORED': [],

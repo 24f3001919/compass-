@@ -75,12 +75,80 @@ async def handle_search_web(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
     top_badge = citations[0].get("authority_badge", "Web") if citations else ""
     summary = f"Found {len(ranked_results)} web result(s) for '{query}'. Top source: {top_url} [{top_badge}]"
 
-    # Build markdown response for chat interface
-    parts = [f"**Web Search Results for:** *{query}*"]
-    for r in ranked_results[:3]:
-        badge = r.get("authority_badge", "Web")
-        parts.append(f"• [{r.get('title', 'Untitled')}]({r.get('url', '')}) `{badge}`\n  {r.get('content', '')[:500].strip()}...")
-    formatted_response = "\n".join(parts) if ranked_results else summary
+    # Build synthesized markdown response for chat interface
+    is_deadline_query = bool(
+        re.search(r"\b(deadline|due\s+date|submission\s+(?:date|deadline|period)|closes?|ends?|verify.*date|when\s+is.*due|hackathon)\b", query, re.IGNORECASE)
+    )
+
+    formatted_response = summary
+    if is_deadline_query and ranked_results:
+        candidates = []
+        for r in ranked_results:
+            content = r.get("content", "")
+            url = r.get("url", "")
+            title = r.get("title", "")
+            badge = r.get("authority_badge", "Web")
+            for line in content.split("\n"):
+                clean_line = line.strip()
+                if not clean_line or len(clean_line) < 15:
+                    continue
+                if re.search(r"\b(deadline|submission|due|closes|ends)\b", clean_line, re.I) and re.search(r"\b(202[4-9]|January|February|March|April|May|June|July|August|September|October|November|December|Oct|Nov|Dec)\b", clean_line, re.I):
+                    candidates.append({
+                        "line": clean_line,
+                        "url": url,
+                        "title": title,
+                        "badge": badge,
+                    })
+
+        if candidates:
+            # Prefer official rules / devpost / organizer sources
+            best_cand = None
+            for c in candidates:
+                u_low = c["url"].lower()
+                if "rules" in u_low or "updates" in u_low or "devpost.com" in u_low:
+                    best_cand = c
+                    break
+            if not best_cand:
+                best_cand = candidates[0]
+
+            out_lines = [
+                f"### 🎯 Verified Finding: {best_cand.get('title') or query}",
+                "",
+                f"> \"{best_cand['line']}\"",
+                "",
+                f"**Primary Official Source:** [{best_cand.get('title') or best_cand['url']}]({best_cand['url']}) `{best_cand['badge']}`",
+                "",
+            ]
+
+            other_sources = [c for c in candidates if c["url"] != best_cand["url"]]
+            if other_sources:
+                out_lines.append("**Corroborating Evidence:**")
+                seen_urls = {best_cand["url"]}
+                for oc in other_sources:
+                    if oc["url"] not in seen_urls:
+                        seen_urls.add(oc["url"])
+                        out_lines.append(f"- [{oc.get('title') or oc['url']}]({oc['url']}) `{oc['badge']}`: *\"{oc['line'][:150]}\"*")
+                out_lines.append("")
+
+            formatted_response = "\n".join(out_lines).strip()
+        else:
+            # Deadline query but no explicit dates extracted
+            parts = [
+                f"### Web Research: *{query}*",
+                "",
+                "No explicit deadline date could be conclusively verified from the official sources. Here are the most authoritative references found:",
+                "",
+            ]
+            for r in ranked_results[:3]:
+                badge = r.get("authority_badge", "Web")
+                parts.append(f"• [{r.get('title', 'Untitled')}]({r.get('url', '')}) `{badge}`\n  {r.get('content', '')[:350].strip()}...")
+            formatted_response = "\n".join(parts)
+    elif ranked_results:
+        parts = [f"**Web Search Results for:** *{query}*"]
+        for r in ranked_results[:3]:
+            badge = r.get("authority_badge", "Web")
+            parts.append(f"• [{r.get('title', 'Untitled')}]({r.get('url', '')}) `{badge}`\n  {r.get('content', '')[:400].strip()}...")
+        formatted_response = "\n".join(parts)
 
     return {
         "success": True,
