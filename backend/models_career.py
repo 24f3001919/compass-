@@ -6,7 +6,7 @@ and Application Center (application states, batch review, explicit approval, sub
 """
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator
@@ -54,6 +54,15 @@ class SubmissionMethod(str, Enum):
     MANUAL_HANDOFF = "manual_handoff"
 
 
+class EvidenceClassification(str, Enum):
+    SOURCE_DOCUMENT = "SOURCE_DOCUMENT"
+    REPOSITORY_EVIDENCE = "REPOSITORY_EVIDENCE"
+    OFFICIAL_API_DATA = "OFFICIAL_API_DATA"
+    USER_CONFIRMED = "USER_CONFIRMED"
+    NEEDS_CONFIRMATION = "NEEDS_CONFIRMATION"
+    CONFLICTING_INFORMATION = "CONFLICTING_INFORMATION"
+
+
 class ResumeEducationItem(BaseModel):
     institution: str
     degree: str
@@ -61,6 +70,7 @@ class ResumeEducationItem(BaseModel):
     start_year: Optional[int] = None
     end_year: Optional[int] = None
     cgpa_or_grade: Optional[str] = None
+    evidence_classification: Optional[EvidenceClassification] = None
 
 
 class ResumeProjectItem(BaseModel):
@@ -68,7 +78,10 @@ class ResumeProjectItem(BaseModel):
     description: str
     technologies: List[str] = Field(default_factory=list)
     project_url: Optional[str] = None
+    repo_url: Optional[str] = None
     highlights: List[str] = Field(default_factory=list)
+    evidence_classification: Optional[EvidenceClassification] = None
+    evidence_details: Optional[Dict[str, Any]] = None
 
 
 class ResumeExperienceItem(BaseModel):
@@ -78,6 +91,7 @@ class ResumeExperienceItem(BaseModel):
     end_date: Optional[str] = None
     is_current: bool = False
     highlights: List[str] = Field(default_factory=list)
+    evidence_classification: Optional[EvidenceClassification] = None
 
 
 class ResumeContent(BaseModel):
@@ -94,6 +108,25 @@ class ResumeContent(BaseModel):
     experience: List[ResumeExperienceItem] = Field(default_factory=list)
     achievements: List[str] = Field(default_factory=list)
     certifications: List[str] = Field(default_factory=list)
+    # Expanded Phase 1 sections
+    internships: List[ResumeExperienceItem] = Field(default_factory=list)
+    awards: List[str] = Field(default_factory=list)
+    hackathons: List[str] = Field(default_factory=list)
+    leadership_and_volunteering: List[str] = Field(default_factory=list)
+    publications: List[str] = Field(default_factory=list)
+    relevant_links: List[str] = Field(default_factory=list)
+    evidence_classifications: Dict[str, str] = Field(default_factory=dict)
+    evidence_notes: Dict[str, str] = Field(default_factory=dict)
+
+
+class OriginalResumeDocument(BaseModel):
+    id: str
+    user_id: str
+    filename: str
+    file_type: str
+    raw_text: str
+    uploaded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ResumeValidationReport(BaseModel):
@@ -259,3 +292,96 @@ class SubmissionAdapterCapability(BaseModel):
     requires_credentials: bool
     is_configured: bool
     supported_platforms: List[str]
+
+
+# ===========================================================================
+# GitHub Profile Intelligence Models (Phase 2)
+# ===========================================================================
+
+class GitHubRepoEvidence(BaseModel):
+    repo_name: str
+    repo_url: str
+    owner: str
+    is_fork: bool
+    is_owned: bool
+    description: Optional[str] = None
+    primary_language: Optional[str] = None
+    detected_technologies: List[str] = Field(default_factory=list)
+    has_tests: bool = False
+    has_ci_cd: bool = False
+    has_documentation: bool = False
+    commit_count_estimate: Optional[int] = None
+    analysis_timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    limitations: List[str] = Field(default_factory=list)
+    implementation_evidence: List[str] = Field(default_factory=list)
+
+
+class GitHubProfileIntelligence(BaseModel):
+    username: str
+    profile_url: str
+    total_public_repos: int
+    analyzed_repos: List[GitHubRepoEvidence] = Field(default_factory=list)
+    detected_skills: List[str] = Field(default_factory=list)
+    evidence_summary: str = ""
+    warnings: List[str] = Field(default_factory=list)
+
+
+class GitHubImportRequest(BaseModel):
+    username_or_url: str
+    personal_access_token: Optional[str] = None
+    excluded_repos: List[str] = Field(default_factory=list)
+
+
+# ===========================================================================
+# LinkedIn and External Profile Models (Phase 3)
+# ===========================================================================
+
+class ExternalProfileSource(str, Enum):
+    LINKEDIN_DATA_EXPORT = "LINKEDIN_DATA_EXPORT"
+    LINKEDIN_PASTED_TEXT = "LINKEDIN_PASTED_TEXT"
+    MANUAL_ENTRY = "MANUAL_ENTRY"
+    PORTFOLIO_SITE = "PORTFOLIO_SITE"
+    OFFICIAL_API = "OFFICIAL_API"
+
+
+class ExternalProfileImportRequest(BaseModel):
+    source_type: ExternalProfileSource
+    raw_content: str
+    source_url: Optional[str] = None
+
+
+# ===========================================================================
+# Job Description Analysis & Matching Models (Phase 5)
+# ===========================================================================
+
+class JobMatchEvidence(BaseModel):
+    requirement: str
+    category: str = "skill"  # skill, qualification, responsibility, eligibility
+    is_mandatory: bool = True
+    match_status: str = "supported"  # supported, partial, missing_evidence, gap
+    supporting_facts: List[str] = Field(default_factory=list)
+    reasoning: str = ""
+    confidence: float = 1.0
+
+
+class JobAnalysisReport(BaseModel):
+    opportunity_id: int
+    role_title: str
+    company_name: str
+    mandatory_qualifications: List[str] = Field(default_factory=list)
+    preferred_qualifications: List[str] = Field(default_factory=list)
+    responsibilities: List[str] = Field(default_factory=list)
+    required_skills: List[str] = Field(default_factory=list)
+    location_and_eligibility: Dict[str, Any] = Field(default_factory=dict)
+    matches: List[JobMatchEvidence] = Field(default_factory=list)
+    match_score: float = 0.0
+    summary_verdict: str = ""
+    missing_critical_skills: List[str] = Field(default_factory=list)
+
+
+class CommitExtractedResumeRequest(BaseModel):
+    content: ResumeContent
+    original_document_id: Optional[str] = None
+    resolved_conflicts: Optional[Dict[str, Any]] = None
+    target: str = "master"  # "master" or "new_draft"
+

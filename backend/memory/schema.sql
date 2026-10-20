@@ -265,5 +265,16 @@ CREATE TABLE IF NOT EXISTS parked_thoughts (
 CREATE INDEX IF NOT EXISTS idx_parked_thoughts_user_status ON parked_thoughts(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_parked_thoughts_conversation ON parked_thoughts(conversation_id);
 
-
-
+-- ============================================================
+-- Career Profile Intelligence: Original Resume Documents
+-- ============================================================
+CREATE TABLE IF NOT EXISTS original_resume_documents (
+    id                  TEXT          PRIMARY KEY,
+    user_id             TEXT          NOT NULL,
+    filename            TEXT          NOT NULL,
+    file_type           TEXT          NOT NULL,
+    raw_text            TEXT          NOT NULL,
+    metadata            JSONB         NOT NULL DEFAULT '{}'::jsonb,
+    uploaded_at         TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_orig_resumes_user ON original_resume_documents(user_id);

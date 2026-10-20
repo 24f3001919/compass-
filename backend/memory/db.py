@@ -515,6 +515,17 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
             created_at          TIMESTAMPTZ   NOT NULL DEFAULT now()
         );
         CREATE INDEX IF NOT EXISTS idx_app_events_app ON application_events(application_id);
+
+        CREATE TABLE IF NOT EXISTS original_resume_documents (
+            id                  TEXT          PRIMARY KEY,
+            user_id             TEXT          NOT NULL,
+            filename            TEXT          NOT NULL,
+            file_type           TEXT          NOT NULL,
+            raw_text            TEXT          NOT NULL,
+            metadata            JSONB         NOT NULL DEFAULT '{}'::jsonb,
+            uploaded_at         TIMESTAMPTZ   NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_orig_resumes_user ON original_resume_documents(user_id);
         """)
     _tables_ensured = True
 
@@ -581,18 +592,19 @@ async def init_pool(dsn: str | None = None) -> asyncpg.Pool:
             await asyncio.wait_for(_ensure_tables(pool), timeout=15.0)
         except Exception as e:
             import logging
-            logging.getLogger("compass.db").warning(f"Could not auto-create tables: {e}")
+            logging.getLogger("compass.db").error(f"Could not auto-create database tables: {e}")
+            raise
 
         # Verify critical tables exist; never silently degrade
         try:
             async with pool.acquire(timeout=10.0) as check_conn:
                 existing_tables = await check_conn.fetch(
-                    "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('user_profile_facts', 'parked_thoughts', 'oauth_consumed_states')"
+                    "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('user_profile_facts', 'parked_thoughts', 'oauth_consumed_states', 'original_resume_documents')"
                 )
                 found = {r["table_name"] for r in existing_tables}
                 import logging
                 db_logger = logging.getLogger("compass.db")
-                for req_table in ("user_profile_facts", "parked_thoughts", "oauth_consumed_states"):
+                for req_table in ("user_profile_facts", "parked_thoughts", "oauth_consumed_states", "original_resume_documents"):
                     if req_table not in found:
                         db_logger.error(f"ERROR: Required database table '{req_table}' is missing! Feature will degrade.")
         except Exception as e:
