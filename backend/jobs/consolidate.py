@@ -422,6 +422,14 @@ async def run_consolidation(
         stale_buckets = await cleanup_stale_rate_limit_buckets(older_than_hours=24)
         pruned_guests = await prune_expired_guests(retention_days=int(getattr(settings, "GUEST_RETENTION_DAYS", 30)), pool=pool)
 
+        # Radar synchronization & autonomous opportunity discovery (including JobSpy)
+        radar_sync_res = None
+        try:
+            from backend.services.radar_sync import run_radar_sync
+            radar_sync_res = await run_radar_sync("all")
+        except Exception as r_err:
+            logger.warning(f"Nightly radar synchronization error: {r_err}")
+
         logger.info("=" * 60)
         logger.info("SUMMARY OF CONSOLIDATION:")
         logger.info(f"  • Overdue tasks flagged  : {overdue_count}")
@@ -429,6 +437,8 @@ async def run_consolidation(
         logger.info(f"  • Stale threads archived : {archived_count}")
         logger.info(f"  • Rate limit buckets pruned: {stale_buckets}")
         logger.info(f"  • Expired guests pruned  : {pruned_guests}")
+        if radar_sync_res:
+            logger.info(f"  • Radar Sync / JobSpy    : {radar_sync_res.get('status')} ({radar_sync_res.get('records_updated', 0)} updated)")
         if proactive_res:
             logger.info(f"  • Proactive agent run    : {proactive_res.get('status')} ({proactive_res.get('run_id')})")
         logger.info(f"  • Slipped tasks detected : {slipped_res.get('slipped_count')}")

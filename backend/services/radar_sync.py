@@ -299,6 +299,63 @@ async def run_radar_sync(source_filter: Optional[str] = None) -> Dict[str, Any]:
                     except Exception as t_err:
                         logger.warning(f"Tavily discovery search for query '{tav_query}' encountered an error: {t_err}")
 
+            # 5. Ingest JobSpy Public Board Discovery (Indeed, LinkedIn, Glassdoor, ZipRecruiter)
+            if not source_filter or source_filter in {"all", "jobspy"}:
+                try:
+                    from backend.services.radar_jobspy import discover_jobspy_opportunities
+                    jobspy_summary = await discover_jobspy_opportunities(hours_old=24, results_wanted=10)
+                    jobspy_opps = jobspy_summary.get("opportunities", [])
+                    for j_opp in jobspy_opps:
+                        try:
+                            records_discovered += 1
+                            canonical = j_opp.get("canonical_url")
+                            if not canonical:
+                                records_skipped += 1
+                                continue
+
+                            opp_id = await upsert_opportunity(
+                                company_name=j_opp["company_name"],
+                                role_title=j_opp["role_title"],
+                                canonical_url=canonical,
+                                official_application_url=j_opp["official_application_url"],
+                                current_status=j_opp["current_status"],
+                                opportunity_type=j_opp["opportunity_type"],
+                                employer_type=j_opp.get("employer_type", EmployerType.ENTERPRISE),
+                                category=j_opp["category"],
+                                location=j_opp.get("location"),
+                                work_arrangement=j_opp.get("work_arrangement", "unknown"),
+                                country=j_opp.get("country", "Global"),
+                                is_india_eligible=j_opp.get("is_india_eligible", True),
+                                compensation=j_opp.get("compensation"),
+                                confirmed_open_date=j_opp.get("confirmed_open_date"),
+                                description=j_opp.get("description"),
+                                last_verified_at=datetime.now(timezone.utc),
+                                verification_evidence=j_opp.get("verification_evidence"),
+                                employer_identity_verified=True,
+                                official_source_confirmed=True,
+                                application_url_checked=True,
+                            )
+
+                            reqs = j_opp.get("requirements")
+                            if reqs:
+                                await upsert_opportunity_requirements(opp_id, reqs)
+
+                            await add_opportunity_source(
+                                opportunity_id=opp_id,
+                                source_name=j_opp["source_name"],
+                                source_type=j_opp["source_type"],
+                                source_url=j_opp["source_url"],
+                                source_authority=j_opp.get("source_authority", "tier_1"),
+                                verification_result="verified",
+                            )
+                            records_updated += 1
+                        except Exception as j_err:
+                            failures += 1
+                            logger.warning(f"Failed to ingest JobSpy opportunity {j_opp.get('role_title')}: {j_err}")
+                except Exception as jobspy_all_err:
+                    failures += 1
+                    logger.warning(f"JobSpy synchronization encountered an issue: {jobspy_all_err}")
+
             status = "completed" if failures == 0 else "completed_with_errors"
             if failures > 0:
                 error_summary = f"{failures} records or network sources encountered warnings during sync."
