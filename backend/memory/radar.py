@@ -528,7 +528,7 @@ async def get_all_opportunities(
 
     where_sql = " AND ".join(conditions)
 
-    count_sql = f"""  # nosec B608
+    count_sql = f"""
     SELECT COUNT(*) FROM opportunities o
     LEFT JOIN user_opportunities uo ON o.id = uo.opportunity_id AND uo.user_id = $1
     WHERE {where_sql}
@@ -536,7 +536,7 @@ async def get_all_opportunities(
     offset = (page - 1) * page_size
     args.extend([page_size, offset])
 
-    data_sql = f"""  # nosec B608
+    data_sql = f"""
     SELECT o.*,
            uo.is_saved, uo.is_dismissed, uo.application_status, uo.application_date,
            uo.personal_deadline, uo.private_notes,

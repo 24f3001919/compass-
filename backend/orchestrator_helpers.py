@@ -58,7 +58,6 @@ async def format_chat_response(
     guest_id: Optional[str],
     persist: bool,
     start_time: float,
-    pool: Any,
 ) -> Dict[str, Any]:
     """Format and persist canonical chat response payload."""
     from backend.router_helpers import is_greeting_intent
@@ -82,8 +81,10 @@ async def format_chat_response(
 
     safe_reply = text_reply or ""
 
-    if persist and chat_success and pool:
+    if persist and chat_success:
         try:
+            from backend.memory.db import get_pool
+            pool = await get_pool()
             async with pool.acquire() as conn:
                 real_cid = await conversations.get_or_create_conversation(
                     conn, conv_id, user_id=user_id, guest_id=guest_id

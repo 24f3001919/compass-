@@ -647,7 +647,6 @@ async def handle_message(
                 "nothing was changed."
             )
 
-    pool = await get_pool() if persist else None
     return await format_chat_response(
         conv_id=conv_id,
         message=message,
@@ -656,7 +655,6 @@ async def handle_message(
         guest_id=guest_id,
         persist=persist,
         start_time=start_time,
-        pool=pool,
     )
 
 

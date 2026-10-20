@@ -20,7 +20,14 @@ def validate_direct_tool_dispatch(
     and conforms to required parameter schema without malformed payload.
     """
     from backend.skills.registry import SKILL_REGISTRY
-    from backend.skills.schemas import get_tool_definitions
+    from backend.skills.schemas import (
+        BASE_TOOL_DEFINITIONS,
+        SEARCH_WEB_TOOL,
+        INGEST_URL_TOOL,
+        VERIFY_DEADLINE_TOOL,
+        DEEP_RESEARCH_TOOL,
+        SAVE_VERIFIED_FINDING_TOOL,
+    )
 
     allowed_tools = frozenset(SKILL_REGISTRY.keys()) | {"add_task", "undo", "agent"}
 
@@ -37,9 +44,16 @@ def validate_direct_tool_dispatch(
         logger.warning("Direct dispatch rejected malformed JSON arguments for '%s': %s", raw_name, json_err)
         return None
 
+    all_defs = list(BASE_TOOL_DEFINITIONS) + [
+        SEARCH_WEB_TOOL,
+        INGEST_URL_TOOL,
+        VERIFY_DEADLINE_TOOL,
+        DEEP_RESEARCH_TOOL,
+        SAVE_VERIFIED_FINDING_TOOL,
+    ]
     tool_defs = {
         t["function"]["name"]: t["function"].get("parameters", {}).get("required", [])
-        for t in get_tool_definitions() if "function" in t
+        for t in all_defs if "function" in t
     }
     required_fields = tool_defs.get(raw_name, [])
     missing = [f for f in required_fields if f not in parsed_args or parsed_args[f] is None]
