@@ -3,19 +3,28 @@ Compass — Task Verification, Dependencies, and Demo Seeding Endpoints.
 """
 
 import logging
+import re
 from datetime import date, datetime, timedelta
 from typing import Any, List, Optional
 
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from backend.config import get_settings
 from backend.dependencies import _get_current_identity, _get_or_create_user_id, rate_limit
 from backend.memory import structured
 from backend.memory.db import get_pool
 from backend.models import AddDependencyBody
 
 logger = logging.getLogger("compass.routers.tasks_verification")
+settings = get_settings()
 
 router = APIRouter(tags=["tasks_verification"])
+
+
+class DemoSeedRequest(BaseModel):
+    reference_date: Optional[str] = None
+
 
 
 # ---- Task Dependencies Endpoints --------------------------------------
@@ -60,11 +69,19 @@ async def remove_task_dependency_endpoint(task_id: int, depends_on_task_id: int)
 
 # ---- 1-Click Judge Demo Persona Seeding ------------------------------------
 @router.post("/api/demo/seed", dependencies=[Depends(rate_limit)])
-async def seed_demo_persona_endpoint(request: Request):
+async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRequest] = None):
     """Seed or refresh the Dual-Degree Hackathon Competitor demo persona for judges.
     Requires an authenticated user session or verified guest identity.
     Writes seeded tasks and memories strictly bound to the caller's identity.
     """
+    env = getattr(settings, "ENVIRONMENT", "").lower()
+    enable_seeding = getattr(settings, "ENABLE_DEMO_SEEDING", False)
+    if env == "production" and not enable_seeding:
+        raise HTTPException(
+            status_code=403,
+            detail="Demo data seeding is guarded and disabled in production. Set ENABLE_DEMO_SEEDING=True in server configuration to enable.",
+        )
+
     ident = _get_current_identity(request)
     if not ident:
         raise HTTPException(
@@ -76,91 +93,285 @@ async def seed_demo_persona_endpoint(request: Request):
     if not pool:
         raise HTTPException(status_code=500, detail="Database unavailable")
 
-    today = date.today()
-    days_to_sunday = (6 - today.weekday()) % 7
-    if days_to_sunday == 0:
-        days_to_sunday = 7
-    upcoming_sunday = today + timedelta(days=days_to_sunday)
+    if body and body.reference_date:
+        try:
+            today = date.fromisoformat(body.reference_date.strip())
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid reference_date format (expected YYYY-MM-DD)")
+    else:
+        today = date.today()
 
     async with pool.acquire() as conn:
         p_hack = await structured.get_or_create_project(conn, name="Compass AI Assistant", domain="hackathon")
         p_course = await structured.get_or_create_project(conn, name="CS 61C - Computer Architecture", domain="coursework")
         p_code = await structured.get_or_create_project(conn, name="Nebius Integration & Infrastructure", domain="code")
+        p_career = await structured.get_or_create_project(conn, name="Systems Research & Internships", domain="career")
+        p_res = await structured.get_or_create_project(conn, name="Distributed Systems Research", domain="coursework")
 
         demo_tasks: list[dict[str, Any]] = [
+            # 3 Overdue (1d, 7d, 30d)
             {
-                "title": "36-hour Hackathon Sprint: Final Demo Build",
+                "title": "Configure Production SSL & CORS Headers",
+                "domain": "code",
+                "project_id": p_code["id"],
+                "due_date": today - timedelta(days=1),
+                "priority": "urgent",
+                "status": "open",
+                "duration_minutes": 60,
+                "notes": "Harden FastAPI origin allowlists and verify secure cookie flags.",
+            },
+            {
+                "title": "CS 61C Homework 3: RISC-V Calling Conventions",
+                "domain": "coursework",
+                "project_id": p_course["id"],
+                "due_date": today - timedelta(days=7),
+                "priority": "medium",
+                "status": "open",
+                "duration_minutes": 180,
+                "notes": "Assembly calling convention review and register allocation exercises.",
+            },
+            {
+                "title": "Nebius Buildathon Phase 1 Submission",
                 "domain": "hackathon",
                 "project_id": p_hack["id"],
-                "due_date": upcoming_sunday,
-                "priority": "urgent",
-                "duration_minutes": 2160,
-                "notes": "Full weekend sprint to finalize 3-minute video demo, pitch deck, and Nebius Token Factory endpoints.",
+                "due_date": today - timedelta(days=30),
+                "priority": "high",
+                "status": "open",
+                "duration_minutes": 120,
+                "notes": "Milestone for live Tavily schedule drift detection and verification pipeline.",
             },
+
+            # 2 Due Today
             {
                 "title": "CS 61C Lab 4: RISC-V Pipeline Synthesis",
                 "domain": "coursework",
                 "project_id": p_course["id"],
-                "due_date": upcoming_sunday,
+                "due_date": today,
                 "priority": "urgent",
+                "status": "open",
                 "duration_minutes": 480,
                 "notes": "Two-stage pipelined CPU in Logisim with forwarding and hazard resolution.",
             },
             {
-                "title": "Nebius Buildathon Phase 2 Submission",
+                "title": "Submit Hackathon Project Devpost Draft",
                 "domain": "hackathon",
                 "project_id": p_hack["id"],
-                "due_date": date(2026, 9, 17),
+                "due_date": today,
                 "priority": "high",
-                "duration_minutes": 120,
-                "notes": "Original hackathon milestone to demonstrate live Tavily schedule drift detection.",
-            },
-            {
-                "title": "Embeddings truncation and Matryoshka dimension verification",
-                "domain": "code",
-                "project_id": p_code["id"],
-                "due_date": today + timedelta(days=5),
-                "priority": "medium",
-                "status": "done",
+                "status": "open",
                 "duration_minutes": 90,
-                "notes": "Qwen3-Embedding-8B truncated to 768 dims to fit pgvector HNSW limit (<2,000 dims).",
+                "notes": "Submit initial project draft on Devpost with architecture diagram and problem statement.",
             },
+
+            # 1 Due within 24 Hours (Urgent)
             {
                 "title": "Record 3-minute Devpost demo video",
                 "domain": "hackathon",
                 "project_id": p_hack["id"],
-                "due_date": today + timedelta(days=3),
+                "due_date": today + timedelta(days=1),
                 "priority": "urgent",
+                "status": "open",
                 "duration_minutes": 180,
                 "notes": "Record, edit, and upload demo video to YouTube. Cover epistemic abstention, confirm gates, and feasibility engine.",
+            },
+
+            # 3 Due in 2–7 Days (Due Soon)
+            {
+                "title": "Deploy Compass backend to Nebius Serverless Endpoints",
+                "domain": "code",
+                "project_id": p_code["id"],
+                "due_date": today + timedelta(days=2),
+                "priority": "urgent",
+                "status": "open",
+                "duration_minutes": 240,
+                "notes": "Activate deploy/serverless_endpoint.yaml manifest on Nebius AI Cloud. Verify health probes and autoscaling.",
             },
             {
                 "title": "CS 61C Midterm Review: Cache Hierarchies & Virtual Memory",
                 "domain": "coursework",
                 "project_id": p_course["id"],
-                "due_date": today + timedelta(days=6),
+                "due_date": today + timedelta(days=3),
                 "priority": "high",
+                "status": "open",
                 "duration_minutes": 300,
                 "notes": "Review L1/L2 cache design, TLB mechanics, page table walks, and AMAT calculations.",
             },
             {
-                "title": "Deploy Compass backend to Nebius Serverless Endpoints",
+                "title": "Tavily Authority Tier Benchmarking & Latency Audit",
+                "domain": "code",
+                "project_id": p_code["id"],
+                "due_date": today + timedelta(days=5),
+                "priority": "medium",
+                "status": "open",
+                "duration_minutes": 120,
+                "notes": "Benchmark domain authority scoring against primary source platforms.",
+            },
+
+            # 3 Upcoming (approx 10d, 3 weeks, 2 months)
+            {
+                "title": "Final Paper: Scalable Hybrid Search in Pgvector",
+                "domain": "coursework",
+                "project_id": p_course["id"],
+                "due_date": today + timedelta(days=10),
+                "priority": "medium",
+                "status": "open",
+                "duration_minutes": 420,
+                "notes": "Draft technical analysis comparing Reciprocal Rank Fusion against BM25 alone.",
+            },
+            {
+                "title": "Distributed Systems Term Project Checkpoint",
+                "domain": "coursework",
+                "project_id": p_res["id"],
+                "due_date": today + timedelta(days=21),
+                "priority": "medium",
+                "status": "open",
+                "duration_minutes": 240,
+                "notes": "Raft leader election and log replication test harness.",
+            },
+            {
+                "title": "Summer 2027 Systems Research Fellowship Application",
+                "domain": "career",
+                "project_id": p_career["id"],
+                "due_date": today + timedelta(days=60),
+                "priority": "high",
+                "status": "open",
+                "duration_minutes": 300,
+                "notes": "Submit statement of purpose, transcript, and systems research proposal.",
+            },
+
+            # 2 Pending without deadlines
+            {
+                "title": "Explore Quantized GGUF Local Inference Fallback",
+                "domain": "code",
+                "project_id": p_code["id"],
+                "due_date": None,
+                "priority": "low",
+                "status": "open",
+                "duration_minutes": 150,
+                "notes": "Research lightweight client-side LLM inference for offline emergency fallback.",
+            },
+            {
+                "title": "Organize CS 61C Discussion Group Study Guide",
+                "domain": "coursework",
+                "project_id": p_course["id"],
+                "due_date": None,
+                "priority": "low",
+                "status": "open",
+                "duration_minutes": 90,
+                "notes": "Compile student lecture notes and practice midterm exams.",
+            },
+
+            # 2 In Progress (1 future, 1 overdue)
+            {
+                "title": "Embeddings truncation and Matryoshka dimension verification",
                 "domain": "code",
                 "project_id": p_code["id"],
                 "due_date": today + timedelta(days=4),
                 "priority": "high",
+                "status": "in_progress",
+                "duration_minutes": 90,
+                "notes": "Qwen3-Embedding-8B truncated to 768 dims to fit pgvector HNSW limit (<2,000 dims).",
+            },
+            {
+                "title": "Audit JWT refresh token expiration and revocation",
+                "domain": "code",
+                "project_id": p_code["id"],
+                "due_date": today - timedelta(days=3),
+                "priority": "urgent",
+                "status": "in_progress",
+                "duration_minutes": 120,
+                "notes": "Verify sliding session window and token blacklist cleanup in Redis.",
+            },
+
+            # 2 Completed (1 before deadline, 1 after deadline)
+            {
+                "title": "Initial Compass Schema Migration to Neon Postgres",
+                "domain": "code",
+                "project_id": p_code["id"],
+                "due_date": today + timedelta(days=5),
+                "priority": "high",
+                "status": "completed",
+                "duration_minutes": 120,
+                "notes": "Completed initial schema initialization and pgvector extension registration.",
+            },
+            {
+                "title": "Set Up GitHub Actions CI Pipeline for Lint and Pytest",
+                "domain": "code",
+                "project_id": p_code["id"],
+                "due_date": today - timedelta(days=6),
+                "priority": "medium",
+                "status": "completed",
+                "duration_minutes": 60,
+                "notes": "Workflow verified with ruff, pytest, and vite build checks.",
+            },
+
+            # 2 Blocked (1 future, 1 past)
+            {
+                "title": "Enterprise SSO Integration for University Directory",
+                "domain": "coursework",
+                "project_id": p_course["id"],
+                "due_date": today + timedelta(days=8),
+                "priority": "medium",
+                "status": "blocked",
                 "duration_minutes": 240,
-                "notes": "Activate deploy/serverless_endpoint.yaml manifest on Nebius AI Cloud. Verify health probes and autoscaling.",
+                "notes": "Blocked pending IT department approval for OAuth client credentials.",
+            },
+            {
+                "title": "Benchmark 128k Context Streaming with Nebius Endpoints",
+                "domain": "code",
+                "project_id": p_code["id"],
+                "due_date": today - timedelta(days=4),
+                "priority": "high",
+                "status": "blocked",
+                "duration_minutes": 180,
+                "notes": "Blocked waiting for upstream quota adjustment on high-context model tier.",
+            },
+
+            # 1 Cancelled (past deadline)
+            {
+                "title": "Deprecated Webhook Gateway V1 Decommission",
+                "domain": "code",
+                "project_id": p_code["id"],
+                "due_date": today - timedelta(days=14),
+                "priority": "low",
+                "status": "cancelled",
+                "duration_minutes": 60,
+                "notes": "Legacy service already removed in prior sprint; task marked cancelled.",
             },
         ]
 
+
         seeded_task_ids = []
         for t in demo_tasks:
+            # Deterministic, collision-safe demo fixture URI
+            raw_title = str(t.get("title") or "")
+            slug = re.sub(r"[^a-z0-9]+", "_", raw_title.lower()).strip("_")
+            fixture_uri = f"compass://demo-persona/{slug}"
+
+            # Query strictly matches demo-owned fixtures for this user by deterministic fixture URI
             existing = await conn.fetchrow(
-                "SELECT id FROM tasks WHERE title = $1 AND user_id = $2",
-                t["title"], user_id,
+                """
+                SELECT id, title, notes FROM tasks
+                WHERE user_id = $1
+                  AND trusted_event_url = $2
+                ORDER BY id ASC
+                LIMIT 1
+                """,
+                user_id,
+                fixture_uri,
             )
             if existing:
+                await structured.update_task(
+                    conn,
+                    existing["id"],
+                    due_date=t.get("due_date"),
+                    priority=str(t.get("priority", "medium")),
+                    status=str(t.get("status", "open")),
+                    notes=t.get("notes"),
+                    trusted_event_url=fixture_uri,
+                )
+                if t.get("duration_minutes"):
+                    await structured.update_task(conn, existing["id"], duration_minutes=int(t["duration_minutes"]))
                 seeded_task_ids.append(existing["id"])
                 continue
 
@@ -174,6 +385,7 @@ async def seed_demo_persona_endpoint(request: Request):
                 status=str(t.get("status", "open")),
                 notes=t.get("notes"),
                 user_id=user_id,
+                trusted_event_url=fixture_uri,
             )
             if t.get("duration_minutes"):
                 await structured.update_task(conn, row["id"], duration_minutes=int(t["duration_minutes"]))
