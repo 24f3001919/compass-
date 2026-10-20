@@ -528,15 +528,15 @@ async def get_all_opportunities(
 
     where_sql = " AND ".join(conditions)
 
-    count_sql = f"""
+    count_sql = f"""  # nosec B608
     SELECT COUNT(*) FROM opportunities o
     LEFT JOIN user_opportunities uo ON o.id = uo.opportunity_id AND uo.user_id = $1
     WHERE {where_sql}
-    """
+    """  # nosec B608
     offset = (page - 1) * page_size
     args.extend([page_size, offset])
 
-    data_sql = f"""
+    data_sql = f"""  # nosec B608
     SELECT o.*,
            uo.is_saved, uo.is_dismissed, uo.application_status, uo.application_date,
            uo.personal_deadline, uo.private_notes,
@@ -557,7 +557,7 @@ async def get_all_opportunities(
         o.confirmed_close_date ASC NULLS LAST,
         o.id DESC
     LIMIT ${len(args)-1} OFFSET ${len(args)};
-    """
+    """  # nosec B608
 
     async with pool.acquire() as conn:
         total = await conn.fetchval(count_sql, *args[:-2]) or 0

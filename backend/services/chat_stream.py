@@ -35,53 +35,7 @@ logger = logging.getLogger("compass.services.chat_stream")
 get_pool = db_get_pool
 
 
-class StreamingThinkFilter:
-    """Filter out <think>...</think> reasoning blocks from streamed model tokens."""
-
-    def __init__(self):
-        self.in_think = False
-        self.buffer = ""
-
-    def process(self, token: str) -> str:
-        self.buffer += token
-        out = ""
-        while self.buffer:
-            if not self.in_think:
-                if "<think>" in self.buffer:
-                    idx = self.buffer.index("<think>")
-                    out += self.buffer[:idx]
-                    self.buffer = self.buffer[idx + len("<think>"):]
-                    self.in_think = True
-                else:
-                    match_pos = -1
-                    for i in range(len(self.buffer)):
-                        if "<think>".startswith(self.buffer[i:]):
-                            match_pos = i
-                            break
-                    if match_pos != -1:
-                        out += self.buffer[:match_pos]
-                        self.buffer = self.buffer[match_pos:]
-                        break
-                    else:
-                        out += self.buffer
-                        self.buffer = ""
-            else:
-                if "</think>" in self.buffer:
-                    idx = self.buffer.index("</think>")
-                    self.buffer = self.buffer[idx + len("</think>"):]
-                    self.in_think = False
-                else:
-                    match_pos = -1
-                    for i in range(len(self.buffer)):
-                        if "</think>".startswith(self.buffer[i:]):
-                            match_pos = i
-                            break
-                    if match_pos != -1:
-                        self.buffer = self.buffer[match_pos:]
-                    else:
-                        self.buffer = ""
-                    break
-        return out
+from backend.services.streaming_filter import StreamingThinkFilter
 
 
 async def _resolve_pool():
@@ -551,34 +505,10 @@ async def generate_chat_events(
                 raw_name = (first_tc.get("name") or "").strip()
                 raw_args_str = (first_tc.get("arguments") or "").strip()
                 if raw_name:
-                    from backend.skills.registry import SKILL_REGISTRY
-                    from backend.skills.schemas import get_tool_definitions
-                    allowed_tools = frozenset(SKILL_REGISTRY.keys()) | {"add_task", "undo", "agent"}
-
-                    if raw_name in allowed_tools:
-                        try:
-                            parsed_args = json.loads(raw_args_str) if raw_args_str else {}
-                            if not isinstance(parsed_args, dict):
-                                logger.warning("Direct dispatch tool arguments for '%s' are not a dict: %r", raw_name, raw_args_str)
-                                parsed_args = None
-                        except Exception as json_err:
-                            logger.warning("Direct dispatch rejected malformed JSON arguments for '%s': %s", raw_name, json_err)
-                            parsed_args = None
-
-                        if parsed_args is not None:
-                            tool_defs = {
-                                t["function"]["name"]: t["function"].get("parameters", {}).get("required", [])
-                                for t in get_tool_definitions() if "function" in t
-                            }
-                            required_fields = tool_defs.get(raw_name, [])
-                            missing = [f for f in required_fields if f not in parsed_args or parsed_args[f] is None]
-                            if missing:
-                                logger.warning("Direct dispatch for '%s' missing required fields %s, falling back to router", raw_name, missing)
-                            else:
-                                pre_routed_skill = raw_name
-                                pre_routed_args = parsed_args
-                    else:
-                        logger.warning("Direct dispatch rejected unknown tool '%s', falling back to router", raw_name)
+                    from backend.services.chat_stream_helpers import validate_direct_tool_dispatch
+                    dispatch_res = validate_direct_tool_dispatch(raw_name, raw_args_str)
+                    if dispatch_res:
+                        pre_routed_skill, pre_routed_args = dispatch_res
 
 
             if pre_routed_skill:
