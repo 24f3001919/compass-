@@ -775,11 +775,11 @@ export default function Sidebar({
               className="mono"
               onClick={() => onOpenTelemetry && onOpenTelemetry()}
               style={{
-                fontSize: '9.5px',
-                letterSpacing: '-0.2px',
+                fontSize: '8px',
+                letterSpacing: '-0.3px',
                 whiteSpace: 'nowrap',
                 color: 'var(--sidebar-text)',
-                padding: '5px 7px',
+                padding: '4px 6px',
                 marginTop: '8px',
                 borderRadius: '6px',
                 background: 'var(--sidebar-hover)',
@@ -788,7 +788,7 @@ export default function Sidebar({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                gap: '4px',
+                gap: '3px',
                 transition: 'all 0.15s ease',
               }}
               onMouseEnter={e => e.currentTarget.style.color = '#ffffff'}

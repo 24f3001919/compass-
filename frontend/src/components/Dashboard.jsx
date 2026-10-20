@@ -3,165 +3,28 @@ import DarkModeToggle from './DarkModeToggle'
 import { getDomainMeta } from './timeline/domainMeta'
 import AddDeadlineModal from './timeline/AddDeadlineModal'
 import { updateTask } from '../api/client'
+import {
+  classifyDeadline,
+  filterTasksByView,
+  sortOverdueDeadlines,
+  sortUpcomingDeadlines,
+} from '../utils/deadlineClassifier'
 
-/**
- * Robust timezone-safe local date parser.
- * Converts YYYY-MM-DD into a local Date at 23:59:59 so western hemisphere
- * users don't see their due dates shift backward by a full day.
- */
-function parseTaskDueDate(dueDateStr) {
-  if (!dueDateStr || typeof dueDateStr !== 'string') return null
-  const trimmed = dueDateStr.trim()
-  if (!trimmed) return null
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    const [y, m, d] = trimmed.split('-').map(Number)
-    if (isNaN(y) || isNaN(m) || isNaN(d)) return null
-    return new Date(y, m - 1, d, 23, 59, 59, 999)
-  }
-  const parsed = new Date(trimmed)
-  return isNaN(parsed.getTime()) ? null : parsed
-}
 
-/**
- * Classifies deadline urgency with real mathematical time differences.
- */
-function classifyDeadline(task, now = new Date()) {
-  if (!task || typeof task !== 'object') {
-    return { type: 'none', label: 'Active', diffHours: 9999, diffDays: 9999, isUrgent: false, isOverdue: false }
-  }
-
-  const status = (task.status || '').toLowerCase()
-  const countdown = (task.countdown || '').toLowerCase()
-  const isCompleted = status === 'completed' || status === 'done' || countdown === 'completed'
-  if (isCompleted) {
-    return { type: 'completed', label: 'Completed', diffHours: 9999, diffDays: 9999, isUrgent: false, isOverdue: false }
-  }
-
-  const dueDate = parseTaskDueDate(task.due_date)
-  const nowMs = now.getTime()
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime()
-
-  if (dueDate) {
-    const dueMs = dueDate.getTime()
-    const diffHours = (dueMs - nowMs) / (1000 * 60 * 60)
-    const diffDays = Math.ceil((dueMs - nowMs) / (1000 * 60 * 60 * 24))
-
-    if (dueMs < todayStart) {
-      return {
-        type: 'overdue',
-        label: `⚠️ Overdue (${Math.max(1, Math.abs(diffDays))}d ago)`,
-        diffHours,
-        diffDays,
-        isUrgent: true,
-        isOverdue: true,
-      }
-    }
-    if (diffHours <= 1 && diffHours > 0) {
-      return {
-        type: 'hour',
-        label: '🚨 Due in <1h',
-        diffHours,
-        diffDays: 0,
-        isUrgent: true,
-        isOverdue: false,
-      }
-    }
-    if (dueMs <= todayEnd || diffHours <= 24) {
-      return {
-        type: 'today',
-        label: '⚠️ Due today',
-        diffHours,
-        diffDays: 0,
-        isUrgent: true,
-        isOverdue: false,
-      }
-    }
-    if (diffDays === 1) {
-      const dayName = dueDate.toLocaleDateString('en-US', { weekday: 'short' })
-      return {
-        type: 'tomorrow',
-        label: `1d left (${dayName})`,
-        diffHours,
-        diffDays: 1,
-        isUrgent: false,
-        isOverdue: false,
-      }
-    }
-    if (diffDays <= 7) {
-      const dayName = dueDate.toLocaleDateString('en-US', { weekday: 'short' })
-      return {
-        type: 'week',
-        label: `${diffDays}d left (${dayName})`,
-        diffHours,
-        diffDays,
-        isUrgent: false,
-        isOverdue: false,
-      }
-    }
-    return {
-      type: 'future',
-      label: `${diffDays}d left`,
-      diffHours,
-      diffDays,
-      isUrgent: false,
-      isOverdue: false,
-    }
-  }
-
-  // Fallback to countdown string interpretation
-  if (countdown.includes('overdue')) {
-    return {
-      type: 'overdue',
-      label: task.countdown || '⚠️ Overdue',
-      diffHours: -1,
-      diffDays: -1,
-      isUrgent: true,
-      isOverdue: true,
-    }
-  }
-  if (countdown.includes('today')) {
-    return {
-      type: 'today',
-      label: task.countdown || '⚠️ Due today',
-      diffHours: 8,
-      diffDays: 0,
-      isUrgent: true,
-      isOverdue: false,
-    }
-  }
-  if (countdown.includes('1d')) {
-    return {
-      type: 'tomorrow',
-      label: task.countdown || '1d left',
-      diffHours: 24,
-      diffDays: 1,
-      isUrgent: false,
-      isOverdue: false,
-    }
-  }
-  if (countdown.includes('left')) {
-    return {
-      type: 'week',
-      label: task.countdown || 'Soon',
-      diffHours: 72,
-      diffDays: 3,
-      isUrgent: false,
-      isOverdue: false,
-    }
-  }
-
-  return {
-    type: 'none',
-    label: task.countdown || 'Active',
-    diffHours: 9999,
-    diffDays: 9999,
-    isUrgent: false,
-    isOverdue: false,
-  }
-}
+const VIEW_OPTIONS = [
+  { key: 'all', label: 'All Tasks', icon: '📋' },
+  { key: 'overdue', label: 'Overdue', icon: '⚠️' },
+  { key: 'due_today', label: 'Due Today', icon: '📅' },
+  { key: 'urgent', label: 'Urgent (<24h)', icon: '🚨' },
+  { key: 'due_soon', label: 'Due Soon (7d)', icon: '⏳' },
+  { key: 'upcoming', label: 'Upcoming (>7d)', icon: '🗓️' },
+  { key: 'pending', label: 'Pending', icon: '📝' },
+  { key: 'in_progress', label: 'In Progress', icon: '⚡' },
+  { key: 'completed', label: 'Completed', icon: '✅' },
+]
 
 export default function Dashboard({
+
   tasks = [],
   backendStatus = 'Waking up the server…',
   usageStats = null,
@@ -221,48 +84,52 @@ export default function Dashboard({
     return cleanTasks.filter((t) => (t.domain || 'general').toLowerCase().trim() === selectedDomainFilter)
   }, [cleanTasks, selectedDomainFilter])
 
-  // Apply time / status filter
-  const displayedTasks = useMemo(() => {
-    if (timeFilter === 'all') return domainFilteredTasks
+  // Exact view counts matching the 8 contextual categories
+  const viewCounts = useMemo(() => {
     const now = new Date()
-
-    if (timeFilter === 'completed') {
-      return domainFilteredTasks.filter((t) => {
-        const s = (t.status || '').toLowerCase()
-        const c = (t.countdown || '').toLowerCase()
-        return s === 'completed' || s === 'done' || c === 'completed'
-      })
+    const counts = {
+      all: domainFilteredTasks.length,
+      overdue: 0,
+      due_today: 0,
+      urgent: 0,
+      due_soon: 0,
+      upcoming: 0,
+      pending: 0,
+      in_progress: 0,
+      completed: 0,
     }
 
-    if (timeFilter === 'overdue') {
-      return domainFilteredTasks.filter((t) => {
-        const info = classifyDeadline(t, now)
-        return info.isOverdue
-      })
-    }
+    domainFilteredTasks.forEach((t) => {
+      const c = classifyDeadline(t, now)
+      if (c.lifecycle === 'completed') {
+        counts.completed++
+      } else if (c.lifecycle === 'cancelled') {
+        // cancelled tasks excluded from active counts
+      } else {
+        if (c.timing === 'overdue' && c.isActiveDeadline) counts.overdue++
+        if (c.timing === 'due_today' && c.isActiveDeadline) counts.due_today++
+        if ((c.timing === 'urgent' || c.timing === 'due_today') && c.isActiveDeadline) counts.urgent++
+        if (c.timing === 'due_soon' && c.isActiveDeadline) counts.due_soon++
+        if (c.timing === 'upcoming' && c.isActiveDeadline) counts.upcoming++
+        if (c.lifecycle === 'pending') counts.pending++
+        if (c.lifecycle === 'in_progress') counts.in_progress++
+      }
+    })
 
-    if (timeFilter === 'today') {
-      return domainFilteredTasks.filter((t) => {
-        const info = classifyDeadline(t, now)
-        return info.type === 'today' || info.type === 'hour' || info.isOverdue
-      })
-    }
+    return counts
+  }, [domainFilteredTasks])
 
-    if (timeFilter === 'week') {
-      return domainFilteredTasks.filter((t) => {
-        const info = classifyDeadline(t, now)
-        return info.type === 'today' || info.type === 'hour' || info.type === 'tomorrow' || info.type === 'week' || info.isOverdue
-      })
-    }
-
-    return domainFilteredTasks
+  // Apply deterministic view filter
+  const displayedTasks = useMemo(() => {
+    const now = new Date()
+    return filterTasksByView(domainFilteredTasks, timeFilter, now)
   }, [domainFilteredTasks, timeFilter])
 
   // Metric calculations
   const metrics = useMemo(() => {
     const total = domainFilteredTasks.length
-    let completedCount = 0
-    let overdueCount = 0
+    const completedCount = viewCounts.completed
+    const overdueCount = viewCounts.overdue
     let completedTodayCount = 0
     const now = new Date()
     const todayStr = now.toDateString()
@@ -274,7 +141,6 @@ export default function Dashboard({
       const isCompleted = s === 'completed' || s === 'done' || c === 'completed'
 
       if (isCompleted) {
-        completedCount++
         if (t.updated_at) {
           const d = new Date(t.updated_at)
           if (!isNaN(d.getTime()) && d.toDateString() === todayStr) {
@@ -292,11 +158,6 @@ export default function Dashboard({
             completedTodayCount++
           }
         }
-      } else {
-        const info = classifyDeadline(t, now)
-        if (info.isOverdue) {
-          overdueCount++
-        }
       }
     })
 
@@ -309,7 +170,8 @@ export default function Dashboard({
       overdueCount,
       completedTodayCount,
     }
-  }, [domainFilteredTasks])
+  }, [domainFilteredTasks, viewCounts])
+
 
   // Tasks by Domain breakdown
   const domainBreakdown = useMemo(() => {
@@ -372,23 +234,16 @@ export default function Dashboard({
     }
   }, [domainFilteredTasks])
 
-  // Upcoming Deadlines (Next 5 open tasks due)
-  const upcomingDeadlines = useMemo(() => {
-    const now = new Date()
-    const openTasks = domainFilteredTasks.filter((t) => {
-      const s = (t.status || '').toLowerCase()
-      const c = (t.countdown || '').toLowerCase()
-      return s !== 'completed' && s !== 'done' && c !== 'completed'
-    })
-
-    const annotated = openTasks.map((t) => ({
-      ...t,
-      urgency: classifyDeadline(t, now),
-    }))
-
-    annotated.sort((a, b) => a.urgency.diffHours - b.urgency.diffHours)
-    return annotated.slice(0, 5)
+  // Overdue Deadlines (Unfinished tasks whose deadline has passed, sorted by priority & elapsed days)
+  const overdueDeadlines = useMemo(() => {
+    return sortOverdueDeadlines(domainFilteredTasks)
   }, [domainFilteredTasks])
+
+  // Upcoming Deadlines (Active tasks with deadline today or future, nearest first)
+  const upcomingDeadlines = useMemo(() => {
+    return sortUpcomingDeadlines(domainFilteredTasks).slice(0, 6)
+  }, [domainFilteredTasks])
+
 
   // Recent Activity Feed
   const recentActivity = useMemo(() => {
@@ -950,6 +805,218 @@ export default function Dashboard({
         </div>
       </div>
 
+      {/* SECTION 1.5: Deadline & Lifecycle Category Views */}
+      <div
+        className="dashboard-filter-bar"
+        role="tablist"
+        aria-label="Filter tasks by lifecycle and deadline status"
+        style={{ marginTop: '14px', marginBottom: '14px', overflowX: 'auto', flexWrap: 'wrap' }}
+      >
+        {VIEW_OPTIONS.map((opt) => {
+          const isActive = timeFilter === opt.key
+          return (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => setTimeFilter(opt.key)}
+              className={`filter-pill ${isActive ? 'active' : ''}`}
+              role="tab"
+              aria-selected={isActive}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                borderRadius: '20px',
+                fontSize: '12px',
+                fontWeight: isActive ? '600' : '500',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <span>{opt.icon}</span>
+              <span>
+                {opt.label} ({viewCounts[opt.key] ?? 0})
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* FILTERED TASKS EXPANDED CARD (Shown when a specific view category is selected) */}
+      {timeFilter !== 'all' && (
+        <div
+          className="dashboard-section-card"
+          role="region"
+          aria-label={`Filtered view: ${timeFilter}`}
+          style={{ marginBottom: '20px' }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>{VIEW_OPTIONS.find((v) => v.key === timeFilter)?.icon || '📌'}</span>
+              <span>
+                {VIEW_OPTIONS.find((v) => v.key === timeFilter)?.label || timeFilter} ({displayedTasks.length})
+              </span>
+            </h3>
+            <button
+              type="button"
+              onClick={() => setTimeFilter('all')}
+              className="btn-secondary"
+              style={{ minHeight: '32px', padding: '0 10px', fontSize: '12px' }}
+            >
+              Show all tasks ✕
+            </button>
+          </div>
+
+          {displayedTasks.length === 0 ? (
+            <div className="dashboard-empty-state">
+              <p style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>
+                No tasks in this category
+              </p>
+              <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--text-muted)' }}>
+                {timeFilter === 'overdue' && 'All clear! You have no overdue deadlines.'}
+                {timeFilter === 'due_today' && 'No tasks due today. Everything is on schedule.'}
+                {timeFilter === 'urgent' && 'No urgent tasks due in the next 24 hours.'}
+                {timeFilter === 'due_soon' && 'No tasks due within the next 7 days.'}
+                {timeFilter === 'upcoming' && 'No distant future deadlines scheduled.'}
+                {timeFilter === 'pending' && 'No pending tasks without deadlines.'}
+                {timeFilter === 'in_progress' && 'No tasks currently marked as in progress.'}
+                {timeFilter === 'completed' && 'No completed tasks yet. Finish a task to see it here.'}
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {displayedTasks.map((task) => {
+                const meta = getDomainMeta(task.domain)
+                const c = classifyDeadline(task)
+                const isCompleted = c.lifecycle === 'completed'
+
+                return (
+                  <div
+                    key={task.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '12px',
+                      padding: '10px 12px',
+                      borderRadius: '6px',
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border)',
+                      opacity: isCompleted ? 0.85 : 1,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleToggleTaskStatus(task.id, isCompleted)}
+                      className="btn-touch-target"
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        minWidth: '32px',
+                        minHeight: '32px',
+                        borderRadius: '6px',
+                        border: '1px solid var(--border)',
+                        background: isCompleted ? 'var(--domain-code)' : 'var(--bg-card-soft)',
+                        color: isCompleted ? '#ffffff' : 'var(--text-muted)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        padding: 0,
+                        flexShrink: 0,
+                      }}
+                      title={isCompleted ? 'Mark as open' : 'Mark as completed'}
+                      aria-label={`Toggle task completion for ${task.title}`}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </button>
+
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px', flexWrap: 'wrap' }}>
+                        <span className="domain-swatch" style={{ background: meta.color }} />
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' }}>
+                          {task.project || meta.label}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            fontWeight: '600',
+                            padding: '1px 6px',
+                            borderRadius: '4px',
+                            background: 'var(--bg-card-soft)',
+                            color: 'var(--text-secondary)',
+                            border: '1px solid var(--border)',
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {c.priority}
+                        </span>
+                        {c.lifecycle !== 'pending' && (
+                          <span
+                            style={{
+                              fontSize: '10px',
+                              fontWeight: '600',
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                              background: 'var(--bg-card-soft)',
+                              color: 'var(--text-muted)',
+                              border: '1px solid var(--border)',
+                            }}
+                          >
+                            {c.lifecycle}
+                          </span>
+                        )}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '13.5px',
+                          fontWeight: '500',
+                          color: isCompleted ? 'var(--text-muted)' : 'var(--text-primary)',
+                          textDecoration: isCompleted ? 'line-through' : 'none',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {task.title}
+                      </div>
+                    </div>
+
+                    <div style={{ flexShrink: 0 }}>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: '600',
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          background: c.isOverdue
+                            ? 'var(--danger-bg)'
+                            : c.isUrgent
+                            ? 'rgba(230, 81, 0, 0.12)'
+                            : 'var(--bg-card-soft)',
+                          color: c.isOverdue
+                            ? 'var(--danger-text)'
+                            : c.isUrgent
+                            ? '#e65100'
+                            : 'var(--text-secondary)',
+                          border: '1px solid var(--border)',
+                        }}
+                      >
+                        {c.label}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+
       {/* SECTION 2 & 3: Main Two-Column Row */}
       <div className="dashboard-main-grid">
         {/* Tasks by Domain */}
@@ -1063,6 +1130,127 @@ export default function Dashboard({
           )}
         </div>
 
+        {/* Overdue Deadlines — Action Required */}
+        {overdueDeadlines.length > 0 && (
+          <div className="dashboard-section-card" role="region" aria-label="Overdue deadlines list" style={{ borderLeft: '3px solid #e65100' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: '600', color: '#e65100', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                <span>Overdue Deadlines ({overdueDeadlines.length})</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setTimeFilter('overdue')}
+                className="btn-secondary"
+                style={{
+                  minHeight: '32px',
+                  padding: '0 10px',
+                  fontSize: '12px',
+                  color: '#e65100',
+                  borderColor: 'rgba(230, 81, 0, 0.4)',
+                }}
+              >
+                View all ({overdueDeadlines.length}) →
+              </button>
+
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {overdueDeadlines.slice(0, 5).map((task) => {
+                const meta = getDomainMeta(task.domain)
+                return (
+                  <div
+                    key={task.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '12px',
+                      padding: '10px 12px',
+                      borderRadius: '6px',
+                      background: 'rgba(230, 81, 0, 0.04)',
+                      border: '1px solid rgba(230, 81, 0, 0.25)',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleToggleTaskStatus(task.id, false)}
+                      className="btn-touch-target"
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        minWidth: '32px',
+                        minHeight: '32px',
+                        borderRadius: '6px',
+                        border: '1px solid rgba(230, 81, 0, 0.4)',
+                        background: 'var(--bg-card-soft)',
+                        color: 'var(--text-muted)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        padding: 0,
+                        flexShrink: 0,
+                      }}
+                      title="Mark as completed"
+                      aria-label={`Mark task ${task.title} as completed`}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </button>
+
+                    <div
+                      style={{ minWidth: 0, flex: 1, cursor: onSelectTab ? 'pointer' : 'default' }}
+                      onClick={() => onSelectTab && onSelectTab('timeline')}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                        <span className="domain-swatch" style={{ background: meta.color }} />
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' }}>
+                          {task.project || meta.label}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '13.5px',
+                          fontWeight: '500',
+                          color: 'var(--text-primary)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {task.title}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: '600',
+                          padding: '2px 8px',
+                          borderRadius: '10px',
+                          background: 'rgba(230, 81, 0, 0.15)',
+                          color: '#e65100',
+                          border: '1px solid rgba(230, 81, 0, 0.35)',
+                        }}
+                      >
+                        {task.urgency?.label || 'Overdue'}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Upcoming Deadlines */}
         <div className="dashboard-section-card" role="region" aria-label="Upcoming deadlines list">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -1073,20 +1261,19 @@ export default function Dashboard({
               </svg>
               <span>Upcoming Deadlines</span>
             </h3>
-            {onSelectTab && (
-              <button
-                type="button"
-                onClick={() => onSelectTab('timeline')}
-                className="btn-secondary"
-                style={{
-                  minHeight: '36px',
-                  padding: '0 10px',
-                  fontSize: '12px',
-                }}
-              >
-                View all ({upcomingDeadlines.length}) →
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setTimeFilter('upcoming')}
+              className="btn-secondary"
+              style={{
+                minHeight: '36px',
+                padding: '0 10px',
+                fontSize: '12px',
+              }}
+            >
+              View all ({viewCounts.upcoming}) →
+            </button>
+
           </div>
 
           {upcomingDeadlines.length === 0 ? (
