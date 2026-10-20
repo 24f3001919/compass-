@@ -18,7 +18,6 @@ import {
   sendQueryToAssistant,
   fetchUsageSummary,
   fetchCurrentUser,
-  seedJudgeDemoPersona,
   initGuestSession,
   fetchMigrationStatus,
 } from './api/client'
@@ -191,30 +190,7 @@ export default function App() {
     }
   }, [])
 
-  // Auto-seed demo data on first visit so judges never see an empty workspace
-  useEffect(() => {
-    const alreadySeeded = localStorage.getItem('compass_demo_seeded')
-    if (alreadySeeded) return
 
-    let cancelled = false
-    const doSeed = async () => {
-      try {
-        await seedJudgeDemoPersona()
-        if (!cancelled) {
-          localStorage.setItem('compass_demo_seeded', '1')
-          // Refresh tasks so the timeline populates immediately
-          loadTasks(selectedDomain)
-        }
-      } catch (err) {
-        console.warn('[Compass] Auto-seed skipped:', err.message)
-      }
-    }
-
-    // Small delay to let the health check and initial task fetch settle first
-    const timer = setTimeout(doSeed, 1500)
-    return () => { cancelled = true; clearTimeout(timer) }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   const checkMigration = useCallback(async () => {
     try {

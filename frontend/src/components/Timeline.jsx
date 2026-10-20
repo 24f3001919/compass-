@@ -444,60 +444,73 @@ export default function Timeline({
             width: '100%',
             boxSizing: 'border-box'
           }}>
-            {!localStorage.getItem('compass_demo_seeded') ? (
-              <>
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px', color: 'var(--accent, #f5a623)' }}>
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px', color: 'var(--text-secondary)' }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+              </svg>
+            </div>
+            <div style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '6px' }}>
+              {activeDomain === 'all' ? 'No deadlines yet' : 'Nothing here yet'}
+            </div>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '18px' }}>
+              {activeDomain === 'all'
+                ? 'Add your first deadline or load the Judge Persona to explore demo data.'
+                : `No deadlines in ${getDomainMeta(activeDomain).label} yet. Add a deadline and it'll show up here.`}
+            </div>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                id="btn-empty-add-deadline"
+                onClick={() => setShowAddModal(true)}
+                className="btn-primary-amber"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  minHeight: '44px',
+                  padding: '0 18px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                <span>Add deadline</span>
+              </button>
+              <button
+                id="btn-empty-load-demo"
+                type="button"
+                onClick={handleSeedJudgePersona}
+                disabled={seedingPersona}
+                className="btn-secondary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  minHeight: '44px',
+                  padding: '0 14px',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  cursor: seedingPersona ? 'wait' : 'pointer',
+                }}
+              >
+                {seedSuccess ? (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--domain-code, #1c8a62)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
                   </svg>
-                </div>
-                <div style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '6px' }}>
-                  Setting up your workspace...
-                </div>
-                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
-                  Loading demo data with cross-domain tasks, code context, and hackathon deadlines.
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px', color: 'var(--text-secondary)' }}>
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
-                    <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
-                  </svg>
-                </div>
-                <div style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '6px' }}>
-                  {activeDomain === 'all' ? 'No deadlines yet' : 'Nothing here yet'}
-                </div>
-                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '18px' }}>
-                  {activeDomain === 'all'
-                    ? 'Add one when you have something coming up.'
-                    : `No deadlines in ${getDomainMeta(activeDomain).label} yet. Add a deadline and it'll show up here.`}
-                </div>
-                <button
-                  id="btn-empty-add-deadline"
-                  onClick={() => setShowAddModal(true)}
-                  className="btn-primary-amber"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    minHeight: '44px',
-                    padding: '0 18px',
-                    fontSize: '13px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                  }}
-                >
+                ) : (
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="12" y1="5" x2="12" y2="19" />
-                    <line x1="5" y1="12" x2="19" y2="12" />
+                    <circle cx="12" cy="12" r="10" />
+                    <circle cx="12" cy="12" r="6" />
+                    <circle cx="12" cy="12" r="2" />
                   </svg>
-                  <span>Add deadline</span>
-                </button>
-              </>
-            )}
+                )}
+                <span>{seedingPersona ? 'Loading...' : seedSuccess ? 'Demo Persona Loaded!' : 'Load Judge Persona'}</span>
+              </button>
+            </div>
           </div>
         ) : filtered.map(task => (
           <TaskCard
