@@ -7,7 +7,6 @@ import Logo from './Logo'
 import TimelineFilterBar from './timeline/TimelineFilterBar'
 import {
   classifyDeadline,
-  filterTasksByView,
   filterTasksByStatusAndDue,
   calculateFilterCounts,
   sortOverdueDeadlines,
