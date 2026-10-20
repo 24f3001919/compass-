@@ -12,6 +12,7 @@ import logging
 import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
+from urllib.parse import urlparse
 
 import httpx
 
@@ -53,9 +54,18 @@ def sanitize_external_text(text: Optional[str], max_len: int = MAX_README_LENGTH
 def extract_username_from_input(user_input: str) -> str:
     """Extracts clean username from URL or handle."""
     clean = user_input.strip()
-    if "github.com/" in clean.lower():
-        parts = clean.split("github.com/")[-1].split("/")
-        return parts[0].strip()
+    if not clean:
+        return ""
+    candidate_url = clean if clean.startswith(("http://", "https://")) else f"https://{clean}"
+    try:
+        parsed = urlparse(candidate_url)
+        host = (parsed.hostname or "").lower()
+        if host == "github.com" or host.endswith(".github.com"):
+            path_parts = [p for p in (parsed.path or "").split("/") if p]
+            if path_parts:
+                return path_parts[0].strip()
+    except Exception:
+        pass
     return clean.lstrip("@").strip()
 
 

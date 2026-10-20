@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple
+from urllib.parse import urlparse
 
 from backend.models_career import (
     ResumeContent,
@@ -431,9 +432,18 @@ def parse_uploaded_resume_text(raw_text: str) -> ResumeContent:
             clean_u = f"https://{clean_u}"
         if clean_u not in relevant_links:
             relevant_links.append(clean_u)
-        if "github.com" in clean_u.lower() and not github_or_portfolio:
+        try:
+            parsed_u = urlparse(clean_u)
+            u_host = (parsed_u.hostname or "").lower()
+            is_github = u_host == "github.com" or u_host.endswith(".github.com")
+            is_linkedin = u_host == "linkedin.com" or u_host.endswith(".linkedin.com")
+        except Exception:
+            is_github = False
+            is_linkedin = False
+
+        if is_github and not github_or_portfolio:
             github_or_portfolio = clean_u
-        elif "linkedin.com" in clean_u.lower() and not linkedin_url:
+        elif is_linkedin and not linkedin_url:
             linkedin_url = clean_u
 
     for line in lines[:5]:
