@@ -253,9 +253,10 @@ export default function ChatPanel({
     setInput('')
     setActiveSpecialist(null)
 
-    const userMsgText = activeSpecialist
-      ? `[${activeSpecialist.icon} ${activeSpecialist.name}] ${text}`
-      : text
+    const specPrefix = activeSpecialist
+      ? `[${activeSpecialist.icon === 'compass' ? activeSpecialist.name : `${activeSpecialist.icon} ${activeSpecialist.name}`}] `
+      : ''
+    const userMsgText = `${specPrefix}${text}`
 
     if (!isRetry) {
       setMessages(prev => [...prev, { role: 'user', text: userMsgText }])

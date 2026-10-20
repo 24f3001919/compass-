@@ -202,7 +202,7 @@ export default function ChatInputBar({
                       transition: 'all 0.12s ease',
                     }}
                   >
-                    {spec.icon === '🧭' ? (
+                    {spec.icon === 'compass' ? (
                       <Logo size={16} alt="" />
                     ) : (
                       <span style={{ fontSize: '16px', flexShrink: 0 }}>{spec.icon}</span>
@@ -277,7 +277,11 @@ export default function ChatInputBar({
             fontWeight: '600',
             color: 'var(--text-primary)',
           }}>
-            <span>{activeSpecialist.icon}</span>
+            {activeSpecialist.icon === 'compass' ? (
+              <Logo size={14} alt="" />
+            ) : (
+              <span>{activeSpecialist.icon}</span>
+            )}
             <span>{activeSpecialist.name}</span>
             <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '400' }}>({activeSpecialist.command})</span>
             <button

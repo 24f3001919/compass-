@@ -1,4 +1,4 @@
-# 🧭 Compass
+# <img src="frontend/public/logo.png" alt="Compass logo" width="28" height="28" valign="middle" /> Compass
 
 > **Your one AI that remembers every hackathon, repo, and deadline — so you don't have to.**
 

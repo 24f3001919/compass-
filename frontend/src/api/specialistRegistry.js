@@ -5,7 +5,7 @@ export const SPECIALIST_AGENTS = [
     id: 'auto-dispatcher',
     name: 'Auto Dispatcher',
     command: '/auto',
-    icon: '🧭',
+    icon: 'compass',
     color: '#38bdf8',
     bg: 'rgba(56, 189, 248, 0.12)',
     border: 'rgba(56, 189, 248, 0.3)',
