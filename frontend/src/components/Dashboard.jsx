@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import DarkModeToggle from './DarkModeToggle'
 import { getDomainMeta } from './timeline/domainMeta'
 import AddDeadlineModal from './timeline/AddDeadlineModal'
-import { updateTask } from '../api/client'
+import { updateTask, seedJudgeDemoPersona } from '../api/client'
 import {
   classifyDeadline,
   filterTasksByView,
@@ -43,7 +43,24 @@ export default function Dashboard({
   const [optimisticOverrides, setOptimisticOverrides] = useState({})
   const [showAddModal, setShowAddModal] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [seedingPersona, setSeedingPersona] = useState(false)
+  const [seedSuccess, setSeedSuccess] = useState(false)
   const [lastRefreshedAt, setLastRefreshedAt] = useState(() => new Date())
+
+  const handleSeedJudgePersona = useCallback(async () => {
+    if (seedingPersona) return
+    setSeedingPersona(true)
+    try {
+      await seedJudgeDemoPersona()
+      setSeedSuccess(true)
+      setTimeout(() => setSeedSuccess(false), 3000)
+      if (onTasksUpdated) await onTasksUpdated()
+    } catch (err) {
+      alert(`Could not load judge persona: ${err.message}`)
+    } finally {
+      setSeedingPersona(false)
+    }
+  }, [seedingPersona, onTasksUpdated])
 
   const today = useMemo(() => {
     return new Date().toLocaleDateString('en-US', {
@@ -425,6 +442,31 @@ export default function Dashboard({
                     <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
                   </svg>
                   <span>Compass</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="dashboard-btn-load-judge-persona"
+                  onClick={handleSeedJudgePersona}
+                  disabled={seedingPersona}
+                  className="btn-secondary"
+                  title="Explicit 1-Click Demo: Populates sample multi-domain tasks and vector memory for hackathon judges"
+                  style={{
+                    cursor: seedingPersona ? 'wait' : 'pointer',
+                  }}
+                >
+                  {seedSuccess ? (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--domain-code, #1c8a62)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10" />
+                      <circle cx="12" cy="12" r="6" />
+                      <circle cx="12" cy="12" r="2" />
+                    </svg>
+                  )}
+                  <span>{seedingPersona ? 'Loading…' : seedSuccess ? 'Persona Loaded!' : 'Load Judge Persona'}</span>
                 </button>
               </>
             )}
@@ -1288,13 +1330,28 @@ export default function Dashboard({
               <p style={{ margin: '4px 0 14px 0', fontSize: '13px', color: 'var(--text-muted)', maxWidth: '300px' }}>
                 You have cleared all scheduled deadlines! Take a breather or log a new milestone.
               </p>
-              <button
-                type="button"
-                onClick={() => setShowAddModal(true)}
-                className="btn-primary-amber"
-              >
-                + Add Deadline
-              </button>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(true)}
+                  className="btn-primary-amber"
+                >
+                  + Add Deadline
+                </button>
+                <button
+                  type="button"
+                  id="dashboard-empty-seed-persona"
+                  onClick={handleSeedJudgePersona}
+                  disabled={seedingPersona}
+                  className="btn-secondary"
+                  title="Populates sample multi-domain tasks and hackathon deadlines for judges"
+                  style={{
+                    cursor: seedingPersona ? 'wait' : 'pointer',
+                  }}
+                >
+                  {seedSuccess ? 'Persona Loaded!' : seedingPersona ? 'Loading…' : 'Load Judge Persona'}
+                </button>
+              </div>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
