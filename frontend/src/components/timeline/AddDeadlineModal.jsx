@@ -536,29 +536,23 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
                   id="btn-shift-deadline"
                   onClick={handleShiftDeadline}
                   disabled={loading || !dueDate}
-                  style={{
-                    padding: '7px 13px',
-                    borderRadius: '8px',
-                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                    color: '#fff',
-                    border: 'none',
-                    fontSize: '12px',
-                    fontWeight: '700',
-                    cursor: (!dueDate || loading) ? 'not-allowed' : 'pointer',
-                    opacity: !dueDate ? 0.6 : 1,
-                    display: 'flex', alignItems: 'center', gap: '6px'
-                  }}
-                  title={!dueDate ? "Please pick a new deadline date above first" : `Shift existing deadline to ${dueDate}`}
                   className="btn-touch-target btn-secondary"
                   style={{
                     padding: '8px 14px',
-                    borderRadius: 'var(--radius-btn, 6px)',
+                    borderRadius: 'var(--radius-btn, 8px)',
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    color: '#fff',
+                    border: 'none',
                     fontSize: '12.5px',
-                    fontWeight: '600',
-                    cursor: !dueDate ? 'not-allowed' : 'pointer',
-                    display: 'flex', alignItems: 'center', gap: '6px',
+                    fontWeight: '700',
+                    cursor: (!dueDate || loading) ? 'not-allowed' : 'pointer',
+                    opacity: !dueDate ? 0.6 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
                     minHeight: '44px'
                   }}
+                  title={!dueDate ? "Please pick a new deadline date above first" : `Shift existing deadline to ${dueDate}`}
                 >
                   <Calendar size={13} strokeWidth={1.8} />
                   <span>Shift Existing Deadline {dueDate ? `to ${dueDate}` : '(Pick Date First)'}</span>
