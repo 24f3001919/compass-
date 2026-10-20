@@ -459,7 +459,7 @@ export default function MarkdownRenderer({ content }) {
 
     // 8. Bullet Lists (•, -, *)
     if (trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('* ')) {
-      const bulletText = trimmed.replace(/^[•\-\*]\s*/, '')
+      const bulletText = trimmed.replace(/^[•\-*]\s*/, '')
       elements.push(
         <div key={`bullet-${elements.length}`} style={{
           display: 'flex',

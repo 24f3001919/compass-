@@ -107,88 +107,6 @@ function getEmptyStateGreeting(isReturning, userName, startingPool = DEFAULT_STA
   return phrase
 }
 
-/**
- * Preserves formatting, line breaks, bullet points, and router latency chips
- */
-function renderFormattedMessage(text) {
-  if (!text) return null
-  const cleaned = text.replace(/\[\[modes\]\]/gi, '').trim()
-  const lines = cleaned.split('\n')
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-      {lines.map((line, i) => {
-        const trimmed = line.trim()
-
-        // 1. Router Latency Badge Chip (⚡ [Routed via Nemotron-3 Nano in 342ms])
-        if (line.includes('Routed via Nemotron-3 Nano') || line.includes('⚡')) {
-          return (
-            <div key={i} className="router-chip">
-              <span style={{ fontSize: '13px' }}>⚡</span>
-              <span>{line.replace('⚡', '').trim()}</span>
-            </div>
-          )
-        }
-
-        // 2. Coursework Deliverables Heading
-        if (line.includes('Coursework') && (line.includes('📚') || line.includes('CS 61C'))) {
-          return (
-            <div key={i} style={{ marginTop: '10px', marginBottom: '4px', color: 'var(--coursework-text)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="badge-coursework" style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', textTransform: 'uppercase' }}>
-                Coursework
-              </span>
-              <span>{line.replace(/^\d+\.\s*/, '').replace('📚', '').trim()}</span>
-            </div>
-          )
-        }
-
-        // 3. Hackathon Deliverables Heading
-        if (line.includes('Hackathon') && (line.includes('🚀') || line.includes('Nebius'))) {
-          return (
-            <div key={i} style={{ marginTop: '10px', marginBottom: '4px', color: 'var(--hackathon-text)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="badge-hackathon" style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', textTransform: 'uppercase' }}>
-                Hackathon
-              </span>
-              <span>{line.replace(/^\d+\.\s*/, '').replace('🚀', '').trim()}</span>
-            </div>
-          )
-        }
-
-        // 4. Actionable Next Step Callout
-        if (line.includes('Next Step:')) {
-          return (
-            <div key={i} style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '10px', background: 'var(--bg-card-soft)', border: '1px solid var(--border)', color: 'var(--code-text)', fontSize: '12.5px', fontFamily: 'JetBrains Mono, monospace', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ color: 'var(--code)' }}>❯</span>
-              <span>{line}</span>
-            </div>
-          )
-        }
-
-        // 5. Bullet Points (• or -)
-        if (trimmed.startsWith('•') || trimmed.startsWith('-')) {
-          return (
-            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', margin: '3px 0 3px 6px', color: 'var(--text-primary)', fontSize: '13.5px' }}>
-              <span style={{ color: 'var(--coursework)', fontWeight: '700', lineHeight: '1.4' }}>•</span>
-              <span style={{ lineHeight: '1.5' }}>{trimmed.replace(/^[•-]\s*/, '')}</span>
-            </div>
-          )
-        }
-
-        // 6. Empty Lines / Spacing
-        if (!trimmed) {
-          return <div key={i} style={{ height: '6px' }} />
-        }
-
-        // 7. Regular Text Paragraph
-        return (
-          <p key={i} style={{ margin: '2px 0', lineHeight: '1.6', color: 'var(--text-primary)' }}>
-            {line}
-          </p>
-        )
-      })}
-    </div>
-  )
-}
 
 export default function ChatMessageList({
   messages,
@@ -201,6 +119,7 @@ export default function ChatMessageList({
   pastConversations = [],
   onSendMessage,
   onSelectMode,
+  onRetry,
 }) {
   const [startingPhrases, setStartingPhrases] = useState(DEFAULT_STARTING_PHRASES)
   const [returningPhrases, setReturningPhrases] = useState(DEFAULT_RETURNING_PHRASES)
@@ -345,38 +264,47 @@ export default function ChatMessageList({
                       )}
                       {msg.role === 'user' ? (
                         msg.text
-                      ) : msg.error ? (
+                      ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--danger, #ef4444)', fontSize: '13px' }}>
-                            <span>⚠️</span>
-                            <span>{msg.error}</span>
-                          </div>
-                          {msg.canRetry && msg.retryPrompt && (
-                            <button
-                              type="button"
-                              onClick={() => onSendMessage && onSendMessage(msg.retryPrompt)}
-                              style={{
-                                alignSelf: 'flex-start',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                padding: '5px 12px',
-                                borderRadius: '6px',
-                                background: 'var(--bg-card-soft, rgba(0,0,0,0.05))',
-                                border: '1px solid var(--border)',
-                                color: 'var(--text-primary)',
-                                fontSize: '12px',
-                                cursor: 'pointer',
-                                fontWeight: '500',
-                              }}
-                            >
-                              <span>🔄</span>
-                              <span>Retry</span>
-                            </button>
+                          {msg.text ? <MarkdownRenderer content={msg.text} /> : null}
+                          {msg.error && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: msg.text ? '6px' : '0' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--danger, #ef4444)', fontSize: '13px' }}>
+                                <span>⚠️</span>
+                                <span>{msg.error}</span>
+                              </div>
+                              {msg.canRetry && msg.retryPrompt && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (onRetry) {
+                                      onRetry(idx, msg.retryPrompt)
+                                    } else if (onSendMessage) {
+                                      onSendMessage(msg.retryPrompt)
+                                    }
+                                  }}
+                                  style={{
+                                    alignSelf: 'flex-start',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '5px 12px',
+                                    borderRadius: '6px',
+                                    background: 'var(--bg-card-soft, rgba(0,0,0,0.05))',
+                                    border: '1px solid var(--border)',
+                                    color: 'var(--text-primary)',
+                                    fontSize: '12px',
+                                    cursor: 'pointer',
+                                    fontWeight: '500',
+                                  }}
+                                >
+                                  <span>🔄</span>
+                                  <span>Retry</span>
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
-                      ) : (
-                        <MarkdownRenderer content={msg.text} />
                       )}
                       {msg.role === 'assistant' && msg.tasks && Array.isArray(msg.tasks) && msg.tasks.length > 0 && (
                         <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
