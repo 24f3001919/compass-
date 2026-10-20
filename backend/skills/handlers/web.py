@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime, date
 import logging
 import re
+from urllib.parse import urlparse
 
 from backend.skills.registry import register_skill
 
@@ -104,8 +105,18 @@ async def handle_search_web(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
             # Prefer official rules / devpost / organizer sources
             best_cand = None
             for c in candidates:
-                u_low = c["url"].lower()
-                if "rules" in u_low or "updates" in u_low or "devpost.com" in u_low:
+                cand_url = c.get("url") or ""
+                try:
+                    parsed = urlparse(cand_url)
+                    host = (parsed.hostname or "").lower()
+                    path = (parsed.path or "").lower()
+                    is_devpost = host == "devpost.com" or host.endswith(".devpost.com")
+                    is_rules_or_updates = "rules" in path or "updates" in path
+                except Exception:
+                    is_devpost = False
+                    is_rules_or_updates = False
+
+                if is_rules_or_updates or is_devpost:
                     best_cand = c
                     break
             if not best_cand:
@@ -284,19 +295,24 @@ async def handle_ingest_url(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
 
 @register_skill("verify_deadline")
 async def handle_verify_deadline(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
-    """Compare a stored task's due date against live web sources to detect drift."""
+    """Compare a stored task's due date against live web sources or verify a claim string."""
     from backend.services import tavily as tavily_service
     from backend.services.tavily_deadline import analyze_deadline_drift
     from backend.memory import structured
 
     task_id = args.get("task_id")
+    claim_or_query = (args.get("claim") or args.get("query") or args.get("topic") or "").strip()
+
+    if not task_id and claim_or_query:
+        return await handle_verify_with_tavily(args, pool)
+
     if not task_id:
         return {
             "success": False,
             "data": {},
-            "summary": "task_id is required",
-            "response": "task_id is required",
-            "error": "task_id is required",
+            "summary": "task_id or claim is required for verification",
+            "response": "Please specify a task or claim to verify.",
+            "error": "task_id or claim is required",
         }
 
     async with pool.acquire() as conn:
@@ -360,10 +376,136 @@ async def handle_verify_deadline(args: Dict[str, Any], pool: Any) -> Dict[str, A
             "citations": [r.get("url") for r in results if r.get("url")],
             "drift_analysis": drift_info,
             "source": "web",
+            "evidence": {
+                "items": [
+                    {
+                        "claim": f"{task_title} deadline: {stored_due}",
+                        "source_url": drift_info.get("source_url") or (results[0].get("url") if results else ""),
+                        "display_quote": drift_info.get("evidence") or "",
+                        "authority_tier": "tier_1_official" if drift_info.get("is_primary_source") else "tier_3_general",
+                        "authority_badge": "Official Organizer" if drift_info.get("is_primary_source") else "Web",
+                        "verdict": "VERIFIED" if drift_info.get("drift_verdict") == "CONFIRMED_ACCURATE" else ("CONFLICTING" if drift_info.get("has_drift") else "UNVERIFIED"),
+                        "local_deadline_ist": drift_info.get("live_date"),
+                    }
+                ],
+                "verdict": "VERIFIED" if drift_info.get("drift_verdict") == "CONFIRMED_ACCURATE" else ("CONFLICTING" if drift_info.get("has_drift") else "UNVERIFIED"),
+                "summary": full_summary,
+            },
         },
         "fenced_context": fenced,
         "summary": full_summary,
         "response": full_summary,
+        "error": None,
+    }
+
+
+@register_skill("verify_with_tavily")
+async def handle_verify_with_tavily(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
+    """Execute evidence-based claim or deadline verification using the complete Tavily pipeline."""
+    from backend.services.tavily_pipeline import run_tavily_research
+
+    claim = (args.get("claim") or args.get("query") or args.get("topic") or "").strip()
+    target_entity = (args.get("target_entity") or "").strip() or None
+
+    if not claim:
+        return {
+            "success": False,
+            "data": {},
+            "summary": "Please provide a claim or deadline to verify.",
+            "response": "Please provide a specific claim or deadline to verify.",
+            "error": "claim cannot be empty",
+        }
+
+    now_dt = datetime.now().astimezone()
+    today_str = now_dt.strftime("%B %d, %Y (%Z)")
+
+    try:
+        pipeline_res = await run_tavily_research(
+            query=claim,
+            target_entity=target_entity,
+        )
+    except Exception as e:
+        logger.error("Tavily verification failed: %s", e, exc_info=True)
+        return {
+            "success": False,
+            "data": {
+                "verdict": "UNVERIFIED",
+                "evidence_ledger": [],
+                "evidence": {
+                    "items": [],
+                    "verdict": "UNVERIFIED",
+                    "summary": f"Verification error: {e}",
+                },
+            },
+            "summary": f"Verification encountered an error: {e}",
+            "response": f"⚠️ Could not complete Tavily verification: {e}. The claim remains **UNVERIFIED**.",
+            "error": str(e),
+        }
+
+    overall_verdict = pipeline_res.get("verdict", "UNVERIFIED")
+    evidence_ledger = pipeline_res.get("evidence_ledger", [])
+    top_sources = pipeline_res.get("sources", [])
+    summary_text = pipeline_res.get("summary", "")
+
+    verdict_badge = overall_verdict.upper()
+    if verdict_badge in ("CONFLICTING", "CONTRADICTED"):
+        v_icon = "⚠️"
+    elif verdict_badge == "VERIFIED":
+        v_icon = "✅"
+    elif verdict_badge in ("STALE", "NOT_FOUND"):
+        v_icon = "🕒"
+    else:
+        v_icon = "🔍"
+
+    lines = [
+        f"### 🔍 Tavily Verification Report: {v_icon} {verdict_badge}",
+        f"**Claim Checked:** \"{claim}\"",
+        f"**Verified on:** {today_str}",
+        "",
+        f"**Finding:** {summary_text}",
+    ]
+
+    if evidence_ledger:
+        lines.append("\n**Key Authoritative Evidence:**")
+        for ev in evidence_ledger[:3]:
+            quote = ev.get("display_quote") or ev.get("verbatim_quote") or ev.get("exact_quote") or ""
+            tier = ev.get("authority_badge") or ev.get("authority_tier") or "Web"
+            s_url = ev.get("source_url") or ""
+            local_dl = ev.get("local_deadline_ist")
+            ev_line = f"- **[{tier}]** {ev.get('verdict', 'EVIDENCE')}:"
+            if s_url:
+                ev_line += f" [{s_url.replace('https://', '').replace('http://', '').rstrip('/')}]({s_url})"
+            lines.append(ev_line)
+            if quote:
+                lines.append(f"  > \"{quote}\"")
+            if local_dl:
+                lines.append(f"  *Local Deadline (IST): {local_dl}*")
+
+    if top_sources:
+        lines.append("\n**Sources Referenced:**")
+        for s in top_sources[:4]:
+            u = s.get("url") or ""
+            t = s.get("title") or u
+            if u:
+                lines.append(f"- [{t}]({u})")
+
+    formatted_response = "\n".join(lines)
+
+    return {
+        "success": True,
+        "data": {
+            "verdict": overall_verdict,
+            "evidence_ledger": evidence_ledger,
+            "evidence": {
+                "items": evidence_ledger,
+                "verdict": overall_verdict,
+                "summary": summary_text,
+            },
+            "sources": top_sources,
+            "citations": [s.get("url") for s in top_sources if s.get("url")],
+        },
+        "summary": summary_text,
+        "response": formatted_response,
         "error": None,
     }
 

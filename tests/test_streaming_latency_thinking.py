@@ -162,6 +162,6 @@ async def test_deadline_verification_synthesis():
         # Must contain actual deadline info, not just "Found 2 web results"
         assert "Verified Finding" in formatted
         assert "October 30, 2026" in formatted
-        assert "devpost.com" in formatted
+        assert "https://nebiusglobalaihackathon.devpost.com/rules" in formatted
         assert "Rules" in formatted
         assert "Submission Period" in formatted
