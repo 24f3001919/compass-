@@ -67,6 +67,11 @@ export default function EvidenceCard({ evidence }) {
       <div style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>
         🔍 Verified Research Evidence
       </div>
+      {evidence.summary && (
+        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontStyle: 'italic', padding: '0 2px' }}>
+          {evidence.summary}
+        </div>
+      )}
       {items.map((item, idx) => {
         const vStyle = getVerdictStyle(item.verdict)
         const tierBadge = getTierBadge(item)

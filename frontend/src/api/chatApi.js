@@ -116,6 +116,8 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
     let lastConvId = conversationId || null
     let lastSkill = null
     let lastTasks = null
+    let lastEvidence = null
+    let lastIsTruncated = false
     let sawDoneEvent = false
 
     const processLine = (line) => {
@@ -152,6 +154,8 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
         if (evt.conversation_id) lastConvId = evt.conversation_id
         if (evt.skill_used) lastSkill = evt.skill_used
         if (evt.tasks) lastTasks = evt.tasks
+        if (evt.evidence) lastEvidence = evt.evidence
+        if (evt.is_truncated) lastIsTruncated = true
       } else if (evt.type === 'error') {
         const errMsg = evt.detail || evt.message || 'Stream error'
         const errObj = new Error(errMsg)
@@ -199,12 +203,17 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
         conversation_id: lastConvId,
         skill_used: lastSkill,
         tasks: lastTasks,
+        evidence: lastEvidence,
+        is_truncated: lastIsTruncated,
       })
     }
     return {
       response: fullResponse,
       conversation_id: lastConvId,
       skill_used: lastSkill,
+      tasks: lastTasks,
+      evidence: lastEvidence,
+      is_truncated: lastIsTruncated,
     }
   } catch (err) {
     if (err && typeof err === 'object') {

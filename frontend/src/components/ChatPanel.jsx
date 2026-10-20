@@ -305,6 +305,8 @@ export default function ChatPanel({
               text: finalText,
               thought: receivedThought || null,
               tasks: Array.isArray(doneData?.tasks) ? doneData.tasks : null,
+              evidence: doneData?.evidence || null,
+              isTruncated: Boolean(doneData?.is_truncated),
             }])
           } else if (onSendMessage) {
             const reply = await onSendMessage(text, tone, specialistIdToUse)

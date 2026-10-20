@@ -30,25 +30,30 @@ const SUGGESTION_CHIPS = [
 function getFollowUpSuggestions(text) {
   if (!text || typeof text !== 'string') return []
   const lower = text.toLowerCase()
+  const chips = []
+  if (lower.includes('hackathon') || lower.includes('deadline') || lower.includes('due') || lower.includes('prize') || lower.includes('event') || lower.includes('verify')) {
+    chips.push('Verify it with Tavily')
+  }
   if (lower.includes('roadmap') || lower.includes('plan for today') || lower.includes('start here') || lower.includes('suggested schedule')) {
-    return [
+    chips.push(
       'Show overdue tasks',
       'Build my schedule',
       'Focus on coursework',
       'Check calendar clashes',
-    ]
-  }
-  if (lower.includes('task') || lower.includes('deadline')) {
-    return [
+    )
+  } else if (lower.includes('task') || lower.includes('deadline')) {
+    chips.push(
       'Plan an optimal roadmap for today',
       'Show overdue tasks',
       'Check schedule conflicts',
-    ]
+    )
+  } else {
+    chips.push(
+      'What should I do today?',
+      'Review my upcoming tasks',
+    )
   }
-  return [
-    'What should I do today?',
-    'Review my upcoming tasks',
-  ]
+  return [...new Set(chips)]
 }
 
 function getTimeGreeting() {
@@ -341,6 +346,68 @@ export default function ChatMessageList({
                       )}
                       {msg.role === 'assistant' && msg.evidence && (
                         <EvidenceCard evidence={msg.evidence} />
+                      )}
+                      {msg.role === 'assistant' && msg.isTruncated && (
+                        <div style={{
+                          marginTop: '10px',
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          background: 'rgba(230, 81, 0, 0.1)',
+                          border: '1px solid rgba(230, 81, 0, 0.3)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '8px',
+                          flexWrap: 'wrap',
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#e65100' }}>
+                            <span>⚠️</span>
+                            <span>Response reached output token limit and may be incomplete.</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => onSendMessage && onSendMessage("Continue response")}
+                            className="btn-secondary"
+                            style={{
+                              padding: '2px 10px',
+                              minHeight: '28px',
+                              fontSize: '11.5px',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontWeight: '600',
+                              color: '#e65100',
+                              border: '1px solid rgba(230, 81, 0, 0.4)',
+                            }}
+                          >
+                            Continue response ➔
+                          </button>
+                        </div>
+                      )}
+                      {msg.role === 'assistant' && !msg.error && msg.text && !msg.evidence && (
+                        <div style={{ marginTop: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <button
+                            type="button"
+                            title="Verify claims and deadlines using live web evidence from Tavily"
+                            onClick={() => onSendMessage && onSendMessage("Verify this with Tavily")}
+                            className="btn-secondary"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '5px',
+                              padding: '3px 10px',
+                              minHeight: '26px',
+                              fontSize: '11px',
+                              borderRadius: '4px',
+                              color: 'var(--text-secondary)',
+                              cursor: 'pointer',
+                              background: 'var(--bg-card-soft, rgba(255,255,255,0.03))',
+                              border: '1px solid var(--border)',
+                            }}
+                          >
+                            <span style={{ color: 'var(--coursework, #1a73e8)' }}>🔍</span>
+                            <span>Verify with Tavily</span>
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
