@@ -191,7 +191,7 @@ async def test_profile_updates_eligibility_classification():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test", headers=candidate_headers) as client:
         # 1. Without profile, opportunity classification is INSUFFICIENT_INFORMATION
-        res_before = await client.get("/api/opportunities")
+        res_before = await client.get("/api/opportunities?search=Acme%20AI")
         assert res_before.status_code == 200
         opp_before = next((o for o in res_before.json()["opportunities"] if o["id"] == opp_id), None)
         assert opp_before is not None
@@ -211,7 +211,7 @@ async def test_profile_updates_eligibility_classification():
         assert save_res.status_code == 200
 
         # 3. After profile update, opportunity classification becomes ELIGIBLE
-        res_after = await client.get("/api/opportunities")
+        res_after = await client.get("/api/opportunities?search=Acme%20AI")
         assert res_after.status_code == 200
         opp_after = next((o for o in res_after.json()["opportunities"] if o["id"] == opp_id), None)
         assert opp_after is not None
