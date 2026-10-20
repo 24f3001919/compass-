@@ -61,18 +61,50 @@ VERIFY_DEADLINE_TOOL: Dict[str, Any] = {
     "function": {
         "name": "verify_deadline",
         "description": (
-            "Compare a stored task's due_date against what the live web currently says. "
-            "Searches for deadline announcements or updates and flags schedule drift with official verdicts."
+            "Compare a stored task's due_date or a factual claim against live web sources using Tavily. "
+            "Flags schedule drift and returns source-backed verification verdicts."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "task_id": {
                     "type": "integer",
-                    "description": "The ID of the task to verify against live web sources",
+                    "description": "Optional ID of a stored task to verify against live web sources",
+                },
+                "claim": {
+                    "type": "string",
+                    "description": "Optional specific claim or deadline to verify with live web sources",
+                },
+                "query": {
+                    "type": "string",
+                    "description": "Optional search query",
                 },
             },
-            "required": ["task_id"],
+        },
+    },
+}
+
+VERIFY_WITH_TAVILY_TOOL: Dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "verify_with_tavily",
+        "description": (
+            "Fact-check a claim, opportunity, or deadline against authoritative web sources using Tavily Web Intelligence. "
+            "Returns structured evidence with domain authority, verbatim quotes, and deterministic verification status."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "claim": {
+                    "type": "string",
+                    "description": "The statement, deadline, or opportunity to verify against live sources",
+                },
+                "target_entity": {
+                    "type": "string",
+                    "description": "Optional organizer, event, or entity name",
+                },
+            },
+            "required": ["claim"],
         },
     },
 }

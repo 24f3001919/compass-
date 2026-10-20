@@ -195,6 +195,7 @@ from backend.skills.schemas_web import (
     SEARCH_WEB_TOOL,
     INGEST_URL_TOOL,
     VERIFY_DEADLINE_TOOL,
+    VERIFY_WITH_TAVILY_TOOL,
     DEEP_RESEARCH_TOOL,
     SAVE_VERIFIED_FINDING_TOOL,
 )
@@ -833,6 +834,7 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 SEARCH_WEB_TOOL,
                 INGEST_URL_TOOL,
                 VERIFY_DEADLINE_TOOL,
+                VERIFY_WITH_TAVILY_TOOL,
                 DEEP_RESEARCH_TOOL,
                 SAVE_VERIFIED_FINDING_TOOL,
             ]
