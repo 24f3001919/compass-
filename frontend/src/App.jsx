@@ -394,9 +394,9 @@ export default function App() {
     return result.response
   }
 
-  // P0.2: Build the live header badge text with micro-dollar precision
+  // P0.2: Build the live header badge text with micro-dollar precision and formatted numbers
   const usageBadge = usageStats
-    ? `⚡ ${usageStats.total_requests ?? 0} calls · $${(usageStats.total_estimated_cost_usd ?? 0).toFixed(5)}`
+    ? `⚡ ${(usageStats.total_requests ?? 0).toLocaleString()} calls · $${(usageStats.total_estimated_cost_usd ?? 0).toFixed(5)}`
     : 'Nebius • Nemotron-3'
 
   return (
