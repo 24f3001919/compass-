@@ -1578,3 +1578,437 @@ textarea {
     transition: none !important;
   }
 }
+
+/* ==========================================================================
+   Compass & Assistant Toolbar (Level 1 & Level 2)
+   ========================================================================== */
+
+.compass-page-header {
+  min-height: 52px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  flex-shrink: 0;
+  gap: 12px;
+}
+
+.compass-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.compass-page-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.compass-page-badge {
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-card-soft);
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+  border-radius: var(--radius-btn, 6px);
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.compass-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.compass-subtab-segmented {
+  display: flex;
+  align-items: center;
+  background: var(--bg-card-soft);
+  padding: 2px;
+  border-radius: var(--radius-btn, 6px);
+  border: 1px solid var(--border);
+  gap: 2px;
+}
+
+.compass-subtab-btn {
+  padding: 0 14px;
+  min-height: 36px;
+  height: 36px;
+  border-radius: calc(var(--radius-btn, 6px) - 2px);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.compass-subtab-btn:hover:not(.active) {
+  color: var(--text-primary);
+}
+
+.compass-subtab-btn.active {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--border);
+  box-shadow: var(--shadow-sm);
+  font-weight: 600;
+}
+
+/* Level 2: Slim Toolbar Row */
+.compass-toolbar-row {
+  min-height: 56px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  flex-shrink: 0;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.compass-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.compass-toolbar-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.compass-toolbar-btn {
+  height: var(--touch-target, 44px);
+  min-height: var(--touch-target, 44px);
+  padding: 0 14px;
+  border-radius: var(--radius-btn, 6px);
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.compass-count-badge {
+  background: var(--bg-card-soft);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  line-height: 1.3;
+}
+
+.compass-style-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.compass-style-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.compass-style-segmented {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-card-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn, 6px);
+  padding: 2px;
+  gap: 2px;
+  height: var(--touch-target, 44px);
+  box-sizing: border-box;
+}
+
+.compass-style-btn {
+  height: 38px;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: calc(var(--radius-btn, 6px) - 2px);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.compass-style-btn:hover:not(.active) {
+  color: var(--text-primary);
+}
+
+.compass-style-btn.active {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--border);
+  box-shadow: var(--shadow-sm);
+  font-weight: 600;
+}
+
+.compass-popover-anchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.compass-status-chip {
+  cursor: pointer;
+  user-select: none;
+}
+
+.compass-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.compass-amber-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent, #f5a623);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.compass-chevron {
+  transition: transform 0.2s ease;
+}
+
+.compass-chevron.open {
+  transform: rotate(180deg);
+}
+
+/* Popover & Menu Dropdowns */
+.compass-popover-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 290px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn, 6px);
+  box-shadow: var(--shadow-md);
+  padding: 14px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.compass-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 220px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn, 6px);
+  box-shadow: var(--shadow-md);
+  padding: 6px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.compass-menu-item {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: calc(var(--radius-btn, 6px) - 2px);
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease;
+  min-height: 40px;
+}
+
+.compass-menu-item:hover:not(:disabled) {
+  background: var(--bg-card-soft);
+}
+
+.compass-menu-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Mobile Bottom Sheet Overlay */
+.compass-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+.compass-bottom-sheet {
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 16px 18px 24px;
+  box-shadow: var(--shadow-lg);
+  box-sizing: border-box;
+  animation: compassSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes compassSlideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compass-bottom-sheet {
+    animation: none !important;
+  }
+  .compass-chevron {
+    transition: none !important;
+  }
+  .compass-toolbar-btn,
+  .compass-style-btn,
+  .compass-subtab-btn {
+    transition: none !important;
+  }
+}
+
+.compass-btn-text-short {
+  display: none;
+}
+
+.compass-btn-text-long {
+  display: inline;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+  .compass-toolbar-row {
+    padding: 6px 12px;
+  }
+  .compass-toolbar-btn {
+    padding: 0 10px;
+    font-size: 12.5px;
+  }
+  .compass-style-btn {
+    padding: 0 8px;
+    font-size: 11.5px;
+  }
+}
+
+@media (max-width: 768px) {
+  .compass-page-header {
+    padding: 0 12px !important;
+    min-height: 48px !important;
+    gap: 8px !important;
+  }
+  .compass-header-left {
+    gap: 6px !important;
+  }
+  .compass-page-title {
+    font-size: 16px !important;
+  }
+  .compass-page-badge {
+    display: none !important;
+  }
+  .compass-subtab-segmented {
+    padding: 2px !important;
+    gap: 2px !important;
+  }
+  .compass-subtab-btn {
+    padding: 0 8px !important;
+    font-size: 12px !important;
+    min-height: 32px !important;
+    height: 32px !important;
+    gap: 4px !important;
+  }
+  .compass-subtab-btn svg {
+    width: 13px !important;
+    height: 13px !important;
+  }
+  .compass-toolbar-row {
+    padding: 6px 12px !important;
+    min-height: 50px !important;
+    justify-content: space-between !important;
+    overflow-x: hidden !important;
+  }
+  .compass-toolbar-group {
+    gap: 6px !important;
+  }
+  .compass-toolbar-style {
+    display: none !important;
+  }
+  .compass-toolbar-divider {
+    display: none !important;
+  }
+  .compass-toolbar-status-desktop {
+    display: none !important;
+  }
+  .compass-btn-text-long {
+    display: none !important;
+  }
+  .compass-btn-text-short {
+    display: inline !important;
+  }
+  .compass-toolbar-btn {
+    height: 40px !important;
+    min-height: 40px !important;
+    padding: 0 10px !important;
+    font-size: 12.5px !important;
+    gap: 6px !important;
+  }
+  .compass-tools-chevron {
+    display: none !important;
+  }
+}

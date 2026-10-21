@@ -39,75 +39,70 @@ export default function NorthstarPanel({
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden', background: 'var(--bg-app)' }}>
-      {/* Northstar Header Sub-bar */}
-      <div style={{
-        minHeight: '48px',
-        borderBottom: '1px solid var(--border)',
-        background: 'var(--bg-card)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '0 14px',
-        flexShrink: 0,
-        gap: '10px',
-        flexWrap: 'wrap',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-          <Logo size={18} alt="Compass logo" />
-          <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.2px' }}>
-            Northstar AI
-          </span>
-          <span className="sidebar-specs-card" style={{
-            fontSize: '11px',
-            color: 'var(--text-muted)',
-            background: 'var(--bg-card-soft)',
-            border: '1px solid var(--border)',
-            padding: '2px 8px',
-            borderRadius: '10px',
-            whiteSpace: 'nowrap'
-          }}>
-            Copilot & Workspace Assistant
+      {/* Header Bar - Level 1 */}
+      <header
+        className="compass-page-header"
+        role="banner"
+        aria-label="Assistant and planner header"
+      >
+        <div className="compass-header-left">
+          <Logo size={20} alt="Compass Logo" />
+          <h1 className="compass-page-title">
+            Compass
+          </h1>
+          <span className="compass-page-badge">
+            Assistant & Planner
           </span>
         </div>
 
-        {/* Right side controls: View Toggle + Dark Mode Toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-          <div style={{ display: 'flex', background: 'var(--bg-card-soft)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border)', flexShrink: 0 }}>
+        <div className="compass-header-right">
+          <div
+            role="tablist"
+            className="compass-subtab-segmented"
+            aria-label="View selection"
+          >
             <button
               id="northstar-subtab-chat"
+              role="tab"
+              aria-selected={activeSubTab === 'assistant'}
+              tabIndex={activeSubTab === 'assistant' ? 0 : -1}
               onClick={() => setActiveSubTab('assistant')}
-              className="btn-touch-target"
-              style={{
-                padding: '6px 14px',
-                borderRadius: '6px',
-                border: 'none',
-                background: (activeSubTab === 'assistant' || activeSubTab === 'specialist') ? 'var(--bg-card)' : 'transparent',
-                color: (activeSubTab === 'assistant' || activeSubTab === 'specialist') ? 'var(--text-primary)' : 'var(--text-secondary)',
-                boxShadow: (activeSubTab === 'assistant' || activeSubTab === 'specialist') ? 'var(--shadow-sm)' : 'none',
-                fontSize: '12.5px',
-                fontWeight: (activeSubTab === 'assistant' || activeSubTab === 'specialist') ? '700' : '500',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}>
-              💬 Chat
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                  e.preventDefault()
+                  setActiveSubTab('planner')
+                  document.getElementById('northstar-subtab-planner')?.focus()
+                }
+              }}
+              className={`compass-subtab-btn ${activeSubTab === 'assistant' ? 'active' : ''}`}
+              title="Assistant conversation mode"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              <span>Chat</span>
             </button>
             <button
               id="northstar-subtab-planner"
+              role="tab"
+              aria-selected={activeSubTab === 'planner'}
+              tabIndex={activeSubTab === 'planner' ? 0 : -1}
               onClick={() => setActiveSubTab('planner')}
-              className="btn-touch-target"
-              style={{
-                padding: '6px 14px',
-                borderRadius: '6px',
-                border: 'none',
-                background: activeSubTab === 'planner' ? 'var(--bg-card)' : 'transparent',
-                color: activeSubTab === 'planner' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                boxShadow: activeSubTab === 'planner' ? 'var(--shadow-sm)' : 'none',
-                fontSize: '12.5px',
-                fontWeight: activeSubTab === 'planner' ? '700' : '500',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}>
-              📋 Planner
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                  e.preventDefault()
+                  setActiveSubTab('assistant')
+                  document.getElementById('northstar-subtab-chat')?.focus()
+                }
+              }}
+              className={`compass-subtab-btn ${activeSubTab === 'planner' ? 'active' : ''}`}
+              title="Multi-step agent planning mode"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+              </svg>
+              <span>Planner</span>
             </button>
           </div>
 
@@ -117,16 +112,17 @@ export default function NorthstarPanel({
             id="northstar-theme-toggle"
           />
         </div>
-      </div>
+      </header>
 
-      {/* Main Unified View Area */}
+      {/* Main Unified View Area: Preserves state across tab switching */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-        {activeSubTab === 'planner' ? (
+        <div style={{ flex: 1, display: activeSubTab === 'planner' ? 'flex' : 'none', flexDirection: 'column', minWidth: 0, minHeight: 0, height: '100%', overflow: 'hidden' }}>
           <AgentPanel
             onTaskMutated={onTaskMutated}
             conversationId={conversationId}
           />
-        ) : (
+        </div>
+        <div style={{ flex: 1, display: activeSubTab === 'assistant' ? 'flex' : 'none', flexDirection: 'column', minWidth: 0, minHeight: 0, height: '100%', overflow: 'hidden' }}>
           <ChatPanel
             messages={messages}
             setMessages={setMessages}
@@ -141,7 +137,7 @@ export default function NorthstarPanel({
             onClearInitialPrompt={onClearPendingPrompt}
             onOpenMigration={onOpenMigration}
           />
-        )}
+        </div>
       </div>
     </div>
   )

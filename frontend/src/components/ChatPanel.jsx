@@ -48,6 +48,26 @@ export default function ChatPanel({
       return 'balanced'
     }
   })
+  const [memoryActive, setMemoryActive] = useState(() => {
+    try {
+      const stored = localStorage.getItem('compass_memory_active')
+      return stored !== 'false'
+    } catch {
+      return true
+    }
+  })
+
+  const handleToggleMemoryActive = () => {
+    setMemoryActive((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('compass_memory_active', String(next))
+      } catch {
+        /* ignore storage access error */
+      }
+      return next
+    })
+  }
   const [convMode, setConvMode] = useState(null)
   const [streamingThought, setStreamingThought] = useState('')
   const [streamingStatus, setStreamingStatus] = useState(null)
@@ -486,6 +506,8 @@ export default function ChatPanel({
         setShowHistoryDrawer={setShowHistoryDrawer}
         pastConversations={pastConversations}
         isOnline={isOnline}
+        memoryActive={memoryActive}
+        onToggleMemoryActive={handleToggleMemoryActive}
         tone={tone}
         handleToneChange={handleToneChange}
         showParkedShelf={showParkedShelf}
@@ -496,6 +518,7 @@ export default function ChatPanel({
         handleRecap={handleRecap}
         handleNewChat={handleNewChat}
         isInputDisabled={isInputDisabled}
+        tasks={tasks}
       />
 
       {/* Main Body: History Drawer + Chat View */}
