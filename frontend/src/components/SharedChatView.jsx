@@ -123,13 +123,7 @@ export default function SharedChatView({ shareId, onGoToApp }) {
           style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
           title="Open Compass Workspace"
         >
-          <div style={{
-            width: '34px', height: '34px', borderRadius: '9px',
-            background: 'var(--brand)', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', boxShadow: '0 2px 8px rgba(245, 166, 35, 0.3)'
-          }}>
-            <Logo size={22} alt="" />
-          </div>
+          <Logo size={34} alt="" />
           <div>
             <div style={{ fontSize: '15px', fontWeight: '800', letterSpacing: '-0.3px', color: 'var(--text-primary)' }}>
               Compass

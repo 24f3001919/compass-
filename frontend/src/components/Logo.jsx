@@ -24,6 +24,10 @@ export default function Logo({
         display: 'inline-block',
         verticalAlign: 'middle',
         flexShrink: 0,
+        border: 'none',
+        outline: 'none',
+        background: 'transparent',
+        padding: 0,
         ...style,
       }}
       {...rest}

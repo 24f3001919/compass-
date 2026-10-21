@@ -165,11 +165,8 @@ export default function Sidebar({
             title="Compass Workspace: Click to return to Dashboard"
             aria-label="Compass Workspace Dashboard"
             style={{
-              width: '42px',
-              height: '42px',
-              borderRadius: '6px',
-              background: 'var(--brand)',
-              color: 'var(--accent-text)',
+              width: '40px',
+              height: '40px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -180,7 +177,7 @@ export default function Sidebar({
             onMouseEnter={e => (e.currentTarget.style.opacity = '0.9')}
             onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
           >
-            <Logo size={24} alt="Compass logo" />
+            <Logo size={40} alt="Compass logo" />
           </div>
           <button
             id="sidebar-collapse-toggle"
@@ -218,21 +215,19 @@ export default function Sidebar({
           </button>
         </div>
       ) : (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px', padding: '0 4px', userSelect: 'none' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px', padding: 0, userSelect: 'none' }}>
           <div
             id="sidebar-brand-header"
             onClick={() => {
               onSelectTab('dashboard')
               if (onCloseMobile) onCloseMobile()
             }}
-            style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', transition: 'opacity 0.15s ease', minWidth: 0 }}
+            style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', transition: 'opacity 0.15s ease', minWidth: 0 }}
             onMouseEnter={e => (e.currentTarget.style.opacity = '0.9')}
             onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
             title="Compass Workspace: Click to return to Dashboard"
           >
-            <div style={{ width: '38px', height: '38px', borderRadius: '6px', background: 'var(--brand)', color: 'var(--accent-text)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Logo size={24} alt="" />
-            </div>
+            <Logo size={40} alt="" />
             <div>
               <h1 style={{ fontSize: '15px', fontWeight: '600', letterSpacing: '-0.2px', color: 'var(--sidebar-active-text)', margin: 0, lineHeight: 1.2 }}>Compass</h1>
               <p style={{ fontSize: '11px', color: 'var(--sidebar-text)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: '500', margin: 0, opacity: 0.8 }}>Workspace</p>
