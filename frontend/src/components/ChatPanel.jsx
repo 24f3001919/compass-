@@ -582,6 +582,8 @@ export default function ChatPanel({
             onSendMessage={handleSend}
             onSelectMode={handleSelectMode}
             onRetry={handleRetry}
+            tasks={tasks}
+            userInput={input}
           />
 
           <ChatInputBar

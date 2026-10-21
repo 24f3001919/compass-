@@ -1,29 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { filterSpecialists, getSpecialistById } from '../../api/specialistRegistry'
-import { AlertTriangle, Brain, Globe, BookOpen, Send, X } from 'lucide-react'
+import { filterSpecialists } from '../../api/specialistRegistry'
+import { Send, X } from 'lucide-react'
 import Logo from '../Logo'
-
-const QUICK_PROMPTS = [
-  { icon: 'warning', text: 'Check my weekend schedule for conflicts across hackathon and coursework', specialistId: 'calendar' },
-  { icon: 'brain', text: 'Why did we choose 768-dim Matryoshka embeddings for pgvector?', specialistId: 'memory' },
-  { icon: 'globe', text: 'Verify the Nebius hackathon deadline on Devpost', specialistId: 'research' },
-  { icon: 'book', text: "Review CS 61C RISC-V pipeline lab notes and coursework tasks", specialistId: 'coursework' }
-]
-
-function renderQuickIcon(type) {
-  switch (type) {
-    case 'warning':
-      return <AlertTriangle size={14} strokeWidth={1.8} style={{ color: 'var(--accent, #f5a623)' }} />
-    case 'brain':
-      return <Brain size={14} strokeWidth={1.8} style={{ color: 'var(--domain-coursework, #2f64c8)' }} />
-    case 'globe':
-      return <Globe size={14} strokeWidth={1.8} style={{ color: 'var(--domain-code, #1c8a62)' }} />
-    case 'book':
-      return <BookOpen size={14} strokeWidth={1.8} style={{ color: 'var(--domain-general, #6b7a86)' }} />
-    default:
-      return null
-  }
-}
 
 export default function ChatInputBar({
   input,
@@ -117,15 +95,6 @@ export default function ChatInputBar({
     e.preventDefault()
     if (!input.trim() || isInputDisabled) return
     onSend(input.trim(), activeSpecialist ? activeSpecialist.id : null)
-  }
-
-  const handleQuickPromptClick = (item) => {
-    if (isInputDisabled) return
-    if (item.specialistId) {
-      const spec = getSpecialistById(item.specialistId)
-      if (spec) setActiveSpecialist(spec)
-    }
-    onSend(item.text, item.specialistId || (activeSpecialist ? activeSpecialist.id : null))
   }
 
   // Close picker when clicking outside
@@ -231,34 +200,6 @@ export default function ChatInputBar({
           </div>
         </div>
       )}
-
-      {/* Quick prompt suggestions: 6px radius, min 44px tap target, line icons */}
-      <div className="quick-prompts-scroll" style={{ display: 'flex', gap: '8px', marginBottom: '10px', overflowX: 'auto', overflowY: 'hidden', paddingBottom: '6px' }}>
-        {QUICK_PROMPTS.map((item, idx) => (
-          <button
-            key={idx}
-            type="button"
-            onClick={() => handleQuickPromptClick(item)}
-            disabled={isInputDisabled}
-            className="btn-secondary"
-            style={{
-              padding: '0 12px',
-              minHeight: '44px',
-              fontSize: '12px',
-              fontWeight: '400',
-              cursor: isInputDisabled ? 'not-allowed' : 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
-            }}
-          >
-            {renderQuickIcon(item.icon)}
-            <span>{item.text}</span>
-          </button>
-        ))}
-      </div>
 
       {/* Composer Container */}
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
