@@ -180,20 +180,32 @@ def evaluate_eligibility(
             degree_status = "unknown"
         else:
             user_degree = profile.degree.lower()
-            match = any(d.lower() in user_degree or user_degree in d.lower() for d in reqs.eligible_degree_types)
-            if match or "bachelor" in user_degree or "b.tech" in user_degree or "bs" in user_degree:
+            allowed_degrees = [d.lower() for d in reqs.eligible_degree_types]
+            is_advanced_only = any("phd" in d or "doctor" in d for d in allowed_degrees) and not any("bachelor" in d or "b.tech" in d or "bs" in d or "undergrad" in d for d in allowed_degrees)
+            is_user_undergrad = any(u in user_degree for u in ["bachelor", "b.tech", "bs", "undergrad", "b.e."])
+
+            if is_advanced_only and is_user_undergrad:
                 reasons.append({
                     "field": "degree",
-                    "status": "pass",
-                    "detail": f"Degree ({profile.degree}) aligns with accepted degrees: {reqs.eligible_degree_types}."
+                    "status": "fail",
+                    "detail": f"Requires advanced degree ({reqs.eligible_degree_types}); not open to undergraduate profile ({profile.degree})."
                 })
+                degree_status = "fail"
             else:
-                reasons.append({
-                    "field": "degree",
-                    "status": "unknown",
-                    "detail": f"Accepted degree types: {reqs.eligible_degree_types}. Profile degree is {profile.degree}."
-                })
-                degree_status = "unknown"
+                match = any(d in user_degree or user_degree in d for d in allowed_degrees)
+                if match or (not is_advanced_only and is_user_undergrad):
+                    reasons.append({
+                        "field": "degree",
+                        "status": "pass",
+                        "detail": f"Degree ({profile.degree}) aligns with accepted degrees: {reqs.eligible_degree_types}."
+                    })
+                else:
+                    reasons.append({
+                        "field": "degree",
+                        "status": "unknown",
+                        "detail": f"Accepted degree types: {reqs.eligible_degree_types}. Profile degree is {profile.degree}."
+                    })
+                    degree_status = "unknown"
 
     # 6. Technical Skills Overlap (Informational / Relevance)
     if reqs.required_skills and profile.skills:
@@ -210,7 +222,7 @@ def evaluate_eligibility(
     # Decision Matrix
     # -----------------------------------------------------------------------
     # Any confirmed hard failure => INELIGIBLE
-    if any(s == "fail" for s in [academic_year_status, grad_year_status, country_status, work_auth_status]):
+    if any(s == "fail" for s in [academic_year_status, grad_year_status, country_status, work_auth_status, degree_status]):
         failed_fields = [r["field"] for r in reasons if r["status"] == "fail"]
         explanation = f"Ineligible: Requirements for {', '.join(failed_fields)} do not match your current academic profile."
         return (EligibilityClassification.INELIGIBLE, explanation, reasons)
