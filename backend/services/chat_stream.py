@@ -64,6 +64,7 @@ async def persist_stream_messages(
     user_id: Optional[str] = None,
     guest_id: Optional[str] = None,
     skill_label: str = "chat",
+    evidence: Optional[Dict[str, Any]] = None,
 ) -> bool:
     """Persist user prompt and assistant response asynchronously after SSE stream completion.
 
@@ -90,7 +91,7 @@ async def persist_stream_messages(
             )
             await conversations.add_message(conn, real_cid, role="user", content=message)
             await conversations.add_message(
-                conn, real_cid, role="assistant", content=final_text, skill_called=skill_label
+                conn, real_cid, role="assistant", content=final_text, skill_called=skill_label, evidence=evidence
             )
         logger.debug("Successfully persisted streamed conversation message for conv=%s (real_cid=%s)", conv_id, real_cid)
         return True
@@ -111,6 +112,7 @@ def _schedule_stream_persistence(
     user_id: Optional[str] = None,
     guest_id: Optional[str] = None,
     skill_label: str = "chat",
+    evidence: Optional[Dict[str, Any]] = None,
 ) -> asyncio.Task:
     """Schedule stream persistence as an async background task with an exception handler."""
     task = asyncio.create_task(
@@ -121,6 +123,7 @@ def _schedule_stream_persistence(
             user_id=user_id,
             guest_id=guest_id,
             skill_label=skill_label,
+            evidence=evidence,
         )
     )
 
@@ -335,6 +338,9 @@ async def generate_chat_events(
             or _settings.NEBIUS_API_KEY in ("mock", "mock-key-not-used-in-tests")
         )
 
+        target_msg_id = getattr(req, "target_message_id", None)
+        target_msg_content = getattr(req, "target_message_content", None)
+
         if (not is_mocked and is_placeholder_key) or is_schedule_or_agent_intent(message) or is_tavily_verification_intent(message):
             result = await orchestrator.handle_message(
                 conversation_id=req.conversation_id,
@@ -344,6 +350,9 @@ async def generate_chat_events(
                 history=history_items if history_items else None,
                 memory_context=memory_context if memory_context else None,
                 persist=False,
+                target_message_id=target_msg_id,
+                target_message_content=target_msg_content,
+                pool=pool,
             )
             response_text = result.get("response", "")
             skill_used = result.get("skill_used") or "agent"
@@ -382,7 +391,7 @@ async def generate_chat_events(
             if result.get('is_truncated') or (isinstance(raw_data, dict) and raw_data.get('is_truncated')):
                 done_payload['is_truncated'] = True
             yield f"data: {json.dumps(done_payload)}\n\n"
-            _schedule_stream_persistence(conv_id, message, response_text, user_id, guest_id, skill_used)
+            _schedule_stream_persistence(conv_id, message, response_text, user_id, guest_id, skill_used, evidence=done_payload.get('evidence'))
             return
 
         logger.info("Serving chat stream request with model=%s", _settings.ROUTER_MODEL)
@@ -596,6 +605,8 @@ async def generate_chat_events(
                 persist=False,
                 pre_routed_skill=pre_routed_skill,
                 pre_routed_args=pre_routed_args,
+                target_message_id=target_msg_id,
+                target_message_content=target_msg_content,
             )
             response_text = result.get("response", "")
             skill_used = result.get("skill_used") or "agent"
@@ -645,7 +656,7 @@ async def generate_chat_events(
             if result.get('is_truncated') or (isinstance(raw_data2, dict) and raw_data2.get('is_truncated')):
                 done_payload2['is_truncated'] = True
             yield f"data: {json.dumps(done_payload2)}\n\n"
-            _schedule_stream_persistence(conv_id, message, response_text, user_id, guest_id, skill_used)
+            _schedule_stream_persistence(conv_id, message, response_text, user_id, guest_id, skill_used, evidence=done_payload2.get('evidence'))
             return
 
         if not full_text.strip():
