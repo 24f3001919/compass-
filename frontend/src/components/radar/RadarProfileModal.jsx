@@ -56,6 +56,9 @@ function RadarProfileModalContent({
   const [academicYear, setAcademicYear] = useState(profile?.academic_year || 2)
   const [gradYear, setGradYear] = useState(profile?.grad_year || 2027)
   const [gradMonth, setGradMonth] = useState(profile?.grad_month || 6)
+  const [cgpa, setCgpa] = useState(profile?.cgpa !== undefined && profile?.cgpa !== null ? String(profile.cgpa) : '8.5')
+  const [cgpaScale, setCgpaScale] = useState(profile?.cgpa_scale || 10.0)
+  const [activeBacklogs, setActiveBacklogs] = useState(profile?.active_backlogs ?? 0)
   const [countryOfStudy, setCountryOfStudy] = useState(profile?.country_of_study || 'India')
   const [preferredArrangements, setPreferredArrangements] = useState(
     profile?.preferred_work_arrangements || ['remote', 'hybrid', 'onsite']
@@ -80,6 +83,9 @@ function RadarProfileModalContent({
     if (p.academic_year !== undefined && p.academic_year !== null) setAcademicYear(Number(p.academic_year))
     if (p.grad_year !== undefined && p.grad_year !== null) setGradYear(Number(p.grad_year))
     if (p.grad_month !== undefined && p.grad_month !== null) setGradMonth(Number(p.grad_month))
+    if (p.cgpa !== undefined && p.cgpa !== null) setCgpa(String(p.cgpa))
+    if (p.cgpa_scale !== undefined && p.cgpa_scale !== null) setCgpaScale(Number(p.cgpa_scale))
+    if (p.active_backlogs !== undefined && p.active_backlogs !== null) setActiveBacklogs(Number(p.active_backlogs))
     if (p.country_of_study !== undefined) setCountryOfStudy(p.country_of_study || 'India')
     if (Array.isArray(p.preferred_work_arrangements)) setPreferredArrangements(p.preferred_work_arrangements)
     if (Array.isArray(p.preferred_roles)) setPreferredRoles(p.preferred_roles)
@@ -176,6 +182,9 @@ function RadarProfileModalContent({
       .map(s => s.trim())
       .filter(Boolean)
 
+    const parsedCgpa = cgpa.trim() ? parseFloat(cgpa) : null
+    const parsedScale = parseFloat(cgpaScale) || 10.0
+
     const payload = {
       degree: degree.trim(),
       degree_specialization: specialization.trim(),
@@ -183,6 +192,9 @@ function RadarProfileModalContent({
       academic_year: parsedAcademicYear,
       grad_year: parsedGradYear,
       grad_month: Number(gradMonth) || 6,
+      cgpa: parsedCgpa,
+      cgpa_scale: parsedScale,
+      active_backlogs: Number(activeBacklogs) || 0,
       country_of_study: countryOfStudy.trim(),
       country_of_residence: countryOfStudy.trim(),
       preferred_work_arrangements: preferredArrangements,
@@ -532,6 +544,93 @@ function RadarProfileModalContent({
                 value={countryOfStudy}
                 onChange={e => setCountryOfStudy(e.target.value)}
                 required
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-app)',
+                  color: 'var(--text-primary)',
+                  fontSize: '13px',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Academic Performance: CGPA & Backlogs */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
+            <div>
+              <label
+                htmlFor="profile-cgpa"
+                style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}
+              >
+                Current CGPA / Percentage
+              </label>
+              <input
+                id="profile-cgpa"
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                value={cgpa}
+                onChange={e => setCgpa(e.target.value)}
+                placeholder="e.g. 8.5"
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-app)',
+                  color: 'var(--text-primary)',
+                  fontSize: '13px',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="profile-cgpa-scale"
+                style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}
+              >
+                Grading Scale
+              </label>
+              <select
+                id="profile-cgpa-scale"
+                value={cgpaScale}
+                onChange={e => setCgpaScale(Number(e.target.value))}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-app)',
+                  color: 'var(--text-primary)',
+                  fontSize: '13px',
+                  boxSizing: 'border-box',
+                }}
+              >
+                <option value={10.0}>10.0 Scale (India standard)</option>
+                <option value={4.0}>4.0 Scale (US standard)</option>
+                <option value={100.0}>100% Percentage Scale</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="profile-backlogs"
+                style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}
+              >
+                Active Backlogs
+              </label>
+              <input
+                id="profile-backlogs"
+                type="number"
+                min="0"
+                max="20"
+                value={activeBacklogs}
+                onChange={e => setActiveBacklogs(Number(e.target.value))}
                 style={{
                   width: '100%',
                   padding: '9px 12px',

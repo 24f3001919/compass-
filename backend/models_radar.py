@@ -84,6 +84,7 @@ class ApplicationStatus:
 class EligibilityClassification:
     ELIGIBLE = "ELIGIBLE"
     POTENTIAL_MATCH = "POTENTIAL_MATCH"
+    POTENTIALLY_ELIGIBLE = "POTENTIAL_MATCH"  # Canonical alias for compatibility
     INELIGIBLE = "INELIGIBLE"
     INSUFFICIENT_INFORMATION = "INSUFFICIENT_INFORMATION"
 
@@ -107,7 +108,11 @@ class OpportunityRequirementsOut(BaseModel):
     work_auth_required: Optional[bool] = None
     sponsorship_available: Optional[bool] = None
     required_skills: List[str] = Field(default_factory=list)
+    preferred_skills: List[str] = Field(default_factory=list)
     min_gpa: Optional[float] = None
+    gpa_scale: Optional[float] = 10.0
+    no_active_backlogs: Optional[bool] = None
+    has_conflicting_requirements: bool = False
     other_mandatory_requirements: Optional[str] = None
     unknown_requirements: List[str] = Field(default_factory=list)
 
@@ -206,6 +211,11 @@ class UserOpportunityProfileIn(BaseModel):
     academic_year: Optional[int] = Field(None, ge=1, le=5)  # 1..5
     grad_month: Optional[int] = Field(6, ge=1, le=12)
     grad_year: Optional[int] = None
+    cgpa: Optional[float] = Field(None, ge=0.0, le=100.0)
+    cgpa_scale: Optional[float] = Field(10.0, ge=4.0, le=100.0)
+    active_backlogs: Optional[int] = Field(0, ge=0)
+    work_authorization: Optional[str] = Field("India", description="Jurisdictions authorized to work without sponsorship")
+    requires_sponsorship: Optional[bool] = False
     country_of_study: str = "India"
     country_of_residence: str = "India"
     preferred_locations: List[str] = Field(default_factory=lambda: ["India", "Remote"])
