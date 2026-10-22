@@ -86,13 +86,17 @@ async def get_projects(
 # ---- GET /tasks -------------------------------------------------------
 @router.get("/tasks", response_model=TasksResponse)
 async def get_tasks(
+    request: Request,
     domain: Optional[str] = Query(None),
     project: Optional[str] = Query(None, description="Filter by project name"),
     status: Optional[str] = Query(None),
     due_before: Optional[str] = Query(None, description="ISO date YYYY-MM-DD"),
     _token: str = Depends(verify_token),
 ):
-    """Query tasks with optional filters from database."""
+    """Query tasks with optional filters from database with strict per-account isolation."""
+    ident = _get_current_identity(request)
+    user_id = ident.id if ident else _get_or_create_user_id(request)
+
     due_date_parsed: Optional[date] = None
     if due_before:
         try:
@@ -120,6 +124,7 @@ async def get_tasks(
                 project_id=project_id,
                 status=status,
                 due_before=due_date_parsed,
+                user_id=user_id,
             )
             tasks = [
                 TaskOut(
@@ -145,10 +150,14 @@ async def get_tasks(
 # ---- GET /dashboard ---------------------------------------------------
 @router.get("/dashboard", response_model=DashboardResponse)
 async def get_dashboard(
+    request: Request,
     ref_date: Optional[date] = Query(None, description="Optional reference date for deterministic classification"),
     _token: str = Depends(verify_token),
 ):
-    """Aggregate live counts via SQL (total open tasks, tasks due within 72 hours, project counts by domain)."""
+    """Aggregate live counts via SQL with strict per-account isolation."""
+    ident = _get_current_identity(request)
+    user_id = ident.id if ident else _get_or_create_user_id(request)
+
     domains = {
         d: DomainStats(project_count=0, open_task_count=0, nearest_deadline=None, last_activity=None)
         for d in ("hackathon", "coursework", "code", "general")
@@ -167,7 +176,8 @@ async def get_dashboard(
                     domains[d].project_count = r["count"]
 
             task_rows = await conn.fetch(
-                "SELECT domain, COUNT(*) AS count FROM tasks WHERE status NOT IN ('completed', 'done', 'cancelled') GROUP BY domain"
+                "SELECT domain, COUNT(*) AS count FROM tasks WHERE status NOT IN ('completed', 'done', 'cancelled') AND user_id = $1 GROUP BY domain",
+                user_id,
             )
             for r in task_rows:
                 d = r["domain"]
@@ -181,9 +191,11 @@ async def get_dashboard(
                 WHERE status NOT IN ('completed', 'done', 'cancelled')
                   AND due_date IS NOT NULL
                   AND due_date >= $1
+                  AND user_id = $2
                 ORDER BY domain, due_date ASC
                 """,
                 target_date,
+                user_id,
             )
             for r in nearest_rows:
                 d = r["domain"]
@@ -194,9 +206,9 @@ async def get_dashboard(
                         due_date=str(r["due_date"]),
                     )
 
-
             activity_rows = await conn.fetch(
-                "SELECT domain, MAX(updated_at) AS last_act FROM tasks GROUP BY domain"
+                "SELECT domain, MAX(updated_at) AS last_act FROM tasks WHERE user_id = $1 GROUP BY domain",
+                user_id,
             )
             for r in activity_rows:
                 d = r["domain"]
@@ -219,12 +231,16 @@ async def get_dashboard(
 # ---- GET /memory/timeline ---------------------------------------------
 @router.get("/memory/timeline", response_model=TimelineResponse)
 async def get_timeline(
+    request: Request,
     domain: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     _token: str = Depends(verify_token),
 ):
-    """Fetch ordered rows across tasks (created_at) and memory_chunks (created_at) filtered by domain."""
+    """Fetch ordered rows across tasks (created_at) and memory_chunks (created_at) filtered by domain with per-account isolation."""
+    ident = _get_current_identity(request)
+    user_id = ident.id if ident else _get_or_create_user_id(request)
+
     try:
         pool = await get_pool()
         async with pool.acquire() as conn:
@@ -233,6 +249,7 @@ async def get_timeline(
                 FROM tasks t
                 LEFT JOIN projects p ON t.project_id = p.id
                 WHERE ($1::text IS NULL OR t.domain = $1)
+                  AND t.user_id = $4
 
                 UNION ALL
 
@@ -240,19 +257,20 @@ async def get_timeline(
                 FROM memory_chunks m
                 LEFT JOIN projects p ON m.project_id = p.id
                 WHERE ($1::text IS NULL OR m.domain = $1)
+                  AND m.user_id = $4
 
                 ORDER BY created_at DESC
                 LIMIT $2 OFFSET $3
             """
-            rows = await conn.fetch(query, domain, limit, offset)
+            rows = await conn.fetch(query, domain, limit, offset, user_id)
 
             count_query = """
                 SELECT (
-                    (SELECT COUNT(*) FROM tasks WHERE ($1::text IS NULL OR domain = $1)) +
-                    (SELECT COUNT(*) FROM memory_chunks WHERE ($1::text IS NULL OR domain = $1))
+                    (SELECT COUNT(*) FROM tasks WHERE ($1::text IS NULL OR domain = $1) AND user_id = $2) +
+                    (SELECT COUNT(*) FROM memory_chunks WHERE ($1::text IS NULL OR domain = $1) AND user_id = $2)
                 ) AS total
             """
-            total_count = await conn.fetchval(count_query, domain) or 0
+            total_count = await conn.fetchval(count_query, domain, user_id) or 0
 
             entries = [
                 TimelineEntry(

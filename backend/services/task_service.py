@@ -82,7 +82,11 @@ def build_frontend_task(
         scheduled_end=s_end.isoformat() if (s_end is not None and hasattr(s_end, "isoformat")) else (str(s_end) if s_end else None),
         is_fixed=bool(row.get("is_fixed", False)),
         description=row.get("notes") or row.get("description"),
-        due_date=due_d.isoformat() if (due_d is not None and hasattr(due_d, "isoformat")) else (str(due_d) if due_d else None),
+        due_date=(
+            s_end.isoformat()
+            if (s_end is not None and hasattr(s_end, "isoformat"))
+            else (due_d.isoformat() if (due_d is not None and hasattr(due_d, "isoformat")) else (str(due_d) if due_d else None))
+        ),
         cognitive_conflict=cognitive_conflict,
     )
 
