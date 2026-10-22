@@ -403,16 +403,22 @@ async def handle_verify_deadline(args: Dict[str, Any], pool: Any) -> Dict[str, A
 async def handle_verify_with_tavily(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
     """Execute evidence-based claim or deadline verification using the complete Tavily pipeline."""
     from backend.services.tavily_pipeline import run_tavily_research
+    from backend.router_helpers import is_tavily_verification_intent
 
     claim = (args.get("claim") or args.get("query") or args.get("topic") or "").strip()
     target_entity = (args.get("target_entity") or "").strip() or None
+    target_message_id = args.get("target_message_id")
+
+    # If the claim is itself an unresolved verification intent string, reject it
+    if is_tavily_verification_intent(claim):
+        claim = ""
 
     if not claim:
         return {
             "success": False,
             "data": {},
-            "summary": "Please provide a claim or deadline to verify.",
-            "response": "Please provide a specific claim or deadline to verify.",
+            "summary": "I couldn't find a specific claim or deadline to verify. Could you specify which statement or deadline you would like me to check?",
+            "response": "I couldn't find a specific claim or deadline to verify. Could you specify which statement or deadline you would like me to check?",
             "error": "claim cannot be empty",
         }
 
@@ -432,8 +438,14 @@ async def handle_verify_with_tavily(args: Dict[str, Any], pool: Any) -> Dict[str
                 "verdict": "UNVERIFIED",
                 "evidence_ledger": [],
                 "evidence": {
-                    "items": [],
+                    "target_message_id": target_message_id,
+                    "claim_checked": claim,
                     "verdict": "UNVERIFIED",
+                    "finding": f"Verification error: {e}",
+                    "verified_at": today_str,
+                    "sources": [],
+                    "items": [],
+                    "limitations": [f"Pipeline error: {e}"],
                     "summary": f"Verification error: {e}",
                 },
             },
@@ -452,55 +464,80 @@ async def handle_verify_with_tavily(args: Dict[str, Any], pool: Any) -> Dict[str
         v_icon = "⚠️"
     elif verdict_badge == "VERIFIED":
         v_icon = "✅"
+    elif verdict_badge == "PARTIALLY_VERIFIED":
+        v_icon = "🟡"
     elif verdict_badge in ("STALE", "NOT_FOUND"):
         v_icon = "🕒"
     else:
         v_icon = "🔍"
 
-    lines = [
-        f"### 🔍 Tavily Verification Report: {v_icon} {verdict_badge}",
-        f"**Claim Checked:** \"{claim}\"",
-        f"**Verified on:** {today_str}",
-        "",
-        f"**Finding:** {summary_text}",
-    ]
-
+    primary_tier = "Web"
     if evidence_ledger:
-        lines.append("\n**Key Authoritative Evidence:**")
-        for ev in evidence_ledger[:3]:
-            quote = ev.get("display_quote") or ev.get("verbatim_quote") or ev.get("exact_quote") or ""
-            tier = ev.get("authority_badge") or ev.get("authority_tier") or "Web"
-            s_url = ev.get("source_url") or ""
-            local_dl = ev.get("local_deadline_ist")
-            ev_line = f"- **[{tier}]** {ev.get('verdict', 'EVIDENCE')}:"
-            if s_url:
-                ev_line += f" [{s_url.replace('https://', '').replace('http://', '').rstrip('/')}]({s_url})"
-            lines.append(ev_line)
-            if quote:
-                lines.append(f"  > \"{quote}\"")
-            if local_dl:
-                lines.append(f"  *Local Deadline (IST): {local_dl}*")
+        primary_tier = evidence_ledger[0].get("authority_badge") or evidence_ledger[0].get("authority_tier") or "Official Organizer"
+    elif top_sources:
+        primary_tier = top_sources[0].get("authority_badge") or top_sources[0].get("authority_tier") or "General Web"
 
-    if top_sources:
-        lines.append("\n**Sources Referenced:**")
-        for s in top_sources[:4]:
-            u = s.get("url") or ""
-            t = s.get("title") or u
-            if u:
-                lines.append(f"- [{t}]({u})")
+    formatted_response = (
+        f"### 🔍 Tavily Verification: {v_icon} {verdict_badge}\n\n"
+        f"**Claim Checked:** \"{claim}\"\n"
+        f"**Verified on:** {today_str}\n"
+        f"**Primary Source Authority:** [{primary_tier}]\n\n"
+        f"**Finding:** {summary_text}"
+    )
 
-    formatted_response = "\n".join(lines)
+    sources_for_card = []
+    seen_urls = set()
+    for ev in evidence_ledger:
+        url = ev.get("source_url")
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            sources_for_card.append({
+                "title": ev.get("authority_badge") or ev.get("authority_tier") or "Official Source",
+                "url": url,
+                "authority": ev.get("authority_badge") or ev.get("authority_tier") or "Official Organizer",
+                "evidence": ev.get("display_quote") or ev.get("exact_quote") or ev.get("verbatim_quote") or "",
+                "published_at": ev.get("published_date") or None,
+            })
+    for s in top_sources:
+        url = s.get("url")
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            sources_for_card.append({
+                "title": s.get("title") or url,
+                "url": url,
+                "authority": s.get("authority_badge") or s.get("authority_tier") or "General Web",
+                "evidence": s.get("content", "")[:200] if s.get("content") else "",
+                "published_at": None,
+            })
+
+    limitations = []
+    if any(ev.get("local_deadline_ist") for ev in evidence_ledger):
+        limitations.append("Local deadline normalized to IST.")
+    if overall_verdict == "CONFLICTING":
+        limitations.append("Conflicting deadline dates reported across independent web sources.")
+    elif overall_verdict == "STALE":
+        limitations.append("The verified deadline has already passed.")
+    elif overall_verdict == "CONTRADICTED":
+        limitations.append("Official evidence contradicts the previous claim date.")
+
+    structured_evidence = {
+        "target_message_id": target_message_id,
+        "claim_checked": claim,
+        "verdict": overall_verdict,
+        "finding": summary_text,
+        "verified_at": today_str,
+        "sources": sources_for_card,
+        "items": evidence_ledger,
+        "limitations": limitations,
+        "summary": summary_text,
+    }
 
     return {
         "success": True,
         "data": {
             "verdict": overall_verdict,
             "evidence_ledger": evidence_ledger,
-            "evidence": {
-                "items": evidence_ledger,
-                "verdict": overall_verdict,
-                "summary": summary_text,
-            },
+            "evidence": structured_evidence,
             "sources": top_sources,
             "citations": [s.get("url") for s in top_sources if s.get("url")],
         },
