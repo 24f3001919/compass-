@@ -1521,7 +1521,7 @@ textarea {
 
   .timeline-filter-controls-right {
     display: flex;
-    justifyContent: space-between;
+    justify-content: space-between;
     align-items: center;
     width: 100%;
   }
@@ -1552,7 +1552,7 @@ textarea {
 
   .timeline-due-sheet-header {
     display: flex !important;
-    justifyContent: space-between;
+    justify-content: space-between;
     align-items: center;
     padding-bottom: 12px;
     margin-bottom: 8px;
