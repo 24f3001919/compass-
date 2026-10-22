@@ -240,6 +240,7 @@ async def get_messages(
                     role=r["role"],
                     content=r["content"],
                     skill_called=r.get("skill_called"),
+                    evidence=r.get("evidence"),
                     created_at=r["created_at"].isoformat() if hasattr(r["created_at"], "isoformat") else str(r["created_at"]),
                 )
                 for r in rows
