@@ -16,6 +16,8 @@ class ChatRequest(BaseModel):
     mode: Optional[str] = None
     specialist_id: Optional[str] = None
     specialistId: Optional[str] = None
+    target_message_id: Optional[str] = None
+    target_message_content: Optional[str] = None
 
     def get_specialist_id(self) -> Optional[str]:
         return self.specialist_id or self.specialistId
@@ -28,6 +30,8 @@ class PublicChatRequest(BaseModel):
     conversation_id: Optional[str] = None
     specialist_id: Optional[str] = None
     specialistId: Optional[str] = None
+    target_message_id: Optional[str] = None
+    target_message_content: Optional[str] = None
 
     def get_specialist_id(self) -> Optional[str]:
         return self.specialist_id or self.specialistId
@@ -73,6 +77,7 @@ class MessageOut(BaseModel):
     content: str
     skill_called: Optional[str] = None
     created_at: str
+    evidence: Optional[Dict[str, Any]] = None
 
 
 class MessagesResponse(BaseModel):
@@ -252,6 +257,8 @@ class StreamChatRequest(BaseModel):
     mode: Optional[str] = None
     specialist_id: Optional[str] = None
     specialistId: Optional[str] = None
+    target_message_id: Optional[str] = None
+    target_message_content: Optional[str] = None
 
     def get_specialist_id(self) -> Optional[str]:
         return self.specialist_id or self.specialistId
