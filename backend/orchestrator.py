@@ -38,10 +38,14 @@ async def handle_message(
     conv_mode: Optional[str] = None,
     pre_routed_skill: Optional[str] = None,
     pre_routed_args: Optional[Dict[str, Any]] = None,
+    target_message_id: Optional[str] = None,
+    target_message_content: Optional[str] = None,
+    pool: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Process an incoming user message through router and skill handlers."""
     start_time = time.perf_counter()
     conv_id = conversation_id or str(uuid.uuid4())
+    active_pool = pool
 
     # Fetch recent history if conversation exists and not pre-provided
     if history is None:
@@ -140,6 +144,19 @@ async def handle_message(
     if pre_routed_skill is not None:
         from backend.skills.registry import SKILL_REGISTRY
         allowed_tools = frozenset(SKILL_REGISTRY.keys()) | {"add_task", "undo", "agent"}
+        import inspect
+        sig = inspect.signature(route_message)
+        has_var_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+        route_kwargs = {}
+        if "target_message_id" in sig.parameters or has_var_kw:
+            route_kwargs["target_message_id"] = target_message_id
+        if "target_message_content" in sig.parameters or has_var_kw:
+            route_kwargs["target_message_content"] = target_message_content
+        if "pool" in sig.parameters or has_var_kw:
+            route_kwargs["pool"] = active_pool
+        if "user_id" in sig.parameters or has_var_kw:
+            route_kwargs["user_id"] = user_id or guest_id
+
         if pre_routed_skill in allowed_tools:
             skill_name = pre_routed_skill
             args = dict(pre_routed_args) if isinstance(pre_routed_args, dict) else {}
@@ -150,16 +167,42 @@ async def handle_message(
                 message,
                 history=history if history else None,
                 memory_context=memory_context if memory_context else None,
+                **route_kwargs,
             )
     else:
+        import inspect
+        sig = inspect.signature(route_message)
+        has_var_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+        route_kwargs = {}
+        if "target_message_id" in sig.parameters or has_var_kw:
+            route_kwargs["target_message_id"] = target_message_id
+        if "target_message_content" in sig.parameters or has_var_kw:
+            route_kwargs["target_message_content"] = target_message_content
+        db_pool = active_pool
+        if db_pool is None:
+            try:
+                db_pool = await get_pool()
+            except Exception:
+                db_pool = None
+
+        if "pool" in sig.parameters or has_var_kw:
+            route_kwargs["pool"] = db_pool
+        if "user_id" in sig.parameters or has_var_kw:
+            route_kwargs["user_id"] = user_id or guest_id
+
         skill_name, args, text_reply = await route_message(
             message,
             history=history if history else None,
             memory_context=memory_context if memory_context else None,
+            **route_kwargs,
         )
     effective_user_id = user_id or guest_id
     if effective_user_id and isinstance(args, dict):
         args["user_id"] = effective_user_id
+    if target_message_id and isinstance(args, dict):
+        args["target_message_id"] = target_message_id
+    if target_message_content and isinstance(args, dict):
+        args["target_message_content"] = target_message_content
     if tone and isinstance(args, dict):
         args["tone"] = tone
     if conv_mode and isinstance(args, dict):
@@ -589,7 +632,7 @@ async def handle_message(
 
     if skill_name and skill_name in SKILL_REGISTRY:
         try:
-            pool = await get_pool()
+            pool = active_pool or await get_pool()
             handler = SKILL_REGISTRY[skill_name]
             skill_result = await handler(args or {}, pool)
 
@@ -620,9 +663,11 @@ async def handle_message(
                             conn, conv_id, user_id=user_id, guest_id=guest_id
                         )
                         await conversations.add_message(conn, real_cid, role="user", content=message)
+                        evidence_to_save = data.get("evidence") if isinstance(data, dict) else None
                         await conversations.add_message(
                             conn, real_cid, role="assistant",
                             content=summary, skill_called=skill_name,
+                            evidence=evidence_to_save,
                         )
                         conv_id = real_cid
                 except Exception as e:
