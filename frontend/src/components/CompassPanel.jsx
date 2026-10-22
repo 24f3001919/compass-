@@ -39,103 +39,92 @@ export default function CompassPanel({
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden', background: 'var(--bg-app)' }}>
-      {/* Header Sub-bar */}
-      <div style={{
-        minHeight: '52px',
-        borderBottom: '1px solid var(--border)',
-        background: 'var(--bg-card)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '0 16px',
-        flexShrink: 0,
-        gap: '12px',
-        flexWrap: 'wrap',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-          <Logo size={20} alt="" />
-          <span style={{ fontSize: '20px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
+      {/* Header Bar - Level 1: Same pattern as Dashboard, Timeline, and Schedule */}
+      <header
+        className="compass-page-header"
+        role="banner"
+        aria-label="Assistant and planner header"
+      >
+        {/* Left: Logo, Page Title, Assistant & Planner badge */}
+        <div className="compass-header-left">
+          <Logo size={20} alt="Compass Logo" />
+          <h1 className="compass-page-title">
             Compass
-          </span>
-          <span style={{
-            fontSize: '11px',
-            color: 'var(--text-secondary)',
-            background: 'var(--bg-card-soft)',
-            border: '1px solid var(--border)',
-            padding: '3px 8px',
-            borderRadius: 'var(--radius-btn, 6px)',
-            whiteSpace: 'nowrap',
-            fontWeight: '500',
-          }}>
+          </h1>
+          <span className="compass-page-badge">
             Assistant & Planner
           </span>
         </div>
 
-        {/* View Toggle */}
-        <div style={{ display: 'flex', background: 'var(--bg-card-soft)', padding: '2px', borderRadius: 'var(--radius-btn, 6px)', border: '1px solid var(--border)', flexShrink: 0, gap: '2px' }}>
-          <button
-            id="compass-subtab-chat"
-            onClick={() => setActiveSubTab('assistant')}
-            style={{
-              padding: '0 14px',
-              minHeight: '44px',
-              borderRadius: 'var(--radius-btn, 6px)',
-              border: 'none',
-              background: activeSubTab === 'assistant' ? 'var(--bg-card)' : 'transparent',
-              color: activeSubTab === 'assistant' ? 'var(--text-primary)' : 'var(--text-secondary)',
-              fontSize: '13px',
-              fontWeight: activeSubTab === 'assistant' ? '600' : '400',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              transition: 'all 0.15s ease',
-            }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            <span>Chat</span>
-          </button>
-          <button
-            id="compass-subtab-planner"
-            onClick={() => setActiveSubTab('planner')}
-            style={{
-              padding: '0 14px',
-              minHeight: '44px',
-              borderRadius: 'var(--radius-btn, 6px)',
-              border: 'none',
-              background: activeSubTab === 'planner' ? 'var(--bg-card)' : 'transparent',
-              color: activeSubTab === 'planner' ? 'var(--text-primary)' : 'var(--text-secondary)',
-              fontSize: '13px',
-              fontWeight: activeSubTab === 'planner' ? '600' : '400',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              transition: 'all 0.15s ease',
-            }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-              <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-            </svg>
-            <span>Planner</span>
-          </button>
-        </div>
-        <DarkModeToggle
-          isDarkMode={Boolean(isDarkMode)}
-          onToggleDarkMode={onToggleDarkMode}
-          id="compass-theme-toggle"
-        />
-      </div>
+        {/* Right: Chat | Planner segmented tabs + DarkModeToggle in the right group */}
+        <div className="compass-header-right">
+          <div
+            role="tablist"
+            className="compass-subtab-segmented"
+            aria-label="View selection"
+          >
+            <button
+              id="compass-subtab-chat"
+              role="tab"
+              aria-selected={activeSubTab === 'assistant'}
+              tabIndex={activeSubTab === 'assistant' ? 0 : -1}
+              onClick={() => setActiveSubTab('assistant')}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                  e.preventDefault()
+                  setActiveSubTab('planner')
+                  document.getElementById('compass-subtab-planner')?.focus()
+                }
+              }}
+              className={`compass-subtab-btn ${activeSubTab === 'assistant' ? 'active' : ''}`}
+              title="Assistant conversation mode"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              <span>Chat</span>
+            </button>
+            <button
+              id="compass-subtab-planner"
+              role="tab"
+              aria-selected={activeSubTab === 'planner'}
+              tabIndex={activeSubTab === 'planner' ? 0 : -1}
+              onClick={() => setActiveSubTab('planner')}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                  e.preventDefault()
+                  setActiveSubTab('assistant')
+                  document.getElementById('compass-subtab-chat')?.focus()
+                }
+              }}
+              className={`compass-subtab-btn ${activeSubTab === 'planner' ? 'active' : ''}`}
+              title="Multi-step agent planning mode"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+              </svg>
+              <span>Planner</span>
+            </button>
+          </div>
 
-      {/* Main Unified View Area */}
+          <DarkModeToggle
+            isDarkMode={Boolean(isDarkMode)}
+            onToggleDarkMode={onToggleDarkMode}
+            id="compass-theme-toggle"
+          />
+        </div>
+      </header>
+
+      {/* Main Unified View Area: Preserves state across tab switching */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-        {activeSubTab === 'planner' ? (
+        <div style={{ flex: 1, display: activeSubTab === 'planner' ? 'flex' : 'none', flexDirection: 'column', minWidth: 0, minHeight: 0, height: '100%', overflow: 'hidden' }}>
           <AgentPanel
             onTaskMutated={onTaskMutated}
             conversationId={conversationId}
           />
-        ) : (
+        </div>
+        <div style={{ flex: 1, display: activeSubTab === 'assistant' ? 'flex' : 'none', flexDirection: 'column', minWidth: 0, minHeight: 0, height: '100%', overflow: 'hidden' }}>
           <ChatPanel
             messages={messages}
             setMessages={setMessages}
@@ -150,7 +139,7 @@ export default function CompassPanel({
             onClearInitialPrompt={onClearPendingPrompt}
             onOpenMigration={onOpenMigration}
           />
-        )}
+        </div>
       </div>
     </div>
   )

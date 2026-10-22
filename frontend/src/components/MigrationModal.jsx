@@ -155,21 +155,7 @@ export default function MigrationModal({
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <div
-              style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: 'var(--radius-btn, 6px)',
-                background: 'var(--bg-card-soft)',
-                border: '1px solid var(--border)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--text-primary)',
-              }}
-            >
-              <Logo size={22} alt="" />
-            </div>
+            <Logo size={36} alt="" />
             <div>
               <h2
                 style={{
