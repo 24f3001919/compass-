@@ -317,11 +317,16 @@ export async function fetchWithGuestRetry(url, options = {}) {
     const isAuthenticated = hasAuthToken || hasAuthEmail
 
     if (isAuthenticated) {
-      // Explicit 'session expired, sign in again' path: do NOT replace identity with a guest token
-      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof window.CustomEvent === 'function') {
-        window.dispatchEvent(new window.CustomEvent('compass:session_expired', {
-          detail: { message: 'Session expired. Please sign in again.' }
-        }))
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        const CustomEventClass = typeof window.CustomEvent === 'function'
+          ? window.CustomEvent
+          : (typeof globalThis.CustomEvent === 'function' ? globalThis.CustomEvent : null)
+        const event = CustomEventClass
+          ? new CustomEventClass('compass:session_expired', {
+              detail: { message: 'Session expired. Please sign in again.' }
+            })
+          : { type: 'compass:session_expired', detail: { message: 'Session expired. Please sign in again.' } }
+        window.dispatchEvent(event)
       }
       return res
     }
