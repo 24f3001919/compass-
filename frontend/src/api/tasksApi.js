@@ -1,6 +1,6 @@
 // Tasks & Verification API
 
-import { API_BASE, FALLBACK_TASKS, getAuthHeaders } from './baseClient'
+import { API_BASE, FALLBACK_TASKS, getAuthHeaders, fetchWithGuestRetry } from './baseClient'
 
 /**
  * Fetch synchronized task list from Neon PostgreSQL with per-account isolation.
@@ -16,9 +16,7 @@ export async function fetchTasks(domain) {
       ? `${API_BASE}/api/tasks?domain=${encodeURIComponent(domain)}`
       : `${API_BASE}/api/tasks`
 
-    const res = await fetch(url, {
-      headers: getAuthHeaders(),
-      credentials: 'include',
+    const res = await fetchWithGuestRetry(url, {
       signal: controller.signal
     })
     clearTimeout(timeoutId)

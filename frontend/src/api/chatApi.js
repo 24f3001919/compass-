@@ -339,9 +339,16 @@ export async function fetchMemoryOverview() {
  */
 export async function seedJudgeDemoPersona() {
   try {
-    const res = await fetch(`${API_BASE}/api/demo/seed`, {
+    let tz = 'UTC'
+    try {
+      tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+    } catch {
+      /* fallback to UTC */
+    }
+    const res = await fetch(`${API_BASE}/api/demo/seed-persona`, {
       method: 'POST',
       headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ tz }),
       credentials: 'include',
     })
     if (!res.ok) {

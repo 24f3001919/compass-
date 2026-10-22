@@ -243,16 +243,17 @@ export default function Dashboard({
       return s !== 'completed' && s !== 'done' && c !== 'completed'
     })
 
-    const urgentItems = openTasks
+    const attentionItems = openTasks
       .map((t) => ({ task: t, urgency: classifyDeadline(t, now) }))
-      .filter(({ urgency }) => urgency.isOverdue || urgency.type === 'hour' || urgency.type === 'today' || urgency.diffHours <= 24)
-      .sort((a, b) => a.urgency.diffHours - b.urgency.diffHours)
+      .filter(({ urgency }) => urgency.isOverdue || urgency.timing === 'due_today' || urgency.timing === 'urgent')
+
+    const nextUpcoming = sortUpcomingDeadlines(domainFilteredTasks, now)[0] || null
 
     return {
-      urgentItems: urgentItems.map((u) => u.task),
-      count: urgentItems.length,
-      nextItem: urgentItems.length > 0 ? urgentItems[0].task : null,
-      nextUrgency: urgentItems.length > 0 ? urgentItems[0].urgency : null,
+      urgentItems: attentionItems.map((u) => u.task),
+      count: attentionItems.length,
+      nextItem: nextUpcoming ? nextUpcoming : null,
+      nextUrgency: nextUpcoming ? nextUpcoming.urgency : null,
     }
   }, [domainFilteredTasks])
 
@@ -752,7 +753,7 @@ export default function Dashboard({
             </span>
           </div>
           <div style={{ fontSize: '26px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.3px', lineHeight: 1.2 }}>
-            {metrics.completionRate}%
+            {metrics.total === 0 ? '0%' : `${metrics.completionRate}%`}
           </div>
           <div style={{ width: '100%', height: '4px', background: 'var(--border)', borderRadius: '2px', marginTop: '8px', overflow: 'hidden' }}>
             <div
@@ -1325,18 +1326,21 @@ export default function Dashboard({
                 <polyline points="22 4 12 14.01 9 11.01" />
               </svg>
               <p style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>
-                No pending deadlines
+                {cleanTasks.length === 0 ? 'No tasks yet' : 'No pending deadlines'}
               </p>
               <p style={{ margin: '4px 0 14px 0', fontSize: '13px', color: 'var(--text-muted)', maxWidth: '300px' }}>
-                You have cleared all scheduled deadlines! Take a breather or log a new milestone.
+                {cleanTasks.length === 0
+                  ? 'Add your first deadline or load the Judge Persona to explore demo data.'
+                  : 'You have cleared all scheduled deadlines! Take a breather or log a new milestone.'}
               </p>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
                 <button
                   type="button"
+                  id="dashboard-empty-add-deadline"
                   onClick={() => setShowAddModal(true)}
                   className="btn-primary-amber"
                 >
-                  + Add Deadline
+                  Add deadline
                 </button>
                 <button
                   type="button"

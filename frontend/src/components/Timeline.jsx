@@ -487,7 +487,7 @@ export default function Timeline({
               <Logo size={32} alt="Compass logo" />
             </div>
             <div style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '6px' }}>
-              {activeDomain === 'all' ? 'No deadlines yet' : 'Nothing here yet'}
+              {activeDomain === 'all' ? 'No tasks yet' : 'Nothing here yet'}
             </div>
             <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '18px' }}>
               {activeDomain === 'all'

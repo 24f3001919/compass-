@@ -6,10 +6,15 @@ export const RENDER_BACKEND_URL = 'https://compass-backend-qryu.onrender.com'
 // Proactively clear obsolete compass_user_id cookie from browser on script initialization
 if (typeof document !== 'undefined') {
   try {
-    const expired = '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure'
+    const expired = '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax'
     document.cookie = `compass_user_id${expired}`
-    document.cookie = `compass_user_id${expired}; domain=${window.location.hostname}`
-    document.cookie = `compass_user_id${expired}; domain=.${window.location.hostname}`
+    document.cookie = `compass_user_id${expired}; Secure`
+    if (typeof window !== 'undefined' && window.location?.hostname) {
+      document.cookie = `compass_user_id${expired}; domain=${window.location.hostname}`
+      document.cookie = `compass_user_id${expired}; domain=${window.location.hostname}; Secure`
+      document.cookie = `compass_user_id${expired}; domain=.${window.location.hostname}`
+      document.cookie = `compass_user_id${expired}; domain=.${window.location.hostname}; Secure`
+    }
   } catch {
     /* ignore cookie cleanup error */
   }
@@ -232,43 +237,40 @@ export async function initGuestSession() {
 }
 
 export function getCurrentUserId() {
-  let uid = localStorage.getItem('compass_user_email') || localStorage.getItem('compass_user_id')
+  const uid = localStorage.getItem('compass_user_email') || localStorage.getItem('compass_user_id')
   if (uid && uid.trim() && uid.includes('@')) {
     return uid.trim().toLowerCase()
   }
-
-  if (typeof document !== 'undefined') {
-    const cookieMatch = document.cookie.match(/(?:^|;\s*)compass_user_id=([^;]+)/)
-    if (cookieMatch && cookieMatch[1]) {
-      uid = decodeURIComponent(cookieMatch[1]).trim().toLowerCase()
-      if (uid && uid.includes('@')) {
-        localStorage.setItem('compass_user_id', uid)
-        localStorage.setItem('compass_user_email', uid)
-        addKnownAccount(uid)
-        return uid
-      }
-    }
-  }
-
   return null
 }
 
 export function setCurrentUserId(userId) {
   if (userId && userId.trim()) {
     const clean = userId.trim().toLowerCase()
-    localStorage.setItem('compass_user_id', clean)
     if (clean.includes('@')) {
       localStorage.setItem('compass_user_email', clean)
       addKnownAccount(clean)
     }
   } else {
-    localStorage.removeItem('compass_user_id')
     localStorage.removeItem('compass_user_email')
   }
-  // Proactively clear obsolete compass_user_id cookie that triggers production impersonation errors
+  try {
+    localStorage.removeItem('compass_user_id')
+  } catch {
+    /* ignore storage access error */
+  }
+  // Proactively clear obsolete compass_user_id cookie that triggers impersonation errors
   if (typeof document !== 'undefined') {
     try {
-      document.cookie = 'compass_user_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure'
+      const expired = '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax'
+      document.cookie = `compass_user_id${expired}`
+      document.cookie = `compass_user_id${expired}; Secure`
+      if (typeof window !== 'undefined' && window.location?.hostname) {
+        document.cookie = `compass_user_id${expired}; domain=${window.location.hostname}`
+        document.cookie = `compass_user_id${expired}; domain=${window.location.hostname}; Secure`
+        document.cookie = `compass_user_id${expired}; domain=.${window.location.hostname}`
+        document.cookie = `compass_user_id${expired}; domain=.${window.location.hostname}; Secure`
+      }
     } catch {
       /* ignore cookie cleanup error */
     }
@@ -277,11 +279,8 @@ export function setCurrentUserId(userId) {
 
 export function getAuthHeaders(extraHeaders = {}) {
   const headers = { ...extraHeaders }
-  const isDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  const uid = getCurrentUserId()
-  if (uid && isDev) {
-    headers['x-user-id'] = uid
-  }
+  // Identity comes exclusively from verified guest token or authenticated session.
+  // Never send x-user-id or compass_user_id.
   const guestToken = getGuestToken()
   if (guestToken) {
     headers['x-guest-token'] = guestToken
@@ -290,11 +289,61 @@ export function getAuthHeaders(extraHeaders = {}) {
   if (guestId) {
     headers['x-guest-id'] = guestId
   }
-  const token = localStorage.getItem('compass_auth_token') || (isDev ? 'dev-token' : '')
+  const token = localStorage.getItem('compass_auth_token')
   if (token && !headers['Authorization']) {
     headers['Authorization'] = `Bearer ${token}`
   }
   return headers
+}
+
+/**
+ * Perform a fetch request with automatic guest token minting and 1-time retry on 401.
+ * Strict rules:
+ * - Retry only for guest identities, max 1 retry (_retried: true).
+ * - NEVER replace or overwrite an authenticated user's identity. If authenticated, dispatch 'compass:session_expired'.
+ * - NEVER retry if the body is a stream or options.isStreaming is true.
+ */
+export async function fetchWithGuestRetry(url, options = {}) {
+  const mergedHeaders = getAuthHeaders(options.headers || {})
+  const init = {
+    ...options,
+    headers: mergedHeaders,
+    credentials: options.credentials || 'include',
+  }
+  let res = await fetch(url, init)
+  if (res.status === 401 && !options._retried) {
+    const hasAuthToken = typeof localStorage !== 'undefined' && Boolean(localStorage.getItem('compass_auth_token'))
+    const hasAuthEmail = typeof localStorage !== 'undefined' && Boolean(localStorage.getItem('compass_user_email'))
+    const isAuthenticated = hasAuthToken || hasAuthEmail
+
+    if (isAuthenticated) {
+      // Explicit 'session expired, sign in again' path: do NOT replace identity with a guest token
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof window.CustomEvent === 'function') {
+        window.dispatchEvent(new window.CustomEvent('compass:session_expired', {
+          detail: { message: 'Session expired. Please sign in again.' }
+        }))
+      }
+      return res
+    }
+
+    // Never retry if this is a streaming request or streaming body already started
+    if (options.isStreaming || (typeof globalThis.ReadableStream !== 'undefined' && options.body instanceof globalThis.ReadableStream)) {
+      return res
+    }
+
+    // Retry only for unauthenticated guest identities, exactly once
+    const guestData = await initGuestSession()
+    if (guestData && (guestData.guest_token || guestData.token)) {
+      const retryHeaders = getAuthHeaders(options.headers || {})
+      res = await fetch(url, {
+        ...options,
+        headers: retryHeaders,
+        credentials: options.credentials || 'include',
+        _retried: true,
+      })
+    }
+  }
+  return res
 }
 
 let inflightHealthCheck = null
@@ -332,15 +381,18 @@ export async function checkBackendHealth(force = false) {
         try {
           res = await probe(`${API_BASE}/health`, 2500)
         } catch {
-          // Local server is not running on port 8000. Fall back to cloud backend immediately.
-          console.info(`[Compass] Local backend (${API_BASE}) unreachable. Attempting cloud backend: ${RENDER_BACKEND_URL}`)
-          try {
-            res = await probe(`${RENDER_BACKEND_URL}/health`, 35000)
-            if (res && (res.ok || res.status === 200)) {
-              setApiBase(RENDER_BACKEND_URL)
+          if (!isLocalDevHost) {
+            console.info(`[Compass] Local backend (${API_BASE}) unreachable. Attempting cloud backend: ${RENDER_BACKEND_URL}`)
+            try {
+              res = await probe(`${RENDER_BACKEND_URL}/health`, 35000)
+              if (res && (res.ok || res.status === 200)) {
+                setApiBase(RENDER_BACKEND_URL)
+              }
+            } catch {
+              return 'Waking up the server…'
             }
-          } catch {
-            return 'Waking up the server…'
+          } else {
+            return 'Local backend starting…'
           }
         }
       } else {
