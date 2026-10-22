@@ -27,6 +27,7 @@ export default function RadarOpportunityCard({
     application_status,
     last_verified_at,
     is_india_eligible,
+    is_verified_within_24h,
     compensation,
   } = opportunity
 
@@ -163,6 +164,37 @@ export default function RadarOpportunityCard({
               }}
             >
               🇮🇳 India Eligible
+            </span>
+          )}
+
+          {/* Recency Badge */}
+          {is_verified_within_24h ? (
+            <span
+              style={{
+                fontSize: '11px',
+                padding: '2px 8px',
+                borderRadius: '6px',
+                background: 'rgba(16, 185, 129, 0.15)',
+                color: '#065f46',
+                fontWeight: 600,
+              }}
+              title="Posting timestamp verified within the last 24 hours"
+            >
+              ⚡ Verified &lt;24h
+            </span>
+          ) : (
+            <span
+              style={{
+                fontSize: '11px',
+                padding: '2px 8px',
+                borderRadius: '6px',
+                background: 'rgba(148, 163, 184, 0.15)',
+                color: '#475569',
+                fontWeight: 500,
+              }}
+              title="Source supplied approximate or unverified posting time"
+            >
+              ⏱️ Posting time unverified
             </span>
           )}
         </div>
