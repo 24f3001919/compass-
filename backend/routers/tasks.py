@@ -294,7 +294,11 @@ async def get_timeline(
 
 # ---- GET /api/tasks ---------------------------------------------------
 @router.get("/api/tasks", response_model=List[FrontendTaskOut])
-async def get_frontend_tasks(request: Request, domain: Optional[str] = Query(None)):
+async def get_frontend_tasks(
+    request: Request,
+    domain: Optional[str] = Query(None),
+    include_demo: bool = Query(True),
+):
     """Public frontend endpoint matching frontend/src/api/client.js format with per-account isolation."""
     try:
         ident = _get_current_identity(request)
@@ -304,6 +308,10 @@ async def get_frontend_tasks(request: Request, domain: Optional[str] = Query(Non
             raw_tasks = await structured.list_tasks(conn, domain=domain, user_id=user_id)
             result = []
             for t in raw_tasks:
+                if not include_demo:
+                    trusted_url = str(t.get("trusted_event_url") or "").lower()
+                    if "demo" in trusted_url or t.get("is_demo"):
+                        continue
                 proj_name = t.get("project", {}).get("name", "General") if t.get("project") else "General"
                 result.append(build_frontend_task(t, proj_name=proj_name))
             return result
