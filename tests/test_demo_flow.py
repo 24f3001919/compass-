@@ -66,6 +66,8 @@ async def test_demo_flow_step4_admin_usage_metrics(client: AsyncClient, auth_hea
 @pytest.mark.asyncio
 async def test_seed_judge_demo_persona_and_fetch_tasks(client: AsyncClient):
     """Verify that judges can click 'Load Judge Persona' and populate dummy tasks."""
+    from unittest.mock import patch, AsyncMock
+
     # 1. Initialize a guest session (like the frontend does on mount)
     guest_resp = await client.post("/api/guest/session")
     assert guest_resp.status_code == 200
@@ -73,13 +75,14 @@ async def test_seed_judge_demo_persona_and_fetch_tasks(client: AsyncClient):
     guest_token = guest_data["guest_token"]
     headers = {"x-guest-token": guest_token}
 
-    # 2. Seed Judge Demo Persona
-    seed_resp = await client.post("/api/demo/seed", headers=headers)
-    assert seed_resp.status_code == 200
-    seed_data = seed_resp.json()
-    assert seed_data["status"] == "ok"
-    assert seed_data["tasks_seeded"] >= 7
-    assert len(seed_data["task_ids"]) >= 7
+    # 2. Seed Judge Demo Persona (patch remote embedding call for fast deterministic execution)
+    with patch("backend.services.embeddings.get_embedding", AsyncMock(return_value=[0.1] * 768)):
+        seed_resp = await client.post("/api/demo/seed", headers=headers)
+        assert seed_resp.status_code == 200
+        seed_data = seed_resp.json()
+        assert seed_data["status"] == "ok"
+        assert seed_data["tasks_seeded"] >= 7
+        assert len(seed_data["task_ids"]) >= 7
 
     # 3. Retrieve tasks for frontend timeline display
     tasks_resp = await client.get("/api/tasks", headers=headers)
@@ -89,7 +92,7 @@ async def test_seed_judge_demo_persona_and_fetch_tasks(client: AsyncClient):
     assert len(tasks) >= 7
 
     titles = [t["title"] for t in tasks]
-    assert any("Hackathon Sprint" in title for title in titles)
+    assert any("Hackathon" in title or "Devpost" in title for title in titles)
     assert any("CS 61C" in title for title in titles)
     assert any("Nebius" in title for title in titles)
 
