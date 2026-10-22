@@ -173,6 +173,9 @@ class OpportunityOut(BaseModel):
     employer_identity_verified: bool = False
     official_source_confirmed: bool = False
     application_url_checked: bool = False
+    posted_at: Optional[datetime] = None
+    posted_at_precision: Optional[str] = None
+    is_verified_within_24h: bool = False
 
     # Nested related domain data
     requirements: Optional[OpportunityRequirementsOut] = None
