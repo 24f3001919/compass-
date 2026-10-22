@@ -520,13 +520,26 @@ def is_greeting_intent(message: str) -> bool:
 
 
 def is_tavily_verification_intent(message: str) -> bool:
-    """Determine whether message is an explicit request to verify facts, deadlines, or claims with Tavily."""
+    """Determine whether message is an explicit request to verify facts, deadlines, or claims with Tavily.
+
+    Recognizes:
+    - Direct button commands: 'Verify with Tavily', 'Verify this with Tavily', 'Verify it with Tavily'
+    - Conversational queries: 'Can you verify that?', 'Verify the claim you just made', 'Fact-check the previous answer'
+    - Targeted event verification: 'Verify the Nebius deadline with Tavily', 'Check this deadline with Tavily'
+    """
     if not message or not message.strip():
         return False
     msg_l = message.lower().strip()
-    verify_patterns = (
-        "verify it with tavily",
+
+    # Direct Tavily mentions + verification verbs
+    if "tavily" in msg_l and any(k in msg_l for k in ("verify", "fact-check", "fact check", "factcheck", "check", "confirm", "investigate", "research")):
+        return True
+
+    # Explicit conversational verification intents referring to prior claims/answers
+    conversational_verify_patterns = (
         "verify this with tavily",
+        "verify it with tavily",
+        "verify that with tavily",
         "verify with tavily",
         "check this deadline with tavily",
         "check this with tavily",
@@ -537,38 +550,278 @@ def is_tavily_verification_intent(message: str) -> bool:
         "fact check this using tavily",
         "fact-check with tavily",
         "fact check with tavily",
-        "fact-check using tavily",
-        "fact check using tavily",
+        "can you verify that",
+        "can you verify this",
+        "can you verify it",
+        "can you fact-check that",
+        "can you fact check that",
+        "can you fact-check this",
+        "can you fact check this",
+        "verify this",
+        "verify that",
+        "verify it",
+        "verify the claim you just made",
+        "verify what you just said",
+        "verify your claim",
+        "fact-check the previous answer",
+        "fact check the previous answer",
+        "fact-check the previous claim",
+        "fact check the previous claim",
+        "fact-check your answer",
+        "fact check your answer",
+        "fact-check this answer",
+        "fact check this answer",
+        "check this deadline",
+        "check that deadline",
     )
-    if any(p in msg_l for p in verify_patterns):
+    # Match if any exact pattern matches or message starts with / ends with pattern
+    clean_msg = re.sub(r"[^\w\s-]", "", msg_l).strip()
+    for p in conversational_verify_patterns:
+        clean_p = re.sub(r"[^\w\s-]", "", p).strip()
+        if clean_p in clean_msg or clean_msg.startswith(clean_p) or clean_msg.endswith(clean_p):
+            return True
+
+    if re.search(r"\bverify\s+(?:the\s+)?(?:[\w-]+\s+)?deadline\b", msg_l):
         return True
-    if "tavily" in msg_l and any(k in msg_l for k in ("verify", "fact-check", "fact check", "factcheck", "check")):
-        return True
+
     return False
+
+
+def extract_claim_and_entity_from_text(text: str, user_query: str = "") -> Tuple[str, Optional[str]]:
+    """Extract specific factual assertions, entity, and deadline details from candidate text.
+
+    Returns:
+        (claim_to_investigate, target_entity)
+    """
+    if not text or not text.strip():
+        return "", None
+
+    clean_text = text.strip()
+    if is_tavily_verification_intent(clean_text):
+        return "", None
+
+    # Strip [[modes...]] markers if present
+    clean_text = re.sub(r"\[\[.*?\]\]", "", clean_text).strip()
+
+    # 1. Identify Target Entity
+    target_entity: Optional[str] = None
+    query_lower = (user_query or "").lower()
+
+    # Check if user query mentions a specific entity
+    known_event_tokens = ("nebius", "nvidia", "chroma", "devpost", "google", "hackathon", "buildathon", "kaggle")
+    for tok in known_event_tokens:
+        if tok in query_lower:
+            m_entity = re.search(rf"\b({tok}(?:\s+[xX&]\s+[\w-]+|\s+[\w-]+)*\s+(?:hackathon|buildathon|awards|challenge|competition|grant))\b", clean_text, re.IGNORECASE)
+            if m_entity:
+                target_entity = m_entity.group(1).strip()
+                break
+            if tok in ("nebius", "nvidia") and ("nebius" in clean_text.lower() or "nvidia" in clean_text.lower()):
+                m_neb = re.search(r"\b(Nebius(?:\s+[xX&]\s+NVIDIA)?(?:\s+Global)?(?:\s+AI)?\s+Hackathon)\b", clean_text, re.IGNORECASE)
+                if m_neb:
+                    target_entity = m_neb.group(1).strip()
+                    break
+
+    if not target_entity:
+        # Search for full event or organization names in the candidate text
+        event_match = re.search(
+            r"\b([A-Z][a-zA-Z0-9_-]*(?:\s+[xX&]\s+[A-Z][a-zA-Z0-9_-]*|\s+[A-Z][a-zA-Z0-9_-]*)*\s+(?:Hackathon|Buildathon|Awards|Challenge|Competition|Fellowship|Internship|Grant|Program))\b",
+            clean_text,
+        )
+        if event_match:
+            target_entity = event_match.group(1).strip()
+        else:
+            # Fallback to capitalized brand name
+            brand_match = re.search(r"\b(Nebius|NVIDIA|Chroma|Devpost|ElevenLabs|Google Cloud|OpenAI|Anthropic)\b", clean_text)
+            if brand_match:
+                target_entity = brand_match.group(1).strip()
+
+    # 2. Extract Deadline Assertion Sentences
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", clean_text) if s.strip()]
+
+    deadline_keywords = (
+        "submission deadline", "submissions close", "submission period",
+        "deadline is", "deadline:", "due on", "due by", "closes on", "closes at",
+        "deadline", "due date", "submission", "due",
+    )
+    date_regex = re.compile(
+        r"\b(?:January|February|March|April|May|June|July|August|September|October|November|December|\d{1,2}(?:st|nd|rd|th)?)\b",
+        re.IGNORECASE,
+    )
+
+    candidate_sentence = None
+    for s in sentences:
+        s_low = s.lower()
+        if any(dk in s_low for dk in deadline_keywords) and date_regex.search(s):
+            candidate_sentence = s
+            break
+
+    if not candidate_sentence:
+        # Check for any sentence containing both a deadline keyword and numbers/dates
+        for s in sentences:
+            s_low = s.lower()
+            if any(dk in s_low for dk in deadline_keywords) and re.search(r"\b\d{1,4}\b", s):
+                candidate_sentence = s
+                break
+
+    if candidate_sentence:
+        # Clean markdown formatting from the candidate sentence
+        clean_sentence = re.sub(r"[*_`#>-]", "", candidate_sentence).strip()
+        clean_sentence = re.sub(r"\s+", " ", clean_sentence).strip()
+
+        # If the sentence does NOT mention the target entity, integrate it for clarity
+        if target_entity and target_entity.lower() not in clean_sentence.lower():
+            claim = f"The {target_entity}'s {clean_sentence[0].lower() + clean_sentence[1:] if clean_sentence.startswith('S') or clean_sentence.startswith('D') else clean_sentence}"
+        else:
+            claim = clean_sentence
+        return claim, target_entity
+
+    # 3. Fallback: If no deadline sentence found, take the first informative factual sentence
+    for s in sentences:
+        clean_s = re.sub(r"[*_`#>-]", "", s).strip()
+        if len(clean_s) > 20 and not clean_s.lower().startswith(("how can i", "sure", "here is", "let me know")):
+            if target_entity and target_entity.lower() not in clean_s.lower():
+                return f"{target_entity}: {clean_s}", target_entity
+            return clean_s, target_entity
+
+    # Final fallback: return trimmed clean text with entity
+    if target_entity:
+        return f"{target_entity} submission deadline", target_entity
+    return clean_text[:200].strip(), None
+
+
+async def resolve_verification_claim_and_entity(
+    message: str,
+    history: Optional[list[dict[str, str]]] = None,
+    target_message_id: Optional[str] = None,
+    target_message_content: Optional[str] = None,
+    pool: Optional[Any] = None,
+    user_id: Optional[str] = None,
+    guest_id: Optional[str] = None,
+    recent_history: Optional[list[dict[str, str]]] = None,
+) -> Tuple[str, Optional[str]]:
+    """Resolve the specific claim and entity to verify, strictly enforcing tenant isolation and conversation boundaries."""
+    effective_history = history or recent_history
+    # 1. Server-authoritative target message check:
+    # When target_message_id is present, load the message text from the DB after ownership verification.
+    # IGNORE client-sent target_message_content in that case. If foreign or invalid ID, REJECT.
+    if target_message_id:
+        effective_uid = user_id or guest_id
+        if pool is None:
+            try:
+                from backend.memory.db import get_pool
+                pool = await get_pool()
+            except Exception:
+                pool = None
+
+        if pool and effective_uid:
+            try:
+                async with pool.acquire() as conn:
+                    mid = int(target_message_id) if str(target_message_id).isdigit() else None
+                    if mid is not None:
+                        row = await conn.fetchrow(
+                            """
+                            SELECT m.content
+                            FROM messages m
+                            JOIN conversations c ON m.conversation_id = c.id
+                            WHERE m.id = $1 AND (c.user_id = $2 OR c.guest_id = $2)
+                            """,
+                            mid,
+                            effective_uid,
+                        )
+                        if row and row["content"]:
+                            claim, entity = extract_claim_and_entity_from_text(row["content"], user_query=message)
+                            if claim and not is_tavily_verification_intent(claim):
+                                return claim, entity
+                            return "", None
+                        else:
+                            logger.warning("Target message ID %s not found or foreign tenant access for user %s: REJECTED", target_message_id, effective_uid)
+                            return "", None
+                    else:
+                        logger.warning("Invalid target message ID %s: REJECTED", target_message_id)
+                        return "", None
+            except Exception as e:
+                logger.warning("Error fetching target message by ID %s: %s; rejecting", target_message_id, e)
+                return "", None
+        else:
+            # If target_message_id was supplied but no pool/user_id available to verify ownership, reject
+            logger.warning("Target message ID %s supplied without db pool or user_id for verification: REJECTED", target_message_id)
+            return "", None
+
+    # 2. Fallback for unpersisted messages: Use client-sent content ONLY when target_message_id is absent.
+    # Cap length at 4000 chars, strip control characters, and treat it as untrusted.
+    if target_message_content and target_message_content.strip():
+        untrusted = target_message_content[:4000]
+        sanitized_content = re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", "", untrusted).strip()
+        if sanitized_content:
+            claim, entity = extract_claim_and_entity_from_text(sanitized_content, user_query=message)
+            if claim and not is_tavily_verification_intent(claim):
+                return claim, entity
+
+    # 3. Check if user provided an explicit claim inside their message (e.g. 'Verify with Tavily: claim text')
+    msg_clean = message.strip()
+    m_direct = re.search(
+        r"(?:verify(?:\s+it|\s+this)?\s+with\s+tavily|fact-?check(?:\s+this\s+answer|\s+this)?\s+using\s+tavily|check\s+(?:this\s+deadline|this|it)\s+with\s+tavily)[:\s]+(?:that\s+)?(.+)",
+        msg_clean,
+        re.IGNORECASE,
+    )
+    if m_direct and m_direct.group(1).strip():
+        extracted = m_direct.group(1).strip().strip('"\'')
+        # Ensure extracted is not another generic intent
+        if len(extracted) > 6 and not is_tavily_verification_intent(extracted):
+            # Check for entity inside extracted
+            _, entity = extract_claim_and_entity_from_text(extracted, user_query=message)
+            return extracted, entity
+
+    # 4. Resolve against conversation history (most recent assistant message)
+    if effective_history:
+        for prev in reversed(effective_history):
+            if isinstance(prev, dict) and prev.get("role") == "assistant":
+                content = (prev.get("content") or "").strip()
+                if content and not is_tavily_verification_intent(content):
+                    claim, entity = extract_claim_and_entity_from_text(content, user_query=message)
+                    if claim and not is_tavily_verification_intent(claim):
+                        return claim, entity
+
+    # 5. Security & Invariant Guard: NEVER return the verification instruction itself as the claim
+    if is_tavily_verification_intent(msg_clean):
+        # Extract entity if mentioned in query (e.g. 'Verify the Nebius deadline with Tavily')
+        m_ent = re.search(r"\b(Nebius|NVIDIA|Chroma|Devpost|Google)\b", msg_clean, re.IGNORECASE)
+        if m_ent:
+            ent = m_ent.group(1).capitalize()
+            return f"{ent} deadline", ent
+        return "", None
+
+    return msg_clean, None
 
 
 def extract_verification_target(message: str, history: Optional[list[dict[str, str]]] = None) -> str:
     """Extract the specific statement or claim to verify, resolving 'it'/'this' against prior assistant messages."""
-    import re
+    # Synchronous wrapper for backward-compatibility with tests
     msg_clean = message.strip()
-    m = re.search(
-        r"(?:verify(?:\s+it|\s+this)?\s+with\s+tavily|fact-?check(?:\s+this\s+answer|\s+this)?\s+using\s+tavily|check\s+(?:this\s+deadline|this|it)\s+with\s+tavily)[:\s]+(.+)",
+    m_direct = re.search(
+        r"(?:verify(?:\s+it|\s+this)?\s+with\s+tavily|fact-?check(?:\s+this\s+answer|\s+this)?\s+using\s+tavily|check\s+(?:this\s+deadline|this|it)\s+with\s+tavily)[:\s]+(?:that\s+)?(.+)",
         msg_clean,
         re.IGNORECASE,
     )
-    if m and m.group(1).strip():
-        extracted = m.group(1).strip().strip('"\'')
-        if len(extracted) > 5:
+    if m_direct and m_direct.group(1).strip():
+        extracted = m_direct.group(1).strip().strip('"\'')
+        if len(extracted) > 6 and not is_tavily_verification_intent(extracted):
             return extracted
 
-    # Fallback to resolving 'it' / 'this' against the latest assistant message
     if history:
         for prev in reversed(history):
             if isinstance(prev, dict) and prev.get("role") == "assistant":
                 content = (prev.get("content") or "").strip()
                 if content:
-                    # Take the first 300 chars of the assistant's previous message
-                    return content[:300].strip()
+                    claim, _ = extract_claim_and_entity_from_text(content, user_query=message)
+                    if claim and not is_tavily_verification_intent(claim):
+                        return claim
+
+    if is_tavily_verification_intent(msg_clean):
+        m_ent = re.search(r"\b(Nebius|NVIDIA|Chroma|Devpost|Google)\b", msg_clean, re.IGNORECASE)
+        if m_ent:
+            return f"{m_ent.group(1).capitalize()} submission deadline"
+        return "submission deadline"
 
     return msg_clean
 
