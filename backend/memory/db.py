@@ -239,6 +239,9 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_evidence_ledger_run ON evidence_ledger(run_id);
 
+        -- Persisted Verification Evidence on Messages
+        ALTER TABLE messages ADD COLUMN IF NOT EXISTS evidence JSONB;
+
         -- Unguessable Revocable Share Tokens
         ALTER TABLE conversations ADD COLUMN IF NOT EXISTS share_token UUID UNIQUE;
         CREATE INDEX IF NOT EXISTS idx_conversations_share_token ON conversations(share_token);
@@ -331,6 +334,8 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
         ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS employer_identity_verified BOOLEAN NOT NULL DEFAULT FALSE;
         ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS official_source_confirmed BOOLEAN NOT NULL DEFAULT FALSE;
         ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS application_url_checked BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS posted_at TIMESTAMPTZ;
+        ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS posted_at_precision TEXT NOT NULL DEFAULT 'unknown';
         CREATE INDEX IF NOT EXISTS idx_opportunities_employer_type ON opportunities(employer_type);
 
         CREATE TABLE IF NOT EXISTS opportunity_sources (
