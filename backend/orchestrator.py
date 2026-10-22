@@ -78,22 +78,14 @@ async def handle_message(
                         """
                         SELECT title, domain, due_date, status, priority, duration_minutes
                         FROM tasks
-                        WHERE status != 'completed' AND (user_id IS NULL OR user_id = $1)
+                        WHERE status != 'completed' AND user_id = $1
                         ORDER BY due_date ASC NULLS LAST, priority DESC
                         LIMIT 8
                         """,
                         user_id
                     )
                 else:
-                    active_tasks = await conn.fetch(
-                        """
-                        SELECT title, domain, due_date, status, priority, duration_minutes
-                        FROM tasks
-                        WHERE status != 'completed'
-                        ORDER BY due_date ASC NULLS LAST, priority DESC
-                        LIMIT 8
-                        """
-                    )
+                    active_tasks = []
                 recent_plans = await conn.fetch(
                     """
                     SELECT goal, status

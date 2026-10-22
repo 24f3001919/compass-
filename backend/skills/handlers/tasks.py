@@ -922,9 +922,9 @@ async def handle_detect_deadline_conflicts(args: Dict[str, Any], pool: Any) -> D
     days = int(args.get("days_ahead") or 7)
     today = date.today()
     cutoff = today + timedelta(days=days)
-
+    user_id = args.get("user_id")
     async with pool.acquire() as conn:
-        tasks = await structured.list_tasks(conn, status="open")
+        tasks = await structured.list_tasks(conn, status="open", user_id=user_id)
 
     by_date: Dict[str, List[Dict[str, Any]]] = {}
     for t in tasks:

@@ -60,55 +60,32 @@ async def search_chunks(
     """Search memory chunks by cosine similarity with per-account isolation."""
     query_vec = await get_embedding(query)
 
-    if user_id:
-        if domain:
-            rows = await conn.fetch(
-                """
-                SELECT id, domain, project_id, content, source, tags, created_at, user_id,
-                       1 - (embedding <=> $1) AS similarity
-                FROM memory_chunks
-                WHERE domain = $2 AND (user_id = $3 OR user_id IS NULL)
-                ORDER BY embedding <=> $1 ASC
-                LIMIT $4
-                """,
-                query_vec, domain, user_id, limit
-            )
-        else:
-            rows = await conn.fetch(
-                """
-                SELECT id, domain, project_id, content, source, tags, created_at, user_id,
-                       1 - (embedding <=> $1) AS similarity
-                FROM memory_chunks
-                WHERE (user_id = $2 OR user_id IS NULL)
-                ORDER BY embedding <=> $1 ASC
-                LIMIT $3
-                """,
-                query_vec, user_id, limit
-            )
+    if not user_id:
+        return []
+
+    if domain:
+        rows = await conn.fetch(
+            """
+            SELECT id, domain, project_id, content, source, tags, created_at, user_id,
+                   1 - (embedding <=> $1) AS similarity
+            FROM memory_chunks
+            WHERE domain = $2 AND user_id = $3
+            ORDER BY embedding <=> $1 ASC
+            LIMIT $4
+            """,
+            query_vec, domain, user_id, limit
+        )
     else:
-        if domain:
-            rows = await conn.fetch(
-                """
-                SELECT id, domain, project_id, content, source, tags, created_at, user_id,
-                       1 - (embedding <=> $1) AS similarity
-                FROM memory_chunks
-                WHERE domain = $2 AND user_id IS NULL
-                ORDER BY embedding <=> $1 ASC
-                LIMIT $3
-                """,
-                query_vec, domain, limit
-            )
-        else:
-            rows = await conn.fetch(
-                """
-                SELECT id, domain, project_id, content, source, tags, created_at, user_id,
-                       1 - (embedding <=> $1) AS similarity
-                FROM memory_chunks
-                WHERE user_id IS NULL
-                ORDER BY embedding <=> $1 ASC
-                LIMIT $2
-                """,
-                query_vec, limit
-            )
+        rows = await conn.fetch(
+            """
+            SELECT id, domain, project_id, content, source, tags, created_at, user_id,
+                   1 - (embedding <=> $1) AS similarity
+            FROM memory_chunks
+            WHERE user_id = $2
+            ORDER BY embedding <=> $1 ASC
+            LIMIT $3
+            """,
+            query_vec, user_id, limit
+        )
 
     return [dict(r) for r in rows]

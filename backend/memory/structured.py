@@ -5,7 +5,7 @@ Provides CRUD operations and fuzzy project matching for PostgreSQL.
 Used by the router skills and API endpoints.
 """
 
-from datetime import date
+from datetime import date, datetime
 from typing import Optional, Union, Any
 import asyncpg
 from asyncpg.pool import PoolConnectionProxy
@@ -135,6 +135,8 @@ async def create_task(
     user_id: Optional[str] = None,
     trusted_event_url: Optional[str] = None,
     duration_minutes: Optional[int] = None,
+    scheduled_start: Optional[datetime] = None,
+    scheduled_end: Optional[datetime] = None,
 ) -> dict:
     """Insert a new task into the structured tasks table with normalized inputs and user identity."""
     # Normalize domain, status, and priority
@@ -148,11 +150,11 @@ async def create_task(
 
     row = await conn.fetchrow(
         """
-        INSERT INTO tasks (domain, project_id, title, due_date, status, priority, notes, user_id, trusted_event_url, duration_minutes)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-        RETURNING id, domain, project_id, title, due_date, status, priority, notes, user_id, trusted_event_url, duration_minutes, created_at, updated_at
+        INSERT INTO tasks (domain, project_id, title, due_date, status, priority, notes, user_id, trusted_event_url, duration_minutes, scheduled_start, scheduled_end)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        RETURNING id, domain, project_id, title, due_date, status, priority, notes, user_id, trusted_event_url, duration_minutes, scheduled_start, scheduled_end, created_at, updated_at
         """,
-        norm_domain, project_id, title.strip(), due_date, norm_status, norm_priority, notes, user_id, trusted_event_url, duration_minutes
+        norm_domain, project_id, title.strip(), due_date, norm_status, norm_priority, notes, user_id, trusted_event_url, duration_minutes, scheduled_start, scheduled_end
     )
     return dict(row) if row else {}
 
@@ -200,7 +202,7 @@ async def list_tasks(
                p.id AS project_id, p.name AS project_name
         FROM tasks t
         LEFT JOIN projects p ON t.project_id = p.id
-        WHERE ($1::text IS NULL OR (t.user_id = $1 OR (t.user_id IS NULL AND NOT EXISTS (SELECT 1 FROM tasks WHERE user_id = $1))))
+        WHERE ($1::text IS NULL OR t.user_id = $1)
           AND ($2::text IS NULL OR t.domain = $2)
           AND ($3::integer IS NULL OR t.project_id = $3)
           AND ($4::text IS NULL OR t.status = $4)

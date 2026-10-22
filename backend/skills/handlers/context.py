@@ -148,8 +148,9 @@ async def handle_summarize_day(args: Dict[str, Any], pool: Any) -> Dict[str, Any
     from openai import AsyncOpenAI
 
     settings = get_settings()
+    user_id = args.get("user_id")
     async with pool.acquire() as conn:
-        tasks = await structured.list_tasks(conn, status="open")
+        tasks = await structured.list_tasks(conn, status="open", user_id=user_id)
 
     by_domain: Dict[str, int] = {}
     for t in tasks:
@@ -225,8 +226,9 @@ async def handle_summarize_across_domains(args: Dict[str, Any], pool: Any) -> Di
     from openai import AsyncOpenAI
 
     settings = get_settings()
+    user_id = args.get("user_id")
     async with pool.acquire() as conn:
-        tasks = await structured.list_tasks(conn, status="open")
+        tasks = await structured.list_tasks(conn, status="open", user_id=user_id)
         projects = await structured.list_projects(conn)
         try:
             code_chunks = await conn.fetch(

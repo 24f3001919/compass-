@@ -449,9 +449,9 @@ def _sse(step_type: str, content: str, *, step: int, t0: float,
     }
 
 
-async def _fetch_open_tasks(pool, domain: Optional[str]) -> List[Dict[str, Any]]:
+async def _fetch_open_tasks(pool, domain: Optional[str], user_id: Optional[str] = None) -> List[Dict[str, Any]]:
     async with pool.acquire() as conn:
-        rows = await structured.list_tasks(conn, domain=domain, status="open")
+        rows = await structured.list_tasks(conn, domain=domain, status="open", user_id=user_id)
     return [dict(r) for r in rows][:MAX_TASKS_CONSIDERED]
 
 
@@ -471,6 +471,7 @@ async def run_feasibility_review(
     days: int = 5,
     hours_per_day: float = DEFAULT_HOURS_PER_DAY,
     domain: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     Stream the Planner ↔ Realist negotiation as SSE-shaped dicts.
@@ -491,7 +492,7 @@ async def run_feasibility_review(
                step=step, t0=t0, model_tier="Compass System")
 
     try:
-        tasks = await _fetch_open_tasks(pool, domain)
+        tasks = await _fetch_open_tasks(pool, domain, user_id=user_id)
     except Exception as e:
         logger.error("Could not load tasks for feasibility review: %s", e, exc_info=True)
         step += 1

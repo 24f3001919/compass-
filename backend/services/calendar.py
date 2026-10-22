@@ -490,12 +490,15 @@ async def sync_all_tasks_to_google_calendar(
     if pool is None:
         return {"success": False, "count": 0, "message": "Database not connected"}
 
+    if not user_id:
+        return {"success": True, "count": 0, "message": "No user ID provided"}
+
     async with pool.acquire() as conn:
         tasks = await conn.fetch(
             """
             SELECT id, title, domain, priority, notes, duration_minutes, due_date, scheduled_start, scheduled_end
             FROM tasks
-            WHERE (user_id = $1 OR user_id IS NULL)
+            WHERE user_id = $1
               AND (
                 (scheduled_start IS NOT NULL AND scheduled_end IS NOT NULL)
                 OR due_date IS NOT NULL

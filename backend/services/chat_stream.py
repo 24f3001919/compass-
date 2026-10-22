@@ -217,18 +217,13 @@ async def generate_chat_events(
                     )
 
             async def _load_tasks():
-                if not needs_tools:
+                if not needs_tools or not user_id:
                     return []
                 async with pool.acquire() as conn:
-                    if user_id:
-                        return await conn.fetch(
-                            "SELECT title, domain, due_date, status, priority FROM tasks WHERE status != 'completed' AND (user_id IS NULL OR user_id = $1) ORDER BY due_date ASC NULLS LAST LIMIT 8",
-                            user_id,
-                        )
-                    else:
-                        return await conn.fetch(
-                            "SELECT title, domain, due_date, status, priority FROM tasks WHERE status != 'completed' ORDER BY due_date ASC NULLS LAST LIMIT 8"
-                        )
+                    return await conn.fetch(
+                        "SELECT title, domain, due_date, status, priority FROM tasks WHERE status != 'completed' AND user_id = $1 ORDER BY due_date ASC NULLS LAST LIMIT 8",
+                        user_id,
+                    )
 
             async def _load_facts():
                 try:
