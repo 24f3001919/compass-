@@ -59,7 +59,7 @@ if %errorlevel% equ 0 (
     echo [INFO] Backend is already running on http://localhost:8000.
 ) else (
     echo [INFO] Starting Backend server on http://localhost:8000...
-    start "Compass Backend (FastAPI)" cmd /k "python -m uvicorn backend.main:app --port 8000 --reload"
+    start "Compass Backend (FastAPI)" cmd /k "set ENVIRONMENT=development&& python -m uvicorn backend.main:app --port 8000 --reload"
 )
 
 :: 7. Launch Frontend if not already running

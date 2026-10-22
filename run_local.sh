@@ -56,7 +56,7 @@ cleanup() {
 
 trap cleanup SIGINT SIGTERM EXIT
 
-python3 -m uvicorn backend.main:app --port 8000 --reload &
+ENVIRONMENT=development python3 -m uvicorn backend.main:app --port 8000 --reload &
 BACKEND_PID=$!
 
 (cd frontend && npm run dev) &

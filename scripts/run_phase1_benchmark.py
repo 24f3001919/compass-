@@ -132,9 +132,9 @@ def summarize_metric(vals: List[float]) -> Dict[str, Any]:
 
 
 async def run_suite_for_case(case_id: str, prompt: str, warm_runs: int = 5):
-    print(f"\n=======================================================")
+    print("\n=======================================================")
     print(f"BENCHMARK [{case_id}]: {prompt}")
-    print(f"=======================================================")
+    print("=======================================================")
 
     # 1. Cold start
     print("Running Cold Start...")

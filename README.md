@@ -313,6 +313,7 @@ compass agent "Propose a triage schedule for coursework and hackathons"
 
 | Variable | Required? | Scope | Purpose | Example / Guidance |
 | :--- | :---: | :---: | :--- | :--- |
+| `ENVIRONMENT` | No | Backend | Runtime mode: `development`, `test`, or `production` (default). Set to `development` locally | `development` |
 | `NEBIUS_API_KEY` | **Yes** | Backend | Authenticates inference requests to Nebius Token Factory | `your_nebius_api_key_here` |
 | `AUTH_TOKEN` | **Yes** | Backend | Master administrative bearer token | `generate_secure_random_token_here` |
 | `DATABASE_URL` | **Yes** | Backend | Neon PostgreSQL connection URI with SSL mode | `postgresql://user:pass@host/db?sslmode=require` |
@@ -412,6 +413,8 @@ For comprehensive deployment topologies, zero-downtime database migration proced
 4. **SSRF & Network Fencing**: Internal IP ranges (e.g. `127.0.0.1`, `169.254.169.254`, `10.0.0.0/8`, IPv6 local loopbacks) and unsafe URL protocols are blocked from web scraping tools.
 5. **Multi-Tenant User Isolation**: Every database query and cache lookup enforces strict `user_id` scoping to prevent Insecure Direct Object References (IDOR).
 6. **Graceful Degradation**: If external APIs or database pools experience transient downtime, non-blocking in-memory layers maintain core application availability without hanging.
+7. **Environment Mode & Impersonation Prevention**: `ENVIRONMENT` must be explicitly set to `development` for local testing. In `production` or when unset, unauthenticated header impersonation (`x-user-id`) is rejected with HTTP 403, and unverified stale cookies (`compass_user_id`) return HTTP 401 with `Set-Cookie` expiration headers.
+8. **Demo Persona Seeding Gate**: The 1-click Judge Persona seeding endpoint (`/api/demo/seed`) is strictly guarded. In `production` environments, seeding is disabled by default and rejected with HTTP 403 unless explicitly enabled with `ENABLE_DEMO_SEEDING=true`.
 
 ---
 
