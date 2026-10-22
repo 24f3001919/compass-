@@ -151,6 +151,8 @@ def _parse_row_to_opportunity(row: Dict[str, Any], sources: List[Dict[str, Any]]
         employer_identity_verified=bool(row.get("employer_identity_verified", False)),
         official_source_confirmed=bool(row.get("official_source_confirmed", False)),
         application_url_checked=bool(row.get("application_url_checked", False)),
+        posted_at=row.get("posted_at"),
+        posted_at_precision=row.get("posted_at_precision") or "unknown",
         requirements=reqs,
         sources=src_models,
         cycles=cycle_models,
@@ -186,19 +188,27 @@ async def upsert_opportunity(
     employer_identity_verified: bool = False,
     official_source_confirmed: bool = False,
     application_url_checked: bool = False,
+    posted_at: Optional[datetime] = None,
+    posted_at_precision: Optional[str] = None,
 ) -> int:
     """Insert or update an opportunity idempotently using canonical_url."""
     global _id_seq
     pool = await get_pool()
     norm_co = re.sub(r"[^\w\s-]", "", company_name.strip().lower())
+    norm_co = re.sub(r"\b(inc|incorporated|llc|ltd|limited|corp|corporation|technologies|tech|solutions|group|services|software)\b", "", norm_co).strip()
+    norm_loc = (location or "remote").strip().lower()
 
     if not pool:
         # In-memory fallback
         for opp_id, opp in _in_memory_opportunities.items():
-            if opp["canonical_url"] == canonical_url:
+            same_canon = opp.get("canonical_url") == canonical_url
+            same_dedup_key = (
+                opp.get("normalized_company") == norm_co
+                and opp.get("role_title", "").strip().lower() == role_title.strip().lower()
+                and (opp.get("location") or "remote").strip().lower() == norm_loc
+            )
+            if same_canon or same_dedup_key:
                 # Status precedence & protection rules:
-                # 1. Closed/Cancelled confirmed records cannot be overwritten by weaker discovery or stale claims
-                # 2. Verified active/upcoming records cannot be downgraded by unverified DISCOVERED records
                 existing_st = opp.get("current_status")
                 new_st = current_status
                 if existing_st in ("CLOSED_CONFIRMED", "CANCELLED_CONFIRMED"):
@@ -211,12 +221,18 @@ async def upsert_opportunity(
                     if current_status in ("DISCOVERED", "NEEDS_VERIFICATION"):
                         new_st = existing_st
 
-                # Evidence protection: do not let a weaker unverified source overwrite verified evidence
+                # Evidence protection
                 has_verified_evidence = opp.get("employer_identity_verified") or opp.get("official_source_confirmed")
                 if has_verified_evidence and not (employer_identity_verified or official_source_confirmed):
                     eff_evidence = opp.get("verification_evidence") or verification_evidence
                 else:
                     eff_evidence = verification_evidence or opp.get("verification_evidence")
+
+                pref_url = official_application_url or opp.get("official_application_url")
+                if opp.get("official_application_url") and not official_application_url:
+                    pref_url = opp.get("official_application_url")
+                elif official_application_url and any(ats in official_application_url for ats in ["greenhouse", "lever", "workday", "smartrecruiters", "ashby"]):
+                    pref_url = official_application_url
 
                 opp.update({
                     "company_name": company_name,
@@ -227,12 +243,15 @@ async def upsert_opportunity(
                     "work_arrangement": work_arrangement if work_arrangement != "unknown" else opp.get("work_arrangement", "unknown"),
                     "compensation": compensation or opp.get("compensation"),
                     "duration": duration or opp.get("duration"),
+                    "official_application_url": pref_url,
                     "current_status": new_st,
                     "last_verified_at": last_verified_at or opp.get("last_verified_at"),
                     "verification_evidence": eff_evidence,
                     "employer_identity_verified": employer_identity_verified or opp.get("employer_identity_verified", False),
                     "official_source_confirmed": official_source_confirmed or opp.get("official_source_confirmed", False),
                     "application_url_checked": application_url_checked or opp.get("application_url_checked", False),
+                    "posted_at": posted_at or opp.get("posted_at"),
+                    "posted_at_precision": posted_at_precision or opp.get("posted_at_precision", "unknown"),
                 })
                 return opp_id
         _id_seq += 1
@@ -261,63 +280,140 @@ async def upsert_opportunity(
             "employer_identity_verified": employer_identity_verified,
             "official_source_confirmed": official_source_confirmed,
             "application_url_checked": application_url_checked,
+            "posted_at": posted_at,
+            "posted_at_precision": posted_at_precision or "unknown",
             "sources": [],
             "cycles": [],
             "requirements": {},
         }
         return _id_seq
 
-    query = """
-    INSERT INTO opportunities (
-        company_name, normalized_company, role_title, opportunity_type, employer_type, category,
-        location, work_arrangement, country, is_india_eligible, compensation, duration,
-        official_application_url, canonical_url, current_status, confirmed_open_date,
-        confirmed_close_date, description, last_verified_at, verification_evidence,
-        employer_identity_verified, official_source_confirmed, application_url_checked,
-        created_at, updated_at
-    ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, now(), now()
-    )
-    ON CONFLICT (canonical_url) DO UPDATE SET
-        company_name = EXCLUDED.company_name,
-        normalized_company = EXCLUDED.normalized_company,
-        role_title = EXCLUDED.role_title,
-        opportunity_type = EXCLUDED.opportunity_type,
-        employer_type = COALESCE(NULLIF(EXCLUDED.employer_type, 'enterprise'), opportunities.employer_type),
-        category = EXCLUDED.category,
-        location = COALESCE(EXCLUDED.location, opportunities.location),
-        work_arrangement = CASE WHEN EXCLUDED.work_arrangement != 'unknown' THEN EXCLUDED.work_arrangement ELSE opportunities.work_arrangement END,
-        country = EXCLUDED.country,
-        is_india_eligible = EXCLUDED.is_india_eligible,
-        compensation = COALESCE(EXCLUDED.compensation, opportunities.compensation),
-        duration = COALESCE(EXCLUDED.duration, opportunities.duration),
-        official_application_url = COALESCE(EXCLUDED.official_application_url, opportunities.official_application_url),
-        current_status = CASE
-            WHEN opportunities.current_status IN ('CLOSED_CONFIRMED', 'CANCELLED_CONFIRMED') THEN
-                CASE WHEN EXCLUDED.current_status IN ('CLOSED_CONFIRMED', 'CANCELLED_CONFIRMED') THEN EXCLUDED.current_status ELSE opportunities.current_status END
-            WHEN opportunities.current_status = 'OPEN_CONFIRMED' AND EXCLUDED.current_status IN ('DISCOVERED', 'NEEDS_VERIFICATION') THEN opportunities.current_status
-            WHEN opportunities.current_status = 'UPCOMING_CONFIRMED' AND EXCLUDED.current_status IN ('DISCOVERED', 'NEEDS_VERIFICATION') THEN opportunities.current_status
-            ELSE EXCLUDED.current_status
-        END,
-        confirmed_open_date = COALESCE(EXCLUDED.confirmed_open_date, opportunities.confirmed_open_date),
-        confirmed_close_date = COALESCE(EXCLUDED.confirmed_close_date, opportunities.confirmed_close_date),
-        description = COALESCE(EXCLUDED.description, opportunities.description),
-        last_verified_at = COALESCE(EXCLUDED.last_verified_at, opportunities.last_verified_at),
-        verification_evidence = CASE
-            WHEN (opportunities.employer_identity_verified OR opportunities.official_source_confirmed)
-                 AND NOT (EXCLUDED.employer_identity_verified OR EXCLUDED.official_source_confirmed)
-                 THEN COALESCE(opportunities.verification_evidence, EXCLUDED.verification_evidence)
-            ELSE COALESCE(EXCLUDED.verification_evidence, opportunities.verification_evidence)
-        END,
-        employer_identity_verified = EXCLUDED.employer_identity_verified OR opportunities.employer_identity_verified,
-        official_source_confirmed = EXCLUDED.official_source_confirmed OR opportunities.official_source_confirmed,
-        application_url_checked = EXCLUDED.application_url_checked OR opportunities.application_url_checked,
-        updated_at = now()
-    RETURNING id;
-    """
     async with pool.acquire() as conn:
+        existing = await conn.fetchrow(
+            """
+            SELECT id, canonical_url, official_application_url, current_status,
+                   employer_identity_verified, official_source_confirmed, verification_evidence,
+                   posted_at, posted_at_precision
+            FROM opportunities
+            WHERE canonical_url = $1
+               OR (normalized_company = $2 AND LOWER(role_title) = LOWER($3) AND LOWER(COALESCE(location, 'remote')) = $4)
+            LIMIT 1;
+            """,
+            canonical_url, norm_co, role_title.strip(), norm_loc
+        )
+
+        if existing:
+            opp_id = existing["id"]
+            pref_url = official_application_url or existing["official_application_url"]
+            if existing["official_application_url"] and not official_application_url:
+                pref_url = existing["official_application_url"]
+            elif official_application_url and any(ats in official_application_url for ats in ["greenhouse", "lever", "workday", "smartrecruiters", "ashby"]):
+                pref_url = official_application_url
+
+            update_q = """
+            UPDATE opportunities SET
+                company_name = $1,
+                role_title = $2,
+                employer_type = COALESCE(NULLIF($3, 'enterprise'), employer_type),
+                category = $4,
+                location = COALESCE($5, location),
+                work_arrangement = CASE WHEN $6 != 'unknown' THEN $6 ELSE work_arrangement END,
+                country = $7,
+                is_india_eligible = $8,
+                compensation = COALESCE($9, compensation),
+                duration = COALESCE($10, duration),
+                official_application_url = COALESCE($11, official_application_url),
+                current_status = CASE
+                    WHEN opportunities.current_status IN ('CLOSED_CONFIRMED', 'CANCELLED_CONFIRMED') THEN
+                        CASE WHEN $12 IN ('CLOSED_CONFIRMED', 'CANCELLED_CONFIRMED') THEN $12 ELSE opportunities.current_status END
+                    WHEN opportunities.current_status = 'OPEN_CONFIRMED' AND $12 IN ('DISCOVERED', 'NEEDS_VERIFICATION') THEN opportunities.current_status
+                    WHEN opportunities.current_status = 'UPCOMING_CONFIRMED' AND $12 IN ('DISCOVERED', 'NEEDS_VERIFICATION') THEN opportunities.current_status
+                    ELSE $12
+                END,
+                confirmed_open_date = COALESCE($13, confirmed_open_date),
+                confirmed_close_date = COALESCE($14, confirmed_close_date),
+                description = COALESCE($15, description),
+                last_verified_at = COALESCE($16, last_verified_at),
+                verification_evidence = CASE
+                    WHEN (opportunities.employer_identity_verified OR opportunities.official_source_confirmed)
+                         AND NOT ($17 OR $18)
+                         THEN COALESCE(opportunities.verification_evidence, $19)
+                    ELSE COALESCE($19, opportunities.verification_evidence)
+                END,
+                employer_identity_verified = $17 OR opportunities.employer_identity_verified,
+                official_source_confirmed = $18 OR opportunities.official_source_confirmed,
+                application_url_checked = $20 OR opportunities.application_url_checked,
+                posted_at = COALESCE($21, opportunities.posted_at),
+                posted_at_precision = COALESCE($22, opportunities.posted_at_precision),
+                updated_at = now()
+            WHERE id = $23
+            RETURNING id;
+            """
+            await conn.execute(
+                update_q,
+                company_name.strip(), role_title.strip(), employer_type, category, location,
+                work_arrangement, country, is_india_eligible, compensation, duration,
+                pref_url, current_status, confirmed_open_date, confirmed_close_date,
+                description, last_verified_at, employer_identity_verified,
+                official_source_confirmed, verification_evidence, application_url_checked,
+                posted_at, posted_at_precision,
+                opp_id
+            )
+            return opp_id
+
+        insert_q = """
+        INSERT INTO opportunities (
+            company_name, normalized_company, role_title, opportunity_type, employer_type, category,
+            location, work_arrangement, country, is_india_eligible, compensation, duration,
+            official_application_url, canonical_url, current_status, confirmed_open_date,
+            confirmed_close_date, description, last_verified_at, verification_evidence,
+            employer_identity_verified, official_source_confirmed, application_url_checked,
+            posted_at, posted_at_precision,
+            created_at, updated_at
+        ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, now(), now()
+        )
+        ON CONFLICT (canonical_url) DO UPDATE SET
+            company_name = EXCLUDED.company_name,
+            normalized_company = EXCLUDED.normalized_company,
+            role_title = EXCLUDED.role_title,
+            opportunity_type = EXCLUDED.opportunity_type,
+            employer_type = COALESCE(NULLIF(EXCLUDED.employer_type, 'enterprise'), opportunities.employer_type),
+            category = EXCLUDED.category,
+            location = COALESCE(EXCLUDED.location, opportunities.location),
+            work_arrangement = CASE WHEN EXCLUDED.work_arrangement != 'unknown' THEN EXCLUDED.work_arrangement ELSE opportunities.work_arrangement END,
+            country = EXCLUDED.country,
+            is_india_eligible = EXCLUDED.is_india_eligible,
+            compensation = COALESCE(EXCLUDED.compensation, opportunities.compensation),
+            duration = COALESCE(EXCLUDED.duration, opportunities.duration),
+            official_application_url = COALESCE(EXCLUDED.official_application_url, opportunities.official_application_url),
+            current_status = CASE
+                WHEN opportunities.current_status IN ('CLOSED_CONFIRMED', 'CANCELLED_CONFIRMED') THEN
+                    CASE WHEN EXCLUDED.current_status IN ('CLOSED_CONFIRMED', 'CANCELLED_CONFIRMED') THEN EXCLUDED.current_status ELSE opportunities.current_status END
+                WHEN opportunities.current_status = 'OPEN_CONFIRMED' AND EXCLUDED.current_status IN ('DISCOVERED', 'NEEDS_VERIFICATION') THEN opportunities.current_status
+                WHEN opportunities.current_status = 'UPCOMING_CONFIRMED' AND EXCLUDED.current_status IN ('DISCOVERED', 'NEEDS_VERIFICATION') THEN opportunities.current_status
+                ELSE EXCLUDED.current_status
+            END,
+            confirmed_open_date = COALESCE(EXCLUDED.confirmed_open_date, opportunities.confirmed_open_date),
+            confirmed_close_date = COALESCE(EXCLUDED.confirmed_close_date, opportunities.confirmed_close_date),
+            description = COALESCE(EXCLUDED.description, opportunities.description),
+            last_verified_at = COALESCE(EXCLUDED.last_verified_at, opportunities.last_verified_at),
+            verification_evidence = CASE
+                WHEN (opportunities.employer_identity_verified OR opportunities.official_source_confirmed)
+                     AND NOT (EXCLUDED.employer_identity_verified OR EXCLUDED.official_source_confirmed)
+                     THEN COALESCE(opportunities.verification_evidence, EXCLUDED.verification_evidence)
+                ELSE COALESCE(EXCLUDED.verification_evidence, opportunities.verification_evidence)
+            END,
+            employer_identity_verified = EXCLUDED.employer_identity_verified OR opportunities.employer_identity_verified,
+            official_source_confirmed = EXCLUDED.official_source_confirmed OR opportunities.official_source_confirmed,
+            application_url_checked = EXCLUDED.application_url_checked OR opportunities.application_url_checked,
+            posted_at = COALESCE(EXCLUDED.posted_at, opportunities.posted_at),
+            posted_at_precision = COALESCE(EXCLUDED.posted_at_precision, opportunities.posted_at_precision),
+            updated_at = now()
+        RETURNING id;
+        """
         row = await conn.fetchrow(
-            query,
+            insert_q,
             company_name.strip(),
             norm_co,
             role_title.strip(),
@@ -341,6 +437,8 @@ async def upsert_opportunity(
             employer_identity_verified,
             official_source_confirmed,
             application_url_checked,
+            posted_at,
+            posted_at_precision,
         )
         return row["id"]
 
