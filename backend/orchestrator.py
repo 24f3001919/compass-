@@ -147,7 +147,7 @@ async def handle_message(
         import inspect
         sig = inspect.signature(route_message)
         has_var_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
-        route_kwargs = {}
+        route_kwargs: Dict[str, Any] = {}
         if "target_message_id" in sig.parameters or has_var_kw:
             route_kwargs["target_message_id"] = target_message_id
         if "target_message_content" in sig.parameters or has_var_kw:
@@ -173,7 +173,7 @@ async def handle_message(
         import inspect
         sig = inspect.signature(route_message)
         has_var_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
-        route_kwargs = {}
+        route_kwargs: Dict[str, Any] = {}
         if "target_message_id" in sig.parameters or has_var_kw:
             route_kwargs["target_message_id"] = target_message_id
         if "target_message_content" in sig.parameters or has_var_kw:
