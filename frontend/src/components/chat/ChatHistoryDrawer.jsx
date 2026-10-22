@@ -14,6 +14,7 @@ export default function ChatHistoryDrawer({
   onSelectPastChat,
   onNewChat,
   onSelectPastPlan,
+  onShareChat,
   onCheckScheduleClashes,
   showToast,
   tasks = [],
@@ -298,6 +299,7 @@ export default function ChatHistoryDrawer({
                       onTogglePin={handleTogglePin}
                       onToggleArchive={handleToggleArchive}
                       onOpenDeleteConfirm={handleOpenDeleteConfirm}
+                      onShareChat={onShareChat}
                     />
                   ))}
                 </div>

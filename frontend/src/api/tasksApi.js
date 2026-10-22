@@ -1,6 +1,6 @@
 // Tasks & Verification API
 
-import { API_BASE, FALLBACK_TASKS, getAuthHeaders, fetchWithGuestRetry } from './baseClient'
+import { API_BASE, FALLBACK_TASKS, getAuthHeaders, fetchWithGuestRetry } from './baseClient.js'
 
 /**
  * Fetch synchronized task list from Neon PostgreSQL with per-account isolation.

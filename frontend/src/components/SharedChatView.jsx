@@ -9,23 +9,43 @@ export default function SharedChatView({ shareId, onGoToApp }) {
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
+    let isMounted = true
+
     async function load() {
+      const cleanToken = (shareId || '').trim()
+      if (!cleanToken) {
+        if (isMounted) {
+          setError('Invalid or missing share link.')
+          setLoading(false)
+        }
+        return
+      }
+
       setLoading(true)
       try {
-        const result = await fetchSharedConversation(shareId)
-        if (result && result.messages) {
+        const result = await fetchSharedConversation(cleanToken)
+        if (!isMounted) return
+
+        if (result && Array.isArray(result.messages)) {
           setData(result)
         } else {
-          setError('Conversation not found or has been deleted.')
+          setError('Conversation not found, expired, or sharing has been revoked.')
         }
       } catch {
-        /* ignore fetch error */
-        setError('Failed to load shared conversation.')
+        if (isMounted) {
+          setError('Failed to load shared conversation. Please check your network connection.')
+        }
       } finally {
-        setLoading(false)
+        if (isMounted) {
+          setLoading(false)
+        }
       }
     }
     load()
+
+    return () => {
+      isMounted = false
+    }
   }, [shareId])
 
   const handleCopyLink = async () => {
@@ -248,7 +268,12 @@ export default function SharedChatView({ shareId, onGoToApp }) {
                     {data.title || 'Chat Session'}
                   </h1>
                   <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
-                    Created on {new Date(data.started_at || data.last_active_at).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} · {data.messages.length} messages
+                    Created on {(() => {
+                      const d = data.started_at || data.last_active_at
+                      return d && !isNaN(new Date(d).getTime())
+                        ? new Date(d).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+                        : 'Recently'
+                    })()} · {data.messages.length} messages
                   </p>
                 </div>
                 <div style={{

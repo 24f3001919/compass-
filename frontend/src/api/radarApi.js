@@ -1,4 +1,4 @@
-import { API_BASE, getAuthHeaders, getGuestToken, initGuestSession } from './baseClient'
+import { API_BASE, getAuthHeaders, getGuestToken, initGuestSession } from './baseClient.js'
 
 async function ensureSession() {
   if (!getGuestToken()) {

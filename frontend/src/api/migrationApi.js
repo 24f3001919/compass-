@@ -1,6 +1,6 @@
 // Anonymous Guest Migration & Data Privacy API
 
-import { API_BASE, getAuthHeaders, setGuestSession } from './baseClient'
+import { API_BASE, getAuthHeaders, setGuestSession } from './baseClient.js'
 
 /**
  * Fetch migration status to check if unauthenticated guest data exists.

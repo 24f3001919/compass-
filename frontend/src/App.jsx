@@ -6,6 +6,7 @@ import Timeline from './components/Timeline'
 import CalendarView from './components/CalendarView'
 import CompassPanel from './components/CompassPanel'
 import AuthModal from './components/AuthModal'
+import SharedChatView from './components/SharedChatView'
 
 const CareerCopilot = React.lazy(() => import('./components/CareerCopilot'))
 import MigrationModal from './components/MigrationModal'
@@ -29,6 +30,7 @@ export default function App() {
   const initialNav = useMemo(() => parseLocation(), [])
   const [activeTab, setActiveTab] = useState(() => initialNav.tab)
   const [selectedDomain, setSelectedDomain] = useState(() => initialNav.domain)
+  const [shareToken, setShareToken] = useState(() => initialNav.shareToken || null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [backendStatus, setBackendStatus] = useState('Waking up the server…')
   const [conversationId, setConversationId] = useState(null)
@@ -131,6 +133,7 @@ export default function App() {
       const loc = parseLocation()
       setActiveTab(loc.tab)
       setSelectedDomain(loc.domain)
+      setShareToken(loc.shareToken || null)
     }
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
@@ -398,6 +401,23 @@ export default function App() {
   const usageBadge = usageStats
     ? `⚡ ${(usageStats.total_requests ?? 0).toLocaleString()} calls · $${(usageStats.total_estimated_cost_usd ?? 0).toFixed(5)}`
     : 'Nebius • Nemotron-3'
+
+  if (activeTab === 'share' || shareToken) {
+    return (
+      <SharedChatView
+        shareId={shareToken}
+        onGoToApp={() => {
+          const url = new URL(window.location.href)
+          url.searchParams.delete('share')
+          const nextUrl = (url.pathname === '/' || url.pathname.startsWith('/share')) ? '/' : `${url.pathname}${url.search}`
+          window.history.pushState({ tab: 'dashboard', domain: 'all' }, '', nextUrl)
+          setShareToken(null)
+          setActiveTab('dashboard')
+          setSelectedDomain('all')
+        }}
+      />
+    )
+  }
 
   return (
     <div style={{ display: 'flex', height: '100vh', width: '100%', background: 'var(--bg-app)', overflow: 'hidden', position: 'relative' }}>

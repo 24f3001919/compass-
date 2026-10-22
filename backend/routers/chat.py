@@ -304,14 +304,18 @@ async def update_past_conversation(
                 status_code = 404 if err == "Conversation not found" else (400 if err == "Invalid conversation ID" else 403)
                 raise HTTPException(status_code=status_code, detail=err)
 
-            ok, _ = await conversations.update_conversation(
+            ok, share_token = await conversations.update_conversation(
                 conn,
                 conversation_id,
                 title=payload.title,
                 is_pinned=payload.is_pinned,
                 is_archived=payload.is_archived,
+                is_shared=payload.is_shared,
             )
-            return {"ok": ok}
+            response_data = {"ok": ok}
+            if share_token is not None:
+                response_data["share_token"] = share_token
+            return response_data
     except HTTPException:
         raise
     except Exception:
@@ -348,6 +352,33 @@ async def delete_past_conversation(conversation_id: str, request: Request):
     except Exception:
         logger.exception("Failed to delete conversation: %s", conversation_id)
         return {"ok": False, "error": "Failed to delete conversation"}
+
+
+# ---- GET /api/chat/shared/{token} ----------------------------------------
+@router.get("/api/chat/shared/{token}")
+async def get_shared_chat_by_token(token: str, request: Request):
+    """Public read-only endpoint to retrieve a shared conversation by its secure share_token.
+    Enforces that only valid stored share tokens resolve, never database conversation IDs.
+    """
+    clean_token = (token or "").strip()
+    if not clean_token:
+        raise HTTPException(status_code=400, detail="Missing share token")
+
+    pool = await get_pool()
+    if not pool:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    try:
+        async with pool.acquire() as conn:
+            shared = await conversations.get_shared_conversation_by_token(conn, clean_token)
+            if not shared:
+                raise HTTPException(status_code=404, detail="Shared conversation not found or link has expired")
+            return shared
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching shared conversation by token: {e}")
+        raise HTTPException(status_code=500, detail="Failed to load shared conversation")
 
 
 
