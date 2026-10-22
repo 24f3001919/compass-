@@ -28,6 +28,7 @@ from backend.router_helpers import (
     is_schedule_or_agent_intent,
     is_tavily_verification_intent,
     extract_verification_target,
+    resolve_verification_claim_and_entity,
     _fallback_route,
 )
 
@@ -66,6 +67,10 @@ async def route_message(
     message: str,
     history: Optional[list[dict[str, str]]] = None,
     memory_context: Optional[str] = None,
+    target_message_id: Optional[str] = None,
+    target_message_content: Optional[str] = None,
+    pool: Optional[Any] = None,
+    user_id: Optional[str] = None,
 ) -> Tuple[Optional[str], Optional[dict[str, Any]], str]:
     """Route a message through Nemotron-3 Nano using native tool calling.
 
@@ -79,8 +84,17 @@ async def route_message(
         if not extracted.get("title"):
             return None, None, "What would you like to name this task? Please provide a title or description."
     if is_tavily_verification_intent(message):
-        target = extract_verification_target(message, history)
-        return "verify_with_tavily", {"claim": target}, ""
+        claim, entity = await resolve_verification_claim_and_entity(
+            message=message,
+            history=history,
+            target_message_id=target_message_id,
+            target_message_content=target_message_content,
+            pool=pool,
+            user_id=user_id,
+        )
+        if not claim:
+            return None, None, "I couldn't find a specific claim or deadline to verify. Could you specify which statement or deadline you would like me to check?"
+        return "verify_with_tavily", {"claim": claim, "target_entity": entity, "target_message_id": target_message_id}, ""
     if is_schedule_or_agent_intent(message):
         return "agent", {"goal": message}, ""
 
