@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { Check, Copy, Lock, ArrowRight } from 'lucide-react'
 import { fetchSharedConversation } from '../api/client'
 import Logo from './Logo'
 
@@ -176,7 +177,7 @@ export default function SharedChatView({ shareId, onGoToApp }) {
             onClick={handleCopyLink}
             style={{
               padding: '7px 13px',
-              borderRadius: '8px',
+              borderRadius: 'var(--radius-btn, 6px)',
               border: '1px solid var(--border)',
               background: 'transparent',
               color: 'var(--text-secondary)',
@@ -188,28 +189,37 @@ export default function SharedChatView({ shareId, onGoToApp }) {
               gap: '6px'
             }}
           >
-            {copied ? '✓ Link Copied' : '🔗 Copy Link'}
+            {copied ? (
+              <>
+                <Check size={13} strokeWidth={2} />
+                <span>Link Copied</span>
+              </>
+            ) : (
+              <>
+                <Copy size={13} strokeWidth={1.8} />
+                <span>Copy Link</span>
+              </>
+            )}
           </button>
 
           <button
             onClick={onGoToApp}
             style={{
               padding: '7px 16px',
-              borderRadius: '8px',
+              borderRadius: 'var(--radius-btn, 6px)',
               border: 'none',
-              background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-              color: '#ffffff',
+              background: 'var(--brand)',
+              color: 'var(--accent-text, #1b1a17)',
               fontSize: '12.5px',
               fontWeight: '700',
               cursor: 'pointer',
-              boxShadow: '0 2px 10px rgba(37, 99, 235, 0.35)',
               display: 'flex',
               alignItems: 'center',
               gap: '6px'
             }}
           >
             <span>Open in Compass</span>
-            <span>→</span>
+            <ArrowRight size={14} strokeWidth={2} />
           </button>
         </div>
       </header>
@@ -234,16 +244,16 @@ export default function SharedChatView({ shareId, onGoToApp }) {
           ) : error ? (
             <div style={{
               textAlign: 'center', padding: '60px 20px', background: 'var(--bg-card)',
-              borderRadius: '16px', border: '1px solid var(--border)', marginTop: '40px'
+              borderRadius: 'var(--radius-card, 8px)', border: '1px solid var(--border)', marginTop: '40px'
             }}>
-              <div style={{ fontSize: '32px', marginBottom: '12px' }}>🔒</div>
+              <Lock size={36} color="var(--text-muted)" strokeWidth={1.5} style={{ margin: '0 auto 12px auto' }} />
               <h3 style={{ margin: '0 0 8px', fontSize: '17px', fontWeight: '800' }}>Conversation Not Available</h3>
               <p style={{ margin: '0 0 20px', fontSize: '13px', color: 'var(--text-muted)' }}>{error}</p>
               <button
                 onClick={onGoToApp}
                 style={{
-                  padding: '9px 20px', borderRadius: '8px', border: 'none',
-                  background: 'var(--brand)', color: '#2a1a00', fontSize: '13px',
+                  padding: '9px 20px', borderRadius: 'var(--radius-btn, 6px)', border: 'none',
+                  background: 'var(--brand)', color: 'var(--accent-text, #1b1a17)', fontSize: '13px',
                   fontWeight: '700', cursor: 'pointer'
                 }}
               >

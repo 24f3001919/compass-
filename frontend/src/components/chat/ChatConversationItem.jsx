@@ -1,4 +1,5 @@
 import React from 'react'
+import { Check, X, Pin, MoreHorizontal } from 'lucide-react'
 
 export default function ChatConversationItem({
   conv,
@@ -75,42 +76,50 @@ export default function ChatConversationItem({
             />
             <button
               type="submit"
+              aria-label="Save name"
               style={{
                 background: 'var(--primary)',
                 color: '#fff',
                 border: 'none',
-                borderRadius: '4px',
+                borderRadius: 'var(--radius-btn, 4px)',
                 padding: '3px 6px',
                 fontSize: '11px',
                 cursor: 'pointer',
-                fontWeight: '700'
+                fontWeight: '700',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
               }}
               title="Save name"
             >
-              ✓
+              <Check size={12} />
             </button>
             <button
               type="button"
               onClick={onCancelRename}
+              aria-label="Cancel rename"
               style={{
                 background: 'transparent',
                 color: 'var(--text-muted)',
                 border: 'none',
-                borderRadius: '4px',
+                borderRadius: 'var(--radius-btn, 4px)',
                 padding: '3px 6px',
                 fontSize: '11px',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
               }}
               title="Cancel"
             >
-              ✕
+              <X size={12} />
             </button>
           </form>
         ) : (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', flex: 1 }}>
               {conv.is_pinned && (
-                <span style={{ fontSize: '11.5px', flexShrink: 0 }} title="Pinned chat">📌</span>
+                <Pin size={12} style={{ flexShrink: 0, color: 'var(--brand)' }} title="Pinned chat" />
               )}
               <span style={{
                 fontSize: '12.5px',
@@ -130,22 +139,23 @@ export default function ChatConversationItem({
                 e.stopPropagation()
                 onToggleMenu()
               }}
+              aria-label="Chat options"
               style={{
                 background: isMenuOpen ? 'var(--bg-card-soft)' : 'none',
                 border: 'none',
                 color: isMenuOpen ? 'var(--text-primary)' : 'var(--text-muted)',
-                fontSize: '16px',
-                fontWeight: '800',
                 cursor: 'pointer',
-                padding: '1px 5px',
-                borderRadius: '4px',
+                padding: '2px 4px',
+                borderRadius: 'var(--radius-btn, 4px)',
                 lineHeight: 1,
-                letterSpacing: '-0.5px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 transition: 'color 0.15s ease',
               }}
               title="Chat options"
             >
-              ···
+              <MoreHorizontal size={14} />
             </button>
           </>
         )}

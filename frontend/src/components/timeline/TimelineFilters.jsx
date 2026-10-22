@@ -1,5 +1,5 @@
 import React from 'react'
-import { Search } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import { getDomainMeta } from './domainMeta'
 
 export default function TimelineFilters({
@@ -148,8 +148,9 @@ export default function TimelineFilters({
                 justifyContent: 'center',
               }}
               title="Clear search"
+              aria-label="Clear search"
             >
-              ✕
+              <X size={13} strokeWidth={1.8} />
             </button>
           )}
         </div>

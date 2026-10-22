@@ -1,4 +1,5 @@
 import React from 'react'
+import { X, Zap } from 'lucide-react'
 import CreateDomainModal from './timeline/CreateDomainModal'
 import Logo from './Logo'
 import { parseUsageBadge } from '../utils/usageBadgeParser'
@@ -616,7 +617,7 @@ export default function Sidebar({
                           e.currentTarget.style.opacity = '0.6'
                         }}
                       >
-                        ✕
+                        <X size={12} strokeWidth={1.8} />
                       </button>
                     )}
                   </>
@@ -827,7 +828,7 @@ export default function Sidebar({
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      <span style={{ color: 'var(--accent, #f5a623)', fontSize: '11px', lineHeight: 1 }} aria-hidden="true">⚡</span>
+                      <Zap size={11} strokeWidth={1.8} style={{ color: 'var(--accent, #f5a623)' }} aria-hidden="true" />
                       <span>{parsed.calls}</span>
                     </span>
                     <span
@@ -938,7 +939,7 @@ export default function Sidebar({
                 {currentUser?.authenticated ? currentUser.email : 'Sign in / Account'}
               </div>
               <div style={{ fontSize: '10.5px', color: 'var(--sidebar-text)', opacity: 0.75 }}>
-                {currentUser?.calendar?.connected ? 'Google Calendar ✓' : 'Isolated Workspace'}
+                {currentUser?.calendar?.connected ? 'Google Calendar Connected' : 'Isolated Workspace'}
               </div>
             </div>
           </div>

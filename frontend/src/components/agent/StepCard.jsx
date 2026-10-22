@@ -37,11 +37,11 @@ export const STEP_STYLES = {
     labelColor: '#7e22ce',
   },
   synthesize: {
-    bg: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(168, 85, 247, 0.08))',
-    border: '#8b5cf6',
+    bg: 'rgba(99, 102, 241, 0.08)',
+    border: '#6366f1',
     icon: '✨',
     label: 'Summary',
-    labelColor: '#6d28d9',
+    labelColor: '#4f46e5',
   },
   error: {
     bg: 'rgba(239, 68, 68, 0.08)',

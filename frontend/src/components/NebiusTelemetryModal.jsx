@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Zap, X, RefreshCw, Copy, Check } from 'lucide-react'
+import { Zap, X, RefreshCw, Copy, Check, Award } from 'lucide-react'
 
 export default function NebiusTelemetryModal({ isOpen, onClose, usageStats, onRefresh }) {
   const [copied, setCopied] = useState(false)
@@ -164,6 +164,7 @@ export default function NebiusTelemetryModal({ isOpen, onClose, usageStats, onRe
               cursor: 'pointer',
               flexShrink: 0,
             }}
+            aria-label="Close modal"
           >
             <X size={16} strokeWidth={1.8} />
           </button>
@@ -258,7 +259,7 @@ export default function NebiusTelemetryModal({ isOpen, onClose, usageStats, onRe
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <span style={{ fontSize: '16px' }}>🏆</span>
+            <Award size={16} color="#fbbf24" strokeWidth={1.8} />
             <span style={{ fontSize: '13px', fontWeight: '800', color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               The 3-Tier NVIDIA Nemotron Model Routing Pipeline
             </span>

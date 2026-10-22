@@ -1,4 +1,5 @@
 import React from 'react'
+import { Star, MapPin, Zap, Clock, DollarSign, Calendar } from 'lucide-react'
 
 export default function RadarOpportunityCard({
   opportunity,
@@ -35,15 +36,15 @@ export default function RadarOpportunityCard({
   const getEmployerTypeBadge = () => {
     switch (employer_type) {
       case 'startup':
-        return { label: '🚀 Startup / SME', bg: 'rgba(236, 72, 153, 0.1)', text: '#db2777' }
+        return { label: 'Startup / SME', bg: 'rgba(236, 72, 153, 0.1)', text: '#db2777' }
       case 'research':
-        return { label: '🔬 Research Lab', bg: 'rgba(99, 102, 241, 0.1)', text: '#4f46e5' }
+        return { label: 'Research Lab', bg: 'rgba(99, 102, 241, 0.1)', text: '#4f46e5' }
       case 'government':
-        return { label: '🏛️ Public Sector', bg: 'rgba(20, 184, 166, 0.1)', text: '#0d9488' }
+        return { label: 'Public Sector', bg: 'rgba(20, 184, 166, 0.1)', text: '#0d9488' }
       case 'open_source':
-        return { label: '🌐 Open Source', bg: 'rgba(139, 92, 246, 0.1)', text: '#7c3aed' }
+        return { label: 'Open Source', bg: 'rgba(139, 92, 246, 0.1)', text: '#7c3aed' }
       default:
-        return { label: '🏢 Enterprise', bg: 'rgba(100, 116, 139, 0.1)', text: '#475569' }
+        return { label: 'Enterprise', bg: 'rgba(100, 116, 139, 0.1)', text: '#475569' }
     }
   }
 
@@ -92,7 +93,7 @@ export default function RadarOpportunityCard({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        borderRadius: '14px',
+        borderRadius: 'var(--radius-card, 8px)',
         background: 'var(--bg-card)',
         border: '1px solid var(--border)',
         boxShadow: 'var(--shadow-sm)',
@@ -157,13 +158,17 @@ export default function RadarOpportunityCard({
               style={{
                 fontSize: '11px',
                 padding: '2px 8px',
-                borderRadius: '6px',
+                borderRadius: 'var(--radius-btn, 6px)',
                 background: 'rgba(245, 166, 35, 0.12)',
                 color: 'var(--brand-dark)',
                 fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
               }}
             >
-              🇮🇳 India Eligible
+              <MapPin size={11} strokeWidth={1.8} />
+              <span>India Eligible</span>
             </span>
           )}
 
@@ -173,28 +178,36 @@ export default function RadarOpportunityCard({
               style={{
                 fontSize: '11px',
                 padding: '2px 8px',
-                borderRadius: '6px',
+                borderRadius: 'var(--radius-btn, 6px)',
                 background: 'rgba(16, 185, 129, 0.15)',
                 color: '#065f46',
                 fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
               }}
               title="Posting timestamp verified within the last 24 hours"
             >
-              ⚡ Verified &lt;24h
+              <Zap size={11} strokeWidth={1.8} />
+              <span>Verified &lt;24h</span>
             </span>
           ) : (
             <span
               style={{
                 fontSize: '11px',
                 padding: '2px 8px',
-                borderRadius: '6px',
+                borderRadius: 'var(--radius-btn, 6px)',
                 background: 'rgba(148, 163, 184, 0.15)',
                 color: '#475569',
                 fontWeight: 500,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
               }}
               title="Source supplied approximate or unverified posting time"
             >
-              ⏱️ Posting time unverified
+              <Clock size={11} strokeWidth={1.8} />
+              <span>Posting time unverified</span>
             </span>
           )}
         </div>
@@ -204,18 +217,21 @@ export default function RadarOpportunityCard({
           type="button"
           onClick={() => onToggleSave(id, is_saved)}
           title={is_saved ? 'Remove from Watchlist' : 'Add to Watchlist'}
+          aria-label={is_saved ? 'Remove from Watchlist' : 'Add to Watchlist'}
           style={{
             background: 'transparent',
             border: 'none',
             cursor: 'pointer',
-            fontSize: '18px',
             padding: '4px',
             lineHeight: 1,
             color: is_saved ? 'var(--brand)' : 'var(--text-muted)',
             transition: 'transform 0.1s ease',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
-          {is_saved ? '★' : '☆'}
+          <Star size={16} strokeWidth={1.8} fill={is_saved ? 'var(--brand)' : 'none'} color={is_saved ? 'var(--brand)' : 'var(--text-muted)'} />
         </button>
       </div>
 
@@ -247,8 +263,9 @@ export default function RadarOpportunityCard({
 
       {/* Compensation & Duration Snippet */}
       {compensation && (
-        <div style={{ fontSize: '12px', color: '#10b981', fontWeight: 600, marginBottom: '8px' }}>
-          💰 {compensation}
+        <div style={{ fontSize: '12px', color: '#10b981', fontWeight: 600, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <DollarSign size={13} strokeWidth={1.8} />
+          <span>{compensation}</span>
         </div>
       )}
 
@@ -260,7 +277,7 @@ export default function RadarOpportunityCard({
             color: 'var(--text-secondary)',
             background: 'var(--bg-app)',
             padding: '8px 12px',
-            borderRadius: '8px',
+            borderRadius: 'var(--radius-card, 8px)',
             marginBottom: '12px',
             lineHeight: 1.4,
             borderLeft: `3px solid ${eligBadge.text}`,
@@ -278,11 +295,15 @@ export default function RadarOpportunityCard({
             color: '#2563eb',
             background: 'rgba(59, 130, 246, 0.08)',
             padding: '6px 10px',
-            borderRadius: '6px',
+            borderRadius: 'var(--radius-btn, 6px)',
             marginBottom: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
           }}
         >
-          📅 <strong>Historical Window:</strong> {prediction.estimated_open_window} ({prediction.confidence} Confidence)
+          <Calendar size={13} strokeWidth={1.8} />
+          <span><strong>Historical Window:</strong> {prediction.estimated_open_window} ({prediction.confidence} Confidence)</span>
         </div>
       )}
 
@@ -299,7 +320,7 @@ export default function RadarOpportunityCard({
             gap: '6px',
           }}
         >
-          <span>📌 Pipeline State:</span>
+          <span>Pipeline State:</span>
           <span style={{ textTransform: 'capitalize', background: 'rgba(245, 166, 35, 0.15)', padding: '2px 8px', borderRadius: '4px' }}>
             {application_status.replace(/_/g, ' ')}
           </span>
@@ -323,7 +344,7 @@ export default function RadarOpportunityCard({
           <div>{formattedVerified ? `Verified ${formattedVerified}` : 'Discovered'}</div>
           {primarySource && (
             <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }} title={verification_evidence || ''}>
-              📡 {primarySource}
+              {primarySource}
             </div>
           )}
         </div>
@@ -335,7 +356,7 @@ export default function RadarOpportunityCard({
             onClick={() => onOpenDetail(opportunity)}
             style={{
               padding: '6px 12px',
-              borderRadius: '7px',
+              borderRadius: 'var(--radius-btn, 6px)',
               border: '1px solid var(--border)',
               background: 'var(--bg-app)',
               color: 'var(--text-primary)',
@@ -356,7 +377,7 @@ export default function RadarOpportunityCard({
               alignItems: 'center',
               gap: '6px',
               padding: '6px 14px',
-              borderRadius: '7px',
+              borderRadius: 'var(--radius-btn, 6px)',
               background: current_status === 'OPEN_CONFIRMED' ? 'var(--brand)' : 'var(--bg-card)',
               color: current_status === 'OPEN_CONFIRMED' ? '#ffffff' : 'var(--text-primary)',
               border: current_status === 'OPEN_CONFIRMED' ? 'none' : '1px solid var(--border)',
@@ -367,7 +388,7 @@ export default function RadarOpportunityCard({
             }}
           >
             <span>Apply Now</span>
-            <span>⚡</span>
+            <Zap size={13} strokeWidth={1.8} />
           </button>
         </div>
       </div>

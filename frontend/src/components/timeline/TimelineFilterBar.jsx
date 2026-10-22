@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
+import { X } from 'lucide-react'
 import { DUE_OPTIONS, STATUS_OPTIONS } from './filterConstants'
 
 function DueIcon({ type }) {
@@ -376,7 +377,7 @@ export default function TimelineFilterBar({
                     aria-label="Close due menu"
                     className="timeline-sheet-close-btn"
                   >
-                    ✕
+                    <X size={15} strokeWidth={1.8} />
                   </button>
                 </div>
 

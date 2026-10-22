@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
+import { Check } from 'lucide-react'
 import { getAuthHeaders, API_BASE } from '../api/client'
 import StepCard, { STEP_STYLES, friendlyTool } from './agent/StepCard'
 import ConfirmationGate from './agent/ConfirmationGate'
@@ -481,7 +482,13 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', fontSize: '13px', color: isRunning ? 'var(--primary)' : '#059669' }}>
                 <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: isRunning ? 'var(--primary)' : '#10b981', animation: isRunning ? 'pulse 1s infinite' : 'none' }} />
-                {isRunning ? 'Working on it…' : 'All done ✓'}
+                {isRunning ? (
+                  'Working on it…'
+                ) : (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    All done <Check size={13} strokeWidth={2.2} />
+                  </span>
+                )}
               </span>
               <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                 {steps.length} action{steps.length !== 1 ? 's' : ''} taken

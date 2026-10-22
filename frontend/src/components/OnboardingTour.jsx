@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { X } from 'lucide-react'
 import Logo from './Logo'
 
 export default function OnboardingTour({
@@ -138,8 +139,9 @@ export default function OnboardingTour({
               lineHeight: 1,
             }}
             title="Dismiss Guide"
+            aria-label="Dismiss Guide"
           >
-            ✕
+            <X size={15} strokeWidth={1.8} />
           </button>
         </div>
       </div>

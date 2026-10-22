@@ -5,7 +5,7 @@ import {
   importSelectedGuestConversations,
   skipMigration,
 } from '../api/client'
-import { X, Check } from 'lucide-react'
+import { X, Check, Lock } from 'lucide-react'
 import Logo from './Logo'
 
 export default function MigrationModal({
@@ -256,7 +256,7 @@ export default function MigrationModal({
                   gap: '0.5rem',
                 }}
               >
-                <span>🔒</span>
+                <Lock size={14} strokeWidth={1.8} style={{ flexShrink: 0, marginTop: '2px' }} />
                 <span>
                   <strong>Data Safety Guarantee:</strong> Original guest conversations and memory will be safely preserved in your browser. You can always import them later.
                 </span>

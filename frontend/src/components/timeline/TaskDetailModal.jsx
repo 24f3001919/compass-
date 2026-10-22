@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { updateTask, verifyTaskDeadline } from '../../api/client'
 import { DOMAIN_META, getDomainMeta } from './domainMeta'
-import { Trash2, Edit2, Check, X, AlertTriangle } from 'lucide-react'
+import { Trash2, Edit2, Check, X, AlertTriangle, Search, RefreshCw, Clock } from 'lucide-react'
 
 const inputStyle = {
   width: '100%',
@@ -177,6 +177,7 @@ export default function TaskDetailModal({ task, onClose, onDelete, onUpdated }) 
             onClick={onClose}
             aria-label="Close"
             className="btn-touch-target btn-secondary"
+            aria-label="Close modal"
             style={{
               color: 'var(--text-muted)',
               width: '32px', height: '32px', minHeight: '32px',
@@ -190,10 +191,12 @@ export default function TaskDetailModal({ task, onClose, onDelete, onUpdated }) 
         {saveError && (
           <div style={{
             background: 'var(--danger-bg)', border: '1px solid #ef4444',
-            color: '#b91c1c', padding: '9px 13px', borderRadius: '7px',
-            fontSize: '12.5px', marginBottom: '14px'
+            color: '#b91c1c', padding: '9px 13px', borderRadius: 'var(--radius-card, 8px)',
+            fontSize: '12.5px', marginBottom: '14px',
+            display: 'flex', alignItems: 'center', gap: '6px'
           }}>
-            ⚠️ {saveError}
+            <AlertTriangle size={15} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+            <span>{saveError}</span>
           </div>
         )}
 
@@ -255,7 +258,7 @@ export default function TaskDetailModal({ task, onClose, onDelete, onUpdated }) 
                   <option key={k} value={k}>{m.icon} {m.label}</option>
                 ))}
                 {!DOMAIN_META[editDomain] && editDomain && (
-                  <option value={editDomain}>🏷️ {editDomain.charAt(0).toUpperCase() + editDomain.slice(1)}</option>
+                  <option value={editDomain}>{editDomain.charAt(0).toUpperCase() + editDomain.slice(1)}</option>
                 )}
               </select>
             ) : (
@@ -309,7 +312,7 @@ export default function TaskDetailModal({ task, onClose, onDelete, onUpdated }) 
                   }}
                   title="Search live official web sources via Tavily to detect schedule postponements or drift"
                 >
-                  <span>{verifying ? '⏳' : '🔍'}</span>
+                  {verifying ? <RefreshCw size={13} strokeWidth={1.8} className="spin" /> : <Search size={13} strokeWidth={1.8} />}
                   <span>{verifying ? 'Checking Tavily...' : 'Verify with Tavily'}</span>
                 </button>
               )}
@@ -340,7 +343,7 @@ export default function TaskDetailModal({ task, onClose, onDelete, onUpdated }) 
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
-                <option value="urgent">Urgent ⚠️</option>
+                <option value="urgent">Urgent</option>
               </select>
             ) : (
               <div style={{
@@ -422,11 +425,15 @@ export default function TaskDetailModal({ task, onClose, onDelete, onUpdated }) 
             border: '1px solid rgba(239, 68, 68, 0.3)',
             color: '#f87171',
             padding: '8px 12px',
-            borderRadius: '8px',
+            borderRadius: 'var(--radius-card, 8px)',
             fontSize: '12px',
             marginBottom: '14px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
           }}>
-            ⚠️ Tavily verification check failed: {driftError}
+            <AlertTriangle size={14} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+            <span>Tavily verification check failed: {driftError}</span>
           </div>
         )}
 
@@ -442,7 +449,7 @@ export default function TaskDetailModal({ task, onClose, onDelete, onUpdated }) 
             >
               <option value="open">Open</option>
               <option value="in_progress">In Progress</option>
-              <option value="done">Done ✓</option>
+              <option value="done">Done</option>
               <option value="overdue">Overdue</option>
             </select>
           ) : (
@@ -455,7 +462,7 @@ export default function TaskDetailModal({ task, onClose, onDelete, onUpdated }) 
                 task.status === 'in_progress' ? 'var(--coursework-text)' : 'var(--text-secondary)',
               fontWeight: '600', textTransform: 'capitalize'
             }}>
-              {task.status === 'done' ? '✓' : task.status === 'in_progress' ? '⏳' : '○'}
+              {task.status === 'done' ? <Check size={12} strokeWidth={2.5} /> : task.status === 'in_progress' ? <Clock size={12} strokeWidth={2} /> : null}
               {task.status?.replace('_', ' ') || 'open'}
             </div>
           )}

@@ -1,5 +1,18 @@
 import React, { useState, useEffect } from 'react'
 import {
+  User,
+  X,
+  AlertCircle,
+  Check,
+  Lock,
+  Key,
+  RefreshCw,
+  Zap,
+  Settings,
+  Info,
+  Copy,
+} from 'lucide-react'
+import {
   logoutUser,
   getGoogleOAuthConnectUrl,
   disconnectCalendar,
@@ -131,7 +144,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '24px' }}>👤</span>
+            <User size={24} color="var(--brand)" strokeWidth={1.8} />
             <div>
               <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: 'var(--text-primary)' }}>
                 Account & Google Calendar
@@ -143,21 +156,21 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
           </div>
           <button
             onClick={onClose}
+            aria-label="Close modal"
             style={{
               background: 'var(--bg-card-soft)',
               border: '1px solid var(--border)',
               color: 'var(--text-secondary)',
               width: '28px',
               height: '28px',
-              borderRadius: '7px',
+              borderRadius: 'var(--radius-btn, 6px)',
               cursor: 'pointer',
-              fontSize: '14px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
             }}
           >
-            ✕
+            <X size={15} strokeWidth={1.8} />
           </button>
         </div>
 
@@ -168,11 +181,15 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
             border: '1px solid rgba(239, 68, 68, 0.3)',
             color: '#dc2626',
             padding: '10px 14px',
-            borderRadius: '8px',
+            borderRadius: 'var(--radius-card, 8px)',
             fontSize: '13px',
-            marginBottom: '16px'
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
           }}>
-            ⚠️ {error}
+            <AlertCircle size={15} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+            <span>{error}</span>
           </div>
         )}
         {successMsg && (
@@ -181,11 +198,15 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
             border: '1px solid rgba(16, 185, 129, 0.3)',
             color: '#059669',
             padding: '10px 14px',
-            borderRadius: '8px',
+            borderRadius: 'var(--radius-card, 8px)',
             fontSize: '13px',
-            marginBottom: '16px'
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
           }}>
-            ✓ {successMsg}
+            <Check size={15} strokeWidth={2} style={{ flexShrink: 0 }} />
+            <span>{successMsg}</span>
           </div>
         )}
 
@@ -220,8 +241,9 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
             </div>
           </div>
 
-          <div style={{ marginTop: '10px', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-            🔒 <strong>Per-Account Privacy:</strong> Deadlines, tasks, and assistant memory chunks belong strictly to your active account. Switching accounts automatically isolates all workspace state.
+          <div style={{ marginTop: '10px', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+            <Lock size={14} strokeWidth={1.8} style={{ flexShrink: 0, marginTop: '2px' }} />
+            <span><strong>Per-Account Privacy:</strong> Deadlines, tasks, and assistant memory chunks belong strictly to your active account. Switching accounts automatically isolates all workspace state.</span>
           </div>
         </div>
 
@@ -237,13 +259,14 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '14px',
-              borderRadius: '10px',
+              borderRadius: 'var(--radius-card, 8px)',
               background: 'rgba(16, 185, 129, 0.08)',
               border: '1px solid rgba(16, 185, 129, 0.25)'
             }}>
               <div>
-                <div style={{ fontSize: '13.5px', fontWeight: '700', color: '#059669' }}>
-                  ✓ Authenticated as {activeEmail}
+                <div style={{ fontSize: '13.5px', fontWeight: '700', color: '#059669', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Check size={14} strokeWidth={2} />
+                  <span>Authenticated as {activeEmail}</span>
                 </div>
                 <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>
                   Session verified and active.
@@ -368,7 +391,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                       alignItems: 'center',
                       gap: '8px',
                       padding: '10px 20px',
-                      borderRadius: '8px',
+                      borderRadius: 'var(--radius-btn, 6px)',
                       background: 'var(--bg-card)',
                       border: '1px solid var(--border)',
                       color: 'var(--text-primary)',
@@ -377,7 +400,8 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                       textDecoration: 'none'
                     }}
                   >
-                    <span>🔑</span> Sign in with Google OAuth
+                    <Key size={15} strokeWidth={1.8} />
+                    <span>Sign in with Google OAuth</span>
                   </a>
                 ) : (
                   <button
@@ -388,7 +412,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                       alignItems: 'center',
                       gap: '8px',
                       padding: '10px 20px',
-                      borderRadius: '8px',
+                      borderRadius: 'var(--radius-btn, 6px)',
                       background: 'var(--bg-card)',
                       border: '1px solid var(--border)',
                       color: 'var(--text-muted)',
@@ -397,7 +421,8 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                       cursor: 'pointer'
                     }}
                   >
-                    <span>🔑</span> Sign in with Google (Setup Required)
+                    <Key size={15} strokeWidth={1.8} />
+                    <span>Sign in with Google (Setup Required)</span>
                   </button>
                 )}
               </div>
@@ -419,7 +444,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
             <div style={{
               background: 'rgba(16, 185, 129, 0.08)',
               border: '1px solid rgba(16, 185, 129, 0.25)',
-              borderRadius: '10px',
+              borderRadius: 'var(--radius-card, 8px)',
               padding: '14px',
               display: 'flex',
               justifyContent: 'space-between',
@@ -429,8 +454,9 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
               marginBottom: '16px'
             }}>
               <div>
-                <div style={{ fontSize: '13px', fontWeight: '700', color: '#059669' }}>
-                  ✓ Google Calendar Live Sync Connected
+                <div style={{ fontSize: '13px', fontWeight: '700', color: '#059669', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Check size={14} strokeWidth={2} />
+                  <span>Google Calendar Live Sync Connected</span>
                 </div>
                 <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>
                   Account: {currentUser?.calendar?.account_email || activeEmail}
@@ -458,12 +484,14 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                     }
                   }}
                   style={{
-                    padding: '6px 12px', borderRadius: '6px',
+                    padding: '6px 12px', borderRadius: 'var(--radius-btn, 6px)',
                     border: '1px solid var(--border)', background: 'var(--bg-card)',
-                    color: 'var(--text-primary)', fontSize: '12px', fontWeight: '600', cursor: 'pointer'
+                    color: 'var(--text-primary)', fontSize: '12px', fontWeight: '600', cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', gap: '6px'
                   }}
                 >
-                  ⚡ Sync Now
+                  <RefreshCw size={13} strokeWidth={1.8} className={loading ? 'spin' : ''} />
+                  <span>Sync Now</span>
                 </button>
                 <button
                   onClick={async () => {
@@ -471,7 +499,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                     if (onUserChanged) onUserChanged(activeEmail)
                   }}
                   style={{
-                    padding: '6px 12px', borderRadius: '6px',
+                    padding: '6px 12px', borderRadius: 'var(--radius-btn, 6px)',
                     border: '1px solid rgba(239, 68, 68, 0.3)',
                     background: 'rgba(239, 68, 68, 0.08)',
                     color: '#dc2626', fontSize: '12px', fontWeight: '600', cursor: 'pointer'
@@ -487,7 +515,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                 <div style={{
                   background: 'rgba(245, 158, 11, 0.08)',
                   border: '1px solid rgba(245, 158, 11, 0.28)',
-                  borderRadius: '10px',
+                  borderRadius: 'var(--radius-card, 8px)',
                   padding: '12px 14px',
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -495,8 +523,9 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                   gap: '10px'
                 }}>
                   <div>
-                    <div style={{ fontSize: '12.5px', fontWeight: '700', color: '#b45309' }}>
-                      ⚡ Demo Mode Active (Simulated Calendar)
+                    <div style={{ fontSize: '12.5px', fontWeight: '700', color: '#b45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Zap size={14} strokeWidth={1.8} />
+                      <span>Demo Mode Active (Simulated Calendar)</span>
                     </div>
                     <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>
                       Mock calendar commitments active. Connect genuine Google OAuth below to sync live events to Google Calendar.
@@ -508,7 +537,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                       if (onUserChanged) onUserChanged(activeEmail)
                     }}
                     style={{
-                      padding: '5px 10px', borderRadius: '6px',
+                      padding: '5px 10px', borderRadius: 'var(--radius-btn, 6px)',
                       border: '1px solid rgba(239, 68, 68, 0.3)',
                       background: 'rgba(239, 68, 68, 0.08)',
                       color: '#dc2626', fontSize: '11px', fontWeight: '600', cursor: 'pointer', flexShrink: 0
@@ -522,7 +551,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
               {/* ── Option A: Google OAuth ──────────────────────────────── */}
               <div style={{
                 background: 'var(--bg-card-soft)', border: '1px solid var(--border)',
-                borderRadius: '10px', padding: '14px'
+                borderRadius: 'var(--radius-card, 8px)', padding: '14px'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
                   <div style={{ flex: 1 }}>
@@ -542,9 +571,9 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                       href={safeHref(getGoogleOAuthConnectUrl(activeEmail))}
                       style={{
                         display: 'inline-flex', alignItems: 'center', gap: '6px',
-                        padding: '8px 14px', borderRadius: '8px',
+                        padding: '8px 14px', borderRadius: 'var(--radius-btn, 6px)',
                         background: 'var(--primary)',
-                        color: '#ffffff', fontSize: '12.5px', fontWeight: '600',
+                        color: 'var(--accent-text, #1b1a17)', fontSize: '12.5px', fontWeight: '600',
                         textDecoration: 'none', flexShrink: 0
                       }}
                     >
@@ -555,9 +584,11 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                       fontSize: '11px', color: '#b45309', fontWeight: '600',
                       background: 'rgba(245, 158, 11, 0.12)',
                       border: '1px solid rgba(245, 158, 11, 0.3)',
-                      borderRadius: '6px', padding: '5px 9px', flexShrink: 0
+                      borderRadius: 'var(--radius-btn, 6px)', padding: '5px 9px', flexShrink: 0,
+                      display: 'inline-flex', alignItems: 'center', gap: '4px'
                     }}>
-                      ⚙️ Setup Required
+                      <Settings size={13} strokeWidth={1.8} />
+                      <span>Setup Required</span>
                     </span>
                   )}
                 </div>
@@ -568,12 +599,16 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                     padding: '8px 12px',
                     background: 'rgba(99, 102, 241, 0.08)',
                     border: '1px solid rgba(99, 102, 241, 0.2)',
-                    borderRadius: '6px',
+                    borderRadius: 'var(--radius-btn, 6px)',
                     fontSize: '11.5px',
                     color: 'var(--text-secondary)',
-                    lineHeight: '1.5'
+                    lineHeight: '1.5',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '6px'
                   }}>
-                    💡 <strong>Test App Setup Note:</strong> If Google blocks sign-in with <em>Error 403: access_denied ("App has not completed verification")</em>, add your email ({activeEmail || 'your email'}) under <strong>Google Cloud Console → OAuth consent screen → Test users</strong>.
+                    <Info size={14} strokeWidth={1.8} style={{ flexShrink: 0, marginTop: '2px' }} />
+                    <span><strong>Test App Setup Note:</strong> If Google blocks sign-in with <em>Error 403: access_denied ("App has not completed verification")</em>, add your email ({activeEmail || 'your email'}) under <strong>Google Cloud Console → OAuth consent screen → Test users</strong>.</span>
                   </div>
                 )}
 
@@ -584,7 +619,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
               {/* ── Option B: iCal Subscription ───────────────────────── */}
               <div style={{
                 background: 'var(--bg-card-soft)', border: '1px solid var(--border)',
-                borderRadius: '10px', padding: '14px'
+                borderRadius: 'var(--radius-card, 8px)', padding: '14px'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
                   <div>
@@ -599,14 +634,25 @@ export default function AuthModal({ isOpen, onClose, currentUser, onUserChanged 
                   <button
                     onClick={handleCopyIcs}
                     style={{
-                      padding: '8px 14px', borderRadius: '8px',
+                      padding: '8px 14px', borderRadius: 'var(--radius-btn, 6px)',
                       border: '1px solid var(--border)',
                       background: copiedIcs ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-card)',
                       color: copiedIcs ? '#059669' : 'var(--text-primary)',
-                      fontSize: '12px', fontWeight: '600', cursor: 'pointer', flexShrink: 0
+                      fontSize: '12px', fontWeight: '600', cursor: 'pointer', flexShrink: 0,
+                      display: 'inline-flex', alignItems: 'center', gap: '6px'
                     }}
                   >
-                    {copiedIcs ? '✓ Link Copied!' : '📋 Copy Calendar URL'}
+                    {copiedIcs ? (
+                      <>
+                        <Check size={14} strokeWidth={2} />
+                        <span>Link Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={14} strokeWidth={1.8} />
+                        <span>Copy Calendar URL</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
