@@ -13,6 +13,7 @@ Run with:
 
 import asyncio
 import logging
+import sys
 import urllib.parse
 from contextlib import asynccontextmanager
 
@@ -151,11 +152,12 @@ async def lifespan(app: FastAPI):
                 fail_loudly=settings.is_production(),
                 routed_roles=routed_roles,
             )
-        # Background startup seed for Internship Radar (in development/production only)
-        if settings.ENVIRONMENT != "test":
+        # Background startup seed for Internship Radar (in development/production only, never in tests)
+        # Uses 'standard' lightweight sources to avoid hung scraper threads in web process
+        if settings.ENVIRONMENT != "test" and "pytest" not in sys.modules:
             try:
                 from backend.services.radar_sync import run_radar_sync
-                asyncio.create_task(run_radar_sync("all"))
+                asyncio.create_task(run_radar_sync("standard"))
             except Exception as seed_err:
                 logger.warning(f"Could not trigger startup radar sync: {seed_err}")
     except Exception as e:
