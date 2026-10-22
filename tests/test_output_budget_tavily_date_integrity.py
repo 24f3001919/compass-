@@ -82,6 +82,7 @@ async def test_synthesis_budget_passed_and_bounded_continuation():
     # Content from both calls assembled without loss
     assert "Here is part 1" in step.content
     assert "Hackathon B" in step.content
+    assert step.metadata is not None
     assert step.metadata["finish_reason"] == "stop"
     assert step.metadata["continuation_attempts"] == 1
     assert step.metadata["is_truncated"] is False
@@ -117,6 +118,7 @@ async def test_continuation_attempts_are_bounded_at_max():
 
     # Initial call (1) + MAX_CONTINUATION_ATTEMPTS (2) = 3 calls total
     assert mock_client.chat.completions.create.call_count == 3
+    assert step.metadata is not None
     assert step.metadata["is_truncated"] is True
     assert step.metadata["continuation_attempts"] == 2
     # Requirement 4: NO closing markdown to fake completeness; preserve intact partial text
