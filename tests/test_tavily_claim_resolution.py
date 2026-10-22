@@ -686,6 +686,7 @@ async def test_truncation_detection_and_no_fake_closing_markdown():
         active_replan_diff=None,
     )
 
+    assert step.metadata is not None
     assert step.metadata["is_truncated"] is True
     assert step.metadata["finish_reason"] == "length"
     # Ensure no fake closing markdown note was appended
@@ -733,6 +734,7 @@ async def test_bounded_continuation_preserves_text_without_duplication():
         active_replan_diff=None,
     )
 
+    assert step.metadata is not None
     assert step.metadata["is_truncated"] is False
     assert step.metadata["continuation_attempts"] == 1
     assert "Step 1: Planning" in step.content
