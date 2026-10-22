@@ -383,7 +383,11 @@ export default function ChatMessageList({
                           <button
                             type="button"
                             title="Verify claims and deadlines using live web evidence from Tavily"
-                            onClick={() => onSendMessage && onSendMessage("Verify this with Tavily")}
+                            onClick={() => onSendMessage && onSendMessage({
+                              text: "Verify this with Tavily",
+                              targetMessageId: msg.id,
+                              targetMessageContent: msg.text,
+                            })}
                             className="btn-secondary"
                             style={{
                               display: 'inline-flex',
