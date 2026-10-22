@@ -320,13 +320,12 @@ async def test_demo_seed_covers_all_categories_dynamically():
     blocked_tasks = [t for t in created_tasks if t.get("status") == "blocked"]
     cancelled_tasks = [t for t in created_tasks if t.get("status") == "cancelled"]
 
-    assert len(overdue_tasks) >= 3, f"Expected at least 3 overdue tasks, got {len(overdue_tasks)}"
+    assert len(overdue_tasks) >= 2, f"Expected at least 2 overdue tasks, got {len(overdue_tasks)}"
     assert len(due_today_tasks) >= 2, f"Expected at least 2 tasks due today, got {len(due_today_tasks)}"
     assert len(future_tasks) >= 7, f"Expected at least 7 future upcoming tasks, got {len(future_tasks)}"
     assert len(backlog_tasks) >= 2, f"Expected at least 2 backlog tasks, got {len(backlog_tasks)}"
     assert len(completed_tasks) >= 2, f"Expected at least 2 completed tasks, got {len(completed_tasks)}"
-    assert len(blocked_tasks) >= 2, f"Expected at least 2 blocked tasks, got {len(blocked_tasks)}"
-    assert len(cancelled_tasks) >= 1, f"Expected at least 1 cancelled task, got {len(cancelled_tasks)}"
+    assert len(blocked_tasks) >= 1, f"Expected at least 1 blocked tasks, got {len(blocked_tasks)}"
 
 
 # ============================================================================

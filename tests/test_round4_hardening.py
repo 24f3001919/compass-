@@ -362,8 +362,8 @@ def test_x_user_id_impersonation_forbidden_in_production():
 
 @pytest.mark.asyncio
 async def test_compass_user_id_cookie_not_blocked_as_impersonation_in_production():
-    """Verify that in production environment, unverified compass_user_id cookie raises 403 impersonation error, while valid session cookies continue to work."""
-    # 1. Unverified compass_user_id cookie in production raises 403
+    """Verify that in production environment, unverified compass_user_id cookie raises 401 with Set-Cookie clearing it, while valid session cookies continue to work."""
+    # 1. Unverified compass_user_id cookie in production raises 401
     scope = {
         "type": "http",
         "method": "GET",
@@ -383,8 +383,8 @@ async def test_compass_user_id_cookie_not_blocked_as_impersonation_in_production
 
         with pytest.raises(HTTPException) as exc:
             _get_current_identity(req)
-        assert exc.value.status_code == 403
-        assert "forbidden" in exc.value.detail
+        assert exc.value.status_code == 401
+        assert "Stale user cookie" in exc.value.detail
 
     # 2. Valid identity cookie (compass_session) continues to work as intended
     scope_valid = {

@@ -344,7 +344,7 @@ async def test_jobspy_synthetic_future_and_invalid_date_classification():
     from tests.fixtures.synthetic_jobspy import create_synthetic_jobspy_dataframe
     from backend.services.radar_jobspy import discover_jobspy_opportunities
 
-    test_clock = datetime(2026, 10, 21, 12, 0, 0, tzinfo=timezone.utc)
+    test_clock = datetime.now(timezone.utc)
     mock_df = create_synthetic_jobspy_dataframe(
         base_time=test_clock,
         include_future_date=True,

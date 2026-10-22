@@ -287,6 +287,7 @@ async def upsert_opportunity(
             "requirements": {},
         }
         return _id_seq
+    eff_posted_precision = posted_at_precision or "unknown"
 
     async with pool.acquire() as conn:
         existing = await conn.fetchrow(
@@ -356,7 +357,7 @@ async def upsert_opportunity(
                 pref_url, current_status, confirmed_open_date, confirmed_close_date,
                 description, last_verified_at, employer_identity_verified,
                 official_source_confirmed, verification_evidence, application_url_checked,
-                posted_at, posted_at_precision,
+                posted_at, eff_posted_precision,
                 opp_id
             )
             return opp_id
@@ -438,7 +439,7 @@ async def upsert_opportunity(
             official_source_confirmed,
             application_url_checked,
             posted_at,
-            posted_at_precision,
+            eff_posted_precision,
         )
         return row["id"]
 

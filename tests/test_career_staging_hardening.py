@@ -153,26 +153,28 @@ async def test_staging_rejects_forged_x_user_id():
 
 @pytest.mark.asyncio
 async def test_production_rejects_forged_compass_user_id_cookie():
-    """When ENVIRONMENT is production, compass_user_id cookie impersonation must return 403 Forbidden."""
+    """When ENVIRONMENT is production, stale compass_user_id cookie returns 401 with Set-Cookie clearing it."""
     settings = get_settings()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test", cookies={"compass_user_id": "victim@compass.internal"}) as client:
         with patch.object(settings, "ENVIRONMENT", "production"):
             res = await client.get("/api/career/resumes/master")
-            assert res.status_code == 403
-            assert "strictly forbidden outside development or test environments" in res.json()["detail"]
+            assert res.status_code == 401
+            assert "Stale user cookie" in res.json()["detail"]
+            assert any("compass_user_id=" in h for h in res.headers.get_list("set-cookie"))
 
 
 @pytest.mark.asyncio
 async def test_staging_rejects_forged_compass_user_id_cookie():
-    """When ENVIRONMENT is staging, compass_user_id cookie impersonation must return 403 Forbidden."""
+    """When ENVIRONMENT is staging, stale compass_user_id cookie returns 401 with Set-Cookie clearing it."""
     settings = get_settings()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test", cookies={"compass_user_id": "victim@compass.internal"}) as client:
         with patch.object(settings, "ENVIRONMENT", "staging"):
             res = await client.get("/api/career/resumes/master")
-            assert res.status_code == 403
-            assert "strictly forbidden outside development or test environments" in res.json()["detail"]
+            assert res.status_code == 401
+            assert "Stale user cookie" in res.json()["detail"]
+            assert any("compass_user_id=" in h for h in res.headers.get_list("set-cookie"))
 
 
 # ===========================================================================
