@@ -260,14 +260,33 @@ async def test_radar_api_endpoints(monkeypatch):
     async def mock_ats(*args, **kwargs):
         return []
 
+    async def mock_jobspy(*args, **kwargs):
+        return {
+            "status": "success",
+            "sources_attempted": 0,
+            "sources_succeeded": 0,
+            "sources_failed": 0,
+            "raw_results": 0,
+            "internship_matches": 0,
+            "normalized_results": 0,
+            "verified_within_24h": 0,
+            "approximate_recency": 0,
+            "unknown_posting_time": 0,
+            "duplicates_removed": 0,
+            "opportunities": [],
+            "errors": [],
+        }
+
     monkeypatch.setattr("backend.services.radar_sync.fetch_github_markdown_opportunities", mock_gh)
     monkeypatch.setattr("backend.services.radar_sync.fetch_all_public_ats_opportunities", mock_ats)
     monkeypatch.setattr("backend.services.radar_sync.tavily_available", lambda: False)
+    monkeypatch.setattr("backend.services.radar_sync.discover_jobspy_opportunities", mock_jobspy)
+    monkeypatch.setattr("backend.services.radar_jobspy.discover_jobspy_opportunities", mock_jobspy)
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test", headers={"x-user-id": "candidate_radar_user"}) as client:
         # 1. Trigger sync (seeds curated opportunities quickly)
-        sync_res = await client.post("/api/opportunities/sync?source=all")
+        sync_res = await client.post("/api/opportunities/sync?source=curated")
         assert sync_res.status_code == 200
         assert sync_res.json()["status"] in ("completed", "completed_with_errors")
 
@@ -334,3 +353,182 @@ async def test_ai_radar_skill_execution():
     res = await handle_query_internship_radar({"query": "Google", "india_only": True})
     assert res["success"] is True
     assert "Compass Internship Radar" in res["summary"]
+
+
+# ===========================================================================
+# 7. Strict Recency, Cross-Site Dedup, Degree Filtering, & Degraded Status
+# ===========================================================================
+
+def test_injected_clock_read_time_recency():
+    """
+    Section 4 Requirement:
+    Test with an injected clock:
+    - A row verified at ingest (exact timestamp 2h ago) is NOT verified 25h later.
+    - A date_only row is NEVER verified.
+    - Future timestamps are NEVER verified.
+    """
+    from datetime import timedelta
+    from backend.routers.radar import compute_is_verified_within_24h
+
+    ingest_time = datetime(2026, 10, 21, 10, 0, 0, tzinfo=timezone.utc)
+    posted_at = datetime(2026, 10, 21, 8, 0, 0, tzinfo=timezone.utc)  # 2 hours before ingest
+
+    # At ingest (2h old, exact precision) -> VERIFIED
+    assert compute_is_verified_within_24h(posted_at, "exact", now_utc=ingest_time) is True
+
+    # 21 hours later (23h old, exact precision) -> Still VERIFIED
+    clock_21h_later = ingest_time + timedelta(hours=21)
+    assert compute_is_verified_within_24h(posted_at, "exact", now_utc=clock_21h_later) is True
+
+    # 25 hours later (27h old, exact precision) -> NOT VERIFIED
+    clock_25h_later = ingest_time + timedelta(hours=25)
+    assert compute_is_verified_within_24h(posted_at, "exact", now_utc=clock_25h_later) is False
+
+    # date_only precision -> NEVER verified within 24h
+    recent_date_only = datetime(2026, 10, 21, 0, 0, 0, tzinfo=timezone.utc)
+    assert compute_is_verified_within_24h(recent_date_only, "date_only", now_utc=ingest_time) is False
+
+    # unknown precision -> NEVER verified within 24h
+    assert compute_is_verified_within_24h(recent_date_only, "unknown", now_utc=ingest_time) is False
+
+    # Future timestamp -> NEVER verified
+    future_time = ingest_time + timedelta(hours=2)
+    assert compute_is_verified_within_24h(future_time, "exact", now_utc=ingest_time) is False
+
+
+@pytest.mark.asyncio
+async def test_cross_site_dedup_and_location_isolation():
+    """
+    Section 5 Requirement:
+    - Same job on two sites (Indeed & LinkedIn) with different URLs merges (1 opportunity, 2 source rows).
+    - Same company/title in different locations does NOT merge.
+    """
+    import uuid
+    from backend.memory.radar import upsert_opportunity, add_opportunity_source, get_opportunity_by_id
+
+    test_company = f"DedupCorp_{uuid.uuid4().hex[:6]}"
+
+    # Site A: Indeed in Bengaluru
+    opp_id_indeed = await upsert_opportunity(
+        company_name=f"{test_company}, Inc.",
+        role_title="Software Engineering Intern",
+        location="Bengaluru, Karnataka, India",
+        canonical_url=f"https://indeed.com/viewjob?jk={test_company}_blr_1",
+        official_application_url=f"https://indeed.com/viewjob?jk={test_company}_blr_1",
+    )
+    await add_opportunity_source(
+        opportunity_id=opp_id_indeed,
+        source_name="JobSpy Indeed",
+        source_type="jobspy_indeed",
+        source_url=f"https://indeed.com/viewjob?jk={test_company}_blr_1",
+    )
+
+    # Site B: LinkedIn with direct career page URL in Bengaluru
+    opp_id_linkedin = await upsert_opportunity(
+        company_name=test_company,
+        role_title="Software Engineering Intern",
+        location="Bengaluru, Karnataka, India",
+        canonical_url=f"https://linkedin.com/jobs/view/{test_company}_blr_2",
+        official_application_url="https://careers.google.com/jobs/results/12345",
+    )
+    await add_opportunity_source(
+        opportunity_id=opp_id_linkedin,
+        source_name="JobSpy LinkedIn",
+        source_type="jobspy_linkedin",
+        source_url=f"https://linkedin.com/jobs/view/{test_company}_blr_2",
+    )
+
+    # Must MERGE into 1 opportunity with 2 sources and prefer direct application URL
+    assert opp_id_indeed == opp_id_linkedin
+    merged_opp = await get_opportunity_by_id(opp_id_indeed)
+    assert merged_opp is not None
+    assert len(merged_opp.sources) == 2
+    assert {s.source_type for s in merged_opp.sources} == {"jobspy_indeed", "jobspy_linkedin"}
+    assert merged_opp.official_application_url == "https://careers.google.com/jobs/results/12345"
+
+    # Site C: Same company and role, but in different location (Hyderabad)
+    opp_id_hyd = await upsert_opportunity(
+        company_name=test_company,
+        role_title="Software Engineering Intern",
+        location="Hyderabad, Telangana, India",
+        canonical_url=f"https://indeed.com/viewjob?jk={test_company}_hyd_3",
+        official_application_url=f"https://indeed.com/viewjob?jk={test_company}_hyd_3",
+    )
+    # Must NOT merge (remains isolated by location)
+    assert opp_id_hyd != opp_id_indeed
+
+
+def test_eligibility_nubank_phd_excluded_for_btech():
+    """
+    Section 6 Requirement:
+    Nubank PhD role must be flagged/excluded (INELIGIBLE) for a B.Tech student with degree reason.
+    """
+    from backend.models_radar import (
+        OpportunityOut,
+        OpportunityRequirementsOut,
+        OpportunityStatus,
+        UserOpportunityProfileIn,
+        EligibilityClassification,
+    )
+    from backend.services.radar_eligibility import evaluate_eligibility
+
+    btech_profile = UserOpportunityProfileIn(
+        academic_year=3,
+        grad_year=2026,
+        degree="B.Tech in Computer Science",
+        country_of_study="India",
+        skills=["Python", "Machine Learning"],
+    )
+
+    nubank_phd_opp = OpportunityOut(
+        id=999,
+        company_name="Nubank",
+        normalized_company="nubank",
+        role_title="Machine Learning Scientist Intern (PhD)",
+        opportunity_type="internship",
+        category="ai_ml",
+        location="Bengaluru, Karnataka, India",
+        country="India",
+        is_india_eligible=True,
+        current_status=OpportunityStatus.OPEN_CONFIRMED,
+        canonical_url="https://nubank.com/jobs/phd_intern",
+        requirements=OpportunityRequirementsOut(
+            eligible_degree_types=["PhD", "Doctoral"],
+            eligible_academic_years=[4, 5],
+            eligible_graduation_years=[2026, 2027],
+            eligible_countries=["India"],
+            work_auth_required=False,
+            required_skills=["Python", "Deep Learning"],
+        ),
+    )
+
+    classification, explanation, reasons = evaluate_eligibility(nubank_phd_opp, btech_profile)
+    assert classification == EligibilityClassification.INELIGIBLE
+    failed_reasons = [r for r in reasons if r["status"] == "fail"]
+    assert any(r["field"] == "degree" for r in failed_reasons)
+    assert "degree" in explanation.lower() or "academic" in explanation.lower()
+
+
+@pytest.mark.asyncio
+async def test_jobspy_all_empty_or_failed_returns_degraded():
+    """
+    Section 7 Requirement:
+    If all JobSpy sites return 0 or fail, the run status must be 'degraded' and logged,
+    not silent success.
+    """
+    from unittest.mock import patch
+    import pandas as pd
+    from backend.services.radar_jobspy import discover_jobspy_opportunities
+
+    empty_df = pd.DataFrame()
+
+    with patch("jobspy.scrape_jobs", return_value=empty_df):
+        summary = await discover_jobspy_opportunities(
+            sites=["indeed", "linkedin"],
+            search_terms=["intern"],
+            location="India",
+        )
+        assert summary["status"] == "degraded"
+        assert summary["raw_results"] == 0
+        assert summary["empty_sources"] == 2
+
