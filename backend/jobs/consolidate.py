@@ -424,11 +424,17 @@ async def run_consolidation(
 
         # Radar synchronization & autonomous opportunity discovery (including JobSpy)
         radar_sync_res = None
+        radar_sync_error = None
         try:
             from backend.services.radar_sync import run_radar_sync
-            radar_sync_res = await run_radar_sync("all")
+            if dry_run:
+                logger.info("[DRY-RUN] Nightly consolidation executing JobSpy discovery adapter in dry-run mode (no DB writes)")
+            radar_sync_res = await run_radar_sync("all", dry_run=dry_run)
+            if radar_sync_res and radar_sync_res.get("status") == "failed":
+                radar_sync_error = radar_sync_res.get("error_summary") or "Radar sync returned failed status"
         except Exception as r_err:
             logger.warning(f"Nightly radar synchronization error: {r_err}")
+            radar_sync_error = str(r_err)
 
         logger.info("=" * 60)
         logger.info("SUMMARY OF CONSOLIDATION:")
@@ -444,7 +450,12 @@ async def run_consolidation(
         logger.info(f"  • Slipped tasks detected : {slipped_res.get('slipped_count')}")
         logger.info("=" * 60)
 
+        consolidate_status = "failed" if (radar_sync_error and not dry_run) else "completed"
         return {
+            "status": consolidate_status,
+            "radar_sync": radar_sync_res,
+            "radar_sync_status": "failed" if radar_sync_error else (radar_sync_res.get("status") if radar_sync_res else "skipped"),
+            "radar_sync_error": radar_sync_error,
             "overdue_tasks_flagged": overdue_count,
             "duplicate_chunks_merged": pruned_count,
             "stale_conversations_rolled_up": archived_count,
@@ -466,11 +477,15 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Report actions without modifying the database")
     args = parser.parse_args()
 
-    asyncio.run(run_consolidation(
+    result = asyncio.run(run_consolidation(
         similarity_threshold=args.similarity_threshold,
         stale_thread_days=args.stale_thread_days,
         dry_run=args.dry_run,
     ))
+    if result.get("status") == "failed" or result.get("radar_sync_status") == "failed":
+        import sys
+        logger.error(f"Nightly consolidation job failed: radar_sync_error={result.get('radar_sync_error')}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
