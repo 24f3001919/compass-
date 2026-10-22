@@ -119,7 +119,9 @@ async def test_continuation_attempts_are_bounded_at_max():
     assert mock_client.chat.completions.create.call_count == 3
     assert step.metadata["is_truncated"] is True
     assert step.metadata["continuation_attempts"] == 2
-    assert "maximum token budget" in step.content
+    # Requirement 4: NO closing markdown to fake completeness; preserve intact partial text
+    assert "maximum token budget" not in step.content
+    assert "Continuing unending tokens..." in step.content
 
 
 # ============================================================================
