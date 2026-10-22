@@ -6,6 +6,7 @@ watchlist monitoring, application pipeline tracking, and source synchronization.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -48,6 +49,24 @@ logger = logging.getLogger("compass.routers.radar")
 router = APIRouter(prefix="/api/opportunities", tags=["internship_radar"])
 
 
+def compute_is_verified_within_24h(
+    posted_at: Optional[datetime],
+    precision: Optional[str] = None,
+    now_utc: Optional[datetime] = None,
+) -> bool:
+    """Compute is_verified_within_24h at read time:
+    precision == 'exact' AND 0 <= (now - posted_at) <= 24h.
+    Future timestamps and date_only/unknown precision are NEVER verified.
+    """
+    if not posted_at or precision != "exact":
+        return False
+    now = now_utc or datetime.now(timezone.utc)
+    if posted_at.tzinfo is None:
+        posted_at = posted_at.replace(tzinfo=timezone.utc)
+    age = now - posted_at
+    return 0 <= age.total_seconds() <= 86400
+
+
 def _enrich_opportunity(opp: OpportunityOut, profile: Optional[UserOpportunityProfileIn]) -> OpportunityOut:
     """Enriches an opportunity with predictive cycle estimates and personal eligibility."""
     # Compute historical prediction
@@ -58,6 +77,9 @@ def _enrich_opportunity(opp: OpportunityOut, profile: Optional[UserOpportunityPr
     opp.eligibility_classification = cls
     opp.eligibility_explanation = explanation
     opp.eligibility_reasons = reasons
+
+    # Strictly compute 24h recency at read time from posted_at & precision (no string derivation)
+    opp.is_verified_within_24h = compute_is_verified_within_24h(opp.posted_at, opp.posted_at_precision)
     return opp
 
 
