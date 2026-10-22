@@ -152,19 +152,34 @@ async def add_message(
     role: str,
     content: str,
     skill_called: Optional[str] = None,
+    evidence: Optional[Union[Dict[str, Any], List[Any], str]] = None,
 ) -> dict:
     """Insert a message into the conversation history and update title if first user message."""
+    import json
     cid = uuid.UUID(conversation_id)
     # Strip [[modes]] control marker and all variants before persisting
     clean_content = strip_modes_marker(content)
-    row = await conn.fetchrow(
-        """
-        INSERT INTO messages (conversation_id, role, content, skill_called)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id, conversation_id, role, content, skill_called, created_at
-        """,
-        cid, role, clean_content, skill_called
-    )
+    evidence_json = json.dumps(evidence) if isinstance(evidence, (dict, list)) else (evidence if isinstance(evidence, str) else None)
+
+    try:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO messages (conversation_id, role, content, skill_called, evidence)
+            VALUES ($1, $2, $3, $4, $5::jsonb)
+            RETURNING id, conversation_id, role, content, skill_called, evidence, created_at
+            """,
+            cid, role, clean_content, skill_called, evidence_json
+        )
+    except Exception:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO messages (conversation_id, role, content, skill_called)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id, conversation_id, role, content, skill_called, created_at
+            """,
+            cid, role, clean_content, skill_called
+        )
+
     await conn.execute(
         "UPDATE conversations SET last_active_at = now() WHERE id = $1",
         cid
@@ -187,7 +202,13 @@ async def add_message(
         except Exception:
             pass
 
-    return dict(row) if row else {}
+    res = dict(row) if row else {}
+    if "evidence" in res and isinstance(res["evidence"], str):
+        try:
+            res["evidence"] = json.loads(res["evidence"])
+        except Exception:
+            pass
+    return res
 
 
 async def get_recent_messages(
@@ -196,32 +217,54 @@ async def get_recent_messages(
     limit: int = 50,
 ) -> list[dict]:
     """Retrieve message history for a conversation, ordered chronologically."""
+    import json
     try:
         cid = uuid.UUID(conversation_id)
     except (ValueError, TypeError):
         return []
 
-    rows = await conn.fetch(
-        """
-        SELECT id, role, content, skill_called, created_at
-        FROM (
+    try:
+        rows = await conn.fetch(
+            """
+            SELECT id, role, content, skill_called, evidence, created_at
+            FROM (
+                SELECT id, role, content, skill_called, evidence, created_at
+                FROM messages
+                WHERE conversation_id = $1
+                ORDER BY created_at DESC, id DESC
+                LIMIT $2
+            ) sub
+            ORDER BY created_at ASC, id ASC
+            """,
+            cid, limit
+        )
+    except Exception:
+        rows = await conn.fetch(
+            """
             SELECT id, role, content, skill_called, created_at
-            FROM messages
-            WHERE conversation_id = $1
-            ORDER BY created_at DESC, id DESC
-            LIMIT $2
-        ) sub
-        ORDER BY created_at ASC, id ASC
-        """,
-        cid, limit
-    )
-    return [
-        {
-            **dict(r),
-            "content": strip_modes_marker(r["content"]),
-        }
-        for r in rows
-    ]
+            FROM (
+                SELECT id, role, content, skill_called, created_at
+                FROM messages
+                WHERE conversation_id = $1
+                ORDER BY created_at DESC, id DESC
+                LIMIT $2
+            ) sub
+            ORDER BY created_at ASC, id ASC
+            """,
+            cid, limit
+        )
+
+    result = []
+    for r in rows:
+        item = dict(r)
+        item["content"] = strip_modes_marker(r["content"])
+        if "evidence" in item and isinstance(item["evidence"], str):
+            try:
+                item["evidence"] = json.loads(item["evidence"])
+            except Exception:
+                pass
+        result.append(item)
+    return result
 
 
 async def list_conversations(
