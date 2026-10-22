@@ -5,6 +5,7 @@ import MarkdownRenderer from './MarkdownRenderer'
 import ChatTaskCard from './ChatTaskCard'
 import { fetchPersonaPhrases } from '../../api/chatApi'
 import Logo from '../Logo'
+import { generateFollowUpSuggestions, formatSuggestionText } from '../../utils/suggestionGenerator'
 
 const DEFAULT_STARTING_PHRASES = [
   "Where should we begin?",
@@ -21,41 +22,6 @@ const DEFAULT_RETURNING_PHRASES = [
   "Good to see you again. Where shall we dive in?",
   "Ready to pick up the thread, or start somewhere fresh?",
 ]
-
-const SUGGESTION_CHIPS = [
-  "Let's noodle on something",
-  "What's due this week?",
-  "Recap where I left off",
-]
-
-function getFollowUpSuggestions(text) {
-  if (!text || typeof text !== 'string') return []
-  const lower = text.toLowerCase()
-  const chips = []
-  if (lower.includes('hackathon') || lower.includes('deadline') || lower.includes('due') || lower.includes('prize') || lower.includes('event') || lower.includes('verify')) {
-    chips.push('Verify it with Tavily')
-  }
-  if (lower.includes('roadmap') || lower.includes('plan for today') || lower.includes('start here') || lower.includes('suggested schedule')) {
-    chips.push(
-      'Show overdue tasks',
-      'Build my schedule',
-      'Focus on coursework',
-      'Check calendar clashes',
-    )
-  } else if (lower.includes('task') || lower.includes('deadline')) {
-    chips.push(
-      'Plan an optimal roadmap for today',
-      'Show overdue tasks',
-      'Check schedule conflicts',
-    )
-  } else {
-    chips.push(
-      'What should I do today?',
-      'Review my upcoming tasks',
-    )
-  }
-  return [...new Set(chips)]
-}
 
 function getTimeGreeting() {
   const hour = new Date().getHours()
@@ -127,6 +93,8 @@ export default function ChatMessageList({
   onSendMessage,
   onSelectMode,
   onRetry,
+  tasks = [],
+  userInput = '',
 }) {
   const [startingPhrases, setStartingPhrases] = useState(DEFAULT_STARTING_PHRASES)
   const [returningPhrases, setReturningPhrases] = useState(DEFAULT_RETURNING_PHRASES)
@@ -200,7 +168,7 @@ export default function ChatMessageList({
           <p style={{
             fontSize: '13px',
             color: 'var(--text-secondary)',
-            marginBottom: '26px',
+            margin: '0',
             maxWidth: '480px',
             lineHeight: '1.5',
           }}>
@@ -209,38 +177,6 @@ export default function ChatMessageList({
               : `Your warm thinking partner for coursework, deadlines, and hackathons. No wrong place to start.`
             }
           </p>
-
-          {/* Suggestion Chips */}
-          <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '8px',
-            justifyContent: 'center',
-            maxWidth: '520px',
-          }}>
-            {SUGGESTION_CHIPS.map((chip, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => onSendMessage && onSendMessage(chip)}
-                className="btn-secondary"
-                style={{
-                  padding: '0 14px',
-                  minHeight: '44px',
-                  borderRadius: 'var(--radius-btn, 6px)',
-                  fontSize: '13px',
-                  fontWeight: '500',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  cursor: 'pointer',
-                }}
-              >
-                <span style={{ color: 'var(--accent, #f5a623)', fontSize: '13px' }}>✦</span>
-                <span>{chip}</span>
-              </button>
-            ))}
-          </div>
         </div>
       ) : (
         <>
@@ -408,39 +344,57 @@ export default function ChatMessageList({
                   </div>
 
                   {/* Contextual Follow-up Chips for Latest Assistant Response */}
-                  {isLatest && msg.role === 'assistant' && !isStreaming && !msg.error && (
-                    <div style={{
-                      display: 'flex',
-                      gap: '8px',
-                      marginLeft: '42px',
-                      marginTop: '2px',
-                      flexWrap: 'wrap',
-                    }}>
-                      {getFollowUpSuggestions(msg.text).map((chip, cIdx) => (
-                        <button
-                          key={cIdx}
-                          type="button"
-                          disabled={isStreaming || isTyping}
-                          onClick={() => onSendMessage && onSendMessage(chip)}
-                          className="btn-secondary"
-                          style={{
-                            padding: '0 12px',
-                            minHeight: '36px',
-                            fontSize: '12px',
-                            borderRadius: 'var(--radius-btn, 6px)',
-                            color: 'var(--text-secondary)',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                          }}
-                        >
-                          <span style={{ color: 'var(--accent, #f5a623)' }}>✦</span>
-                          <span>{chip}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  {(() => {
+                    if (!isLatest || msg.role !== 'assistant' || isStreaming || isTyping || msg.error) {
+                      return null
+                    }
+                    if (userInput && userInput.trim().length > 0) {
+                      return null
+                    }
+                    const suggestions = generateFollowUpSuggestions({
+                      latestMessage: msg,
+                      messages,
+                      tasks,
+                    })
+                    if (!suggestions || suggestions.length === 0) return null
+
+                    return (
+                      <div
+                        className="assistant-follow-up-group"
+                        role="group"
+                        aria-label="Suggested follow-up questions"
+                      >
+                        {suggestions.map((chip, cIdx) => (
+                          <button
+                            key={cIdx}
+                            type="button"
+                            disabled={isStreaming || isTyping}
+                            onClick={() => onSendMessage && onSendMessage(chip)}
+                            className="assistant-follow-up-chip"
+                            title={chip}
+                            aria-label={chip}
+                          >
+                            <svg
+                              width="12"
+                              height="12"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                              style={{ flexShrink: 0, opacity: 0.75 }}
+                            >
+                              <path d="M5 12h14" />
+                              <path d="M12 5l7 7-7 7" />
+                            </svg>
+                            <span className="chip-label">{formatSuggestionText(chip, 60)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )
+                  })()}
 
                   {showModes && (
                     <div style={{
