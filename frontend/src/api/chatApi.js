@@ -74,7 +74,7 @@ export function sanitizeModesMarker(text) {
  * Dispatches incremental tokens via onToken, completion metadata via onComplete,
  * and errors via onError.
  */
-export async function streamQueryFromAssistant(prompt, conversationId, { onToken, onThought, onStatus, onComplete, onError, tone = null, mode = null, specialistId = null, signal = null } = {}) {
+export async function streamQueryFromAssistant(prompt, conversationId, { onToken, onThought, onStatus, onComplete, onError, tone = null, mode = null, specialistId = null, targetMessageId = null, targetMessageContent = null, signal = null } = {}) {
   let fullResponse = ''
   let reader = null
   try {
@@ -90,6 +90,12 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
     }
     if (specialistId) {
       body.specialist_id = specialistId
+    }
+    if (targetMessageId) {
+      body.target_message_id = targetMessageId
+    }
+    if (targetMessageContent) {
+      body.target_message_content = targetMessageContent
     }
 
     const res = await fetch(`${API_BASE}/api/chat/stream`, {
@@ -264,8 +270,11 @@ export async function fetchConversationMessages(conversationId) {
     if (!res.ok) return []
     const data = await res.json()
     return (data.messages || []).map(m => ({
+      id: m.id,
       role: m.role,
       text: m.content,
+      skill_called: m.skill_called,
+      evidence: m.evidence,
       created_at: m.created_at,
     }))
   } catch {
