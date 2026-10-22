@@ -112,9 +112,6 @@ async def force_final_synthesis(
             logger.warning("Continuation request failed: %s; stopping continuation.", cont_err)
             break
 
-    if is_truncated:
-        raw_text += "\n\n*[Note: Response reached maximum token budget; generation concluded.]*"
-
     is_abstained = any(k in raw_text.upper() for k in ("[ABSTAIN]", "[ABSTENTION]", "ABSTAIN:")) or raw_text.strip().startswith("[ABSTAIN]")
     final_text = _clean_synthesis_text(raw_text)
 
