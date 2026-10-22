@@ -230,8 +230,18 @@ export default function ChatPanel({
     handleSend(label, selectedMode)
   }
 
-  const handleSend = async (textToSend, overrideMode = null, explicitSpecialistId = null, isRetry = false) => {
-    const text = (textToSend || input).trim()
+  const handleSend = async (textToSend, overrideMode = null, explicitSpecialistId = null, isRetry = false, extraMeta = {}) => {
+    let text = ''
+    let targetMessageId = extraMeta?.targetMessageId || null
+    let targetMessageContent = extraMeta?.targetMessageContent || null
+
+    if (textToSend && typeof textToSend === 'object') {
+      text = (textToSend.text || '').trim()
+      targetMessageId = textToSend.targetMessageId || targetMessageId
+      targetMessageContent = textToSend.targetMessageContent || targetMessageContent
+    } else {
+      text = (textToSend || input).trim()
+    }
     if (!text || isStreaming || isTyping || isSendingRef.current) return
 
     if (text.toLowerCase() === 'recap where i left off') {
@@ -274,6 +284,8 @@ export default function ChatPanel({
         tone,
         mode: activeMode,
         specialistId: specialistIdToUse,
+        targetMessageId,
+        targetMessageContent,
         signal: abortController.signal,
         onStatus: (statusEvt) => {
           if (requestId !== activeRequestIdRef.current) return
