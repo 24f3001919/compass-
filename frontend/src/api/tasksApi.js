@@ -1,20 +1,27 @@
 // Tasks & Verification API
 
-import { API_BASE, FALLBACK_TASKS, getAuthHeaders, fetchWithGuestRetry } from './baseClient'
+import { API_BASE, getAuthHeaders, fetchWithGuestRetry } from './baseClient.js'
 
 /**
  * Fetch synchronized task list from Neon PostgreSQL with per-account isolation.
  * Accepts an optional domain string to issue a genuine server-side filtered request.
- * Returns empty array if database is empty; falls back to demo tasks only if server is unreachable.
+ * Returns empty array if database is empty or if request fails (zero dummy tasks by default).
  */
-export async function fetchTasks(domain) {
+export async function fetchTasks(domain, options = {}) {
   try {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 20000)
 
-    const url = domain && domain !== 'all'
-      ? `${API_BASE}/api/tasks?domain=${encodeURIComponent(domain)}`
-      : `${API_BASE}/api/tasks`
+    const params = new URLSearchParams()
+    if (domain && domain !== 'all') {
+      params.set('domain', domain)
+    }
+    if (options.include_demo !== undefined) {
+      params.set('include_demo', String(Boolean(options.include_demo)))
+    }
+
+    const qs = params.toString()
+    const url = qs ? `${API_BASE}/api/tasks?${qs}` : `${API_BASE}/api/tasks`
 
     const res = await fetchWithGuestRetry(url, {
       signal: controller.signal
@@ -22,16 +29,16 @@ export async function fetchTasks(domain) {
     clearTimeout(timeoutId)
 
     if (!res.ok) {
-      return FALLBACK_TASKS.map(t => ({ ...t, is_fallback: true }))
+      return []
     }
 
     const data = await res.json()
     if (Array.isArray(data)) {
       return data
     }
-    return FALLBACK_TASKS.map(t => ({ ...t, is_fallback: true }))
+    return []
   } catch {
-    return FALLBACK_TASKS.map(t => ({ ...t, is_fallback: true }))
+    return []
   }
 }
 

@@ -20,7 +20,16 @@ import {
   fetchCurrentUser,
   initGuestSession,
   fetchMigrationStatus,
+  clearDemoPersona,
 } from './api/client'
+
+function isDemoTask(t) {
+  if (!t) return false
+  if (t.is_demo || t.is_fallback) return true
+  if (Array.isArray(t.tags) && t.tags.includes('demo')) return true
+  if (t.trusted_event_url && String(t.trusted_event_url).toLowerCase().includes('demo')) return true
+  return false
+}
 
 export default function App() {
   const [tasks, setTasks] = useState([])
@@ -146,30 +155,57 @@ export default function App() {
     if (stats) setUsageStats(stats)
   }, [])
 
+  // Demo persona is strictly session-scoped: on reload, it starts false so dummy data is gone
+  const [isDemoActive, setIsDemoActive] = useState(false)
+  const isDemoActiveRef = useRef(false)
+  isDemoActiveRef.current = isDemoActive
+
+  // Listen for explicit "Load Judge Persona" clicks
+  useEffect(() => {
+    const handleDemoLoaded = () => {
+      setIsDemoActive(true)
+    }
+    window.addEventListener('compass:demo-persona-loaded', handleDemoLoaded)
+    return () => window.removeEventListener('compass:demo-persona-loaded', handleDemoLoaded)
+  }, [])
+
+  // On site reload/mount: clear any lingering dummy demo persona tasks from DB
+  // ensuring only genuine user-created tasks exist after reload
+  useEffect(() => {
+    clearDemoPersona().catch(() => {})
+  }, [])
+
   // P0.1 FIX: Domain-aware task fetcher: fires a NEW server-side request with
   // ?domain=<X> query param every time selectedDomain changes, instead of
   // client-side array filtering on stale data.
   const loadTasks = useCallback(async (domain) => {
     try {
-      const incomingTasks = await fetchTasks(domain)
+      const demoActive = isDemoActiveRef.current
+      const incomingTasks = await fetchTasks(domain, { include_demo: demoActive })
       if (!Array.isArray(incomingTasks)) return
 
+      // Client-side filter to guarantee zero dummy data on reload even if backend delete is in flight
+      const activeTasks = demoActive
+        ? incomingTasks
+        : incomingTasks.filter((t) => !isDemoTask(t))
+
       const currentTasks = tasksRef.current
-      const wasFallback = currentTasks.some(t => t.is_fallback)
-      const isIncomingFallback = incomingTasks.some(t => t.is_fallback)
-      const hasLengthChanged = incomingTasks.length !== currentTasks.length
-      const hasContentChanged = incomingTasks.some((task, i) => {
+      const hasLengthChanged = activeTasks.length !== currentTasks.length
+      const hasContentChanged = activeTasks.some((task, i) => {
         const cur = currentTasks[i]
-        return !cur || cur.id !== task.id || cur.title !== task.title || cur.countdown !== task.countdown || Boolean(cur.is_fallback) !== Boolean(task.is_fallback)
+        return !cur || cur.id !== task.id || cur.title !== task.title || cur.countdown !== task.countdown
       })
-      if (wasFallback !== isIncomingFallback || hasLengthChanged || hasContentChanged) {
-        setTasks(incomingTasks)
+      if (hasLengthChanged || hasContentChanged) {
+        setTasks(activeTasks)
       }
       if (!domain || domain === 'all') {
-        setAllTasks(incomingTasks)
+        setAllTasks(activeTasks)
       } else {
-        fetchTasks('all').then(total => {
-          if (Array.isArray(total)) setAllTasks(total)
+        fetchTasks('all', { include_demo: demoActive }).then((total) => {
+          if (Array.isArray(total)) {
+            const filteredTotal = demoActive ? total : total.filter((t) => !isDemoTask(t))
+            setAllTasks(filteredTotal)
+          }
         }).catch(() => {})
       }
     } catch {
@@ -177,10 +213,10 @@ export default function App() {
     }
   }, [])
 
-  // Re-fetch tasks from server whenever the domain filter changes
+  // Re-fetch tasks from server whenever the domain filter or demo active state changes
   useEffect(() => {
     loadTasks(selectedDomain)
-  }, [selectedDomain, loadTasks])
+  }, [selectedDomain, isDemoActive, loadTasks])
 
   // Check URL query parameters on mount to prompt account selection or show OAuth errors
   useEffect(() => {
