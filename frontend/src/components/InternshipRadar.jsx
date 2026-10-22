@@ -98,19 +98,8 @@ export default function InternshipRadar({
           pageSize: 50,
         })
         const allOpps = res.opportunities || []
-        // Strict 24h verified filter: confirmed within 24h or posted today/yesterday with verified source
-        const now = new Date()
-        items = allOpps.filter(o => {
-          if (o.verification_evidence && o.verification_evidence.includes('VERIFIED_WITHIN_24H')) {
-            return true
-          }
-          if (o.confirmed_open_date) {
-            const openD = new Date(o.confirmed_open_date)
-            const diffHours = (now - openD) / (1000 * 60 * 60)
-            return diffHours >= 0 && diffHours <= 28
-          }
-          return false
-        })
+        // Strict 24h verified filter: strictly rely ONLY on backend is_verified_within_24h boolean
+        items = allOpps.filter(o => o.is_verified_within_24h === true)
       } else if (activeTab === 'open') {
         items = await fetchOpenOpportunities({
           category: selectedCategory,
