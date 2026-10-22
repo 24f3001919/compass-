@@ -61,6 +61,68 @@ def format_display_quote(text: str) -> str:
     return re.sub(r"\s+", " ", formatted).strip()
 
 
+def truncate_quote_cleanly(text: str, max_chars: int = 320) -> str:
+    """Truncate text at sentence or word boundary with ellipsis if needed to avoid mid-word cutoff."""
+    if not text or not isinstance(text, str):
+        return ""
+    clean = " ".join(text.split()).strip()
+    if len(clean) <= max_chars:
+        return clean
+    # Try finding sentence boundary up to max_chars
+    match = list(re.finditer(r"([.!?])\s+", clean[:max_chars]))
+    if match:
+        end_idx = match[-1].end(1)
+        if end_idx >= 60:
+            return clean[:end_idx].strip()
+    # Otherwise truncate at word boundary
+    truncated = clean[:max_chars].rsplit(" ", 1)[0].strip()
+    truncated = re.sub(r"[,;:\s]+$", "", truncated)
+    return truncated + "..."
+
+
+def sanitize_verification_query(query: str) -> str:
+    """Strip verification intent phrasing wrapper so research queries only contain the factual topic.
+
+    Preserves subject words like 'Tavily' or 'verification' if they are part of the
+    actual factual claim itself (e.g. 'Tavily free tier credits' or 'verification deadline').
+    """
+    if not query:
+        return ""
+    q = query.strip()
+
+    # 1. Pure instruction queries with no factual claim return empty string
+    pure_instruction_patterns = [
+        r"(?i)^(?:please\s+)?(?:can\s+you\s+)?(?:verify|fact[- ]?check|check)\s+(?:this|that|it|the\s+claim(?:\s+you\s+just\s+made)?)(?:\s+(?:with|using)\s+tavily)?[\s.?!]*$",
+        r"(?i)^(?:please\s+)?(?:can\s+you\s+)?(?:verify|fact[- ]?check|check)(?:\s+(?:with|using)\s+tavily)?[\s.?!]*$",
+    ]
+    if any(re.match(pat, q) for pat in pure_instruction_patterns):
+        return ""
+
+    # 2. Strip leading instruction wrapper phrases (preserve 'verification', only strip 'verify'/'check')
+    patterns_start = [
+        r"(?i)^(?:please\s+)?(?:can\s+you\s+)?(?:verify|fact[- ]?check|check)\s+(?:this|that|it|the\s+claim(?:\s+you\s+just\s+made)?)(?:\s+(?:with|using)\s+tavily)?(?:\s*[:,-]\s*|\s+that\s+|\s+about\s+|\s+for\s+|\s+)",
+        r"(?i)^(?:please\s+)?(?:can\s+you\s+)?(?:verify|fact[- ]?check|check)\s+(?:with\s+tavily|using\s+tavily)(?:\s*[:,-]\s*|\s+that\s+|\s+about\s+|\s+for\s+|\s+)",
+        r"(?i)^(?:verify|fact[- ]?check|check)\s+this(?:\s+deadline)?\s*[:,-]?\s*",
+        r"(?i)^(?:please\s+)?(?:can\s+you\s+)?\b(?:verify|fact[- ]?check|check)\b(?:\s+(?:the|a|an))?(?:\s*[:,-]|\s+)\s*",
+    ]
+    for pat in patterns_start:
+        new_q = re.sub(pat, "", q).strip()
+        if new_q != q:
+            q = new_q
+            break
+
+    # 3. Strip trailing instruction phrases like "with tavily" or "using tavily"
+    patterns_end = [
+        r"(?i)\s+(?:with\s+tavily|using\s+tavily)\.?$",
+        r"(?i)\s+(?:using\s+the\s+tavily\s+api)\.?$",
+    ]
+    for pat in patterns_end:
+        q = re.sub(pat, "", q).strip()
+
+    clean = " ".join(q.split()).strip(" :.-")
+    return clean
+
+
 def _raw_cache_key(query: str, domains: Optional[List[str]] = None) -> str:
     norm = f"{query.strip().lower()}:{sorted(domains or [])}"
     return hashlib.sha256(norm.encode("utf-8")).hexdigest()
@@ -72,7 +134,7 @@ def _cache_key(query: str, domains: Optional[List[str]], trusted_event_url: Opti
 
 async def decompose_query(query: str) -> List[str]:
     """Decompose research objective into 2-3 focused sub-queries."""
-    clean = query.strip()
+    clean = sanitize_verification_query(query).strip()
     sub_queries = [clean]
     if "deadline" in clean.lower() or "due" in clean.lower():
         sub_queries.append(f"{clean} official schedule rules")
@@ -127,44 +189,109 @@ async def execute_subqueries(
     return list(deduped.values()), credits_used
 
 
-def _parse_time_and_tz(text: str) -> Tuple[int, int, Any]:
-    """Parse time and timezone from text using zoneinfo (America/Los_Angeles, America/New_York, Asia/Kolkata)."""
+def _parse_time_and_tz_detail(text: str) -> Tuple[int, int, Any, bool]:
+    """Parse hour, minute, ZoneInfo, and boolean indicating whether time was explicitly present."""
     if not text or not isinstance(text, str):
-        return 0, 0, ZoneInfo("UTC")
+        return 0, 0, ZoneInfo("UTC"), False
     text_clean = text.lower().strip()
     if "midnight" in text_clean:
-        return 23, 59, ZoneInfo("UTC")
+        return 23, 59, ZoneInfo("UTC"), True
 
-    m = re.search(
-        r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(pdt|pst|pt|pacific(?:\s+time)?|edt|est|et|eastern(?:\s+time)?|cdt|cst|ct|central(?:\s+time)?|mdt|mst|mt|mountain(?:\s+time)?|ist|utc|gmt)?\b",
-        text,
+    tz_pattern = r"(?:pdt|pst|pt|pacific(?:\s+time)?|edt|est|et|eastern(?:\s+time)?|cdt|cst|ct|central(?:\s+time)?|mdt|mst|mt|mountain(?:\s+time)?|ist|utc|gmt)"
+    pattern_strict = re.compile(
+        rf"\b(\d{{1,2}})(?::(\d{{2}}))?\s*(am|pm)?\s*({tz_pattern})?\b",
         re.IGNORECASE,
     )
-    if not m:
-        return 0, 0, ZoneInfo("UTC")
+    for cand in pattern_strict.finditer(text):
+        h_r, m_r, ap_r, tz_r = cand.group(1), cand.group(2), cand.group(3), cand.group(4)
+        if m_r or ap_r or tz_r:
+            hour = int(h_r)
+            if hour <= 24:
+                minute = int(m_r or 0)
+                ampm = (ap_r or "").lower()
+                if ampm == "pm" and hour < 12:
+                    hour += 12
+                elif ampm == "am" and hour == 12:
+                    hour = 0
+                tz_str = (tz_r or "").lower().strip()
+                tz_map = {
+                    ("pdt", "pst", "pt", "pacific", "pacific time"): "America/Los_Angeles",
+                    ("edt", "est", "et", "eastern", "eastern time"): "America/New_York",
+                    ("cdt", "cst", "ct", "central", "central time"): "America/Chicago",
+                    ("mdt", "mst", "mt", "mountain", "mountain time"): "America/Denver",
+                    ("ist", "india", "indian standard time"): "Asia/Kolkata",
+                }
+                tz_name = next((zone for keys, zone in tz_map.items() if tz_str in keys), "UTC")
+                return hour, minute, ZoneInfo(tz_name), True
 
-    hour = int(m.group(1))
-    minute = int(m.group(2) or 0)
-    ampm = (m.group(3) or "").lower()
-    tz_str = (m.group(4) or "").lower().strip()
+    return 0, 0, ZoneInfo("UTC"), False
 
-    if not m.group(2) and not m.group(3) and hour not in (23, 0):
-        return 0, 0, ZoneInfo("UTC")
 
-    if ampm == "pm" and hour < 12:
-        hour += 12
-    elif ampm == "am" and hour == 12:
-        hour = 0
+def _parse_time_and_tz(text: str) -> Tuple[int, int, Any]:
+    """Parse time and timezone from text using zoneinfo (America/Los_Angeles, America/New_York, Asia/Kolkata)."""
+    h, m, tz, _ = _parse_time_and_tz_detail(text)
+    return h, m, tz
 
-    tz_map = {
-        ("pdt", "pst", "pt", "pacific", "pacific time"): "America/Los_Angeles",
-        ("edt", "est", "et", "eastern", "eastern time"): "America/New_York",
-        ("cdt", "cst", "ct", "central", "central time"): "America/Chicago",
-        ("mdt", "mst", "mt", "mountain", "mountain time"): "America/Denver",
-        ("ist", "india", "indian standard time"): "Asia/Kolkata",
-    }
-    tz_name = next((zone for keys, zone in tz_map.items() if tz_str in keys), "UTC")
-    return hour, minute, ZoneInfo(tz_name)
+
+def classify_deadline_label(before_text: str, after_text: str = "", window_text: str = "") -> str:
+    """Classify date candidate into a semantic deadline label based on surrounding text context."""
+    comb = f"{before_text} {after_text} {window_text}".lower()
+
+    # 1. Registration checks
+    if any(k in comb for k in (
+        "registration close", "registration deadline", "register by",
+        "registration ends", "registration period", "registration window",
+        "register before", "registration closes", "registration opens", "registration open",
+        "registration"
+    )):
+        return "registration"
+
+    # 2. Judging checks
+    if any(k in comb for k in ("judging period", "judging begins", "judging starts", "evaluation period", "judging", "evaluation")):
+        return "judging"
+
+    # 3. Winners / announcement checks
+    if any(k in comb for k in ("winners announced", "results announced", "winner announcement", "winners", "winner")):
+        return "winners"
+
+    # 4. Event start checks
+    if any(k in comb for k in (
+        "hackathon kickoff", "kickoff", "starts on", "begins on", "opening date", "hackathon starts", "start date",
+        "event starts", "event start", "starts", "begins", "opening", "opens"
+    )):
+        return "event_start"
+
+    # 5. Event end / concluding checks (when not submission)
+    if any(k in comb for k in ("hackathon ends", "concludes on", "closing date", "concluding", "wrap-up", "closing ceremony", "event ends")):
+        return "event_end"
+
+    # 6. Submission deadline checks
+    if any(k in comb for k in (
+        "submission deadline", "submissions close", "submission period end",
+        "submit by", "submissions due", "submission closes", "deadline:", "due date", "due by",
+        "submissions", "submission", "deadline", "due", "closes"
+    )):
+        return "submission"
+
+    return "unclassified"
+
+
+def determine_claim_deadline_type(claim_text: str) -> str:
+    """Determine the semantic deadline category asserted by the user's claim."""
+    if not claim_text:
+        return "submission"
+    c_low = claim_text.lower()
+    if any(k in c_low for k in ("registration", "register")):
+        return "registration"
+    if any(k in c_low for k in ("start", "begins", "opening", "kickoff")):
+        return "event_start"
+    if any(k in c_low for k in ("judging", "evaluation")):
+        return "judging"
+    if any(k in c_low for k in ("winner", "winners", "results")):
+        return "winners"
+    if any(k in c_low for k in ("event ends", "concludes", "closing ceremony")):
+        return "event_end"
+    return "submission"
 
 
 def _parse_explicit_year_date(date_str: Optional[str]) -> Tuple[Optional[datetime], str]:
@@ -283,18 +410,39 @@ def evaluate_deterministic_verdict(
     sources: List[Dict[str, Any]],
     target_entity: Optional[str] = None,
     source_text_map: Optional[Dict[str, str]] = None,
+    target_claim: Optional[str] = None,
 ) -> Tuple[str, List[Dict[str, Any]]]:
-    """Derive deterministic verdicts over structured extractions with entity binding and quote validation."""
+    """Derive deterministic verdicts over structured extractions with label-aware entity binding, same-type comparison, and quote validation."""
     if not sources or not raw_extracted_text:
         return "NOT_FOUND", []
 
+    VERIFY_STOPWORDS = {
+        "verify", "verification", "check", "factcheck", "fact",
+        "please", "with", "this", "that", "claim", "hackathon", "submission",
+        "deadline", "rules", "schedule", "guide", "overview", "date", "dates",
+        "time", "official", "2024", "2025", "2026", "global"
+    }
     entity_keywords = []
     if target_entity:
-        entity_keywords = [
-            w.lower()
-            for w in re.findall(r"\b[a-zA-Z0-9_-]{3,}\b", target_entity)
-            if w.lower() not in ("hackathon", "submission", "deadline", "rules", "schedule", "guide", "overview")
-        ]
+        if target_entity.strip().lower() in ("tavily", "tavily ai", "tavily search"):
+            entity_keywords = ["tavily"]
+        else:
+            entity_keywords = [
+                w.lower()
+                for w in re.findall(r"\b[a-zA-Z0-9_-]{3,}\b", target_entity)
+                if w.lower() not in VERIFY_STOPWORDS
+            ]
+
+    # Semantic label of the target claim
+    claim_type = determine_claim_deadline_type(target_claim or "")
+    target_claim_dt = None
+    target_claim_has_time = False
+    if target_claim:
+        target_claim_dt, _ = _parse_explicit_year_date(target_claim)
+        if target_claim_dt:
+            t_h, t_m, t_tz, target_claim_has_time = _parse_time_and_tz_detail(target_claim)
+            if target_claim_has_time:
+                target_claim_dt = datetime(target_claim_dt.year, target_claim_dt.month, target_claim_dt.day, t_h, t_m, 0, tzinfo=t_tz)
 
     evidence_items: List[Dict[str, Any]] = []
     verdicts: List[str] = []
@@ -302,6 +450,7 @@ def evaluate_deterministic_verdict(
     url_badge_map = {s.get("url"): s.get("authority_badge", "") for s in sources}
     normalized_raw = " ".join(raw_extracted_text.lower().split())
     seen_quotes: set[str] = set()
+    now_utc = datetime.now(timezone.utc)
 
     for c in claims:
         claim_text = c.get("claim", "").strip()
@@ -349,13 +498,22 @@ def evaluate_deterministic_verdict(
             seen_quotes.add(quote)
         verbatim_match = in_own_text
 
-
         tier = url_tier_map.get(source_url, AuthorityTier.TIER_3_GENERAL.value)
-        parsed_dt, year_provenance = _parse_explicit_year_date(raw_date or claim_text)
+        cand_text_for_time = f"{raw_date or ''} {claim_text or ''} {quote or ''}"
+        parsed_dt, year_provenance = _parse_explicit_year_date(cand_text_for_time)
+        item_has_time = False
+        if parsed_dt:
+            item_h, item_m, item_tz, item_has_time = _parse_time_and_tz_detail(cand_text_for_time)
+            if item_has_time:
+                parsed_dt = datetime(parsed_dt.year, parsed_dt.month, parsed_dt.day, item_h, item_m, 0, tzinfo=item_tz)
+
+        # Label classification for evidence candidate
+        item_label = classify_deadline_label(quote, claim_text, raw_date or "")
+        is_same_type = (item_label == claim_type)
+
         is_verified_quote = (
             verbatim_match and entity_matched and is_independent and (parsed_dt is not None if raw_date else True)
         )
-
 
         if not entity_matched:
             verdict = "NOT_FOUND"
@@ -369,7 +527,39 @@ def evaluate_deterministic_verdict(
             verdict = "UNVERIFIED"
         elif _COUNTDOWN_PATTERN.search(claim_text) or _COUNTDOWN_PATTERN.search(quote):
             verdict = "UNVERIFIED"
-        elif parsed_dt and parsed_dt < datetime.now(timezone.utc):
+        elif not is_same_type:
+            # Different deadline category (e.g. registration date vs submission deadline).
+            # Do NOT use it to contradict or verify this claim.
+            verdict = "UNVERIFIED"
+        elif target_claim_dt and parsed_dt:
+            # Same type candidate! Compare date, time, timezone, and year.
+            date_mismatch = (
+                target_claim_dt.year != parsed_dt.year or
+                target_claim_dt.month != parsed_dt.month or
+                target_claim_dt.day != parsed_dt.day
+            )
+            if date_mismatch:
+                if tier in (AuthorityTier.TIER_1_OFFICIAL.value, AuthorityTier.TIER_2_TECHNICAL.value):
+                    verdict = "CONTRADICTED"
+                else:
+                    verdict = "UNVERIFIED"
+            else:
+                # Date matches! Check time and timezone if specified
+                if target_claim_has_time and item_has_time:
+                    target_utc = target_claim_dt.astimezone(timezone.utc)
+                    parsed_utc = parsed_dt.astimezone(timezone.utc)
+                    if (target_utc.hour != parsed_utc.hour or target_utc.minute != parsed_utc.minute):
+                        verdict = "PARTIALLY_VERIFIED"
+                    else:
+                        verdict = "VERIFIED"
+                else:
+                    verdict = "VERIFIED"
+
+                # Check runtime clock for passed deadline
+                if parsed_dt.astimezone(timezone.utc) < now_utc:
+                    if verdict == "VERIFIED":
+                        verdict = "STALE"
+        elif parsed_dt and parsed_dt.astimezone(timezone.utc) < now_utc:
             verdict = "STALE"
         elif tier == AuthorityTier.TIER_1_OFFICIAL.value:
             verdict = "VERIFIED"
@@ -415,33 +605,40 @@ def evaluate_deterministic_verdict(
             "verbatim_verified": is_verified_quote,
             "is_independent": is_independent,
             "entity_matched": entity_matched,
+            "deadline_type": item_label,
+            "is_same_type": is_same_type,
             "fetched_at": datetime.now(timezone.utc).isoformat(),
             "retrieved_at": datetime.now(timezone.utc).isoformat(),
         })
 
-    # Check for conflicting dates across distinct sources
+    # Check for conflicting dates across distinct sources for SAME deadline type
     dates_by_source = {}
     for item in evidence_items:
-        parsed_date = item.get("parsed_date")
-        source_url = item.get("source_url")
-        if isinstance(parsed_date, str) and source_url:
-            d = parsed_date[:10]  # compare YYYY-MM-DD
-            dates_by_source[source_url] = d
+        if item.get("deadline_type") == claim_type and item.get("authority_tier") in (AuthorityTier.TIER_1_OFFICIAL.value, AuthorityTier.TIER_2_TECHNICAL.value):
+            parsed_date = item.get("parsed_date")
+            source_url = item.get("source_url")
+            if isinstance(parsed_date, str) and source_url:
+                d = parsed_date[:10]
+                dates_by_source[source_url] = d
 
     unique_dates = set(dates_by_source.values())
     has_conflict = len(dates_by_source) >= 2 and len(unique_dates) > 1
 
     if has_conflict:
         for idx, item in enumerate(evidence_items):
-            if isinstance(item.get("parsed_date"), str):
+            if item.get("deadline_type") == claim_type and isinstance(item.get("parsed_date"), str):
                 item["verdict"] = "CONFLICTING"
                 verdicts[idx] = "CONFLICTING"
 
     # Overall pipeline verdict rule
     if not evidence_items:
         overall = "NOT_FOUND"
+    elif any(v == "CONTRADICTED" for v in verdicts):
+        overall = "CONTRADICTED"
     elif any(v == "CONFLICTING" for v in verdicts):
         overall = "CONFLICTING"
+    elif any(v == "PARTIALLY_VERIFIED" for v in verdicts):
+        overall = "PARTIALLY_VERIFIED"
     elif any(v == "VERIFIED" for v in verdicts):
         overall = "VERIFIED"
     elif all(v == "NOT_FOUND" for v in verdicts):
@@ -627,9 +824,7 @@ async def run_tavily_research(
 
         if chosen:
             dt_match = re.search(r"\b(202[4-9])\b", chosen)
-            exact_quote = chosen.strip()
-            if len(exact_quote) > 300:
-                exact_quote = exact_quote[:300].strip()
+            exact_quote = truncate_quote_cleanly(chosen)
             if exact_quote and exact_quote[-1] in (",", ";", ":"):
                 exact_quote = exact_quote[:-1].strip()
 
@@ -646,7 +841,12 @@ async def run_tavily_research(
     full_extracted_corpus = "\n\n".join(url_to_raw_content.values())
     combined_corpus = (full_extracted_corpus + "\n\n" + " ".join(s.get("content", "") for s in top_sources)).strip()
     overall_verdict, evidence_ledger = evaluate_deterministic_verdict(
-        claims, combined_corpus, top_sources, target_entity=target_entity or query, source_text_map=source_text_map
+        claims,
+        combined_corpus,
+        top_sources,
+        target_entity=target_entity or query,
+        source_text_map=source_text_map,
+        target_claim=query,
     )
     stage_timings["verdict_eval_ms"] = round((time.perf_counter() - t0) * 1000, 2)
 
@@ -670,12 +870,25 @@ async def run_tavily_research(
 
     stage_timings["total_ms"] = round((time.perf_counter() - t_start) * 1000, 2)
 
+    if overall_verdict == "VERIFIED":
+        summary_msg = f"Authoritative source confirms the deadline claim. Evaluated {len(top_sources)} sources. Overall verdict: VERIFIED."
+    elif overall_verdict == "PARTIALLY_VERIFIED":
+        summary_msg = f"The date is confirmed by official sources, but the specified time or timezone differs. Evaluated {len(top_sources)} sources. Overall verdict: PARTIALLY_VERIFIED."
+    elif overall_verdict == "CONTRADICTED":
+        summary_msg = f"Authoritative evidence contradicts the stated claim. Evaluated {len(top_sources)} sources. Overall verdict: CONTRADICTED."
+    elif overall_verdict == "CONFLICTING":
+        summary_msg = f"Conflicting dates were found across independent sources for this deadline. Evaluated {len(top_sources)} sources. Overall verdict: CONFLICTING."
+    elif overall_verdict == "STALE":
+        summary_msg = f"The verified deadline has already passed as of today's date. Evaluated {len(top_sources)} sources. Overall verdict: STALE."
+    else:
+        summary_msg = f"Unable to independently verify the claim from authoritative sources. Evaluated {len(top_sources)} sources. Overall verdict: UNVERIFIED."
+
     result = {
         "status": "ok",
         "verdict": overall_verdict,
         "run_id": active_run_id,
         "cached": from_cache,
-        "summary": f"Research complete. Evaluated {len(top_sources)} sources. Overall verdict: {overall_verdict}.",
+        "summary": summary_msg,
         "evidence_ledger": evidence_ledger,
         "stage_timings": stage_timings,
         "progress": {"stage": "complete", "total_ms": stage_timings["total_ms"]},
