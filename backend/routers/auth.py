@@ -556,7 +556,7 @@ async def calendar_connect(
         if not (settings.is_development() or settings.is_test()):
             raise HTTPException(
                 status_code=403,
-                detail="x-user-id / compass_user_id impersonation is strictly forbidden outside development or test environments",
+                detail="x-user-id / compass_user_id impersonation is strictly forbidden outside development or test environments. Set ENVIRONMENT=development in your environment or .env for local development.",
             )
         if not current_user:
             candidate = (user_header and user_header.strip()) or (cookie_user and cookie_user.strip())

@@ -453,10 +453,12 @@ async def trigger_nightly_consolidation_endpoint(_token: str = Depends(verify_to
 
 
 @router.post("/feasibility")
-async def agent_feasibility(req: FeasibilityRequest, _token: str = Depends(verify_token)):
+async def agent_feasibility(request: Request, req: FeasibilityRequest, _token: str = Depends(verify_token)):
     """Stream feasibility evaluation via SSE."""
     from backend.agents.feasibility import run_feasibility_review
+    from backend.dependencies import _get_or_create_user_id
     pool = await get_pool()
+    user_id = _get_or_create_user_id(request)
 
     days = req.days or 5
     hours = req.hours_per_day or 4.0
@@ -466,6 +468,7 @@ async def agent_feasibility(req: FeasibilityRequest, _token: str = Depends(verif
             async for ev in run_feasibility_review(
                 pool, days=days, hours_per_day=hours,
                 domain=req.domain,
+                user_id=user_id,
             ):
                 yield f"data: {json.dumps(ev)}\n\n"
         except Exception:

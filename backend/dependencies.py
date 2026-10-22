@@ -270,6 +270,14 @@ def _extract_verified_guest_id(request: Request) -> Optional[str]:
         if verified:
             return verified
 
+    auth_header = request.headers.get("authorization")
+    if auth_header and auth_header.lower().startswith("bearer "):
+        bearer_tok = auth_header[7:].strip()
+        if "." in bearer_tok:
+            verified = verify_guest_token(bearer_tok)
+            if verified:
+                return verified
+
     return None
 
 
@@ -290,7 +298,7 @@ def _get_current_identity(request: Request) -> Optional[Identity]:
         if not (settings.is_development() or settings.is_test()):
             raise HTTPException(
                 status_code=403,
-                detail="x-user-id / compass_user_id impersonation is strictly forbidden outside development or test environments",
+                detail="x-user-id / compass_user_id impersonation is strictly forbidden outside development or test environments. Set ENVIRONMENT=development in your environment or .env for local development.",
             )
 
     session_token = request.cookies.get("compass_session")
@@ -332,16 +340,19 @@ def _get_current_identity(request: Request) -> Optional[Identity]:
             guest_id=verified_guest,
         )
 
-    # 5. Fallback unverified cookie / dev header
+    # 5. Fallback unverified cookie: return 401 with Set-Cookie clearing it in production
     cookie_user = request.cookies.get("compass_user_id")
-    candidate_raw = (user_header or "").strip() or (cookie_user or "").strip()
-    if candidate_raw:
+    if cookie_user and cookie_user.strip():
         if not (settings.is_development() or settings.is_test()):
             raise HTTPException(
-                status_code=403,
-                detail="x-user-id / compass_user_id impersonation is strictly forbidden outside development or test environments",
+                status_code=401,
+                detail="Stale user cookie. Re-authentication required.",
+                headers={"Set-Cookie": "compass_user_id=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax"},
             )
-        target = candidate_raw.lower()
+
+    # 6. Dev-only x-user-id header fallback (never trust cookie as identity)
+    if user_header and user_header.strip() and (settings.is_development() or settings.is_test()):
+        target = user_header.strip().lower()
         return Identity(id=target, is_admin=(target == "admin"), is_guest=False, user_id=target, guest_id=verified_guest)
 
     return None

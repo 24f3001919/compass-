@@ -202,7 +202,9 @@ async def enforce_mint_rate_limit(request: Request) -> None:
     await check_global_mint_cap()
 
     # 3. Configurable hourly capacity per IP/key
-    hourly_limit = int(getattr(settings, "GUEST_MINT_HOURLY_IP_LIMIT", 5))
+    default_limit = 1000 if (settings.is_development() or settings.is_test()) else 5
+    configured_limit = getattr(settings, "GUEST_MINT_HOURLY_IP_LIMIT", default_limit)
+    hourly_limit = int(configured_limit) if configured_limit != 5 or not (settings.is_development() or settings.is_test()) else 1000
     capacity = float(hourly_limit)
     refill_rate = capacity / 3600.0
 
