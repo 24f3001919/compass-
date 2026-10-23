@@ -220,7 +220,7 @@ async def validate_resume_endpoint(resume_id: int, request: Request):
         raise HTTPException(status_code=404, detail="Resume not found")
 
     master = await get_master_resume(user_id)
-    master_content = master.content if master else res.content
+    master_content = res.content if res.is_master else (master.content if master else res.content)
 
     opp = None
     if res.opportunity_id:
@@ -412,7 +412,7 @@ async def commit_extracted_resume_endpoint(
         report = validate_resume_against_master(reviewed_content, reviewed_content)
         return await create_tailored_resume(
             user_id=user_id,
-            opportunity_id=0,
+            opportunity_id=None,
             title="Imported Resume Draft",
             content=reviewed_content,
             validation_report=report,

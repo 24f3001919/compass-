@@ -202,7 +202,7 @@ async def upsert_master_resume(user_id: str, content: ResumeContent, title: str 
 
 async def create_tailored_resume(
     user_id: str,
-    opportunity_id: int,
+    opportunity_id: Optional[int],
     title: str,
     content: ResumeContent,
     validation_report: ResumeValidationReport,
@@ -210,6 +210,7 @@ async def create_tailored_resume(
     cover_letter: Optional[str] = None,
 ) -> ResumeOut:
     global _resume_id_seq
+    safe_opp_id = opportunity_id if (opportunity_id and opportunity_id > 0) else None
     pool = await get_pool()
     content_dict = content.model_dump()
     report_dict = validation_report.model_dump()
@@ -219,7 +220,7 @@ async def create_tailored_resume(
         record = {
             "id": _resume_id_seq,
             "user_id": user_id,
-            "opportunity_id": opportunity_id,
+            "opportunity_id": safe_opp_id,
             "is_master": False,
             "title": title,
             "version": 1,
@@ -242,7 +243,7 @@ async def create_tailored_resume(
             RETURNING *;
             """,
             user_id,
-            opportunity_id,
+            safe_opp_id,
             title,
             json.dumps(content_dict),
             cover_letter,
@@ -423,6 +424,9 @@ async def update_resume(resume_id: int, user_id: str, updates: Dict[str, Any]) -
             return _parse_resume_row(record, is_persisted=False)
         return None
 
+    has_cover_letter = "cover_letter" in updates
+    cover_letter_val = updates.get("cover_letter")
+
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
@@ -431,6 +435,7 @@ async def update_resume(resume_id: int, user_id: str, updates: Dict[str, Any]) -
                 content = COALESCE($4::jsonb, content),
                 validation_status = COALESCE($5, validation_status),
                 validation_report = COALESCE($6::jsonb, validation_report),
+                cover_letter = CASE WHEN $7::boolean THEN $8 ELSE cover_letter END,
                 updated_at = now()
             WHERE id = $1 AND user_id = $2
             RETURNING *;
@@ -441,6 +446,8 @@ async def update_resume(resume_id: int, user_id: str, updates: Dict[str, Any]) -
             content_json,
             updates.get("validation_status"),
             report_json,
+            has_cover_letter,
+            cover_letter_val,
         )
         return _parse_resume_row(dict(row), is_persisted=True) if row else None
 

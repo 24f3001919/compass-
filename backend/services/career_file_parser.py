@@ -42,12 +42,16 @@ class ResumeParseResult(BaseModel):
 
 
 def is_pdf_parser_available() -> bool:
-    """Check if pypdf is installed and functional."""
+    """Check if pypdf or pdfplumber is installed and functional."""
     try:
         import pypdf
         return True
     except ImportError:
-        return False
+        try:
+            import pdfplumber
+            return True
+        except ImportError:
+            return False
 
 
 def is_docx_parser_available() -> bool:
@@ -169,7 +173,15 @@ def extract_resume_from_file_bytes(
         import docx
         try:
             doc = docx.Document(io.BytesIO(file_bytes))
-            paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+            paragraphs = []
+            for p in doc.paragraphs:
+                txt = p.text.strip()
+                if not txt:
+                    continue
+                style_name = (p.style.name if p.style else "").lower()
+                if ("list" in style_name or "bullet" in style_name) and not txt.startswith(("•", "-", "*", "·")):
+                    txt = "• " + txt
+                paragraphs.append(txt)
             for table in doc.tables:
                 for row in table.rows:
                     row_text = " | ".join(cell.text.strip() for cell in row.cells if cell.text.strip())
@@ -240,6 +252,17 @@ def extract_resume_from_file_bytes(
                         has_images = True
                 except Exception as page_err:
                     logger.warning("Error reading PDF page %d: %s", idx, page_err)
+
+            if not extracted_chunks:
+                try:
+                    import pdfplumber
+                    with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                        for page in pdf.pages:
+                            t = page.extract_text() or ""
+                            if t.strip():
+                                extracted_chunks.append(t.strip())
+                except Exception as plumber_err:
+                    logger.debug("pdfplumber fallback attempt: %s", plumber_err)
 
             full_text = "\n\n".join(extracted_chunks).strip()
 
