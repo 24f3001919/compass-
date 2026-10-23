@@ -1,6 +1,6 @@
 // Chat & Memory History API
 
-import { API_BASE, getAuthHeaders } from './baseClient.js'
+import { API_BASE, getAuthHeaders, fetchWithGuestRetry } from './baseClient.js'
 
 /**
  * Send a chat message to the Nebius-powered assistant.
@@ -376,11 +376,10 @@ export async function seedJudgeDemoPersona() {
     } catch {
       /* fallback to UTC */
     }
-    const res = await fetch(`${API_BASE}/api/demo/seed-persona`, {
+    const res = await fetchWithGuestRetry(`${API_BASE}/api/demo/seed-persona`, {
       method: 'POST',
-      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tz }),
-      credentials: 'include',
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))

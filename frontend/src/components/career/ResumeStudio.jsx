@@ -11,7 +11,7 @@ import {
   commitExtractedResume,
   draftCoverLetter,
 } from '../../api/careerApi'
-import { safeHref } from '../../api/baseClient.js'
+import { downloadAuthedFile, openAuthedHtml } from '../../api/baseClient.js'
 
 import ValidationReportCard from './ValidationReportCard'
 import ResumeImportModal from './ResumeImportModal'
@@ -29,6 +29,8 @@ export default function ResumeStudio() {
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [error, setError] = useState(null)
+  const [exportingType, setExportingType] = useState(null) // 'print' | 'docx' | null
+  const [exportToast, setExportToast] = useState(null) // { message: string, type: 'error' | 'success' } | null
 
   // Form edit states
   const [fullName, setFullName] = useState('')
@@ -244,6 +246,9 @@ export default function ResumeStudio() {
         const updated = await updateMasterResume(updatedContent)
         setMasterResume(updated)
         setSelectedResume(updated)
+        if (updated?.validation_report) {
+          setValidationReport(updated.validation_report)
+        }
       } else if (selectedResume) {
         // Tailored variant save - strictly preserves master resume unmodified
         const updated = await updateResume(selectedResume.id, {
@@ -252,6 +257,9 @@ export default function ResumeStudio() {
           cover_letter: coverLetterText,
         })
         setSelectedResume(updated)
+        if (updated?.validation_report) {
+          setValidationReport(updated.validation_report)
+        }
       }
 
       setSaveSuccess(true)
@@ -271,6 +279,71 @@ export default function ResumeStudio() {
       setValidationReport(report)
     } catch (err) {
       setError(err.message || 'Validation failed')
+    }
+  }
+
+  const handleExportPrint = async () => {
+    if (exportingType || !selectedResume?.id) return
+    const nameVal = (fullName || selectedResume?.content?.full_name || '').trim()
+    const emailVal = (email || selectedResume?.content?.email || '').trim()
+    const isPlaceholderName = !nameVal || nameVal.toLowerCase() === 'compass candidate' || nameVal.toLowerCase() === 'candidate'
+    const isPlaceholderEmail = !emailVal || emailVal.toLowerCase() === 'candidate@compass.local' || !emailVal.includes('@')
+    if (isPlaceholderName || isPlaceholderEmail) {
+      const missing = []
+      if (isPlaceholderName) missing.push('Candidate Full Name')
+      if (isPlaceholderEmail) missing.push('Candidate Email')
+      setExportToast({
+        message: `Please complete required profile fields with your real information before exporting: ${missing.join(', ')} (placeholder or empty data detected).`,
+        type: 'error',
+      })
+      return
+    }
+
+    setExportingType('print')
+    setExportToast(null)
+    const popup = typeof window !== 'undefined' ? window.open('about:blank', '_blank') : null
+    try {
+      const url = getResumeExportUrl(selectedResume.id, resumeTemplate)
+      await openAuthedHtml(url, { printOnLoad: true, popup })
+      setExportToast({ message: 'Opened ATS-compliant printable resume for PDF export.', type: 'success' })
+    } catch (err) {
+      if (popup && typeof popup.close === 'function' && !popup.closed) {
+        try { popup.close() } catch { /* ignore */ }
+      }
+      setExportToast({ message: err.message || 'Failed to prepare print preview.', type: 'error' })
+    } finally {
+      setExportingType(null)
+    }
+  }
+
+  const handleExportDocx = async () => {
+    if (exportingType || !selectedResume?.id) return
+    const nameVal = (fullName || selectedResume?.content?.full_name || '').trim()
+    const emailVal = (email || selectedResume?.content?.email || '').trim()
+    const isPlaceholderName = !nameVal || nameVal.toLowerCase() === 'compass candidate' || nameVal.toLowerCase() === 'candidate'
+    const isPlaceholderEmail = !emailVal || emailVal.toLowerCase() === 'candidate@compass.local' || !emailVal.includes('@')
+    if (isPlaceholderName || isPlaceholderEmail) {
+      const missing = []
+      if (isPlaceholderName) missing.push('Candidate Full Name')
+      if (isPlaceholderEmail) missing.push('Candidate Email')
+      setExportToast({
+        message: `Please complete required profile fields with your real information before exporting: ${missing.join(', ')} (placeholder or empty data detected).`,
+        type: 'error',
+      })
+      return
+    }
+
+    setExportingType('docx')
+    setExportToast(null)
+    try {
+      const url = getResumeExportDocxUrl(selectedResume.id)
+      const fallbackName = `${(selectedResume.title || 'resume').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_') || 'resume'}.docx`
+      const result = await downloadAuthedFile(url, fallbackName)
+      setExportToast({ message: `Successfully downloaded ${result.filename || 'Word (.docx) resume'}.`, type: 'success' })
+    } catch (err) {
+      setExportToast({ message: err.message || 'Failed to download Word document.', type: 'error' })
+    } finally {
+      setExportingType(null)
     }
   }
 
@@ -377,6 +450,42 @@ export default function ResumeStudio() {
         </div>
       )}
 
+      {exportToast && (
+        <div
+          role="alert"
+          style={{
+            background: exportToast.type === 'error' ? '#fee2e2' : '#dcfce7',
+            border: `1px solid ${exportToast.type === 'error' ? '#fca5a5' : '#86efac'}`,
+            color: exportToast.type === 'error' ? '#991b1b' : '#166534',
+            padding: '12px 16px',
+            borderRadius: '8px',
+            marginBottom: '16px',
+            fontSize: '13px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px',
+          }}
+        >
+          <span>{exportToast.type === 'error' ? '⚠️ ' : '✅ '}{exportToast.message}</span>
+          <button
+            type="button"
+            onClick={() => setExportToast(null)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'inherit',
+              fontWeight: '700',
+              padding: '0 4px',
+              fontSize: '14px',
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Main Grid: Left sidebar versions / validation card, Right editor / diff */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px', alignItems: 'start' }}>
         {/* Left Column: Versions & Integrity Card */}
@@ -469,10 +578,11 @@ export default function ResumeStudio() {
 
               {selectedResume && (
                 <>
-                  <a
-                    href={safeHref(getResumeExportUrl(selectedResume.id, resumeTemplate))}
-                    target="_blank"
-                    rel="noreferrer"
+                  <button
+                    type="button"
+                    id="btn-print-pdf"
+                    disabled={Boolean(exportingType)}
+                    onClick={handleExportPrint}
                     style={{
                       background: 'var(--primary, #2563eb)',
                       color: '#ffffff',
@@ -480,17 +590,22 @@ export default function ResumeStudio() {
                       borderRadius: '8px',
                       fontSize: '12.5px',
                       fontWeight: '700',
-                      textDecoration: 'none',
+                      border: 'none',
+                      cursor: exportingType ? 'not-allowed' : 'pointer',
+                      opacity: exportingType ? 0.7 : 1,
                       boxShadow: '0 2px 8px rgba(37, 99, 235, 0.25)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
                     }}
                   >
-                    📄 Print / PDF
-                  </a>
-                  <a
-                    href={safeHref(getResumeExportDocxUrl(selectedResume.id))}
-                    target="_blank"
-                    rel="noreferrer"
-
+                    {exportingType === 'print' ? '⏳ Generating PDF…' : '📄 Print / PDF'}
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-export-docx"
+                    disabled={Boolean(exportingType)}
+                    onClick={handleExportDocx}
                     style={{
                       background: 'var(--bg-card)',
                       border: '1px solid var(--border)',
@@ -499,11 +614,15 @@ export default function ResumeStudio() {
                       borderRadius: '8px',
                       fontSize: '12.5px',
                       fontWeight: '700',
-                      textDecoration: 'none',
+                      cursor: exportingType ? 'not-allowed' : 'pointer',
+                      opacity: exportingType ? 0.7 : 1,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
                     }}
                   >
-                    📝 Word (.docx)
-                  </a>
+                    {exportingType === 'docx' ? '⏳ Preparing Word…' : '📝 Word (.docx)'}
+                  </button>
                 </>
               )}
             </div>
@@ -610,8 +729,13 @@ export default function ResumeStudio() {
             <form onSubmit={handleSaveResume} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>
-                    Full Name
+                  <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>
+                    <span>Full Name</span>
+                    {fullName.trim().toLowerCase() === 'compass candidate' && (
+                      <span style={{ fontSize: '11px', color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: '4px', fontWeight: '600' }}>
+                        ⚠️ Placeholder, please replace
+                      </span>
+                    )}
                   </label>
                   <input
                     type="text"
@@ -622,8 +746,13 @@ export default function ResumeStudio() {
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>
-                    Contact Email
+                  <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12.5px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '6px' }}>
+                    <span>Contact Email</span>
+                    {email.trim().toLowerCase() === 'candidate@compass.local' && (
+                      <span style={{ fontSize: '11px', color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: '4px', fontWeight: '600' }}>
+                        ⚠️ Placeholder, please replace
+                      </span>
+                    )}
                   </label>
                   <input
                     type="email"

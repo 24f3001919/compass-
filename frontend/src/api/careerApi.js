@@ -111,20 +111,14 @@ export async function validateResume(resumeId) {
 }
 
 export function getResumeExportUrl(resumeId, template = null) {
-  const tok = getGuestToken()
   const params = new URLSearchParams()
   if (template) params.append('template', template)
-  if (tok) params.append('guest_token', tok)
   const qs = params.toString()
   return safeHref(qs ? `${API_BASE}/resumes/${encodeURIComponent(resumeId)}/export/html?${qs}` : `${API_BASE}/resumes/${encodeURIComponent(resumeId)}/export/html`)
 }
 
 export function getResumeExportDocxUrl(resumeId) {
-  const tok = getGuestToken()
-  const params = new URLSearchParams()
-  if (tok) params.append('guest_token', tok)
-  const qs = params.toString()
-  return safeHref(qs ? `${API_BASE}/resumes/${encodeURIComponent(resumeId)}/export/docx?${qs}` : `${API_BASE}/resumes/${encodeURIComponent(resumeId)}/export/docx`)
+  return safeHref(`${API_BASE}/resumes/${encodeURIComponent(resumeId)}/export/docx`)
 }
 
 

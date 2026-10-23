@@ -18,7 +18,7 @@ from fastapi.responses import HTMLResponse
 
 from backend.services.career_file_parser import extract_resume_from_file_bytes, ResumeParseResult
 
-from backend.dependencies import _get_or_create_user_id
+from backend.dependencies import _get_current_identity, _get_or_create_user_id
 from backend.memory.career import (
     approve_application_batch,
     create_application_batch,
@@ -40,6 +40,7 @@ from backend.memory.career import (
     upsert_master_resume,
 )
 from backend.memory.radar import get_opportunity_by_id, get_user_opportunity_profile
+from backend.models_radar import UserOpportunityProfileIn
 from backend.models_career import (
     BatchApproveRequest,
     BatchPrepareRequest,
@@ -98,6 +99,18 @@ router = APIRouter(prefix="/api/career", tags=["career_copilot"])
 # 1. Resume Studio Endpoints
 # ===========================================================================
 
+def _build_initial_master_content(profile: Optional[UserOpportunityProfileIn], request: Request) -> ResumeContent:
+    ident = getattr(request.state, "identity", None) or _get_current_identity(request)
+    authed_name = ""
+    authed_email = ""
+    if ident and not ident.is_guest and ident.user_id:
+        if "@" in ident.user_id:
+            authed_email = ident.user_id
+        else:
+            authed_name = ident.user_id
+    return build_default_master_from_profile(profile, user_name=authed_name, email=authed_email)
+
+
 @router.get("/resumes/master", response_model=ResumeOut)
 async def get_master_resume_endpoint(request: Request):
     """Retrieve the candidate's master resume, auto-creating a truthful draft from profile if missing."""
@@ -108,7 +121,7 @@ async def get_master_resume_endpoint(request: Request):
         if not profile:
             from backend.models_radar import UserOpportunityProfileIn
             profile = UserOpportunityProfileIn()
-        default_content = build_default_master_from_profile(profile, user_name="Compass Candidate")
+        default_content = _build_initial_master_content(profile, request)
         master = await upsert_master_resume(user_id, default_content, "Master Resume")
     return master
 
@@ -144,7 +157,7 @@ async def tailor_resume_endpoint(body: TailorResumeRequest, request: Request):
         if not profile:
             from backend.models_radar import UserOpportunityProfileIn
             profile = UserOpportunityProfileIn()
-        default_content = build_default_master_from_profile(profile, user_name="Compass Candidate")
+        default_content = _build_initial_master_content(profile, request)
         master = await upsert_master_resume(user_id, default_content, "Master Resume")
 
     tailored_content, report, status = tailor_resume_for_opportunity(
@@ -249,12 +262,32 @@ async def export_resume_html_endpoint(
     if not res:
         raise HTTPException(status_code=404, detail="Resume not found")
 
+    # Guard against placeholder or empty candidate data before export
+    PLACEHOLDER_NAMES = {"compass candidate", "candidate"}
+    PLACEHOLDER_EMAILS = {"candidate@compass.local"}
+    name = (res.content.full_name or "").strip()
+    email = (res.content.email or "").strip()
+    missing_fields = []
+    if not name or name.lower() in PLACEHOLDER_NAMES:
+        missing_fields.append("Candidate Full Name (currently missing or placeholder)")
+    if not email or email.lower() in PLACEHOLDER_EMAILS or "@" not in email:
+        missing_fields.append("Candidate Email (currently missing or placeholder)")
+    if missing_fields:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot export resume: Please replace placeholder/empty profile fields with your real information before export: {', '.join(missing_fields)}.",
+        )
+
     opp = None
     if res.opportunity_id:
         opp = await get_opportunity_by_id(res.opportunity_id, user_id)
 
     html = generate_resume_html(res, opp, template=template)
-    return HTMLResponse(content=html, status_code=200)
+    return HTMLResponse(
+        content=html,
+        status_code=200,
+        headers={"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:;"},
+    )
 
 
 @router.get("/resumes/{resume_id}/export/docx")
@@ -267,6 +300,22 @@ async def export_resume_docx_endpoint(
     res = await get_resume_by_id(resume_id, user_id)
     if not res:
         raise HTTPException(status_code=404, detail="Resume not found")
+
+    # Guard against placeholder or empty candidate data before export
+    PLACEHOLDER_NAMES = {"compass candidate", "candidate"}
+    PLACEHOLDER_EMAILS = {"candidate@compass.local"}
+    name = (res.content.full_name or "").strip()
+    email = (res.content.email or "").strip()
+    missing_fields = []
+    if not name or name.lower() in PLACEHOLDER_NAMES:
+        missing_fields.append("Candidate Full Name (currently missing or placeholder)")
+    if not email or email.lower() in PLACEHOLDER_EMAILS or "@" not in email:
+        missing_fields.append("Candidate Email (currently missing or placeholder)")
+    if missing_fields:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot export resume: Please replace placeholder/empty profile fields with your real information before export: {', '.join(missing_fields)}.",
+        )
 
     opp = None
     if res.opportunity_id:
@@ -332,7 +381,7 @@ async def analyze_opportunity_job_endpoint(
         if not profile:
             from backend.models_radar import UserOpportunityProfileIn
             profile = UserOpportunityProfileIn()
-        default_content = build_default_master_from_profile(profile, user_name="Compass Candidate")
+        default_content = _build_initial_master_content(profile, request)
         master = await upsert_master_resume(user_id, default_content, "Master Resume")
 
     return analyze_job_and_match(
@@ -444,7 +493,7 @@ async def draft_cover_letter_endpoint(body: DraftCoverLetterRequest, request: Re
         if not profile:
             from backend.models_radar import UserOpportunityProfileIn
             profile = UserOpportunityProfileIn()
-        default_content = build_default_master_from_profile(profile, user_name="Compass Candidate")
+        default_content = _build_initial_master_content(profile, request)
         master = await upsert_master_resume(user_id, default_content, "Master Resume")
 
     letter_text, verified_projs, verified_skls = draft_truthful_cover_letter(

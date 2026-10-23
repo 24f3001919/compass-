@@ -81,6 +81,8 @@ async def export_calendar_ics_endpoint(
     """Export standard RFC 5545 iCalendar feed for calendar apps."""
     from backend.services.calendar import generate_ics_feed
     ident = _get_current_identity(request)
+    if not ident:
+        raise HTTPException(status_code=401, detail="Authentication or valid guest token required")
     target_user_id = ident.user_id if ident and not ident.is_guest else (ident.id if ident else None)
     pool = await get_pool()
     tasks = []

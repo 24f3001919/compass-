@@ -166,10 +166,8 @@ export async function fetchSchedulingPreferences() {
 }
 
 export function getCalendarExportUrl(domain) {
-  const uid = getCurrentUserId()
   const params = new URLSearchParams()
   if (domain && domain !== 'all') params.append('domain', domain)
-  if (uid) params.append('user_id', uid)
   const qs = params.toString()
   return safeHref(qs ? `${API_BASE}/api/calendar/export.ics?${qs}` : `${API_BASE}/api/calendar/export.ics`)
 }

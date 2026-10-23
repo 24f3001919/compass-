@@ -6,14 +6,11 @@ export const RENDER_BACKEND_URL = 'https://compass-backend-qryu.onrender.com'
 // Proactively clear obsolete compass_user_id cookie from browser on script initialization
 if (typeof document !== 'undefined') {
   try {
-    const expired = '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax'
+    const expired = '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure'
     document.cookie = `compass_user_id${expired}`
-    document.cookie = `compass_user_id${expired}; Secure`
     if (typeof window !== 'undefined' && window.location?.hostname) {
       document.cookie = `compass_user_id${expired}; domain=${window.location.hostname}`
-      document.cookie = `compass_user_id${expired}; domain=${window.location.hostname}; Secure`
       document.cookie = `compass_user_id${expired}; domain=.${window.location.hostname}`
-      document.cookie = `compass_user_id${expired}; domain=.${window.location.hostname}; Secure`
     }
   } catch {
     /* ignore cookie cleanup error */
@@ -221,14 +218,11 @@ export function setCurrentUserId(userId) {
   // Proactively clear obsolete compass_user_id cookie that triggers impersonation errors
   if (typeof document !== 'undefined') {
     try {
-      const expired = '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax'
+      const expired = '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure'
       document.cookie = `compass_user_id${expired}`
-      document.cookie = `compass_user_id${expired}; Secure`
       if (typeof window !== 'undefined' && window.location?.hostname) {
         document.cookie = `compass_user_id${expired}; domain=${window.location.hostname}`
-        document.cookie = `compass_user_id${expired}; domain=${window.location.hostname}; Secure`
         document.cookie = `compass_user_id${expired}; domain=.${window.location.hostname}`
-        document.cookie = `compass_user_id${expired}; domain=.${window.location.hostname}; Secure`
       }
     } catch {
       /* ignore cookie cleanup error */
@@ -248,9 +242,13 @@ export function getAuthHeaders(extraHeaders = {}) {
   if (guestId) {
     headers['x-guest-id'] = guestId
   }
-  const token = localStorage.getItem('compass_auth_token')
-  if (token && !headers['Authorization']) {
-    headers['Authorization'] = `Bearer ${token}`
+  try {
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('compass_auth_token') : null
+    if (token && !headers['Authorization']) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+  } catch {
+    /* ignore storage access error */
   }
   return headers
 }
@@ -394,3 +392,164 @@ export async function checkBackendHealth(force = false) {
   return inflightHealthCheck
 }
 
+export function mapHttpErrorToUserMessage(status, fallbackMessage = 'An unexpected error occurred. Please try again.') {
+  if (status === 401) {
+    return 'Your session has expired. Please sign in or refresh the page.'
+  }
+  if (status === 403 || status === 404) {
+    return 'The requested resource was not found or you do not have permission to access it.'
+  }
+  if (status >= 500) {
+    return 'The server encountered an error generating the file. Please try again later.'
+  }
+  return fallbackMessage
+}
+
+export async function downloadAuthedFile(url, fallbackFilename = 'download') {
+  let res
+  try {
+    res = await fetchWithGuestRetry(url)
+  } catch {
+    const error = new Error('Network error: Unable to connect to server. Please check your connection.')
+    error.status = 0
+    throw error
+  }
+
+  if (!res.ok) {
+    const message = mapHttpErrorToUserMessage(res.status, `Failed to download file (HTTP ${res.status}).`)
+    const error = new Error(message)
+    error.status = res.status
+    throw error
+  }
+
+  let filename = fallbackFilename
+  const disposition = res.headers?.get?.('content-disposition') || res.headers?.get?.('Content-Disposition')
+  if (disposition) {
+    const match = disposition.match(/filename\*?=(?:UTF-8'')?"?([^";\r\n]+)"?/i)
+    if (match && match[1]) {
+      filename = decodeURIComponent(match[1].trim().replace(/^"+|"+$/g, ''))
+    }
+  }
+
+  const blob = await res.blob()
+  const urlHelper = (typeof window !== 'undefined' ? window.URL : null) || globalThis.URL || URL
+  const doc = typeof document !== 'undefined' ? document : (typeof globalThis !== 'undefined' ? globalThis.document : null)
+  if (doc && urlHelper && typeof urlHelper.createObjectURL === 'function') {
+    const blobUrl = urlHelper.createObjectURL(blob)
+    try {
+      const a = doc.createElement('a')
+      if (a) {
+        if (a.style) a.style.display = 'none'
+        a.href = blobUrl
+        a.download = filename
+        if (doc.body) doc.body.appendChild(a)
+        if (typeof a.click === 'function') a.click()
+        if (a.parentNode) a.parentNode.removeChild(a)
+      }
+    } finally {
+      setTimeout(() => {
+        try {
+          urlHelper.revokeObjectURL(blobUrl)
+        } catch { /* ignore */ }
+      }, 1000)
+    }
+  }
+  return { success: true, filename, blob }
+}
+
+export async function openAuthedHtml(url, { printOnLoad = true, popup = null } = {}) {
+  let res
+  try {
+    res = await fetchWithGuestRetry(url)
+  } catch {
+    if (popup && typeof popup.close === 'function' && !popup.closed) {
+      try { popup.close() } catch { /* ignore */ }
+    }
+    const error = new Error('Network error: Unable to connect to server. Please check your connection.')
+    error.status = 0
+    throw error
+  }
+
+  if (!res.ok) {
+    if (popup && typeof popup.close === 'function' && !popup.closed) {
+      try { popup.close() } catch { /* ignore */ }
+    }
+    const message = mapHttpErrorToUserMessage(res.status, `Failed to load document for printing (HTTP ${res.status}).`)
+    const error = new Error(message)
+    error.status = res.status
+    throw error
+  }
+
+  const html = await res.text()
+  const urlHelper = (typeof window !== 'undefined' ? window.URL : null) || globalThis.URL || URL
+  const doc = typeof document !== 'undefined' ? document : (typeof globalThis !== 'undefined' ? globalThis.document : null)
+  if (urlHelper && typeof urlHelper.createObjectURL === 'function') {
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+    const blobUrl = urlHelper.createObjectURL(blob)
+
+    if (popup && typeof popup.close === 'function' && !popup.closed) {
+      try {
+        try { popup.opener = null } catch { /* ignore */ }
+        if (popup.location) {
+          popup.location.href = blobUrl
+        }
+        if (printOnLoad) {
+          popup.onload = () => {
+            try {
+              if (typeof popup.focus === 'function') popup.focus()
+              if (typeof popup.print === 'function') popup.print()
+            } catch { /* ignore */ }
+          }
+        }
+      } catch {
+        if (doc) renderInHiddenIframe(blobUrl, printOnLoad)
+      }
+      const revokeTimer = setTimeout(() => {
+        try {
+          urlHelper.revokeObjectURL(blobUrl)
+        } catch { /* ignore */ }
+      }, 60000)
+      if (revokeTimer && typeof revokeTimer.unref === 'function') {
+        revokeTimer.unref()
+      }
+    } else if (doc) {
+      renderInHiddenIframe(blobUrl, printOnLoad)
+    }
+  }
+  return { success: true, html }
+}
+
+function renderInHiddenIframe(blobUrl, printOnLoad) {
+  if (typeof document === 'undefined') return
+  const iframe = document.createElement('iframe')
+  iframe.style.position = 'fixed'
+  iframe.style.right = '0'
+  iframe.style.bottom = '0'
+  iframe.style.width = '0'
+  iframe.style.height = '0'
+  iframe.style.border = '0'
+  iframe.style.visibility = 'hidden'
+  try { iframe.setAttribute('sandbox', 'allow-modals allow-same-origin') } catch { /* ignore */ }
+  document.body.appendChild(iframe)
+
+  iframe.onload = () => {
+    if (printOnLoad) {
+      setTimeout(() => {
+        try {
+          iframe.contentWindow?.focus()
+          iframe.contentWindow?.print()
+        } catch { /* ignore */ }
+        setTimeout(() => {
+          if (iframe.parentNode) iframe.parentNode.removeChild(iframe)
+          try { (window.URL || URL).revokeObjectURL(blobUrl) } catch { /* ignore */ }
+        }, 3000)
+      }, 300)
+    } else {
+      setTimeout(() => {
+        if (iframe.parentNode) iframe.parentNode.removeChild(iframe)
+        try { (window.URL || URL).revokeObjectURL(blobUrl) } catch { /* ignore */ }
+      }, 5000)
+    }
+  }
+  iframe.src = blobUrl
+}

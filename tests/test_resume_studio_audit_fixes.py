@@ -118,8 +118,8 @@ def test_cover_letter_persisted_in_update_resume():
     assert resp_get.json()["cover_letter"] == letter_text
 
 
-def test_export_endpoints_authenticated_via_query_param():
-    """Verify HTML and DOCX export endpoints accept guest_token in query parameter without headers."""
+def test_export_endpoints_reject_query_param_tokens():
+    """Verify HTML and DOCX export endpoints reject guest_token in query parameter without headers."""
     from backend.dependencies import generate_guest_token
     gid, token = generate_guest_token()
     headers = {"x-guest-token": token}
@@ -129,16 +129,15 @@ def test_export_endpoints_authenticated_via_query_param():
     assert resp_master.status_code == 200
     res_id = resp_master.json()["id"]
 
-    # Request HTML export with query param token and NO headers
+    # Request HTML export with query param token and NO headers -> must reject 401
     resp_html = client.get(f"/api/career/resumes/{res_id}/export/html?guest_token={token}&template=minimal")
-    assert resp_html.status_code == 200
-    assert "resume-template-minimal" in resp_html.text
+    assert resp_html.status_code == 401
+    assert resp_html.json()["detail"] == "Authentication or valid guest token required"
 
-    # Request DOCX export with query param token and NO headers
+    # Request DOCX export with query param token and NO headers -> must reject 401
     resp_docx = client.get(f"/api/career/resumes/{res_id}/export/docx?guest_token={token}")
-    assert resp_docx.status_code == 200
-    assert len(resp_docx.content) > 1000
-    assert resp_docx.headers["content-type"] == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    assert resp_docx.status_code == 401
+    assert resp_docx.json()["detail"] == "Authentication or valid guest token required"
 
 
 def test_master_validation_self_anchors():

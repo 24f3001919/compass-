@@ -600,8 +600,8 @@ def extract_claim_and_entity_from_text(text: str, user_query: str = "") -> Tuple
     if is_tavily_verification_intent(clean_text):
         return "", None
 
-    # Strip [[modes...]] markers if present
-    clean_text = re.sub(r"\[\[.*?\]\]", "", clean_text).strip()
+    # Strip [[modes...]] markers if present without backtracking
+    clean_text = re.sub(r"\[\[[^\]\n]*\]\]", "", clean_text).strip()
 
     # 1. Identify Target Entity
     target_entity: Optional[str] = None
@@ -611,7 +611,7 @@ def extract_claim_and_entity_from_text(text: str, user_query: str = "") -> Tuple
     known_event_tokens = ("nebius", "nvidia", "chroma", "devpost", "google", "hackathon", "buildathon", "kaggle")
     for tok in known_event_tokens:
         if tok in query_lower:
-            m_entity = re.search(rf"\b({tok}(?:\s+[xX&]\s+[\w-]+|\s+[\w-]+)*\s+(?:hackathon|buildathon|awards|challenge|competition|grant))\b", clean_text, re.IGNORECASE)
+            m_entity = re.search(rf"\b({tok}(?:\s+(?:[xX&]\s+)?[\w-]+){{0,5}}\s+(?:hackathon|buildathon|awards|challenge|competition|grant))\b", clean_text, re.IGNORECASE)
             if m_entity:
                 target_entity = m_entity.group(1).strip()
                 break
@@ -622,9 +622,9 @@ def extract_claim_and_entity_from_text(text: str, user_query: str = "") -> Tuple
                     break
 
     if not target_entity:
-        # Search for full event or organization names in the candidate text
+        # Search for full event or organization names in the candidate text (bounded non-overlapping repetition)
         event_match = re.search(
-            r"\b([A-Z][a-zA-Z0-9_-]*(?:\s+[xX&]\s+[A-Z][a-zA-Z0-9_-]*|\s+[A-Z][a-zA-Z0-9_-]*)*\s+(?:Hackathon|Buildathon|Awards|Challenge|Competition|Fellowship|Internship|Grant|Program))\b",
+            r"\b([A-Z][a-zA-Z0-9_-]*(?:\s+(?:[xX&]\s+)?[A-Z][a-zA-Z0-9_-]*){0,5}\s+(?:Hackathon|Buildathon|Awards|Challenge|Competition|Fellowship|Internship|Grant|Program))\b",
             clean_text,
         )
         if event_match:

@@ -7,6 +7,7 @@ Enforces Section 3.2: Never fabricates or silently alters skills, projects, grad
 """
 from __future__ import annotations
 
+import html
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import urlparse
@@ -23,45 +24,30 @@ from backend.models_career import (
 from backend.models_radar import OpportunityOut, UserOpportunityProfileIn
 
 
-def build_default_master_from_profile(profile: UserOpportunityProfileIn, user_name: str = "Compass Candidate", email: str = "") -> ResumeContent:
-    """Creates a truthful master resume draft directly from verified candidate profile data."""
+def build_default_master_from_profile(profile: Optional[UserOpportunityProfileIn] = None, user_name: str = "", email: str = "") -> ResumeContent:
+    """Creates a truthful master resume draft directly from verified candidate profile data without placeholder fabrication."""
     edu_list = []
-    if profile.university or profile.degree:
+    if profile and (profile.university or profile.degree):
         edu_list.append(
             ResumeEducationItem(
-                institution=profile.university or "University",
-                degree=profile.degree or "Undergraduate Degree",
-                field_of_study=profile.degree_specialization,
-                end_year=profile.grad_year,
+                institution=profile.university or "",
+                degree=profile.degree or "",
+                field_of_study=profile.degree_specialization or "",
+                end_year=profile.grad_year or "",
             )
         )
 
-    skills = list(profile.skills or [])
-    if not skills:
-        skills = ["Python", "Git", "Problem Solving"]
-
-    # Seed default verified projects
-    projects = [
-        ResumeProjectItem(
-            title="Intelligent Systems Project",
-            description="Built full-stack software application with automated task pipelines and verified data models.",
-            technologies=[s for s in skills if s in {"Python", "PyTorch", "FastAPI", "React", "SQL"}][:4] or ["Python"],
-            highlights=[
-                "Engineered responsive user interfaces and robust REST APIs with deterministic verification.",
-                "Integrated continuous testing and validation with clean architecture principles.",
-            ],
-        )
-    ]
+    skills = list(profile.skills or []) if profile else []
 
     return ResumeContent(
         full_name=user_name,
-        email=email or "candidate@compass.local",
-        location=profile.country_of_study or "India",
+        email=email,
+        location=profile.country_of_study if profile and profile.country_of_study else "",
         skills=skills,
         education=edu_list,
-        projects=projects,
+        projects=[],
         experience=[],
-        achievements=["Undergraduate scholar actively preparing for technology and research opportunities."],
+        achievements=[],
         certifications=[],
     )
 
@@ -72,11 +58,12 @@ def validate_resume_against_master(
     opportunity: Optional[OpportunityOut] = None,
 ) -> ResumeValidationReport:
     """
-    Strictly audits a tailored resume against master resume and verified profile data:
+    Audits a tailored resume against master resume and verified profile data:
     1. Audits skills: Flags any skill not supported by master resume as unsupported claim.
     2. Audits projects: Verifies project titles exist in master resume.
     3. Checks essential sections: Contact, education, skills, projects.
     4. Computes clear comparison diff summary against master.
+    5. Returns honest 3-state badge status: 'NOT ENOUGH DATA', 'CONSISTENT WITH MASTER', or 'INCONSISTENT WITH MASTER'.
     """
     passed: List[str] = []
     warnings: List[str] = []
@@ -146,8 +133,36 @@ def validate_resume_against_master(
 
     is_valid = len(missing) == 0 and len(unsupported) == 0
 
+    # 6. Honest consistency badge determination
+    # Threshold for "NOT ENOUGH DATA":
+    # Master must have non-placeholder contact, and at least 2 substantive sections among:
+    # >= 2 skills, >= 1 project, >= 1 experience, summary (> 10 chars), or >= 1 education.
+    has_contact = bool(
+        master.full_name and master.email and
+        master.full_name.strip().lower() not in {"compass candidate", "candidate"} and
+        master.email.strip().lower() not in {"candidate@compass.local"} and
+        "@" in master.email
+    )
+    substantive_count = (
+        (1 if len(master.skills) >= 2 else 0)
+        + (1 if len(master.projects) >= 1 else 0)
+        + (1 if len(master.experience) >= 1 else 0)
+        + (1 if master.summary and len(master.summary.strip()) > 10 else 0)
+        + (1 if len(master.education) >= 1 else 0)
+    )
+    is_sparse = (not has_contact) or (substantive_count < 2)
+
+    if is_sparse:
+        status = "NOT ENOUGH DATA"
+        warnings.append("Master profile lacks sufficient baseline content (skills, projects, experience, or summary) for conclusive audit.")
+    elif len(unsupported) == 0:
+        status = "CONSISTENT WITH MASTER"
+    else:
+        status = "INCONSISTENT WITH MASTER"
+
     return ResumeValidationReport(
         is_valid=is_valid,
+        status=status,
         passed_checks=passed,
         warnings=warnings,
         unsupported_claims=unsupported,
@@ -255,6 +270,18 @@ def resolve_template_id(template: Optional[str]) -> str:
     return TEMPLATE_ALIASES.get(norm, "ats_classic")
 
 
+def _safe_link(url: Optional[str]) -> str:
+    """Validate and sanitize URL to allow only http, https, and mailto schemes."""
+    if not url:
+        return ""
+    clean = str(url).strip()
+    # Reject javascript:, data:, vbscript:, etc.
+    if re.match(r"^(https?://|mailto:)", clean, re.IGNORECASE):
+        escaped_url = html.escape(clean, quote=True)
+        return f'<a href="{escaped_url}" target="_blank" rel="noopener noreferrer">{html.escape(clean)}</a>'
+    return html.escape(clean)
+
+
 def generate_resume_html(
     resume: ResumeOut,
     opportunity: Optional[OpportunityOut] = None,
@@ -264,48 +291,79 @@ def generate_resume_html(
     Generates a clean, ATS-compliant printable HTML document for PDF export and preview.
     Supports three distinct single-column templates: ats_classic, modern, and minimal.
     Preserves exact candidate facts across all templates.
+    Ensures EVERY interpolated field is HTML-escaped, links are scheme-validated,
+    and a strict Content-Security-Policy meta tag is embedded.
     """
     tmpl_id = resolve_template_id(template)
     c = resume.content
     opp_banner = ""
     if opportunity:
-        opp_banner = f"<div class='tailored-banner'>Tailored for: {opportunity.company_name} — {opportunity.role_title}</div>"
+        co = html.escape(opportunity.company_name or "")
+        ro = html.escape(opportunity.role_title or "")
+        opp_banner = f"<div class='tailored-banner'>Tailored for: {co} — {ro}</div>"
 
-    skills_html = ", ".join(c.skills) if c.skills else "Not specified"
+    skills_html = ", ".join([html.escape(s) for s in c.skills]) if c.skills else "Not specified"
 
     edu_items = ""
     for e in c.education:
-        dates = f"{e.start_year or ''} - {e.end_year or 'Present'}" if e.start_year or e.end_year else ""
-        grade = f" | CGPA/Grade: {e.cgpa_or_grade}" if e.cgpa_or_grade else ""
+        start = html.escape(str(e.start_year or ""))
+        end = html.escape(str(e.end_year or "Present"))
+        dates = f"{start} - {end}" if (e.start_year or e.end_year) else ""
+        grade = f" | CGPA/Grade: {html.escape(str(e.cgpa_or_grade))}" if e.cgpa_or_grade else ""
+        field = f" in {html.escape(e.field_of_study)}" if e.field_of_study else ""
+        inst = html.escape(e.institution or "")
+        deg = html.escape(e.degree or "")
         edu_items += f"""
         <div class="entry">
-            <div class="entry-header"><strong>{e.institution}</strong> <span>{dates}</span></div>
-            <div>{e.degree}{f' in {e.field_of_study}' if e.field_of_study else ''}{grade}</div>
+            <div class="entry-header"><strong>{inst}</strong> <span>{dates}</span></div>
+            <div>{deg}{field}{grade}</div>
         </div>
         """
 
     proj_items = ""
     for p in c.projects:
-        tech_badge = f"<span class='tech-badge'>{', '.join(p.technologies)}</span>" if p.technologies else ""
-        highlights = "".join([f"<li>{h}</li>" for h in p.highlights])
+        techs = ", ".join([html.escape(t) for t in p.technologies])
+        tech_badge = f"<span class='tech-badge'>{techs}</span>" if techs else ""
+        highlights = "".join([f"<li>{html.escape(h)}</li>" for h in p.highlights])
+        p_title = html.escape(p.title or "")
+        p_desc = html.escape(p.description or "")
         proj_items += f"""
         <div class="entry">
-            <div class="entry-header"><strong>{p.title}</strong> {tech_badge}</div>
-            <p>{p.description}</p>
+            <div class="entry-header"><strong>{p_title}</strong> {tech_badge}</div>
+            <p>{p_desc}</p>
             {f'<ul>{highlights}</ul>' if highlights else ''}
         </div>
         """
 
     exp_items = ""
     for ex in c.experience:
-        dates = f"{ex.start_date or ''} - {'Present' if ex.is_current else ex.end_date or ''}"
-        highlights = "".join([f"<li>{h}</li>" for h in ex.highlights])
+        start = html.escape(str(ex.start_date or ""))
+        end = "Present" if ex.is_current else html.escape(str(ex.end_date or ""))
+        dates = f"{start} - {end}" if (ex.start_date or ex.end_date or ex.is_current) else ""
+        highlights = "".join([f"<li>{html.escape(h)}</li>" for h in ex.highlights])
+        comp = html.escape(ex.company or "")
+        role = html.escape(ex.role_title or "")
         exp_items += f"""
         <div class="entry">
-            <div class="entry-header"><strong>{ex.company}</strong> — <em>{ex.role_title}</em> <span>{dates}</span></div>
+            <div class="entry-header"><strong>{comp}</strong> — <em>{role}</em> <span>{dates}</span></div>
             {f'<ul>{highlights}</ul>' if highlights else ''}
         </div>
         """
+
+    achieve_items = "".join([f"<li>{html.escape(a)}</li>" for a in c.achievements]) if c.achievements else ""
+
+    contact_parts = []
+    if c.email:
+        contact_parts.append(html.escape(c.email))
+    if c.location:
+        contact_parts.append(html.escape(c.location))
+    if c.phone:
+        contact_parts.append(html.escape(c.phone))
+    if c.github_or_portfolio:
+        contact_parts.append(_safe_link(c.github_or_portfolio))
+    if c.linkedin_url:
+        contact_parts.append(_safe_link(c.linkedin_url))
+    contact_html = " | ".join(contact_parts) if contact_parts else "Not provided"
 
     # Template-specific CSS styles
     if tmpl_id == "modern":
@@ -313,6 +371,7 @@ def generate_resume_html(
     body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; color: #1e293b; margin: 36px auto; max-width: 800px; line-height: 1.55; font-size: 14px; }
     h1 { margin: 0 0 6px 0; font-size: 26px; color: #1e3a8a; letter-spacing: -0.2px; font-weight: 800; }
     .contact { font-size: 13px; color: #475569; margin-bottom: 18px; border-bottom: 2px solid #2563eb; padding-bottom: 10px; }
+    .contact a { color: #2563eb; text-decoration: none; }
     .tailored-banner { background: #eff6ff; color: #1d4ed8; padding: 6px 14px; border-radius: 6px; font-size: 12px; margin-bottom: 16px; font-weight: 600; border-left: 4px solid #2563eb; }
     h2 { font-size: 14px; color: #1e3a8a; text-transform: uppercase; border-left: 4px solid #2563eb; border-bottom: 1px solid #e2e8f0; padding: 2px 0 3px 8px; margin: 18px 0 10px 0; letter-spacing: 0.6px; font-weight: 700; }
     .entry { margin-bottom: 14px; }
@@ -328,6 +387,7 @@ def generate_resume_html(
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif; color: #111827; margin: 40px auto; max-width: 780px; line-height: 1.5; font-size: 13.5px; }
     h1 { margin: 0 0 4px 0; font-size: 22px; color: #111827; font-weight: 700; letter-spacing: -0.2px; }
     .contact { font-size: 12.5px; color: #6b7280; margin-bottom: 20px; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; }
+    .contact a { color: #111827; text-decoration: underline; }
     .tailored-banner { background: #f9fafb; color: #374151; padding: 5px 10px; border-radius: 4px; font-size: 11px; margin-bottom: 16px; border: 1px solid #e5e7eb; }
     h2 { font-size: 12px; color: #374151; text-transform: uppercase; border-bottom: 1px solid #e5e7eb; padding-bottom: 2px; margin: 18px 0 8px 0; letter-spacing: 1px; font-weight: 600; }
     .entry { margin-bottom: 12px; }
@@ -343,6 +403,7 @@ def generate_resume_html(
     body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; margin: 40px auto; max-width: 800px; line-height: 1.5; font-size: 14px; }
     h1 { margin: 0 0 4px 0; font-size: 24px; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
     .contact { font-size: 13px; color: #475569; margin-bottom: 16px; border-bottom: 2px solid #0f172a; padding-bottom: 8px; }
+    .contact a { color: #0f172a; text-decoration: underline; }
     .tailored-banner { background: #eff6ff; color: #1d4ed8; padding: 6px 12px; border-radius: 4px; font-size: 12px; margin-bottom: 16px; font-weight: bold; border-left: 4px solid #2563eb; }
     h2 { font-size: 15px; color: #0f172a; text-transform: uppercase; border-bottom: 1px solid #cbd5e1; padding-bottom: 3px; margin: 18px 0 8px 0; letter-spacing: 0.5px; font-weight: 700; }
     .entry { margin-bottom: 12px; }
@@ -359,17 +420,18 @@ def generate_resume_html(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{resume.title}</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:;">
+<title>{html.escape(resume.title or 'Resume')}</title>
 <style>{styles}</style>
 </head>
 <body data-template="{tmpl_id}" class="resume-template-{tmpl_id}">
     {opp_banner}
-    <h1>{c.full_name}</h1>
+    <h1>{html.escape(c.full_name or 'Candidate')}</h1>
     <div class="contact">
-        {c.email} | {c.location or 'India'} {f'| {c.phone}' if c.phone else ''} {f'| {c.github_or_portfolio}' if c.github_or_portfolio else ''}
+        {contact_html}
     </div>
 
-    {f'<h2>Summary</h2><p>{c.summary}</p>' if c.summary else ''}
+    {f'<h2>Summary</h2><p>{html.escape(c.summary)}</p>' if c.summary else ''}
 
     <h2>Education</h2>
     {edu_items or '<p>None specified</p>'}
@@ -382,7 +444,7 @@ def generate_resume_html(
 
     {f'<h2>Experience</h2>{exp_items}' if exp_items else ''}
 
-    {'<h2>Achievements</h2><ul>' + "".join([f"<li>{a}</li>" for a in c.achievements]) + '</ul>' if c.achievements else ''}
+    {f'<h2>Achievements</h2><ul>{achieve_items}</ul>' if achieve_items else ''}
 </body>
 </html>
 """
@@ -454,7 +516,8 @@ def _is_skill_category_header(line: str) -> bool:
 
 
 def _is_tech_stack_line(line: str) -> Optional[str]:
-    m = re.match(r"^[\s*•\-–—+·\u2022\u25cf\u25cb\u25aa\u25ab]*(?:tech\s*stack|technologies|tools|stack)[\s:]+(.*)$", line, re.IGNORECASE)
+    clean = line.lstrip(" \t*•-–—+·\u2022\u25cf\u25cb\u25aa\u25ab")
+    m = re.match(r"^(?:tech\s*stack|technologies|tools|stack)[\s:]+(.*)$", clean, re.IGNORECASE)
     if m:
         return m.group(1).strip()
     return None
@@ -477,14 +540,14 @@ def parse_uploaded_resume_text(raw_text: str) -> ResumeContent:
     """
     cleaned_lines = []
     for raw_l in raw_text.splitlines():
-        l = raw_l.strip()
-        if not l:
+        line = raw_l.strip()
+        if not line:
             continue
-        if l.startswith(('\ufffd', '\u2022', '•', '·', '- ', '* ')):
-            l = '• ' + re.sub(r'^[\s\ufffd\u2022•·\-*]+', '', l).strip()
-        l = re.sub(r'(\w|\d)\s*[\ufffd]+\s*(\w|\d)', r'\1 — \2', l)
-        l = l.replace('\ufffd', '—')
-        cleaned_lines.append(l)
+        if line.startswith(('\ufffd', '\u2022', '•', '·', '- ', '* ')):
+            line = '• ' + re.sub(r'^[\s\ufffd\u2022•·\-*]+', '', line).strip()
+        line = re.sub(r'(\w|\d)\s*[\ufffd]+\s*(\w|\d)', r'\1 — \2', line)
+        line = line.replace('\ufffd', '—')
+        cleaned_lines.append(line)
     lines = cleaned_lines
     if not lines:
         return ResumeContent(full_name="Candidate", email="candidate@compass.local")
@@ -724,9 +787,10 @@ def parse_uploaded_resume_text(raw_text: str) -> ResumeContent:
                 if date_match:
                     d_str = date_match.group(1)
                     comp = comp.replace(d_str, "").strip(" \t|,-–—")
-                    parts = re.split(r"\s*(?:[-–—~]|\bto\b)\s*", d_str)
-                    start_d = parts[0].strip()
-                    end_d = parts[1].strip() if len(parts) > 1 else None
+                    norm_d = re.sub(r"\s+to\s+", "-", d_str, flags=re.IGNORECASE)
+                    parts = [p.strip() for p in re.split(r"[-–—~]", norm_d) if p.strip()]
+                    start_d = parts[0] if parts else None
+                    end_d = parts[1] if len(parts) > 1 else None
 
                 if "|" in comp:
                     comp = comp.split("|")[0].strip()

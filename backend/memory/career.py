@@ -72,6 +72,11 @@ async def get_pool() -> Optional[asyncpg.Pool]:
 def _parse_resume_row(row: Dict[str, Any], is_persisted: bool = True) -> ResumeOut:
     content_raw = row["content"] if isinstance(row["content"], dict) else json.loads(row["content"] or "{}")
     report_raw = row["validation_report"] if isinstance(row["validation_report"], dict) else json.loads(row["validation_report"] or "{}")
+    status_raw = str(row.get("validation_status") or "DRAFT").strip()
+    try:
+        val_status = ResumeValidationStatus(status_raw)
+    except (ValueError, TypeError):
+        val_status = ResumeValidationStatus.DRAFT
     return ResumeOut(
         id=row["id"],
         user_id=row["user_id"],
@@ -81,7 +86,7 @@ def _parse_resume_row(row: Dict[str, Any], is_persisted: bool = True) -> ResumeO
         version=row.get("version", 1),
         content=ResumeContent(**content_raw),
         cover_letter=row.get("cover_letter"),
-        validation_status=ResumeValidationStatus(row.get("validation_status", "DRAFT")),
+        validation_status=val_status,
         validation_report=ResumeValidationReport(**report_raw),
         is_persisted=is_persisted,
         created_at=row.get("created_at"),
@@ -142,11 +147,18 @@ async def upsert_master_resume(user_id: str, content: ResumeContent, title: str 
     content_dict = content.model_dump()
 
     if not pool:
+        from backend.services.career_resume import validate_resume_against_master
+        init_report = validate_resume_against_master(content, content)
+        report_dict = init_report.model_dump()
+        status_val = "APPROVED" if init_report.is_valid else "DRAFT"
+
         for r in _in_memory_resumes.values():
             if r["user_id"] == user_id and r.get("is_master"):
                 r["title"] = title
                 r["content"] = content_dict
                 r["version"] = r.get("version", 1) + 1
+                r["validation_status"] = status_val
+                r["validation_report"] = report_dict
                 r["updated_at"] = datetime.now(timezone.utc)
                 return _parse_resume_row(r, is_persisted=False)
         _resume_id_seq += 1
@@ -158,8 +170,8 @@ async def upsert_master_resume(user_id: str, content: ResumeContent, title: str 
             "title": title,
             "version": 1,
             "content": content_dict,
-            "validation_status": "APPROVED",
-            "validation_report": {"is_valid": True, "passed_checks": ["Master resume verified"]},
+            "validation_status": status_val,
+            "validation_report": report_dict,
             "created_at": datetime.now(timezone.utc),
             "updated_at": datetime.now(timezone.utc),
         }
@@ -167,6 +179,11 @@ async def upsert_master_resume(user_id: str, content: ResumeContent, title: str 
         return _parse_resume_row(record, is_persisted=False)
 
     async with pool.acquire() as conn:
+        from backend.services.career_resume import validate_resume_against_master
+        init_report = validate_resume_against_master(content, content)
+        report_dict = init_report.model_dump()
+        status_val = "APPROVED" if init_report.is_valid else "DRAFT"
+
         existing = await conn.fetchrow(
             "SELECT id, version FROM resumes WHERE user_id = $1 AND is_master IS TRUE ORDER BY updated_at DESC, id DESC LIMIT 1",
             user_id,
@@ -177,6 +194,8 @@ async def upsert_master_resume(user_id: str, content: ResumeContent, title: str 
                 UPDATE resumes
                 SET title = $2,
                     content = $3::jsonb,
+                    validation_status = $4,
+                    validation_report = $5::jsonb,
                     version = version + 1,
                     updated_at = now()
                 WHERE id = $1
@@ -185,17 +204,21 @@ async def upsert_master_resume(user_id: str, content: ResumeContent, title: str 
                 existing["id"],
                 title,
                 json.dumps(content_dict),
+                status_val,
+                json.dumps(report_dict),
             )
         else:
             row = await conn.fetchrow(
                 """
                 INSERT INTO resumes (user_id, is_master, title, version, content, validation_status, validation_report, created_at, updated_at)
-                VALUES ($1, TRUE, $2, 1, $3::jsonb, 'APPROVED', '{"is_valid": true}'::jsonb, now(), now())
+                VALUES ($1, TRUE, $2, 1, $3::jsonb, $4, $5::jsonb, now(), now())
                 RETURNING *;
                 """,
                 user_id,
                 title,
                 json.dumps(content_dict),
+                status_val,
+                json.dumps(report_dict),
             )
         return _parse_resume_row(dict(row), is_persisted=True)
 

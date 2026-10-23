@@ -131,6 +131,7 @@ class OriginalResumeDocument(BaseModel):
 
 class ResumeValidationReport(BaseModel):
     is_valid: bool = True
+    status: str = "CONSISTENT WITH MASTER"
     passed_checks: List[str] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
     unsupported_claims: List[str] = Field(default_factory=list)

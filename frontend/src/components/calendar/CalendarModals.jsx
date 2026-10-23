@@ -1,5 +1,5 @@
 import React from 'react'
-import { getCalendarExportUrl, quickConnectUser, fetchCalendarStatus, safeHref } from '../../api/client'
+import { getCalendarExportUrl, quickConnectUser, fetchCalendarStatus, downloadAuthedFile } from '../../api/client'
 
 import { Zap, X, Check, Calendar, Download, ExternalLink } from 'lucide-react'
 
@@ -127,11 +127,15 @@ export function IcsExportModal({ show, onClose, activeDomain }) {
             <li>
               Click below to download the <code style={{ color: 'var(--accent)', background: 'var(--bg-card)', padding: '2px 4px', borderRadius: '4px' }}>compass_schedule.ics</code> file:
               <div style={{ marginTop: '8px', marginBottom: '8px' }}>
-                <a href={safeHref(getCalendarExportUrl(activeDomain))} download="compass_schedule.ics" className="btn-touch-target btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: 'var(--radius-btn, 6px)', fontSize: '13px', fontWeight: '600', textDecoration: 'none', minHeight: '44px' }}>
-
+                <button
+                  type="button"
+                  onClick={() => downloadAuthedFile(getCalendarExportUrl(activeDomain), 'compass_schedule.ics')}
+                  className="btn-touch-target btn-secondary"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: 'var(--radius-btn, 6px)', fontSize: '13px', fontWeight: '600', minHeight: '44px', cursor: 'pointer', border: '1px solid var(--border)' }}
+                >
                   <Download size={14} strokeWidth={1.8} />
                   <span>Download compass_schedule.ics</span>
-                </a>
+                </button>
               </div>
             </li>
             <li>In Google Calendar, look at the left sidebar under <b>Other calendars</b> and click <b>+</b>.</li>

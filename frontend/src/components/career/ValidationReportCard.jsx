@@ -3,25 +3,59 @@ import React from 'react'
 export default function ValidationReportCard({ validationReport }) {
   if (!validationReport) return null
 
+  const status = validationReport.status || (validationReport.is_valid ? 'CONSISTENT WITH MASTER' : 'INCONSISTENT WITH MASTER')
+  const isNotEnoughData = status === 'NOT ENOUGH DATA'
+  const isConsistent = status === 'CONSISTENT WITH MASTER'
+
+  const badgeConfig = isNotEnoughData
+    ? {
+        label: 'NOT ENOUGH DATA',
+        bg: '#fef3c7',
+        color: '#92400e',
+        tooltip: 'Master profile lacks sufficient substantive data (summary, skills, projects, experience) to evaluate factual consistency.',
+        explanation: 'Audited profile threshold: Minimum baseline sections not met for conclusive verification.',
+      }
+    : isConsistent
+    ? {
+        label: 'CONSISTENT WITH MASTER',
+        bg: '#dcfce7',
+        color: '#166534',
+        tooltip: 'All candidate skills, degrees, and project claims are anchored to verified master resume data without hallucination.',
+        explanation: 'Audited against Master Profile: verified skills, degrees, and project claims match master anchor.',
+      }
+    : {
+        label: 'INCONSISTENT WITH MASTER',
+        bg: '#fee2e2',
+        color: '#991b1b',
+        tooltip: 'Divergence detected: Resume contains skills or claims not supported by the master profile.',
+        explanation: 'Audited against Master Profile: unsupported or unanchored claims detected.',
+      }
+
   return (
     <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '18px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
         <h3 style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)' }}>
-          🛡️ Factual Audit Report
+          🛡️ Profile Consistency Audit
         </h3>
         <span
+          title={badgeConfig.tooltip}
           style={{
             fontSize: '12px',
             fontWeight: '800',
-            padding: '3px 10px',
+            padding: '4px 10px',
             borderRadius: '12px',
-            background: validationReport.is_valid ? '#dcfce7' : '#fee2e2',
-            color: validationReport.is_valid ? '#166534' : '#991b1b',
+            background: badgeConfig.bg,
+            color: badgeConfig.color,
+            cursor: 'help',
           }}
         >
-          {validationReport.is_valid ? 'VERIFIED ACCURATE' : 'AUDIT FAILED'}
+          {badgeConfig.label}
         </span>
       </div>
+
+      <p style={{ margin: '0 0 12px 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
+        ℹ️ {badgeConfig.explanation}
+      </p>
 
       {/* Unsupported Claims Alert */}
       {validationReport.unsupported_claims && validationReport.unsupported_claims.length > 0 && (

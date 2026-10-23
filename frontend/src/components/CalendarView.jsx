@@ -11,6 +11,7 @@ import {
   syncCalendarNow,
   deleteTask,
   safeHref,
+  downloadAuthedFile,
 } from '../api/client'
 
 import {
@@ -356,6 +357,21 @@ export default function CalendarView({
     }
   }
 
+  const [exportingIcs, setExportingIcs] = useState(false)
+  const handleExportIcs = async () => {
+    if (exportingIcs) return
+    setExportingIcs(true)
+    try {
+      const url = getCalendarExportUrl(activeDomain)
+      await downloadAuthedFile(url, 'compass_schedule.ics')
+    } catch (err) {
+      setBannerMessage({ type: 'error', text: err.message || 'Failed to export calendar feed.' })
+    } finally {
+      setExportingIcs(false)
+      setShowMoreMenu(false)
+    }
+  }
+
   const handleDisconnect = async () => {
     await disconnectCalendar()
     setCalendarStatus({ connected: false, mode: 'demo', account_email: 'demo-scholar@compass.ai' })
@@ -483,10 +499,16 @@ export default function CalendarView({
                     <Calendar size={14} strokeWidth={1.8} />
                     <span>{syncingCalendar ? 'Syncing...' : (isLive ? 'Sync to Google Calendar' : 'Slot / Sync Tasks')}</span>
                   </button>
-                  <a id="btn-export-ics" href={safeHref(getCalendarExportUrl(activeDomain))} download="compass_schedule.ics" style={{ ...menuItemStyle, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button
+                    id="btn-export-ics"
+                    type="button"
+                    disabled={exportingIcs}
+                    onClick={handleExportIcs}
+                    style={{ ...menuItemStyle, border: 'none', background: 'transparent', textAlign: 'left', width: '100%', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                  >
                     <Download size={14} strokeWidth={1.8} />
-                    <span>Export .ics Feed</span>
-                  </a>
+                    <span>{exportingIcs ? 'Exporting…' : 'Export .ics Feed'}</span>
+                  </button>
                   <button onClick={() => { setShowIcsModal(true); setShowMoreMenu(false) }} style={{ ...menuItemStyle, display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <BookOpen size={14} strokeWidth={1.8} />
                     <span>Sync Guide</span>

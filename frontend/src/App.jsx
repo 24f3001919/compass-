@@ -156,27 +156,12 @@ export default function App() {
   const isDemoActiveRef = useRef(false)
   isDemoActiveRef.current = isDemoActive
 
-  // Listen for explicit "Load Judge Persona" clicks
-  useEffect(() => {
-    const handleDemoLoaded = () => {
-      setIsDemoActive(true)
-    }
-    window.addEventListener('compass:demo-persona-loaded', handleDemoLoaded)
-    return () => window.removeEventListener('compass:demo-persona-loaded', handleDemoLoaded)
-  }, [])
-
-  // On site reload/mount: clear any lingering dummy demo persona tasks from DB
-  // ensuring only genuine user-created tasks exist after reload
-  useEffect(() => {
-    clearDemoPersona().catch(() => {})
-  }, [])
-
   // P0.1 FIX: Domain-aware task fetcher: fires a NEW server-side request with
   // ?domain=<X> query param every time selectedDomain changes, instead of
   // client-side array filtering on stale data.
-  const loadTasks = useCallback(async (domain) => {
+  const loadTasks = useCallback(async (domain, overrideDemoActive) => {
     try {
-      const demoActive = isDemoActiveRef.current
+      const demoActive = overrideDemoActive !== undefined ? overrideDemoActive : isDemoActiveRef.current
       const incomingTasks = await fetchTasks(domain, { include_demo: demoActive })
       if (!Array.isArray(incomingTasks)) return
 
@@ -207,6 +192,23 @@ export default function App() {
     } catch {
       // Silently preserve current view during transient connection blips
     }
+  }, [])
+
+  // Listen for explicit "Load Judge Persona" clicks
+  useEffect(() => {
+    const handleDemoLoaded = () => {
+      isDemoActiveRef.current = true
+      setIsDemoActive(true)
+      loadTasks(selectedDomain, true)
+    }
+    window.addEventListener('compass:demo-persona-loaded', handleDemoLoaded)
+    return () => window.removeEventListener('compass:demo-persona-loaded', handleDemoLoaded)
+  }, [selectedDomain, loadTasks])
+
+  // On site reload/mount: clear any lingering dummy demo persona tasks from DB
+  // ensuring only genuine user-created tasks exist after reload
+  useEffect(() => {
+    clearDemoPersona().catch(() => {})
   }, [])
 
   // Re-fetch tasks from server whenever the domain filter or demo active state changes

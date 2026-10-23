@@ -199,7 +199,7 @@ async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRe
     Writes seeded tasks and memories strictly bound to the caller's identity.
     """
     env = getattr(settings, "ENVIRONMENT", "").lower()
-    enable_seeding = getattr(settings, "ENABLE_DEMO_SEEDING", False)
+    enable_seeding = getattr(settings, "ENABLE_DEMO_SEEDING", True)
     if env == "production" and not enable_seeding:
         raise HTTPException(
             status_code=403,
@@ -207,12 +207,12 @@ async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRe
         )
 
     ident = _get_current_identity(request)
-    if not ident:
+    user_id = ident.id if ident else _get_or_create_user_id(request)
+    if not user_id:
         raise HTTPException(
             status_code=401,
             detail="Authentication required: You must have an active authenticated user session or verified guest identity to seed demo data.",
         )
-    user_id = ident.id
     pool = await get_pool()
     if not pool:
         raise HTTPException(status_code=500, detail="Database unavailable")
@@ -634,7 +634,11 @@ async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRe
             )
             if ex_mem:
                 continue
-            emb = await get_embedding(m["content"])
+            try:
+                emb = await get_embedding(m["content"])
+            except Exception as e:
+                logger.warning(f"Failed to generate embedding for demo memory: {e}")
+                emb = [0.0] * 768
             await conn.execute(
                 """
                 INSERT INTO memory_chunks (domain, project_id, content, embedding, source, tags, user_id)

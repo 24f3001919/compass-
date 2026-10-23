@@ -277,13 +277,6 @@ def _extract_verified_guest_id(request: Request) -> Optional[str]:
             verified = verify_guest_token(bearer_tok)
             if verified:
                 return verified
-
-    query_token = request.query_params.get("guest_token") or request.query_params.get("token")
-    if query_token:
-        verified = verify_guest_token(query_token)
-        if verified:
-            return verified
-
     return None
 
 

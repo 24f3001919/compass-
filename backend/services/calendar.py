@@ -607,8 +607,8 @@ def generate_ics_feed(
     ]
 
     for t in tasks:
-        start = t.get("scheduled_start")
-        end = t.get("scheduled_end")
+        start = t.get("scheduled_start") or t.get("due_date")
+        end = t.get("scheduled_end") or start
         if not start or not end:
             continue
 

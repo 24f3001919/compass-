@@ -11,7 +11,7 @@ import {
   getResumeExportDocxUrl,
   fetchJobAnalysis,
 } from '../../api/careerApi'
-import { safeHref } from '../../api/baseClient.js'
+import { downloadAuthedFile, openAuthedHtml } from '../../api/baseClient.js'
 
 import {
   loadWorkspaceDraft,
@@ -37,6 +37,8 @@ export default function ApplicationWorkspaceModal({
   const [savingStatus, setSavingStatus] = useState(false)
   const [error, setError] = useState(null)
   const [notification, setNotification] = useState(null)
+  const [exportingDocx, setExportingDocx] = useState(false)
+  const [exportingPrint, setExportingPrint] = useState(false)
 
   // Resume form state
   const [fullName, setFullName] = useState('')
@@ -265,6 +267,51 @@ export default function ApplicationWorkspaceModal({
       setError(err.message || 'Failed to save resume edits')
     } finally {
       setSavingResume(false)
+    }
+  }
+
+  const handleExportDocx = async () => {
+    if (!resume?.id || exportingDocx) return
+    const nameVal = (resume.content?.full_name || fullName || '').trim()
+    const emailVal = (resume.content?.email || email || '').trim()
+    if (!nameVal || nameVal.toLowerCase() === 'compass candidate' || !emailVal || emailVal.toLowerCase() === 'candidate@compass.local') {
+      setError('Please complete candidate Full Name and Email before exporting.')
+      return
+    }
+    setExportingDocx(true)
+    try {
+      const url = getResumeExportDocxUrl(resume.id)
+      const fallbackName = `${(resume.title || 'tailored_resume').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}.docx`
+      const res = await downloadAuthedFile(url, fallbackName)
+      showNotification(`Downloaded ${res.filename || 'Word (.docx) resume'}.`)
+    } catch (err) {
+      setError(err.message || 'Failed to download Word document.')
+    } finally {
+      setExportingDocx(false)
+    }
+  }
+
+  const handleExportPrint = async () => {
+    if (!resume?.id || exportingPrint) return
+    const nameVal = (resume.content?.full_name || fullName || '').trim()
+    const emailVal = (resume.content?.email || email || '').trim()
+    if (!nameVal || nameVal.toLowerCase() === 'compass candidate' || !emailVal || emailVal.toLowerCase() === 'candidate@compass.local') {
+      setError('Please complete candidate Full Name and Email before exporting.')
+      return
+    }
+    setExportingPrint(true)
+    const popup = typeof window !== 'undefined' ? window.open('about:blank', '_blank') : null
+    try {
+      const url = getResumeExportUrl(resume.id, resumeTemplate)
+      await openAuthedHtml(url, { printOnLoad: true, popup })
+      showNotification('Opened ATS-compliant printable resume for PDF export.')
+    } catch (err) {
+      if (popup && typeof popup.close === 'function' && !popup.closed) {
+        try { popup.close() } catch { /* ignore */ }
+      }
+      setError(err.message || 'Failed to open print preview.')
+    } finally {
+      setExportingPrint(false)
     }
   }
 
@@ -977,14 +1024,10 @@ export default function ApplicationWorkspaceModal({
                       </button>
                       {resume?.id && (
                         <>
-                          <a
-                            href={safeHref(getResumeExportDocxUrl(resume.id))}
-                            download
-
-                            onClick={() => {
-                              setChecklist(prev => ({ ...prev, resumeDownloaded: true }))
-                              showNotification('Downloading clean ATS Word (.docx) document.')
-                            }}
+                          <button
+                            type="button"
+                            disabled={exportingDocx}
+                            onClick={handleExportDocx}
                             style={{
                               padding: '7px 14px',
                               borderRadius: '8px',
@@ -993,22 +1036,19 @@ export default function ApplicationWorkspaceModal({
                               color: 'var(--text-primary)',
                               fontSize: '12px',
                               fontWeight: 600,
-                              cursor: 'pointer',
-                              textDecoration: 'none',
+                              cursor: exportingDocx ? 'not-allowed' : 'pointer',
+                              opacity: exportingDocx ? 0.7 : 1,
                               display: 'inline-flex',
                               alignItems: 'center',
                               gap: '6px',
                             }}
                           >
-                            📥 Export Word (.docx)
-                          </a>
+                            {exportingDocx ? '⏳ Downloading…' : '📥 Export Word (.docx)'}
+                          </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              window.open(getResumeExportUrl(resume.id, resumeTemplate), '_blank')
-                              setChecklist(prev => ({ ...prev, resumeDownloaded: true }))
-                              showNotification('Opened ATS-compliant printable resume for PDF export.')
-                            }}
+                            disabled={exportingPrint}
+                            onClick={handleExportPrint}
                             style={{
                               padding: '7px 14px',
                               borderRadius: '8px',
@@ -1017,10 +1057,11 @@ export default function ApplicationWorkspaceModal({
                               border: 'none',
                               fontSize: '12px',
                               fontWeight: 600,
-                              cursor: 'pointer',
+                              cursor: exportingPrint ? 'not-allowed' : 'pointer',
+                              opacity: exportingPrint ? 0.7 : 1,
                             }}
                           >
-                            📄 Export ATS Resume (Print/PDF)
+                            {exportingPrint ? '⏳ Generating PDF…' : '📄 Export ATS Resume (Print/PDF)'}
                           </button>
                         </>
                       )}

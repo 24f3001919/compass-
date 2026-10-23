@@ -38,7 +38,7 @@ class Settings(BaseSettings):
 
     # --- Environment & Security ---
     ENVIRONMENT: str = "production"  # development | test | production (must be explicitly 'development' to expose docs)
-    ENABLE_DEMO_SEEDING: bool = False  # Explicit opt-in server configuration guard
+    ENABLE_DEMO_SEEDING: bool = True  # Enabled for hackathon judge evaluation; can be disabled with ENABLE_DEMO_SEEDING=False
     DEFAULT_DEV_TOKEN: str = "dev-token"
     DEFAULT_DEV_ENCRYPTION_KEY: str = "compass_secure_local_dev_token_encryption_key_32bytes!"
 

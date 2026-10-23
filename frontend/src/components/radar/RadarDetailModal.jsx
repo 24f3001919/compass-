@@ -58,6 +58,7 @@ export default function RadarDetailModal({
     compensation,
     duration,
     eligibility_classification,
+    eligibility_explanation,
     eligibility_reasons = [],
     cycles = [],
     prediction,

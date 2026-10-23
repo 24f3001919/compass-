@@ -73,6 +73,7 @@ async def test_production_rejects_unverified_compass_user_id_cookie_without_cred
         "method": "GET",
         "path": "/api/test",
         "headers": [(b"cookie", b"compass_user_id=stale_victim@vit.ac.in")],
+        "query_string": b"",
     }
     req = Request(scope)
 
