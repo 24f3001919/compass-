@@ -14,7 +14,7 @@
       "destination": "https://compass-backend-qryu.onrender.com/api/:path*"
     },
     {
-      "source": "/((?!api/|chat|health).*)",
+      "source": "/((?!api/|chat|health|google[a-zA-Z0-9_-]+\\.html).*)",
       "destination": "/index.html"
     }
   ]
