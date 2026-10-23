@@ -6,6 +6,7 @@ import ChatTaskCard from './ChatTaskCard'
 import { fetchPersonaPhrases } from '../../api/chatApi'
 import Logo from '../Logo'
 import { generateFollowUpSuggestions, formatSuggestionText } from '../../utils/suggestionGenerator'
+import { isMessageEligibleForVerification } from '../../utils/verificationEligibility'
 
 const DEFAULT_STARTING_PHRASES = [
   "Where should we begin?",
@@ -314,7 +315,7 @@ export default function ChatMessageList({
                           </button>
                         </div>
                       )}
-                      {msg.role === 'assistant' && !msg.error && msg.text && !msg.evidence && (
+                      {isMessageEligibleForVerification(msg) && (
                         <div style={{ marginTop: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
                           <button
                             type="button"

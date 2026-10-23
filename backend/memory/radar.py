@@ -77,11 +77,15 @@ def _parse_row_to_opportunity(row: Dict[str, Any], sources: List[Dict[str, Any]]
             work_auth_required=req_data.get("work_auth_required"),
             sponsorship_available=req_data.get("sponsorship_available"),
             required_skills=req_data.get("required_skills") or [],
-            min_gpa=req_data.get("min_gpa"),
+            preferred_skills=req_data.get("preferred_skills") or [],
+            min_gpa=float(req_data["min_gpa"]) if req_data.get("min_gpa") is not None else None,
+            gpa_scale=float(req_data["gpa_scale"]) if req_data.get("gpa_scale") is not None else 10.0,
+            no_active_backlogs=bool(req_data.get("no_active_backlogs", False)),
+            has_conflicting_requirements=bool(req_data.get("has_conflicting_requirements", False)),
             other_mandatory_requirements=req_data.get("other_mandatory_requirements"),
             unknown_requirements=req_data.get("unknown_requirements") or [],
         )
-    elif row.get("eligible_academic_years") is not None or row.get("eligible_degree_types") is not None:
+    elif row.get("eligible_academic_years") is not None or row.get("eligible_degree_types") is not None or row.get("min_gpa") is not None:
         reqs = OpportunityRequirementsOut(
             eligible_degree_types=row.get("eligible_degree_types") or [],
             eligible_academic_years=row.get("eligible_academic_years") or [],
@@ -90,7 +94,11 @@ def _parse_row_to_opportunity(row: Dict[str, Any], sources: List[Dict[str, Any]]
             work_auth_required=row.get("work_auth_required"),
             sponsorship_available=row.get("sponsorship_available"),
             required_skills=row.get("required_skills") or [],
-            min_gpa=row.get("min_gpa"),
+            preferred_skills=row.get("preferred_skills") or [],
+            min_gpa=float(row["min_gpa"]) if row.get("min_gpa") is not None else None,
+            gpa_scale=float(row["gpa_scale"]) if row.get("gpa_scale") is not None else 10.0,
+            no_active_backlogs=bool(row.get("no_active_backlogs", False)),
+            has_conflicting_requirements=bool(row.get("has_conflicting_requirements", False)),
             other_mandatory_requirements=row.get("other_mandatory_requirements"),
             unknown_requirements=row.get("unknown_requirements") or [],
         )
@@ -455,9 +463,10 @@ async def upsert_opportunity_requirements(opp_id: int, reqs: Dict[str, Any]) -> 
     INSERT INTO opportunity_requirements (
         opportunity_id, eligible_degree_types, eligible_academic_years, eligible_graduation_years,
         eligible_countries, work_auth_required, sponsorship_available, required_skills,
-        min_gpa, other_mandatory_requirements, unknown_requirements, last_updated_at
+        preferred_skills, min_gpa, gpa_scale, no_active_backlogs, has_conflicting_requirements,
+        other_mandatory_requirements, unknown_requirements, last_updated_at
     ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, now()
     )
     ON CONFLICT (opportunity_id) DO UPDATE SET
         eligible_degree_types = EXCLUDED.eligible_degree_types,
@@ -467,7 +476,11 @@ async def upsert_opportunity_requirements(opp_id: int, reqs: Dict[str, Any]) -> 
         work_auth_required = EXCLUDED.work_auth_required,
         sponsorship_available = EXCLUDED.sponsorship_available,
         required_skills = EXCLUDED.required_skills,
+        preferred_skills = EXCLUDED.preferred_skills,
         min_gpa = EXCLUDED.min_gpa,
+        gpa_scale = EXCLUDED.gpa_scale,
+        no_active_backlogs = EXCLUDED.no_active_backlogs,
+        has_conflicting_requirements = EXCLUDED.has_conflicting_requirements,
         other_mandatory_requirements = EXCLUDED.other_mandatory_requirements,
         unknown_requirements = EXCLUDED.unknown_requirements,
         last_updated_at = now();
@@ -483,7 +496,11 @@ async def upsert_opportunity_requirements(opp_id: int, reqs: Dict[str, Any]) -> 
             reqs.get("work_auth_required"),
             reqs.get("sponsorship_available"),
             reqs.get("required_skills") or [],
+            reqs.get("preferred_skills") or [],
             reqs.get("min_gpa"),
+            reqs.get("gpa_scale", 10.0),
+            bool(reqs.get("no_active_backlogs", False)),
+            bool(reqs.get("has_conflicting_requirements", False)),
             reqs.get("other_mandatory_requirements"),
             reqs.get("unknown_requirements") or [],
         )
@@ -641,6 +658,7 @@ async def get_all_opportunities(
            uo.personal_deadline, uo.private_notes,
            r.eligible_degree_types, r.eligible_academic_years, r.eligible_graduation_years,
            r.eligible_countries, r.work_auth_required, r.sponsorship_available, r.required_skills,
+           r.preferred_skills, r.gpa_scale, r.no_active_backlogs, r.has_conflicting_requirements,
            r.min_gpa, r.other_mandatory_requirements, r.unknown_requirements
     FROM opportunities o
     LEFT JOIN user_opportunities uo ON o.id = uo.opportunity_id AND uo.user_id = $1
@@ -771,6 +789,11 @@ async def get_user_opportunity_profile(user_id: str) -> Optional[UserOpportunity
             academic_year=row["academic_year"],
             grad_month=row["grad_month"],
             grad_year=row["grad_year"],
+            cgpa=float(row["cgpa"]) if row.get("cgpa") is not None else None,
+            cgpa_scale=float(row["cgpa_scale"]) if row.get("cgpa_scale") is not None else 10.0,
+            active_backlogs=row.get("active_backlogs", 0) if row.get("active_backlogs") is not None else 0,
+            work_authorization=row.get("work_authorization") or "India",
+            requires_sponsorship=bool(row.get("requires_sponsorship", False)),
             country_of_study=row["country_of_study"] or "India",
             country_of_residence=row["country_of_residence"] or "India",
             preferred_locations=row["preferred_locations"] or ["India", "Remote"],
@@ -791,10 +814,11 @@ async def upsert_user_opportunity_profile(user_id: str, p: UserOpportunityProfil
     query = """
     INSERT INTO user_opportunity_profiles (
         user_id, degree, degree_specialization, university, academic_year, grad_month, grad_year,
+        cgpa, cgpa_scale, active_backlogs, work_authorization, requires_sponsorship,
         country_of_study, country_of_residence, preferred_locations, preferred_work_arrangements,
         preferred_roles, skills, min_compensation, resume_url, created_at, updated_at
     ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, now(), now()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, now(), now()
     )
     ON CONFLICT (user_id) DO UPDATE SET
         degree = EXCLUDED.degree,
@@ -803,6 +827,11 @@ async def upsert_user_opportunity_profile(user_id: str, p: UserOpportunityProfil
         academic_year = EXCLUDED.academic_year,
         grad_month = EXCLUDED.grad_month,
         grad_year = EXCLUDED.grad_year,
+        cgpa = EXCLUDED.cgpa,
+        cgpa_scale = EXCLUDED.cgpa_scale,
+        active_backlogs = EXCLUDED.active_backlogs,
+        work_authorization = EXCLUDED.work_authorization,
+        requires_sponsorship = EXCLUDED.requires_sponsorship,
         country_of_study = EXCLUDED.country_of_study,
         country_of_residence = EXCLUDED.country_of_residence,
         preferred_locations = EXCLUDED.preferred_locations,
@@ -823,6 +852,11 @@ async def upsert_user_opportunity_profile(user_id: str, p: UserOpportunityProfil
             p.academic_year,
             p.grad_month,
             p.grad_year,
+            p.cgpa,
+            p.cgpa_scale,
+            p.active_backlogs,
+            p.work_authorization,
+            p.requires_sponsorship,
             p.country_of_study,
             p.country_of_residence,
             p.preferred_locations,
@@ -903,12 +937,26 @@ async def get_user_application_tracking(user_id: str) -> List[OpportunityOut]:
 
 
 async def get_radar_overview_stats(user_id: str) -> Dict[str, Any]:
+    from backend.services.radar_eligibility import evaluate_eligibility
+    from backend.models_radar import EligibilityClassification
+
+    profile = await get_user_opportunity_profile(user_id)
     pool = await get_pool()
     if not pool:
         all_opps = list(_in_memory_opportunities.values())
+        verified_open_opps = [o for o in all_opps if o.get("current_status") == "OPEN_CONFIRMED"]
+        
+        strong_matches_count = 0
+        if profile:
+            for raw_o in verified_open_opps:
+                opp_model = _parse_row_to_opportunity(raw_o, raw_o.get("sources", []), raw_o.get("cycles", []))
+                status, _, _ = evaluate_eligibility(opp_model, profile)
+                if status == EligibilityClassification.ELIGIBLE:
+                    strong_matches_count += 1
+
         return {
-            "verified_open_count": sum(1 for o in all_opps if o.get("current_status") == "OPEN_CONFIRMED"),
-            "strong_matches_count": sum(1 for o in all_opps if o.get("current_status") == "OPEN_CONFIRMED"),
+            "verified_open_count": len(verified_open_opps),
+            "strong_matches_count": strong_matches_count,
             "opening_soon_count": sum(1 for o in all_opps if o.get("current_status") in ("UPCOMING_CONFIRMED", "ANNOUNCED")),
             "upcoming_deadlines_count": 0,
             "saved_count": sum(1 for v in _in_memory_user_opps.values() if v.get("is_saved")),
@@ -937,9 +985,23 @@ async def get_radar_overview_stats(user_id: str) -> Dict[str, Any]:
         type_rows = await conn.fetch("SELECT employer_type, COUNT(*) as cnt FROM opportunities GROUP BY employer_type")
         type_counts = {r["employer_type"]: r["cnt"] for r in type_rows}
 
+        # Calculate Eligible Matches independently by evaluating candidate profile against open opportunities
+        strong_matches_count = 0
+        if profile and open_cnt > 0:
+            open_opps, _ = await get_all_opportunities(
+                user_id=user_id,
+                status=OpportunityStatus.OPEN_CONFIRMED,
+                page=1,
+                page_size=500,
+            )
+            for opp in open_opps:
+                elig_status, _, _ = evaluate_eligibility(opp, profile)
+                if elig_status == EligibilityClassification.ELIGIBLE:
+                    strong_matches_count += 1
+
         return {
             "verified_open_count": open_cnt,
-            "strong_matches_count": open_cnt,
+            "strong_matches_count": strong_matches_count,
             "opening_soon_count": upcoming_cnt,
             "upcoming_deadlines_count": 0,
             "saved_count": saved_cnt,

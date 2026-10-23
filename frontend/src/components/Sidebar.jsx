@@ -149,7 +149,7 @@ export default function Sidebar({
         background: 'var(--bg-sidebar)',
         display: 'flex',
         flexDirection: 'column',
-        padding: effectivelyCollapsed ? '18px 8px' : '20px 14px',
+        padding: effectivelyCollapsed ? '18px 8px' : '18px 14px',
         height: '100vh',
         overflowY: 'auto',
         overflowX: 'hidden',
@@ -157,29 +157,22 @@ export default function Sidebar({
         transition: 'width 0.2s cubic-bezier(0.16, 1, 0.3, 1), min-width 0.2s cubic-bezier(0.16, 1, 0.3, 1), padding 0.2s ease',
       }}
     >
-      {/* Brand Header */}
-      {effectivelyCollapsed ? (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', marginBottom: '20px', userSelect: 'none' }}>
-          <div
-            id="sidebar-brand-header"
-            onClick={() => onSelectTab('dashboard')}
-            title="Compass Workspace: Click to return to Dashboard"
-            aria-label="Compass Workspace Dashboard"
-            style={{
-              width: '40px',
-              height: '40px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              flexShrink: 0,
-              transition: 'opacity 0.15s ease'
-            }}
-            onMouseEnter={e => (e.currentTarget.style.opacity = '0.9')}
-            onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-          >
-            <Logo size={40} alt="Compass logo" />
-          </div>
+      {/* Brand Header & Toggle Row */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: effectivelyCollapsed ? 'center' : 'space-between',
+          minHeight: '40px',
+          height: '40px',
+          marginBottom: '20px',
+          padding: 0,
+          userSelect: 'none',
+          position: 'relative',
+          width: '100%',
+        }}
+      >
+        {effectivelyCollapsed ? (
           <button
             id="sidebar-collapse-toggle"
             onClick={toggleCollapsed}
@@ -199,7 +192,8 @@ export default function Sidebar({
               alignItems: 'center',
               justifyContent: 'center',
               padding: 0,
-              transition: 'all 0.15s ease'
+              transition: 'all 0.15s ease',
+              flexShrink: 0,
             }}
             onMouseEnter={e => {
               e.currentTarget.style.color = '#ffffff'
@@ -214,92 +208,94 @@ export default function Sidebar({
               <polyline points="9 18 15 12 9 6" />
             </svg>
           </button>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px', padding: 0, userSelect: 'none' }}>
-          <div
-            id="sidebar-brand-header"
-            onClick={() => {
-              onSelectTab('dashboard')
-              if (onCloseMobile) onCloseMobile()
-            }}
-            style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', transition: 'opacity 0.15s ease', minWidth: 0 }}
-            onMouseEnter={e => (e.currentTarget.style.opacity = '0.9')}
-            onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-            title="Compass Workspace: Click to return to Dashboard"
-          >
-            <Logo size={40} alt="" />
-            <div>
-              <h1 style={{ fontSize: '15px', fontWeight: '600', letterSpacing: '-0.2px', color: 'var(--sidebar-active-text)', margin: 0, lineHeight: 1.2 }}>Compass</h1>
-              <p style={{ fontSize: '11px', color: 'var(--sidebar-text)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: '500', margin: 0, opacity: 0.8 }}>Workspace</p>
+        ) : (
+          <>
+            <div
+              id="sidebar-brand-header"
+              onClick={() => {
+                onSelectTab('dashboard')
+                if (onCloseMobile) onCloseMobile()
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', transition: 'opacity 0.15s ease', minWidth: 0 }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = '0.9')}
+              onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+              title="Compass Workspace: Click to return to Dashboard"
+            >
+              <Logo size={36} alt="" />
+              <div>
+                <h1 style={{ fontSize: '15px', fontWeight: '600', letterSpacing: '-0.2px', color: 'var(--sidebar-active-text)', margin: 0, lineHeight: 1.2 }}>Compass</h1>
+                <p style={{ fontSize: '11px', color: 'var(--sidebar-text)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: '500', margin: 0, opacity: 0.8 }}>Workspace</p>
+              </div>
             </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {onCloseMobile && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {onCloseMobile && (
+                <button
+                  id="mobile-drawer-close"
+                  className="mobile-close-btn btn-touch-target"
+                  onClick={onCloseMobile}
+                  title="Close sidebar"
+                  aria-label="Close navigation drawer"
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid var(--sidebar-divider)',
+                    borderRadius: '6px',
+                    color: 'var(--sidebar-text)',
+                    cursor: 'pointer',
+                    width: '44px',
+                    height: '44px',
+                    minWidth: '44px',
+                    minHeight: '44px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" />
+                  </svg>
+                </button>
+              )}
               <button
-                id="mobile-drawer-close"
-                className="mobile-close-btn btn-touch-target"
-                onClick={onCloseMobile}
-                title="Close sidebar"
-                aria-label="Close navigation drawer"
+                id="sidebar-collapse-toggle"
+                onClick={toggleCollapsed}
+                title="Collapse sidebar"
+                aria-label="Collapse sidebar"
                 style={{
                   background: 'transparent',
                   border: '1px solid var(--sidebar-divider)',
                   borderRadius: '6px',
                   color: 'var(--sidebar-text)',
                   cursor: 'pointer',
-                  width: '44px',
-                  height: '44px',
-                  minWidth: '44px',
-                  minHeight: '44px',
+                  width: '28px',
+                  height: '28px',
+                  minWidth: '28px',
+                  minHeight: '28px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  flexShrink: 0,
+                  padding: 0,
+                  transition: 'all 0.15s ease',
+                  flexShrink: 0
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.color = '#ffffff'
+                  e.currentTarget.style.background = 'var(--sidebar-hover)'
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.color = 'var(--sidebar-text)'
+                  e.currentTarget.style.background = 'transparent'
                 }}
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M18 6 6 18" />
-                  <path d="m6 6 12 12" />
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="15 18 9 12 15 6" />
                 </svg>
               </button>
-            )}
-            <button
-              id="sidebar-collapse-toggle"
-              onClick={toggleCollapsed}
-              title="Collapse sidebar"
-              aria-label="Collapse sidebar"
-              style={{
-                background: 'transparent',
-                border: '1px solid var(--sidebar-divider)',
-                borderRadius: '6px',
-                color: 'var(--sidebar-text)',
-                cursor: 'pointer',
-                width: '28px',
-                height: '28px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 0,
-                transition: 'all 0.15s ease',
-                flexShrink: 0
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.color = '#ffffff'
-                e.currentTarget.style.background = 'var(--sidebar-hover)'
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.color = 'var(--sidebar-text)'
-                e.currentTarget.style.background = 'transparent'
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      )}
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Navigation */}
       <div style={{ marginBottom: effectivelyCollapsed ? '16px' : '22px' }}>

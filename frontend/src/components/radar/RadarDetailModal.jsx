@@ -372,8 +372,45 @@ export default function RadarDetailModal({
           {/* TAB 2: ELIGIBILITY AUDIT */}
           {activeTab === 'eligibility' && (
             <div>
-              <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                Compass deterministically evaluates mandatory published requirements without assuming unstated criteria:
+              {/* Classification Summary Card */}
+              <div
+                style={{
+                  padding: '16px',
+                  borderRadius: '10px',
+                  marginBottom: '16px',
+                  background:
+                    eligibility_classification === 'ELIGIBLE'
+                      ? 'rgba(16, 185, 129, 0.1)'
+                      : (eligibility_classification === 'INELIGIBLE'
+                          ? 'rgba(239, 68, 68, 0.1)'
+                          : 'rgba(245, 166, 35, 0.1)'),
+                  border: `1px solid ${
+                    eligibility_classification === 'ELIGIBLE'
+                      ? '#10b981'
+                      : (eligibility_classification === 'INELIGIBLE'
+                          ? '#ef4444'
+                          : '#f5a623')
+                  }`,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '18px' }}>
+                    {eligibility_classification === 'ELIGIBLE' ? '✅' : (eligibility_classification === 'INELIGIBLE' ? '❌' : '⚠️')}
+                  </span>
+                  <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>
+                    {eligibility_classification === 'ELIGIBLE' && 'Confirmed Eligible to Apply'}
+                    {(eligibility_classification === 'POTENTIAL_MATCH' || eligibility_classification === 'POTENTIALLY_ELIGIBLE') && 'Potentially Eligible (Verification Required)'}
+                    {eligibility_classification === 'INELIGIBLE' && 'Ineligible Based on Published Criteria'}
+                    {eligibility_classification === 'INSUFFICIENT_INFORMATION' && 'Insufficient Requirements Information'}
+                  </div>
+                </div>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  {eligibility_explanation || 'Mandatory published requirements deterministically evaluated against candidate academic profile.'}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '12px', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Requirement-by-Requirement Evidence Breakdown:
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {eligibility_reasons.length === 0 ? (
@@ -393,8 +430,8 @@ export default function RadarDetailModal({
                           gap: '12px',
                           padding: '12px 16px',
                           borderRadius: '8px',
-                          background: isPass ? 'rgba(16, 185, 129, 0.08)' : (isFail ? 'rgba(239, 68, 68, 0.08)' : 'rgba(245, 166, 35, 0.08)'),
-                          border: `1px solid ${isPass ? '#10b981' : (isFail ? '#ef4444' : '#f5a623')}`,
+                          background: isPass ? 'rgba(16, 185, 129, 0.08)' : (isFail ? 'rgba(239, 68, 68, 0.08)' : (isUnknown ? 'rgba(245, 166, 35, 0.08)' : 'var(--bg-app)')),
+                          border: `1px solid ${isPass ? '#10b981' : (isFail ? '#ef4444' : (isUnknown ? '#f5a623' : 'var(--border)'))}`,
                           alignItems: 'flex-start',
                         }}
                       >
@@ -404,6 +441,9 @@ export default function RadarDetailModal({
                         <div>
                           <div style={{ fontWeight: 600, fontSize: '13px', textTransform: 'capitalize', color: 'var(--text-primary)' }}>
                             {r.field.replace(/_/g, ' ')}
+                            <span style={{ marginLeft: '8px', fontSize: '11px', fontWeight: 500, color: 'var(--text-muted)' }}>
+                              ({isPass ? 'Satisfied' : (isFail ? 'Not Satisfied' : (isUnknown ? 'Action Needed / Unverified' : 'Informational'))})
+                            </span>
                           </div>
                           <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
                             {r.detail}

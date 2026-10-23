@@ -14,6 +14,54 @@ import {
   sortUpcomingDeadlines,
 } from '../utils/deadlineClassifier'
 
+function getUrgencyBadgeStyle(urgency) {
+  if (!urgency) {
+    return {
+      label: 'Scheduled',
+      bg: 'var(--bg-card-soft)',
+      color: 'var(--text-muted)',
+      border: 'var(--border)',
+    }
+  }
+  if (urgency.isOverdue) {
+    return {
+      label: urgency.label || 'Overdue',
+      bg: 'rgba(230, 81, 0, 0.12)',
+      color: '#e65100',
+      border: 'rgba(230, 81, 0, 0.35)',
+    }
+  }
+  if (urgency.timing === 'due_today') {
+    return {
+      label: urgency.label || 'Due Today',
+      bg: 'rgba(217, 119, 6, 0.12)',
+      color: '#d97706',
+      border: 'rgba(217, 119, 6, 0.35)',
+    }
+  }
+  if (urgency.timing === 'urgent') {
+    return {
+      label: urgency.label || 'Urgent (<24h)',
+      bg: 'rgba(239, 68, 68, 0.12)',
+      color: '#ef4444',
+      border: 'rgba(239, 68, 68, 0.35)',
+    }
+  }
+  if (urgency.timing === 'due_soon') {
+    return {
+      label: urgency.label || 'Due Soon',
+      bg: 'rgba(14, 165, 233, 0.12)',
+      color: '#0284c7',
+      border: 'rgba(14, 165, 233, 0.35)',
+    }
+  }
+  return {
+    label: urgency.label || 'Upcoming',
+    bg: 'rgba(16, 185, 129, 0.10)',
+    color: '#059669',
+    border: 'rgba(16, 185, 129, 0.30)',
+  }
+}
 
 export default function Dashboard({
 
@@ -33,6 +81,7 @@ export default function Dashboard({
   const [selectedDomainFilter, setSelectedDomainFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'pending' | 'in_progress' | 'completed'
   const [dueFilter, setDueFilter] = useState('all') // 'all' | 'overdue' | 'due_today' | 'urgent' | 'due_soon' | 'upcoming'
+  const [priorityFilter, setPriorityFilter] = useState('all') // 'all' | 'overdue' | 'today' | 'upcoming'
   const [optimisticOverrides, setOptimisticOverrides] = useState({})
   const [showAddModal, setShowAddModal] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -258,15 +307,54 @@ export default function Dashboard({
     }
   }, [domainFilteredTasks])
 
-  // Overdue Deadlines (Unfinished tasks whose deadline has passed, sorted by priority & elapsed days)
-  const overdueDeadlines = useMemo(() => {
-    return sortOverdueDeadlines(domainFilteredTasks)
-  }, [domainFilteredTasks])
 
-  // Upcoming Deadlines (Active tasks with deadline today or future, nearest first)
-  const upcomingDeadlines = useMemo(() => {
-    return sortUpcomingDeadlines(domainFilteredTasks).slice(0, 6)
-  }, [domainFilteredTasks])
+  // Varied Priority Deadlines: balanced cross-section across urgency tiers
+  // (Overdue + Due Today + Urgent + Due Soon + Upcoming) instead of single-tier dominance
+  const priorityDeadlines = useMemo(() => {
+    const now = new Date()
+    const overdue = sortOverdueDeadlines(domainFilteredTasks, now)
+    const upcoming = sortUpcomingDeadlines(domainFilteredTasks, now)
+
+    if (priorityFilter === 'overdue') {
+      return overdue.slice(0, 6)
+    }
+    if (priorityFilter === 'today') {
+      return upcoming.filter((t) => t.urgency?.timing === 'due_today').slice(0, 6)
+    }
+    if (priorityFilter === 'upcoming') {
+      return upcoming.filter((t) => t.urgency?.timing !== 'due_today').slice(0, 6)
+    }
+
+    // Default 'all': balanced selection across all urgency categories
+    const dueToday = upcoming.filter((t) => t.urgency?.timing === 'due_today')
+    const urgent = upcoming.filter((t) => t.urgency?.timing === 'urgent')
+    const dueSoon = upcoming.filter((t) => t.urgency?.timing === 'due_soon')
+    const laterUpcoming = upcoming.filter((t) => t.urgency?.timing === 'upcoming')
+
+    const selected = []
+    const addedIds = new Set()
+    const addUnique = (task) => {
+      if (!task || addedIds.has(task.id)) return false
+      addedIds.add(task.id)
+      selected.push(task)
+      return true
+    }
+
+    // Balanced selection: max 2 overdue, max 2 today, max 2 urgent, due soon, upcoming
+    overdue.slice(0, 2).forEach(addUnique)
+    dueToday.slice(0, 2).forEach(addUnique)
+    urgent.slice(0, 2).forEach(addUnique)
+    dueSoon.slice(0, 2).forEach(addUnique)
+    laterUpcoming.slice(0, 2).forEach(addUnique)
+
+    // Backfill if fewer than 6
+    if (selected.length < 6) {
+      upcoming.forEach(addUnique)
+      overdue.forEach(addUnique)
+    }
+
+    return selected.slice(0, 6)
+  }, [domainFilteredTasks, priorityFilter])
 
 
   // Recent Activity Feed
@@ -1171,159 +1259,112 @@ export default function Dashboard({
           )}
         </div>
 
-        {/* Overdue Deadlines — Action Required */}
-        {overdueDeadlines.length > 0 && (
-          <div className="dashboard-section-card" role="region" aria-label="Overdue deadlines list" style={{ borderLeft: '3px solid #e65100' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: '600', color: '#e65100', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                  <line x1="12" y1="9" x2="12" y2="13" />
-                  <line x1="12" y1="17" x2="12.01" y2="17" />
+        {/* Deadlines & Milestones — Varied Urgency Spotlight (Overdue, Due Today, Urgent, Upcoming) */}
+        <div className="dashboard-section-card" role="region" aria-label="Upcoming deadlines list">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
                 </svg>
-                <span>Overdue Deadlines ({overdueDeadlines.length})</span>
+                <span>Deadlines & Milestones</span>
               </h3>
-              <button
-                type="button"
-                onClick={() => {
-                  setDueFilter('overdue')
-                  setStatusFilter('all')
-                }}
-                className="btn-secondary"
-                style={{
-                  minHeight: '32px',
-                  padding: '0 10px',
-                  fontSize: '12px',
-                  color: '#e65100',
-                  borderColor: 'rgba(230, 81, 0, 0.4)',
-                }}
-              >
-                View all ({overdueDeadlines.length}) →
-              </button>
 
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {overdueDeadlines.slice(0, 5).map((task) => {
-                const meta = getDomainMeta(task.domain)
-                return (
-                  <div
-                    key={task.id}
+              {/* Quick interactive filter pills on the card */}
+              {(viewCounts.overdue > 0 || viewCounts.due_today > 0 || viewCounts.upcoming > 0) && (
+                <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-card-soft)', padding: '2px', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                  <button
+                    type="button"
+                    onClick={() => setPriorityFilter('all')}
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '12px',
-                      padding: '10px 12px',
-                      borderRadius: '6px',
-                      background: 'rgba(230, 81, 0, 0.04)',
-                      border: '1px solid rgba(230, 81, 0, 0.25)',
-                      transition: 'all 0.15s ease',
+                      padding: '3px 8px',
+                      fontSize: '11px',
+                      fontWeight: priorityFilter === 'all' ? '600' : '400',
+                      borderRadius: '4px',
+                      border: 'none',
+                      background: priorityFilter === 'all' ? 'var(--bg-card)' : 'transparent',
+                      color: priorityFilter === 'all' ? 'var(--text-primary)' : 'var(--text-muted)',
+                      cursor: 'pointer',
                     }}
                   >
+                    All ({viewCounts.overdue + viewCounts.upcoming + viewCounts.due_today})
+                  </button>
+                  {viewCounts.overdue > 0 && (
                     <button
                       type="button"
-                      onClick={() => handleToggleTaskStatus(task.id, false)}
-                      className="btn-touch-target"
+                      onClick={() => setPriorityFilter('overdue')}
                       style={{
-                        width: '32px',
-                        height: '32px',
-                        minWidth: '32px',
-                        minHeight: '32px',
-                        borderRadius: '6px',
-                        border: '1px solid rgba(230, 81, 0, 0.4)',
-                        background: 'var(--bg-card-soft)',
-                        color: 'var(--text-muted)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
+                        padding: '3px 8px',
+                        fontSize: '11px',
+                        fontWeight: priorityFilter === 'overdue' ? '600' : '400',
+                        borderRadius: '4px',
+                        border: 'none',
+                        background: priorityFilter === 'overdue' ? 'rgba(230, 81, 0, 0.15)' : 'transparent',
+                        color: priorityFilter === 'overdue' ? '#e65100' : 'var(--text-muted)',
                         cursor: 'pointer',
-                        padding: 0,
-                        flexShrink: 0,
                       }}
-                      title="Mark as completed"
-                      aria-label={`Mark task ${task.title} as completed`}
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
+                      Overdue ({viewCounts.overdue})
                     </button>
-
-                    <div
-                      style={{ minWidth: 0, flex: 1, cursor: onSelectTab ? 'pointer' : 'default' }}
-                      onClick={() => onSelectTab && onSelectTab('timeline')}
+                  )}
+                  {viewCounts.due_today > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setPriorityFilter('today')}
+                      style={{
+                        padding: '3px 8px',
+                        fontSize: '11px',
+                        fontWeight: priorityFilter === 'today' ? '600' : '400',
+                        borderRadius: '4px',
+                        border: 'none',
+                        background: priorityFilter === 'today' ? 'rgba(217, 119, 6, 0.15)' : 'transparent',
+                        color: priorityFilter === 'today' ? '#d97706' : 'var(--text-muted)',
+                        cursor: 'pointer',
+                      }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                        <span className="domain-swatch" style={{ background: meta.color }} />
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' }}>
-                          {task.project || meta.label}
-                        </span>
-                      </div>
-                      <div
-                        style={{
-                          fontSize: '13.5px',
-                          fontWeight: '500',
-                          color: 'var(--text-primary)',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {task.title}
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                      <span
-                        style={{
-                          fontSize: '11px',
-                          fontWeight: '600',
-                          padding: '2px 8px',
-                          borderRadius: '10px',
-                          background: 'rgba(230, 81, 0, 0.15)',
-                          color: '#e65100',
-                          border: '1px solid rgba(230, 81, 0, 0.35)',
-                        }}
-                      >
-                        {task.urgency?.label || 'Overdue'}
-                      </span>
-                    </div>
-                  </div>
-                )
-              })}
+                      Today ({viewCounts.due_today})
+                    </button>
+                  )}
+                  {viewCounts.upcoming > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setPriorityFilter('upcoming')}
+                      style={{
+                        padding: '3px 8px',
+                        fontSize: '11px',
+                        fontWeight: priorityFilter === 'upcoming' ? '600' : '400',
+                        borderRadius: '4px',
+                        border: 'none',
+                        background: priorityFilter === 'upcoming' ? 'rgba(14, 165, 233, 0.15)' : 'transparent',
+                        color: priorityFilter === 'upcoming' ? '#0ea5e9' : 'var(--text-muted)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Upcoming ({viewCounts.upcoming})
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
-        )}
 
-        {/* Upcoming Deadlines */}
-        <div className="dashboard-section-card" role="region" aria-label="Upcoming deadlines list">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
-              <span>Upcoming Deadlines</span>
-            </h3>
             <button
               type="button"
               onClick={() => {
-                setDueFilter('upcoming')
-                setStatusFilter('all')
+                if (onSelectTab) onSelectTab('timeline')
               }}
               className="btn-secondary"
               style={{
-                minHeight: '36px',
+                minHeight: '32px',
                 padding: '0 10px',
                 fontSize: '12px',
               }}
             >
-              View all ({viewCounts.upcoming}) →
+              View all in Timeline →
             </button>
-
           </div>
 
-          {upcomingDeadlines.length === 0 ? (
+          {priorityDeadlines.length === 0 ? (
             <div className="dashboard-empty-state">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginBottom: '8px', color: 'var(--text-muted)' }}>
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -1363,10 +1404,9 @@ export default function Dashboard({
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {upcomingDeadlines.map((task) => {
+              {priorityDeadlines.map((task) => {
                 const meta = getDomainMeta(task.domain)
-                const isOverdue = task.urgency?.isOverdue
-                const isUrgent = task.urgency?.isUrgent
+                const badge = getUrgencyBadgeStyle(task.urgency)
 
                 return (
                   <div
@@ -1378,12 +1418,11 @@ export default function Dashboard({
                       gap: '12px',
                       padding: '10px 12px',
                       borderRadius: '6px',
-                      background: 'var(--bg-card)',
-                      border: '1px solid var(--border)',
+                      background: task.urgency?.isOverdue ? 'rgba(230, 81, 0, 0.04)' : 'var(--bg-card)',
+                      border: task.urgency?.isOverdue ? '1px solid rgba(230, 81, 0, 0.25)' : '1px solid var(--border)',
                       transition: 'all 0.15s ease',
                     }}
                   >
-                    {/* Inline Completion Checkbox: 6px radius, 44px min tap */}
                     <button
                       type="button"
                       onClick={() => handleToggleTaskStatus(task.id, false)}
@@ -1446,23 +1485,17 @@ export default function Dashboard({
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: '4px',
-                          background: isOverdue
-                            ? 'var(--danger-bg)'
-                            : 'var(--bg-card-soft)',
-                          color: isOverdue
-                            ? 'var(--danger-text)'
-                            : isUrgent
-                            ? 'var(--accent-text)'
-                            : 'var(--text-secondary)',
-                          border: '1px solid var(--border)',
+                          background: badge.bg,
+                          color: badge.color,
+                          border: `1px solid ${badge.border}`,
                           padding: '3px 8px',
                           borderRadius: '6px',
                           fontSize: '11.5px',
-                          fontWeight: '500',
+                          fontWeight: '600',
                           whiteSpace: 'nowrap',
                         }}
                       >
-                        {task.urgency?.label || task.countdown || 'Active'}
+                        {badge.label}
                       </span>
                     </div>
                   </div>

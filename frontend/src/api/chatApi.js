@@ -386,10 +386,33 @@ export async function seedJudgeDemoPersona() {
       const err = await res.json().catch(() => ({}))
       throw new Error(err.detail || `Failed to seed demo persona (HTTP ${res.status})`)
     }
-    return await res.json()
+    const data = await res.json()
+    if (typeof window !== 'undefined' && typeof window.CustomEvent === 'function') {
+      window.dispatchEvent(new window.CustomEvent('compass:demo-persona-loaded'))
+    }
+    return data
   } catch (err) {
     console.warn('Demo persona seed error:', err)
     throw err
+  }
+}
+
+/**
+ * Remove all demo persona dummy tasks for the current identity.
+ * Genuine user tasks are strictly preserved.
+ */
+export async function clearDemoPersona() {
+  try {
+    const res = await fetch(`${API_BASE}/api/demo/clear`, {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      credentials: 'include',
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch (err) {
+    console.warn('Clear demo persona error:', err)
+    return null
   }
 }
 

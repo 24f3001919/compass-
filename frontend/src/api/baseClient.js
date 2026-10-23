@@ -95,48 +95,7 @@ export function setApiBase(newBase) {
 
 
 
-export const FALLBACK_TASKS = [
-  {
-    id: '1',
-    title: 'Submit Nebius Token Factory Benchmark',
-    domain: 'hackathon',
-    project: 'Compass',
-    countdown: '2d left (Friday)',
-    tags: ['nebius', 'vector', 'benchmark'],
-    vector_dim: 768,
-    timestamp: 'Just now'
-  },
-  {
-    id: '2',
-    title: 'Configured Matryoshka 768-dim embeddings with Nebius Token Factory',
-    domain: 'code',
-    project: 'Compass',
-    countdown: 'Logged from CLI',
-    tags: ['qwen3', 'pgvector', 'hnsw'],
-    vector_dim: 768,
-    timestamp: '2 mins ago'
-  },
-  {
-    id: '3',
-    title: 'CS 61C: RISC-V Pipeline Synthesis Report',
-    domain: 'coursework',
-    project: 'CS 61C',
-    countdown: '1d left (Thursday)',
-    tags: ['hardware', 'riscv', 'architecture'],
-    vector_dim: 768,
-    timestamp: '1 hour ago'
-  },
-  {
-    id: '4',
-    title: 'Implement Nemotron-3 Nano sub-400ms router function',
-    domain: 'code',
-    project: 'Compass Core',
-    countdown: 'Completed',
-    tags: ['nemotron', 'router', 'latency'],
-    vector_dim: 768,
-    timestamp: '3 hours ago'
-  }
-]
+export const FALLBACK_TASKS = []
 
 const DEFAULT_ACCOUNTS = ['demo@compass.app', 'researcher@compass.app']
 

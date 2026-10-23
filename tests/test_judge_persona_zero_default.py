@@ -394,3 +394,131 @@ async def test_reseed_preserves_user_completed_status():
         assert phase1["status"] == "completed", "User-completed status must not be reverted by re-seed"
         assert phase1["due_date"] == date(2026, 10, 29), "Due date must shift to Nov 1 - 3 days"
 
+
+@pytest.mark.asyncio
+async def test_clear_demo_tasks_removes_dummy_leaves_user_tasks():
+    """On site reload/clear, demo dummy tasks are removed while genuine user tasks are preserved."""
+    from backend.routers.tasks_verification import clear_demo_tasks_endpoint
+
+    mock_request = MagicMock()
+    mock_ident = MagicMock(id="user_with_mixed_tasks", is_guest=True)
+    mock_pool = MagicMock()
+    mock_conn = AsyncMock()
+    mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+
+    # Simulated DB with 2 demo tasks and 1 real user task
+    stored_tasks = [
+        {"id": 101, "trusted_event_url": "compass://demo-persona/36_hour_hackathon_sprint", "title": "36-hour Hackathon Sprint"},
+        {"id": 102, "trusted_event_url": "compass://demo-persona/cs_61c_lab_4", "title": "CS 61C Lab 4"},
+        {"id": 201, "trusted_event_url": None, "title": "Real User Task: Submit Report"},
+    ]
+
+    # conn.fetch returns the demo task rows matching the query
+    mock_conn.fetch.return_value = [
+        {"id": 101, "trusted_event_url": "compass://demo-persona/36_hour_hackathon_sprint"},
+        {"id": 102, "trusted_event_url": "compass://demo-persona/cs_61c_lab_4"},
+    ]
+
+    with patch("backend.routers.tasks_verification.get_pool", AsyncMock(return_value=mock_pool)), \
+         patch("backend.routers.tasks_verification._get_current_identity", return_value=mock_ident):
+
+        res = await clear_demo_tasks_endpoint(mock_request)
+        assert res["status"] == "ok"
+        assert res["deleted_count"] == 2
+
+        # Verify SQL execution deleted exactly the 2 demo task IDs, leaving user task 201 untouched
+        execute_calls = mock_conn.execute.call_args_list
+        assert len(execute_calls) >= 2
+        # Task dependencies delete call
+        assert execute_calls[0][0][1] == [101, 102]
+        # Tasks delete call
+        assert execute_calls[1][0][1] == [101, 102]
+
+
+@pytest.mark.asyncio
+async def test_get_frontend_tasks_include_demo_filter():
+    """get_frontend_tasks with include_demo=False returns only user tasks, excluding demo tasks."""
+    from backend.routers.tasks import get_frontend_tasks
+
+    mock_request = MagicMock()
+    mock_ident = MagicMock(id="user_reload_test", is_guest=False)
+    mock_pool = MagicMock()
+    mock_conn = AsyncMock()
+    mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+
+    # Simulated raw tasks from DB
+    mock_raw_tasks = [
+        {
+            "id": 1,
+            "title": "36-hour Hackathon Sprint: Final Demo Build",
+            "domain": "hackathon",
+            "due_date": date(2026, 10, 25),
+            "priority": "high",
+            "status": "open",
+            "trusted_event_url": "compass://demo-persona/36_hour_hackathon_sprint",
+            "is_demo": True,
+            "tags": ["hackathon", "demo"],
+        },
+        {
+            "id": 2,
+            "title": "User Personal Milestone: Study for GRE",
+            "domain": "coursework",
+            "due_date": date(2026, 10, 28),
+            "priority": "medium",
+            "status": "open",
+            "trusted_event_url": None,
+            "is_demo": False,
+            "tags": ["coursework"],
+        },
+    ]
+
+    with patch("backend.routers.tasks.get_pool", AsyncMock(return_value=mock_pool)), \
+         patch("backend.routers.tasks._get_current_identity", return_value=mock_ident), \
+         patch("backend.routers.tasks.structured.list_tasks", AsyncMock(return_value=mock_raw_tasks)):
+
+        # 1. With include_demo=True: returns both
+        all_res = await get_frontend_tasks(mock_request, include_demo=True)
+        assert len(all_res) == 2
+
+        # 2. With include_demo=False (on reload): returns ONLY the genuine user task
+        user_only_res = await get_frontend_tasks(mock_request, include_demo=False)
+        assert len(user_only_res) == 1
+        assert user_only_res[0].id == "2"
+        assert user_only_res[0].title == "User Personal Milestone: Study for GRE"
+
+
+@pytest.mark.asyncio
+async def test_legacy_untagged_demo_tasks_filtered_and_cleared():
+    """Legacy demo tasks with trusted_event_url=None and is_demo=None are filtered out when include_demo=False."""
+    from backend.routers.tasks import get_frontend_tasks
+
+    mock_request = MagicMock()
+    mock_ident = MagicMock(id="himynameisratnesh12@gmail.com", is_guest=False)
+    mock_pool = MagicMock()
+    mock_conn = AsyncMock()
+    mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+
+    # 7 legacy untagged tasks + 1 real user task
+    mock_raw_tasks = [
+        {"id": 448, "title": "36-hour Hackathon Sprint: Final Demo Build", "trusted_event_url": None, "domain": "hackathon"},
+        {"id": 449, "title": "CS 61C Lab 4: RISC-V Pipeline Synthesis", "trusted_event_url": None, "domain": "coursework"},
+        {"id": 450, "title": "Nebius Buildathon Phase 2 Submission", "trusted_event_url": None, "domain": "hackathon"},
+        {"id": 451, "title": "Embeddings truncation and Matryoshka dimension verification", "trusted_event_url": None, "domain": "code"},
+        {"id": 452, "title": "Record 3-minute Devpost demo video", "trusted_event_url": None, "domain": "hackathon"},
+        {"id": 453, "title": "CS 61C Midterm Review: Cache Hierarchies & Virtual Memory", "trusted_event_url": None, "domain": "coursework"},
+        {"id": 454, "title": "Deploy Compass backend to Nebius Serverless Endpoints", "trusted_event_url": None, "domain": "code"},
+        {"id": 999, "title": "My Genuine User Task: Learn React 19", "trusted_event_url": None, "domain": "code"},
+    ]
+
+    with patch("backend.routers.tasks.get_pool", AsyncMock(return_value=mock_pool)), \
+         patch("backend.routers.tasks._get_current_identity", return_value=mock_ident), \
+         patch("backend.routers.tasks.structured.list_tasks", AsyncMock(return_value=mock_raw_tasks)):
+
+        # include_demo=False must filter out all 7 legacy demo tasks, returning only the genuine user task
+        user_tasks = await get_frontend_tasks(mock_request, include_demo=False)
+        assert len(user_tasks) == 1
+        assert user_tasks[0].id == "999"
+        assert user_tasks[0].title == "My Genuine User Task: Learn React 19"
+
+
+

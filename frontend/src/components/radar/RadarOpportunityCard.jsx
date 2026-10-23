@@ -67,13 +67,16 @@ export default function RadarOpportunityCard({
   const getEligibilityBadge = () => {
     switch (eligibility_classification) {
       case 'ELIGIBLE':
-        return { label: 'Eligible', bg: '#dcfce7', text: '#166534' }
+        return { label: 'Confirmed Eligible', bg: '#dcfce7', text: '#166534' }
       case 'POTENTIAL_MATCH':
-        return { label: 'Potential Match', bg: '#fef3c7', text: '#92400e' }
+      case 'POTENTIALLY_ELIGIBLE':
+        return { label: 'Potentially Eligible', bg: '#fef3c7', text: '#92400e' }
       case 'INELIGIBLE':
         return { label: 'Ineligible', bg: '#fee2e2', text: '#991b1b' }
+      case 'INSUFFICIENT_INFORMATION':
+        return { label: 'Insufficient Info', bg: '#f1f5f9', text: '#475569' }
       default:
-        return { label: 'Verify Criteria', bg: '#f1f5f9', text: '#475569' }
+        return { label: 'Needs Verification', bg: '#f1f5f9', text: '#475569' }
     }
   }
 

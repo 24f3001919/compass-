@@ -370,6 +370,10 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
             last_updated_at              TIMESTAMPTZ   NOT NULL DEFAULT now()
         );
         CREATE INDEX IF NOT EXISTS idx_opp_req_opp_id ON opportunity_requirements(opportunity_id);
+        ALTER TABLE opportunity_requirements ADD COLUMN IF NOT EXISTS preferred_skills TEXT[] DEFAULT ARRAY[]::TEXT[];
+        ALTER TABLE opportunity_requirements ADD COLUMN IF NOT EXISTS gpa_scale NUMERIC(4, 2) DEFAULT 10.0;
+        ALTER TABLE opportunity_requirements ADD COLUMN IF NOT EXISTS no_active_backlogs BOOLEAN DEFAULT FALSE;
+        ALTER TABLE opportunity_requirements ADD COLUMN IF NOT EXISTS has_conflicting_requirements BOOLEAN DEFAULT FALSE;
 
         CREATE TABLE IF NOT EXISTS opportunity_cycles (
             id                  SERIAL        PRIMARY KEY,
@@ -404,10 +408,20 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
             skills                      TEXT[]        DEFAULT ARRAY[]::TEXT[],
             min_compensation            TEXT,
             resume_url                  TEXT,
+            cgpa                        DOUBLE PRECISION,
+            cgpa_scale                  DOUBLE PRECISION DEFAULT 10.0,
+            active_backlogs             INT DEFAULT 0,
+            work_authorization          TEXT DEFAULT 'India',
+            requires_sponsorship        BOOLEAN DEFAULT FALSE,
             created_at                  TIMESTAMPTZ   NOT NULL DEFAULT now(),
             updated_at                  TIMESTAMPTZ   NOT NULL DEFAULT now()
         );
         CREATE INDEX IF NOT EXISTS idx_user_opp_prof_user ON user_opportunity_profiles(user_id);
+        ALTER TABLE user_opportunity_profiles ADD COLUMN IF NOT EXISTS cgpa DOUBLE PRECISION;
+        ALTER TABLE user_opportunity_profiles ADD COLUMN IF NOT EXISTS cgpa_scale DOUBLE PRECISION DEFAULT 10.0;
+        ALTER TABLE user_opportunity_profiles ADD COLUMN IF NOT EXISTS active_backlogs INT DEFAULT 0;
+        ALTER TABLE user_opportunity_profiles ADD COLUMN IF NOT EXISTS work_authorization TEXT DEFAULT 'India';
+        ALTER TABLE user_opportunity_profiles ADD COLUMN IF NOT EXISTS requires_sponsorship BOOLEAN DEFAULT FALSE;
 
         CREATE TABLE IF NOT EXISTS user_opportunities (
             id                          SERIAL        PRIMARY KEY,

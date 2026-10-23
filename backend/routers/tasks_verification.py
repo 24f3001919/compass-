@@ -68,6 +68,128 @@ async def remove_task_dependency_endpoint(task_id: int, depends_on_task_id: int)
         return {"status": "ok", "deleted": deleted}
 
 
+# Known Judge Persona and legacy dummy demo task titles
+DEMO_TASK_TITLES: List[str] = [
+    # Legacy seed titles (commit c34cf7b)
+    "36-hour Hackathon Sprint: Final Demo Build",
+    "CS 61C Lab 4: RISC-V Pipeline Synthesis",
+    "Record 3-minute Devpost demo video",
+    "Nebius Buildathon Phase 2 Submission",
+    "Deploy Compass backend to Nebius Serverless Endpoints",
+    "CS 61C Midterm Review: Cache Hierarchies & Virtual Memory",
+    "Embeddings truncation and Matryoshka dimension verification",
+    # Current Judge Persona seed titles
+    "Nebius Buildathon Phase 1 Submission",
+    "CS 61C Homework 3: RISC-V Calling Conventions",
+    "Configure Production SSL & CORS Headers",
+    "Organize Hackathon Pitch Slide Deck",
+    "Final Paper: Scalable Hybrid Search in Pgvector",
+    "General Quarterly Study Group Retrospective",
+    "Distributed Systems Term Project Checkpoint",
+    "Nebius Cloud GPU Quota and Capacity Review",
+    "Explore Quantized GGUF Local Inference Fallback",
+    "Organize CS 61C Discussion Group Study Guide",
+    "CS 61C Logisim ALU Control Hazard Resolution",
+    "Enterprise SSO Integration for University Directory",
+    "Initial Compass Schema Migration to Neon Postgres",
+    "Set Up GitHub Actions CI Pipeline for Lint and Pytest",
+]
+
+
+async def clear_demo_tasks(conn, user_id: str) -> int:
+    """Delete all demo persona dummy tasks for a user, leaving genuine user tasks completely intact."""
+    if not user_id:
+        return 0
+
+    task_ids = []
+    if type(conn).__module__.startswith("asyncpg"):
+        try:
+            rows = await conn.fetch(
+                """
+                SELECT id FROM tasks
+                WHERE user_id = $1
+                  AND (
+                    trusted_event_url LIKE 'compass://demo-persona/%'
+                    OR trusted_event_url ILIKE '%demo%'
+                    OR title = ANY($2)
+                  )
+                """,
+                user_id,
+                DEMO_TASK_TITLES,
+            )
+            task_ids = [r["id"] for r in rows if r and "id" in r]
+        except Exception as e:
+            logger.warning(f"Error fetching demo tasks for deletion: {e}")
+    else:
+        if hasattr(conn, "fetch"):
+            try:
+                res = await conn.fetch(
+                    """
+                    SELECT id FROM tasks
+                    WHERE user_id = $1
+                      AND (
+                        trusted_event_url LIKE 'compass://demo-persona/%'
+                        OR trusted_event_url ILIKE '%demo%'
+                        OR title = ANY($2)
+                      )
+                    """,
+                    user_id,
+                    DEMO_TASK_TITLES,
+                )
+                if isinstance(res, list):
+                    task_ids = [r["id"] for r in res if isinstance(r, dict) and "id" in r]
+            except Exception:
+                pass
+
+    if not task_ids:
+        return 0
+
+    if type(conn).__module__.startswith("asyncpg"):
+        try:
+            await conn.execute(
+                "DELETE FROM task_dependencies WHERE task_id = ANY($1) OR depends_on_task_id = ANY($1)",
+                task_ids,
+            )
+            await conn.execute(
+                "DELETE FROM tasks WHERE id = ANY($1) AND user_id = $2",
+                task_ids,
+                user_id,
+            )
+        except Exception as e:
+            logger.warning(f"Error executing demo tasks deletion: {e}")
+    else:
+        if hasattr(conn, "execute"):
+            try:
+                await conn.execute(
+                    "DELETE FROM task_dependencies WHERE task_id = ANY($1) OR depends_on_task_id = ANY($1)",
+                    task_ids,
+                )
+                await conn.execute(
+                    "DELETE FROM tasks WHERE id = ANY($1)",
+                    task_ids,
+                )
+            except Exception:
+                pass
+    return len(task_ids)
+
+
+@router.post("/api/demo/clear")
+@router.delete("/api/demo/clear")
+@router.delete("/api/demo/tasks")
+async def clear_demo_tasks_endpoint(request: Request):
+    """Remove all demo persona dummy tasks for the current identity.
+    Genuine user tasks are strictly preserved.
+    """
+    ident = _get_current_identity(request)
+    user_id = ident.id if ident else _get_or_create_user_id(request)
+    pool = await get_pool()
+    if not pool:
+        return {"status": "ok", "deleted_count": 0}
+    async with pool.acquire() as conn:
+        deleted = await clear_demo_tasks(conn, user_id)
+        return {"status": "ok", "deleted_count": deleted}
+
+
 # ---- 1-Click Judge Demo Persona Seeding ------------------------------------
 @router.post("/api/demo/seed", dependencies=[Depends(rate_limit)])
 @router.post("/api/demo/seed-persona", dependencies=[Depends(rate_limit)])
@@ -190,14 +312,14 @@ async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRe
                 "notes": "Two-stage pipelined CPU in Logisim with forwarding and hazard resolution.",
             },
             {
-                "title": "Submit Hackathon Project Devpost Draft",
+                "title": "36-hour Hackathon Sprint: Final Demo Build",
                 "domain": "hackathon",
                 "project_id": p_hack["id"],
                 "due_date": today,
                 "priority": "high",
                 "status": "open",
                 "duration_minutes": 90,
-                "notes": "Submit initial project draft on Devpost with architecture diagram and problem statement.",
+                "notes": "Full weekend sprint to finalize 3-minute video demo, pitch deck, and live cloud deployment.",
             },
 
             # 3. Urgent (within ~24h, tomorrow): 2
@@ -258,14 +380,14 @@ async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRe
 
             # 5. Upcoming (> 7 days): 5
             {
-                "title": "Tavily Authority Tier Benchmarking & Latency Audit",
-                "domain": "code",
-                "project_id": p_code["id"],
+                "title": "Nebius Buildathon Phase 2 Submission",
+                "domain": "hackathon",
+                "project_id": p_hack["id"],
                 "due_date": today + timedelta(days=8),
-                "priority": "medium",
+                "priority": "high",
                 "status": "open",
-                "duration_minutes": 120,
-                "notes": "Benchmark domain authority scoring against primary source platforms.",
+                "duration_minutes": 180,
+                "notes": "Final hackathon submission demonstrating live Tavily schedule drift detection and verification pipeline.",
             },
             {
                 "title": "Final Paper: Scalable Hybrid Search in Pgvector",

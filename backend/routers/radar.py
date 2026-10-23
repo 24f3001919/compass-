@@ -130,6 +130,7 @@ async def get_recommended_opportunities(
     request: Request,
     limit: int = Query(20, ge=1, le=50),
     employer_type: Optional[str] = Query(None),
+    eligible_only: bool = Query(False, description="When true, strictly returns only confirmed ELIGIBLE opportunities"),
 ):
     """
     Return top recommended opportunities tailored to user's profile and preferences.
@@ -143,10 +144,14 @@ async def get_recommended_opportunities(
         user_id=user_id,
         employer_type=employer_type,
         page=1,
-        page_size=150,  # Evaluate broader candidate set for ranking
+        page_size=200,  # Evaluate broader candidate set for ranking
     )
 
     enriched = [_enrich_opportunity(item, profile) for item in raw_items]
+
+    # If eligible_only is requested, strictly filter for ELIGIBLE
+    if eligible_only:
+        enriched = [o for o in enriched if o.eligibility_classification == EligibilityClassification.ELIGIBLE]
 
     # Neutral Ranking Matrix:
     # 1. Verified and active status: OPEN_CONFIRMED first (0), UPCOMING_CONFIRMED (1), others (2)
