@@ -228,8 +228,11 @@ export default function App() {
 
   const checkMigration = useCallback(async () => {
     try {
+      if (typeof window !== 'undefined' && window.sessionStorage?.getItem('compass_migration_dismissed') === '1') {
+        return
+      }
       const status = await fetchMigrationStatus()
-      if (status.has_guest_data && status.guest_conversations_count > 0) {
+      if (status.has_guest_data && status.guest_conversations_count > 0 && !status.skipped) {
         setGuestConversationsCount(status.guest_conversations_count)
         setShowMigrationModal(true)
       }
@@ -256,6 +259,13 @@ export default function App() {
       checkMigration()
     } else {
       setCurrentUser({ authenticated: false, email: '' })
+      try {
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+          window.sessionStorage.removeItem('compass_migration_dismissed')
+        }
+      } catch {
+        /* ignore storage access error */
+      }
     }
     loadTasks(selectedDomain)
     refreshUsage()
@@ -686,6 +696,13 @@ export default function App() {
         guestConversationsCount={guestConversationsCount}
         onMigrationComplete={() => {
           setShowMigrationModal(false)
+          try {
+            if (typeof window !== 'undefined' && window.sessionStorage) {
+              window.sessionStorage.removeItem('compass_migration_dismissed')
+            }
+          } catch {
+            /* ignore storage access error */
+          }
           loadTasks(selectedDomain)
           refreshUsage()
         }}

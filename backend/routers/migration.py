@@ -121,6 +121,7 @@ async def get_migration_status(request: Request):
             "total_conversations": 0,
             "unimported_conversations": 0,
             "total_memories": 0,
+            "skipped": False,
         }
 
     if not guest_id:
@@ -131,6 +132,7 @@ async def get_migration_status(request: Request):
             "total_conversations": 0,
             "unimported_conversations": 0,
             "total_memories": 0,
+            "skipped": False,
         }
 
     pool = await get_pool()
@@ -139,6 +141,7 @@ async def get_migration_status(request: Request):
 
     async with pool.acquire() as conn:
         overview = await conversations.get_guest_migration_overview(conn, guest_id, user_id)
+        overview["skipped"] = request.cookies.get("compass_migration_skipped") == "1"
         return overview
 
 

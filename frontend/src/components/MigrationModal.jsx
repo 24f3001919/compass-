@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
   fetchMigrationConversations,
   importAllGuestData,
@@ -30,6 +30,40 @@ export default function MigrationModal({
       setImportResult(null)
     }
   }, [isOpen])
+
+  const handleSkip = useCallback(() => {
+    // 1. Immediately dismiss modal so UI responds without blocking on network I/O
+    if (typeof onClose === 'function') {
+      onClose()
+    }
+    // 2. Persist session-level dismissal to prevent immediate reopening during auth hydration / polling
+    try {
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        window.sessionStorage.setItem('compass_migration_dismissed', '1')
+      }
+    } catch {
+      /* ignore storage access error */
+    }
+    // 3. Notify backend asynchronously to record preference in cookie (preserves all guest data)
+    skipMigration().catch((err) => {
+      console.warn('[Migration] Skip notification failed:', err)
+    })
+  }, [onClose])
+
+  // Close dialog on Escape key when interactive (not importing)
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && view !== 'importing') {
+        e.preventDefault()
+        handleSkip()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOpen, view, handleSkip])
 
   // Fetch conversations list when switching to select view
   const handleOpenSelect = async () => {
@@ -101,11 +135,6 @@ export default function MigrationModal({
       setError(err.message || 'Failed to import selected conversations')
       setView('select')
     }
-  }
-
-  const handleSkip = async () => {
-    await skipMigration()
-    onClose()
   }
 
   if (!isOpen) return null
@@ -181,21 +210,29 @@ export default function MigrationModal({
           </div>
           {view !== 'importing' && (
             <button
-              onClick={handleSkip}
-              className="btn-touch-target btn-secondary"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleSkip()
+              }}
               style={{
-                color: 'var(--text-muted)',
+                background: 'var(--bg-card-soft, rgba(255, 255, 255, 0.05))',
+                border: '1px solid var(--border)',
+                color: 'var(--text-secondary)',
                 cursor: 'pointer',
                 width: '32px',
                 height: '32px',
+                minWidth: '32px',
                 minHeight: '32px',
                 borderRadius: 'var(--radius-btn, 6px)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                padding: 0,
+                transition: 'background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease',
               }}
               title="Close"
-              aria-label="Close"
+              aria-label="Close import dialog"
             >
               <X size={16} strokeWidth={1.8} />
             </button>
