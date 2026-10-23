@@ -308,24 +308,28 @@ export default function Dashboard({
   }, [domainFilteredTasks])
 
 
-  // Varied Priority Deadlines: balanced cross-section across urgency tiers
-  // (Overdue + Due Today + Urgent + Due Soon + Upcoming) instead of single-tier dominance
+  // Varied Priority Deadlines: balanced cross-section across ALL urgency tiers
+  // (Overdue + Due Today + Urgent + Due Soon + Upcoming) so all varieties are visible at a glance
   const priorityDeadlines = useMemo(() => {
     const now = new Date()
     const overdue = sortOverdueDeadlines(domainFilteredTasks, now)
     const upcoming = sortUpcomingDeadlines(domainFilteredTasks, now)
 
     if (priorityFilter === 'overdue') {
-      return overdue.slice(0, 6)
+      return overdue.slice(0, 8)
     }
     if (priorityFilter === 'today') {
-      return upcoming.filter((t) => t.urgency?.timing === 'due_today').slice(0, 6)
+      return upcoming.filter((t) => t.urgency?.timing === 'due_today' || t.urgency?.timing === 'urgent').slice(0, 8)
+    }
+    if (priorityFilter === 'due_soon') {
+      return upcoming.filter((t) => t.urgency?.timing === 'due_soon').slice(0, 8)
     }
     if (priorityFilter === 'upcoming') {
-      return upcoming.filter((t) => t.urgency?.timing !== 'due_today').slice(0, 6)
+      return upcoming.filter((t) => t.urgency?.timing === 'upcoming' || t.urgency?.timing === 'due_soon').slice(0, 8)
     }
 
-    // Default 'all': balanced selection across all urgency categories
+    // Default 'all': balanced selection across all 5 urgency categories:
+    // (Overdue, Due Today, Urgent <24h, Due Soon 2-7d, Upcoming >7d)
     const dueToday = upcoming.filter((t) => t.urgency?.timing === 'due_today')
     const urgent = upcoming.filter((t) => t.urgency?.timing === 'urgent')
     const dueSoon = upcoming.filter((t) => t.urgency?.timing === 'due_soon')
@@ -340,21 +344,23 @@ export default function Dashboard({
       return true
     }
 
-    // Balanced selection: max 2 overdue, max 2 today, max 2 urgent, due soon, upcoming
-    overdue.slice(0, 2).forEach(addUnique)
-    dueToday.slice(0, 2).forEach(addUnique)
-    urgent.slice(0, 2).forEach(addUnique)
+    // Diverse cross-section across all tiers: 1 Overdue, 1 Due Today, 1 Urgent (<24h), 2 Due Soon (2-4d), 2 Upcoming (>7d)
+    overdue.slice(0, 1).forEach(addUnique)
+    dueToday.slice(0, 1).forEach(addUnique)
+    urgent.slice(0, 1).forEach(addUnique)
     dueSoon.slice(0, 2).forEach(addUnique)
     laterUpcoming.slice(0, 2).forEach(addUnique)
 
-    // Backfill if fewer than 6
-    if (selected.length < 6) {
-      upcoming.forEach(addUnique)
-      overdue.forEach(addUnique)
-    }
+    // Backfill across remaining tasks up to 8 so all tiers have presence
+    overdue.slice(1).forEach((t) => { if (selected.length < 8) addUnique(t) })
+    dueToday.slice(1).forEach((t) => { if (selected.length < 8) addUnique(t) })
+    dueSoon.slice(2).forEach((t) => { if (selected.length < 8) addUnique(t) })
+    laterUpcoming.slice(2).forEach((t) => { if (selected.length < 8) addUnique(t) })
+    urgent.slice(1).forEach((t) => { if (selected.length < 8) addUnique(t) })
 
-    return selected.slice(0, 6)
+    return selected.slice(0, 8)
   }, [domainFilteredTasks, priorityFilter])
+
 
 
   // Recent Activity Feed
@@ -1272,8 +1278,8 @@ export default function Dashboard({
               </h3>
 
               {/* Quick interactive filter pills on the card */}
-              {(viewCounts.overdue > 0 || viewCounts.due_today > 0 || viewCounts.upcoming > 0) && (
-                <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-card-soft)', padding: '2px', borderRadius: '6px', border: '1px solid var(--border)' }}>
+              {(viewCounts.overdue > 0 || viewCounts.due_today > 0 || viewCounts.due_soon > 0 || viewCounts.upcoming > 0) && (
+                <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-card-soft)', padding: '2px', borderRadius: '6px', border: '1px solid var(--border)', flexWrap: 'wrap' }}>
                   <button
                     type="button"
                     onClick={() => setPriorityFilter('all')}
@@ -1288,7 +1294,7 @@ export default function Dashboard({
                       cursor: 'pointer',
                     }}
                   >
-                    All ({viewCounts.overdue + viewCounts.upcoming + viewCounts.due_today})
+                    All ({viewCounts.overdue + viewCounts.due_today + viewCounts.due_soon + viewCounts.upcoming})
                   </button>
                   {viewCounts.overdue > 0 && (
                     <button
@@ -1326,6 +1332,24 @@ export default function Dashboard({
                       Today ({viewCounts.due_today})
                     </button>
                   )}
+                  {viewCounts.due_soon > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setPriorityFilter('due_soon')}
+                      style={{
+                        padding: '3px 8px',
+                        fontSize: '11px',
+                        fontWeight: priorityFilter === 'due_soon' ? '600' : '400',
+                        borderRadius: '4px',
+                        border: 'none',
+                        background: priorityFilter === 'due_soon' ? 'rgba(14, 165, 233, 0.15)' : 'transparent',
+                        color: priorityFilter === 'due_soon' ? '#0284c7' : 'var(--text-muted)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Due Soon ({viewCounts.due_soon})
+                    </button>
+                  )}
                   {viewCounts.upcoming > 0 && (
                     <button
                       type="button"
@@ -1336,8 +1360,8 @@ export default function Dashboard({
                         fontWeight: priorityFilter === 'upcoming' ? '600' : '400',
                         borderRadius: '4px',
                         border: 'none',
-                        background: priorityFilter === 'upcoming' ? 'rgba(14, 165, 233, 0.15)' : 'transparent',
-                        color: priorityFilter === 'upcoming' ? '#0ea5e9' : 'var(--text-muted)',
+                        background: priorityFilter === 'upcoming' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+                        color: priorityFilter === 'upcoming' ? '#059669' : 'var(--text-muted)',
                         cursor: 'pointer',
                       }}
                     >
