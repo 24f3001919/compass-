@@ -13,6 +13,16 @@ export function parseLocation(pathname = window.location.pathname, search = wind
   const cleanPath = (pathname || '/').replace(/\/+$/, '') || '/'
   const searchParams = new URLSearchParams(search || '')
 
+  // Share route: query param (?share=<token>) or pathname (/share/<token>)
+  if (searchParams.has('share')) {
+    const token = (searchParams.get('share') || '').trim()
+    return { tab: 'share', shareToken: token, domain: 'all' }
+  }
+  if (cleanPath.startsWith('/share/')) {
+    const token = decodeURIComponent(cleanPath.slice('/share/'.length)).trim()
+    return { tab: 'share', shareToken: token, domain: 'all' }
+  }
+
   // Explicit query parameters
   const queryTab = searchParams.get('tab')
   const queryDomain = searchParams.get('domain')
@@ -91,7 +101,10 @@ export function parseLocation(pathname = window.location.pathname, search = wind
   return { tab: 'dashboard', domain: 'all' }
 }
 
-export function buildUrl(tab, domain) {
+export function buildUrl(tab, domain, shareToken = null) {
+  if (tab === 'share') {
+    return shareToken ? `/?share=${encodeURIComponent(shareToken)}` : '/'
+  }
   if (tab === 'dashboard') {
     return '/'
   }

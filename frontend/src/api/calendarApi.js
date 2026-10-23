@@ -1,6 +1,6 @@
 // Calendar & Dynamic Scheduling API
 
-import { API_BASE, getAuthHeaders, getCurrentUserId, setCurrentUserId, safeHref } from './baseClient'
+import { API_BASE, getAuthHeaders, getCurrentUserId, setCurrentUserId, safeHref } from './baseClient.js'
 
 export async function fetchCalendarStatus() {
   try {

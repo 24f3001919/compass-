@@ -1,4 +1,5 @@
 import React from 'react'
+import { Check, X, Pin, MoreHorizontal } from 'lucide-react'
 
 export default function ChatConversationItem({
   conv,
@@ -15,6 +16,7 @@ export default function ChatConversationItem({
   onTogglePin,
   onToggleArchive,
   onOpenDeleteConfirm,
+  onShareChat,
 }) {
   return (
     <div
@@ -74,42 +76,50 @@ export default function ChatConversationItem({
             />
             <button
               type="submit"
+              aria-label="Save name"
               style={{
                 background: 'var(--primary)',
                 color: '#fff',
                 border: 'none',
-                borderRadius: '4px',
+                borderRadius: 'var(--radius-btn, 4px)',
                 padding: '3px 6px',
                 fontSize: '11px',
                 cursor: 'pointer',
-                fontWeight: '700'
+                fontWeight: '700',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
               }}
               title="Save name"
             >
-              ✓
+              <Check size={12} />
             </button>
             <button
               type="button"
               onClick={onCancelRename}
+              aria-label="Cancel rename"
               style={{
                 background: 'transparent',
                 color: 'var(--text-muted)',
                 border: 'none',
-                borderRadius: '4px',
+                borderRadius: 'var(--radius-btn, 4px)',
                 padding: '3px 6px',
                 fontSize: '11px',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
               }}
               title="Cancel"
             >
-              ✕
+              <X size={12} />
             </button>
           </form>
         ) : (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', flex: 1 }}>
               {conv.is_pinned && (
-                <span style={{ fontSize: '11.5px', flexShrink: 0 }} title="Pinned chat">📌</span>
+                <Pin size={12} style={{ flexShrink: 0, color: 'var(--brand)' }} title="Pinned chat" />
               )}
               <span style={{
                 fontSize: '12.5px',
@@ -129,22 +139,23 @@ export default function ChatConversationItem({
                 e.stopPropagation()
                 onToggleMenu()
               }}
+              aria-label="Chat options"
               style={{
                 background: isMenuOpen ? 'var(--bg-card-soft)' : 'none',
                 border: 'none',
                 color: isMenuOpen ? 'var(--text-primary)' : 'var(--text-muted)',
-                fontSize: '16px',
-                fontWeight: '800',
                 cursor: 'pointer',
-                padding: '1px 5px',
-                borderRadius: '4px',
+                padding: '2px 4px',
+                borderRadius: 'var(--radius-btn, 4px)',
                 lineHeight: 1,
-                letterSpacing: '-0.5px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 transition: 'color 0.15s ease',
               }}
               title="Chat options"
             >
-              ···
+              <MoreHorizontal size={14} />
             </button>
           </>
         )}
@@ -181,6 +192,26 @@ export default function ChatConversationItem({
             gap: '2px',
           }}
         >
+          {onShareChat && (
+            <button
+              onClick={() => onShareChat(conv)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
+                padding: '8px 12px', borderRadius: '8px', border: 'none', background: 'transparent',
+                color: '#ececed', fontSize: '12.5px', fontWeight: '500', cursor: 'pointer', textAlign: 'left'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+                <polyline points="16 6 12 2 8 6"/>
+                <line x1="12" y1="2" x2="12" y2="15"/>
+              </svg>
+              <span>Share</span>
+            </button>
+          )}
+
           <button
             onClick={() => onStartRename(conv)}
             style={{

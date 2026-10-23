@@ -283,7 +283,7 @@ export async function fetchConversationMessages(conversationId) {
 }
 
 /**
- * Update conversation metadata (title, is_pinned, is_archived).
+ * Update conversation metadata (title, is_pinned, is_archived, is_shared).
  */
 export async function updateConversation(conversationId, updates) {
   if (!conversationId) return false
@@ -296,9 +296,40 @@ export async function updateConversation(conversationId, updates) {
       },
       body: JSON.stringify(updates),
     })
-    return res.ok
+    if (!res.ok) return false
+    const data = await res.json().catch(() => ({}))
+    return { ok: true, ...data }
   } catch {
     return false
+  }
+}
+
+/**
+ * Fetch a publicly shared conversation and its messages by secure share token.
+ */
+export async function fetchSharedConversation(shareToken) {
+  if (!shareToken || typeof shareToken !== 'string') return null
+  const cleanToken = shareToken.trim()
+  if (!cleanToken) return null
+
+  try {
+    const res = await fetch(`${API_BASE}/api/chat/shared/${encodeURIComponent(cleanToken)}`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    })
+    if (!res.ok) {
+      return null
+    }
+    const data = await res.json()
+    if (!data || !Array.isArray(data.messages)) {
+      return null
+    }
+    return data
+  } catch (err) {
+    console.warn('[Compass API] Failed to fetch shared conversation:', err)
+    return null
   }
 }
 

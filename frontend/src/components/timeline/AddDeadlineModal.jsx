@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { createTask, updateTask } from '../../api/client'
 import { DOMAIN_META } from './domainMeta'
-import { Calendar, GitFork, X } from 'lucide-react'
+import { Calendar, GitFork, X, AlertCircle, AlertTriangle } from 'lucide-react'
 import Logo from '../Logo'
 
 export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDomain, tasks = [], customDomains = [], onOpenCompass }) {
@@ -225,11 +225,15 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
             border: '1px solid #ef4444',
             color: '#b91c1c',
             padding: '10px 14px',
-            borderRadius: '8px',
+            borderRadius: 'var(--radius-btn, 6px)',
             fontSize: '13px',
-            marginBottom: '16px'
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
           }}>
-            ⚠️ {error}
+            <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+            <span>{error}</span>
           </div>
         )}
 
@@ -411,7 +415,7 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
-                <option value="urgent">Urgent ⚠️</option>
+                <option value="urgent">Urgent</option>
               </select>
             </div>
             <div>
@@ -480,7 +484,7 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
               marginTop: '4px'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#f87171', fontWeight: '700', fontSize: '13px' }}>
-                <span>🚫</span>
+                <AlertCircle size={15} style={{ flexShrink: 0 }} />
                 <span>Exact Duplicate Deadline</span>
               </div>
               <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
@@ -493,12 +497,12 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
                   onClick={() => handleAskCompass(`I have an existing deadline titled "${exactMatch.title}" scheduled for ${exactMatch.due_date || 'unscheduled'}. Can you look into my schedules, check for duplicate commitments or conflicts, and tell me how to resolve this?`)}
                   style={{
                     padding: '7px 13px',
-                    borderRadius: '8px',
-                    background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(99, 102, 241, 0.25) 100%)',
-                    border: '1px solid rgba(139, 92, 246, 0.5)',
-                    color: '#c084fc',
+                    borderRadius: 'var(--radius-btn, 6px)',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-primary)',
                     fontSize: '12px',
-                    fontWeight: '700',
+                    fontWeight: '600',
                     cursor: 'pointer',
                     display: 'flex', alignItems: 'center', gap: '6px'
                   }}
@@ -514,7 +518,7 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
           {sameNameMatch && (
             <div style={{
               padding: '12px 14px',
-              borderRadius: '10px',
+              borderRadius: 'var(--radius-btn, 6px)',
               background: 'rgba(245, 166, 35, 0.1)',
               border: '1px solid rgba(245, 166, 35, 0.35)',
               display: 'flex',
@@ -523,7 +527,7 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
               marginTop: '4px'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fbbf24', fontWeight: '700', fontSize: '13px' }}>
-                <span>⚠️</span>
+                <AlertTriangle size={15} style={{ flexShrink: 0 }} />
                 <span>Existing Deadline with Same Name Found</span>
               </div>
               <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
@@ -540,7 +544,7 @@ export default function AddDeadlineModal({ isOpen, onClose, onCreated, defaultDo
                   className="btn-touch-target btn-secondary"
                   style={{
                     padding: '8px 14px',
-                    borderRadius: 'var(--radius-btn, 8px)',
+                    borderRadius: 'var(--radius-btn, 6px)',
                     background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                     color: '#fff',
                     border: 'none',

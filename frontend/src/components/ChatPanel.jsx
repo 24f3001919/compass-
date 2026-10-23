@@ -14,6 +14,7 @@ import {
   getCurrentUserId,
 } from '../api/client'
 import ChatHistoryDrawer from './chat/ChatHistoryDrawer'
+import ShareModal from './ShareModal'
 import ChatChatMessageList from './chat/ChatMessageList'
 import ChatInputBar from './chat/ChatInputBar'
 import ChatContextBar from './chat/ChatContextBar'
@@ -41,6 +42,7 @@ export default function ChatPanel({
   const [_loadingHistory, setLoadingHistory] = useState(false)
   const [guestMigrationCount, setGuestMigrationCount] = useState(0)
   const [toast, setToast] = useState(null)
+  const [sharingConv, setSharingConv] = useState(null)
   const [tone, setTone] = useState(() => {
     try {
       return localStorage.getItem('compass_chat_tone') || 'balanced'
@@ -503,6 +505,9 @@ export default function ChatPanel({
     setShowHistoryDrawer(false)
   }
 
+  const handleShareChat = (conv) => {
+    setSharingConv(conv)
+  }
 
   const isInputDisabled = isStreaming || isTyping
   const isOnline = backendStatus.toLowerCase().includes('neon') ||
@@ -547,6 +552,7 @@ export default function ChatPanel({
           onSelectPastChat={handleSelectPastChat}
           onNewChat={handleNewChat}
           onSelectPastPlan={handleSelectPastPlan}
+          onShareChat={handleShareChat}
           onCheckScheduleClashes={() => handleSend('Check for any schedule conflicts between my upcoming deadlines and past discussions')}
           showToast={showToast}
           tasks={tasks}
@@ -634,6 +640,17 @@ export default function ChatPanel({
           {toast}
         </div>
       )}
+
+      {/* Share Link Modal */}
+      <ShareModal
+        isOpen={Boolean(sharingConv)}
+        onClose={() => setSharingConv(null)}
+        conversation={sharingConv}
+        onConversationUpdated={(updatedConv) => {
+          setSharingConv(updatedConv)
+          setPastConversations(prev => prev.map(c => c.id === updatedConv.id ? updatedConv : c))
+        }}
+      />
     </div>
   )
 }

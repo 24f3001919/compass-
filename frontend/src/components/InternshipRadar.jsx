@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { Radar, RefreshCw, Loader2, ArrowDown } from 'lucide-react'
 import RadarOverviewCards from './radar/RadarOverviewCards'
 import RadarFilters from './radar/RadarFilters'
 import RadarOpportunityCard from './radar/RadarOpportunityCard'
@@ -317,7 +318,7 @@ export default function InternshipRadar({
       {/* Header Title */}
       <div style={{ marginBottom: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '28px' }}>📡</span>
+          <Radar size={24} color="var(--brand)" strokeWidth={1.8} />
           <h1 style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
             Internship Radar
           </h1>
@@ -387,7 +388,7 @@ export default function InternshipRadar({
             gap: '8px',
           }}
         >
-          <span style={{ display: 'inline-block', animation: 'spin 1.5s infinite linear' }}>🔄</span>
+          <RefreshCw size={14} strokeWidth={1.8} className="spin" />
           <span>Refreshing internship recommendations and eligibility matches…</span>
         </div>
       )}
@@ -405,14 +406,14 @@ export default function InternshipRadar({
             gap: '12px',
           }}
         >
-          <div style={{ fontSize: '32px', animation: 'spin 1.5s infinite linear' }}>⏳</div>
+          <Loader2 size={32} strokeWidth={1.8} className="spin" color="var(--brand)" />
           <div style={{ fontSize: '15px', fontWeight: 600 }}>Loading verified opportunities…</div>
         </div>
       ) : error ? (
         <div
           style={{
             padding: '24px',
-            borderRadius: '12px',
+            borderRadius: 'var(--radius-card, 8px)',
             background: 'rgba(239, 68, 68, 0.08)',
             border: '1px solid #ef4444',
             color: '#dc2626',
@@ -429,7 +430,7 @@ export default function InternshipRadar({
             onClick={loadOpportunities}
             style={{
               padding: '6px 14px',
-              borderRadius: '6px',
+              borderRadius: 'var(--radius-btn, 6px)',
               background: '#ef4444',
               color: '#ffffff',
               border: 'none',
@@ -445,12 +446,12 @@ export default function InternshipRadar({
           style={{
             padding: '48px 24px',
             textAlign: 'center',
-            borderRadius: '16px',
+            borderRadius: 'var(--radius-card, 8px)',
             background: 'var(--bg-card)',
             border: '1px dashed var(--border)',
           }}
         >
-          <div style={{ fontSize: '36px', marginBottom: '12px' }}>🛰️</div>
+          <Radar size={36} strokeWidth={1.5} color="var(--text-muted)" style={{ margin: '0 auto 12px auto' }} />
           <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 6px 0' }}>
             No opportunities found in this view
           </h3>
@@ -467,9 +468,9 @@ export default function InternshipRadar({
             disabled={isSyncing}
             style={{
               padding: '8px 18px',
-              borderRadius: '8px',
+              borderRadius: 'var(--radius-btn, 6px)',
               background: 'var(--brand)',
-              color: '#ffffff',
+              color: 'var(--accent-text, #1b1a17)',
               border: 'none',
               fontWeight: 600,
               fontSize: '13px',
@@ -526,13 +527,13 @@ export default function InternshipRadar({
               >
                 {isLoadingMore ? (
                   <>
-                    <span style={{ animation: 'spin 1s infinite linear' }}>⏳</span>
+                    <Loader2 size={14} className="spin" />
                     <span>Loading more opportunities…</span>
                   </>
                 ) : (
                   <>
                     <span>Load More Opportunities</span>
-                    <span>↓</span>
+                    <ArrowDown size={14} />
                   </>
                 )}
               </button>

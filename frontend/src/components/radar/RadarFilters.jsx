@@ -1,4 +1,17 @@
 import React from 'react'
+import {
+  Sparkles,
+  Zap,
+  CheckCircle2,
+  Clock,
+  FileText,
+  Star,
+  ClipboardList,
+  Search,
+  MapPin,
+  Settings,
+  RefreshCw,
+} from 'lucide-react'
 
 const CATEGORIES = [
   { id: '', label: 'All Roles' },
@@ -13,21 +26,21 @@ const CATEGORIES = [
 
 const EMPLOYER_TYPES = [
   { id: '', label: 'All Employer Types' },
-  { id: 'startup', label: '🚀 Startups & SMEs' },
-  { id: 'research', label: '🔬 Research & Labs' },
-  { id: 'government', label: '🏛️ Government & Public' },
-  { id: 'open_source', label: '🌐 Open Source Fellowships' },
-  { id: 'enterprise', label: '🏢 Established Enterprises' },
+  { id: 'startup', label: 'Startups & SMEs' },
+  { id: 'research', label: 'Research & Labs' },
+  { id: 'government', label: 'Government & Public' },
+  { id: 'open_source', label: 'Open Source Fellowships' },
+  { id: 'enterprise', label: 'Established Enterprises' },
 ]
 
 const TABS = [
-  { id: 'recommended', label: 'Recommended for You', icon: '✨' },
-  { id: 'recent_24h', label: 'Posted in Last 24 Hours — Verified', icon: '⚡' },
-  { id: 'open', label: 'Open Now', icon: '🟢' },
-  { id: 'upcoming', label: 'Opening Soon', icon: '⏱️' },
-  { id: 'all', label: 'All Listings', icon: '📑' },
-  { id: 'watchlist', label: 'Watchlist', icon: '⭐' },
-  { id: 'applications', label: 'Application Tracker', icon: '📋' },
+  { id: 'recommended', label: 'Recommended for You', icon: Sparkles },
+  { id: 'recent_24h', label: 'Posted in Last 24 Hours (Verified)', icon: Zap },
+  { id: 'open', label: 'Open Now', icon: CheckCircle2 },
+  { id: 'upcoming', label: 'Opening Soon', icon: Clock },
+  { id: 'all', label: 'All Listings', icon: FileText },
+  { id: 'watchlist', label: 'Watchlist', icon: Star },
+  { id: 'applications', label: 'Application Tracker', icon: ClipboardList },
 ]
 
 export default function RadarFilters({
@@ -62,6 +75,7 @@ export default function RadarFilters({
       >
         {TABS.map(tab => {
           const isActive = activeTab === tab.id
+          const TabIcon = tab.icon
           return (
             <button
               key={tab.id}
@@ -72,7 +86,7 @@ export default function RadarFilters({
                 alignItems: 'center',
                 gap: '8px',
                 padding: '10px 16px',
-                borderRadius: '8px 8px 0 0',
+                borderRadius: 'var(--radius-tab, 6px) var(--radius-tab, 6px) 0 0',
                 border: 'none',
                 background: isActive ? 'var(--bg-card)' : 'transparent',
                 color: isActive ? 'var(--brand)' : 'var(--text-secondary)',
@@ -84,7 +98,7 @@ export default function RadarFilters({
                 transition: 'all 0.15s ease',
               }}
             >
-              <span>{tab.icon}</span>
+              <TabIcon size={15} strokeWidth={1.8} />
               <span>{tab.label}</span>
             </button>
           )
@@ -111,7 +125,7 @@ export default function RadarFilters({
             style={{
               width: '100%',
               padding: '10px 14px 10px 36px',
-              borderRadius: '8px',
+              borderRadius: 'var(--radius-input, 6px)',
               border: '1px solid var(--border)',
               background: 'var(--bg-card)',
               color: 'var(--text-primary)',
@@ -127,10 +141,12 @@ export default function RadarFilters({
               top: '50%',
               transform: 'translateY(-50%)',
               color: 'var(--text-muted)',
-              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              pointerEvents: 'none',
             }}
           >
-            🔍
+            <Search size={15} strokeWidth={1.8} />
           </span>
         </div>
 
@@ -141,7 +157,7 @@ export default function RadarFilters({
           title="Filter by Employer Category"
           style={{
             padding: '10px 14px',
-            borderRadius: '8px',
+            borderRadius: 'var(--radius-input, 6px)',
             border: '1px solid var(--border)',
             background: 'var(--bg-card)',
             color: 'var(--text-primary)',
@@ -163,7 +179,7 @@ export default function RadarFilters({
           onChange={e => onCategoryChange(e.target.value)}
           style={{
             padding: '10px 14px',
-            borderRadius: '8px',
+            borderRadius: 'var(--radius-input, 6px)',
             border: '1px solid var(--border)',
             background: 'var(--bg-card)',
             color: 'var(--text-primary)',
@@ -185,7 +201,7 @@ export default function RadarFilters({
           onChange={e => onWorkArrangementChange(e.target.value)}
           style={{
             padding: '10px 14px',
-            borderRadius: '8px',
+            borderRadius: 'var(--radius-input, 6px)',
             border: '1px solid var(--border)',
             background: 'var(--bg-card)',
             color: 'var(--text-primary)',
@@ -209,16 +225,16 @@ export default function RadarFilters({
             alignItems: 'center',
             gap: '8px',
             padding: '8px 14px',
-            borderRadius: '8px',
-            border: indiaOnly ? '1px solid #10b981' : '1px solid var(--border)',
+            borderRadius: 'var(--radius-btn, 6px)',
+            border: indiaOnly ? '1px solid var(--domain-code, #10b981)' : '1px solid var(--border)',
             background: indiaOnly ? 'rgba(16, 185, 129, 0.12)' : 'var(--bg-card)',
-            color: indiaOnly ? '#059669' : 'var(--text-secondary)',
+            color: indiaOnly ? 'var(--domain-code, #059669)' : 'var(--text-secondary)',
             fontWeight: 600,
             fontSize: '13px',
             cursor: 'pointer',
           }}
         >
-          <span>🇮🇳</span>
+          <MapPin size={15} strokeWidth={1.8} />
           <span>India Priority</span>
           <span style={{ fontSize: '11px', opacity: 0.8 }}>{indiaOnly ? 'ON' : 'OFF'}</span>
         </button>
@@ -234,7 +250,7 @@ export default function RadarFilters({
               alignItems: 'center',
               gap: '6px',
               padding: '9px 14px',
-              borderRadius: '8px',
+              borderRadius: 'var(--radius-btn, 6px)',
               border: '1px solid var(--border)',
               background: 'var(--bg-card)',
               color: 'var(--text-primary)',
@@ -243,7 +259,7 @@ export default function RadarFilters({
               cursor: 'pointer',
             }}
           >
-            <span>⚙️</span>
+            <Settings size={15} strokeWidth={1.8} />
             <span>Profile</span>
           </button>
 
@@ -256,17 +272,17 @@ export default function RadarFilters({
               alignItems: 'center',
               gap: '6px',
               padding: '9px 14px',
-              borderRadius: '8px',
+              borderRadius: 'var(--radius-btn, 6px)',
               border: 'none',
               background: 'var(--brand)',
-              color: '#ffffff',
+              color: 'var(--accent-text, #1b1a17)',
               fontSize: '13px',
               fontWeight: 600,
               cursor: isSyncing ? 'not-allowed' : 'pointer',
               opacity: isSyncing ? 0.7 : 1,
             }}
           >
-            <span>{isSyncing ? '⏳' : '🔄'}</span>
+            <RefreshCw size={15} strokeWidth={1.8} className={isSyncing ? 'spin' : ''} />
             <span>{isSyncing ? 'Syncing…' : 'Sync Sources'}</span>
           </button>
         </div>

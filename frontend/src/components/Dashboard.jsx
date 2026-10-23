@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import { X, Check } from 'lucide-react'
 import DarkModeToggle from './DarkModeToggle'
 import { getDomainMeta } from './timeline/domainMeta'
 import AddDeadlineModal from './timeline/AddDeadlineModal'
@@ -272,7 +273,7 @@ export default function Dashboard({
       return {
         key,
         label: meta.label || key,
-        icon: meta.icon || '🏷️',
+        icon: meta.icon || '',
         color: meta.color || 'var(--brand)',
         count,
         pct: Math.min(100, Math.max(0, pct)),
@@ -761,9 +762,11 @@ export default function Dashboard({
               minHeight: '44px',
               display: 'inline-flex',
               alignItems: 'center',
+              gap: '4px',
             }}
           >
-            Reset filter ✕
+            <span>Reset filter</span>
+            <X size={13} strokeWidth={2} />
           </button>
         )}
       </div>
@@ -978,9 +981,10 @@ export default function Dashboard({
               id="dashboard-btn-clear-expanded-filter"
               onClick={handleClearFilters}
               className="btn-secondary"
-              style={{ minHeight: '32px', padding: '0 10px', fontSize: '12px' }}
+              style={{ minHeight: '32px', padding: '0 10px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
             >
-              Clear filters ✕
+              <span>Clear filters</span>
+              <X size={13} strokeWidth={2} />
             </button>
           </div>
 
@@ -1636,7 +1640,14 @@ export default function Dashboard({
                           border: '1px solid var(--border)',
                         }}
                       >
-                        {isCompleted ? '✓ Done' : 'Open'}
+                        {isCompleted ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                            <Check size={11} strokeWidth={2.5} />
+                            <span>Done</span>
+                          </span>
+                        ) : (
+                          'Open'
+                        )}
                       </span>
                     </div>
                   </div>

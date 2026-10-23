@@ -24,6 +24,7 @@ import {
   Link2,
   LogOut,
   CheckCircle2,
+  AlertCircle,
   Trash2,
   Clock,
   Settings,
@@ -167,7 +168,7 @@ export default function CalendarView({
       const email = urlParams.get('email') || ''
       setBannerMessage({
         type: 'success',
-        text: `✅ Google Calendar successfully connected via OAuth (${email || 'Live'})! Scheduled tasks will synchronize directly.`
+        text: `Google Calendar successfully connected via OAuth (${email || 'Live'})! Scheduled tasks will synchronize directly.`
       })
       if (email) {
         setCalendarStatus({
@@ -196,7 +197,7 @@ export default function CalendarView({
       const desc = errorMap[rawError] || `Google Calendar connection failed (${rawError}).`
       setBannerMessage({
         type: 'error',
-        text: `❌ ${desc}`
+        text: desc
       })
       window.history.replaceState({}, document.title, window.location.pathname)
     }
@@ -304,7 +305,7 @@ export default function CalendarView({
         scheduled_end: s.scheduled_end,
       }))
       await commitSchedule(assignments, proposedPlan.summary)
-      setBannerMessage({ type: 'success', text: `✅ Successfully slotted ${assignments.length} tasks and synced to Google Calendar!` })
+      setBannerMessage({ type: 'success', text: `Successfully slotted ${assignments.length} tasks and synced to Google Calendar!` })
       setProposedPlan(null)
       if (onTasksUpdated) onTasksUpdated()
       loadAvailability(weekStart)
@@ -536,11 +537,22 @@ export default function CalendarView({
           borderRadius: 'var(--radius-card, 8px)',
           border: '1px solid var(--border)',
           background: bannerMessage.type === 'error' ? 'var(--danger-bg)' : 'var(--bg-card)',
-          color: bannerMessage.type === 'error' ? '#b91c1c' : 'var(--text-primary)',
+          color: bannerMessage.type === 'error' ? 'var(--danger-text, #b91c1c)' : 'var(--text-primary)',
           fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0
         }}>
-          <span>{bannerMessage.text}</span>
-          <button onClick={() => setBannerMessage(null)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {bannerMessage.type === 'error' ? (
+              <AlertCircle size={16} strokeWidth={1.8} style={{ color: 'var(--danger-text, #b91c1c)', flexShrink: 0 }} />
+            ) : (
+              <CheckCircle2 size={16} strokeWidth={1.8} style={{ color: 'var(--domain-code, #1c8a62)', flexShrink: 0 }} />
+            )}
+            <span>{bannerMessage.text}</span>
+          </div>
+          <button
+            onClick={() => setBannerMessage(null)}
+            aria-label="Dismiss banner"
+            style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}
+          >
             <X size={14} strokeWidth={1.8} />
           </button>
         </div>

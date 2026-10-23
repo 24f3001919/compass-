@@ -253,7 +253,7 @@ export default function ChatHeaderToolbar({
             aria-haspopup="dialog"
             aria-expanded={statusPopoverOpen}
             aria-label={`Status: ${statusMeta.ariaText}. Click to view details and toggle memory.`}
-            title={`${statusMeta.text} — Click for workspace status and memory settings`}
+            title={`${statusMeta.text} - Click for workspace status and memory settings`}
           >
             <span
               className="compass-status-dot"

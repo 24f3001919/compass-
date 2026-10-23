@@ -1,14 +1,68 @@
-import React, { useState } from 'react'
-import { Link2, X, Check, Copy, ExternalLink } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { Link2, X, Check, Copy, ExternalLink, Loader2 } from 'lucide-react'
+import { updateConversation } from '../api/client'
 
-export default function ShareModal({ isOpen, onClose, conversation }) {
+export default function ShareModal({ isOpen, onClose, conversation, onConversationUpdated }) {
   const [copied, setCopied] = useState(false)
+  const [shareToken, setShareToken] = useState(conversation?.share_token || null)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function ensureShareToken() {
+      if (!isOpen || !conversation) return
+      setError(null)
+
+      if (conversation.share_token) {
+        setShareToken(conversation.share_token)
+        return
+      }
+
+      setIsGenerating(true)
+      try {
+        const result = await updateConversation(conversation.id, { is_shared: true })
+        if (!isMounted) return
+
+        if (result && result.share_token) {
+          setShareToken(result.share_token)
+          if (onConversationUpdated) {
+            onConversationUpdated({
+              ...conversation,
+              is_shared: true,
+              share_token: result.share_token,
+            })
+          }
+        } else {
+          setError('Failed to generate secure share link. Please try again.')
+        }
+      } catch {
+        if (isMounted) {
+          setError('Failed to generate secure share link. Please check your connection.')
+        }
+      } finally {
+        if (isMounted) {
+          setIsGenerating(false)
+        }
+      }
+    }
+
+    ensureShareToken()
+
+    return () => {
+      isMounted = false
+    }
+  }, [isOpen, conversation, onConversationUpdated])
 
   if (!isOpen || !conversation) return null
 
-  const shareUrl = `${window.location.origin}/?share=${conversation.id}`
+  const shareUrl = shareToken
+    ? `${window.location.origin}/?share=${encodeURIComponent(shareToken)}`
+    : ''
 
   const handleCopy = async () => {
+    if (!shareUrl || isGenerating) return
     try {
       await navigator.clipboard.writeText(shareUrl)
       setCopied(true)
@@ -26,7 +80,9 @@ export default function ShareModal({ isOpen, onClose, conversation }) {
   }
 
   const handleOpenLink = () => {
-    window.open(shareUrl, '_blank')
+    if (shareUrl) {
+      window.open(shareUrl, '_blank')
+    }
   }
 
   return (
@@ -74,7 +130,7 @@ export default function ShareModal({ isOpen, onClose, conversation }) {
                 Share link to chat
               </h3>
               <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--text-muted)' }}>
-                Anyone with this link will be able to view this chat.
+                Anyone with this secure link will be able to view this chat snapshot.
               </p>
             </div>
           </div>
@@ -124,37 +180,56 @@ export default function ShareModal({ isOpen, onClose, conversation }) {
           )}
         </div>
 
+        {/* Error Notification if generation fails */}
+        {error && (
+          <div style={{
+            fontSize: '12px',
+            color: '#ef4444',
+            background: 'rgba(239, 68, 68, 0.08)',
+            padding: '8px 12px',
+            borderRadius: '6px',
+            border: '1px solid rgba(239, 68, 68, 0.2)',
+          }}>
+            {error}
+          </div>
+        )}
+
         {/* Link Input & Copy Button */}
         <div style={{ display: 'flex', gap: '8px' }}>
           <input
             id="share-link-input"
             type="text"
             readOnly
-            value={shareUrl}
-            onClick={e => e.target.select()}
+            value={isGenerating ? 'Generating secure share link…' : shareUrl}
+            placeholder={isGenerating ? 'Generating secure share link…' : 'Share link'}
+            onClick={e => {
+              if (shareUrl) e.target.select()
+            }}
             style={{
               flex: 1,
               padding: '10px 14px',
               borderRadius: 'var(--radius-btn, 6px)',
               background: 'var(--bg-app)',
               border: '1px solid var(--border)',
-              color: 'var(--text-primary)',
+              color: isGenerating ? 'var(--text-muted)' : 'var(--text-primary)',
               fontSize: '13px',
               outline: 'none',
-              fontFamily: 'monospace',
+              fontFamily: shareUrl ? 'monospace' : 'inherit',
               minHeight: '44px',
             }}
           />
           <button
             id="btn-copy-share-link"
             onClick={handleCopy}
+            disabled={!shareUrl || isGenerating}
             className="btn-touch-target btn-primary-amber"
             style={{
               padding: '10px 18px',
               borderRadius: 'var(--radius-btn, 6px)',
               fontSize: '13px',
               fontWeight: '600',
-              cursor: 'pointer',
+              cursor: (!shareUrl || isGenerating) ? 'not-allowed' : 'pointer',
+              opacity: (!shareUrl || isGenerating) ? 0.6 : 1,
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
@@ -162,7 +237,12 @@ export default function ShareModal({ isOpen, onClose, conversation }) {
               minHeight: '44px',
             }}
           >
-            {copied ? (
+            {isGenerating ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                <span>Generating…</span>
+              </>
+            ) : copied ? (
               <>
                 <Check size={14} strokeWidth={1.8} />
                 <span>Copied!</span>
@@ -179,13 +259,17 @@ export default function ShareModal({ isOpen, onClose, conversation }) {
         {/* Footer info & open in new tab */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '4px' }}>
           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            Link is active and viewable by anyone.
+            {shareToken ? 'Link is active and viewable by anyone with the link.' : 'Generating snapshot…'}
           </span>
           <button
             onClick={handleOpenLink}
+            disabled={!shareUrl || isGenerating}
             style={{
-              background: 'none', border: 'none', color: 'var(--accent)',
-              fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+              background: 'none', border: 'none',
+              color: (!shareUrl || isGenerating) ? 'var(--text-muted)' : 'var(--accent)',
+              fontSize: '13px', fontWeight: '600',
+              cursor: (!shareUrl || isGenerating) ? 'not-allowed' : 'pointer',
+              opacity: (!shareUrl || isGenerating) ? 0.5 : 1,
               display: 'flex', alignItems: 'center', gap: '4px',
               minHeight: '36px',
             }}

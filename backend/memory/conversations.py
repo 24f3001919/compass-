@@ -284,6 +284,8 @@ async def list_conversations(
                    c.title AS title,
                    COALESCE(c.is_pinned, FALSE) AS is_pinned,
                    COALESCE(c.is_archived, FALSE) AS is_archived,
+                   COALESCE(c.is_shared, FALSE) AS is_shared,
+                   c.share_token,
                    COUNT(m.id) AS message_count,
                    (
                        SELECT content FROM messages
@@ -303,7 +305,7 @@ async def list_conversations(
                 OR ($1::text IS NULL AND $2::text IS NULL AND c.user_id IS NULL AND (c.guest_id IS NULL OR c.guest_id = ''))
             )
             AND ($3::boolean = TRUE OR c.is_archived = FALSE OR c.is_archived IS NULL)
-            GROUP BY c.id, c.started_at, c.last_active_at, c.title, c.is_pinned, c.is_archived
+            GROUP BY c.id, c.started_at, c.last_active_at, c.title, c.is_pinned, c.is_archived, c.is_shared, c.share_token
             ORDER BY COALESCE(c.is_pinned, FALSE) DESC, c.last_active_at DESC
             LIMIT $4
         """
@@ -318,6 +320,8 @@ async def list_conversations(
                 "title": title,
                 "is_pinned": bool(r.get("is_pinned", False)),
                 "is_archived": bool(r.get("is_archived", False)),
+                "is_shared": bool(r.get("is_shared", False)),
+                "share_token": str(r["share_token"]) if r.get("share_token") else None,
                 "started_at": r["started_at"].isoformat() if hasattr(r["started_at"], "isoformat") else str(r["started_at"]),
                 "last_active_at": r["last_active_at"].isoformat() if hasattr(r["last_active_at"], "isoformat") else str(r["last_active_at"]),
                 "message_count": int(r["message_count"] or 0),
@@ -482,6 +486,60 @@ async def check_conversation_access(
             return False, "Forbidden: You do not have permission to access this conversation."
 
     return True, None
+
+
+# ---------------------------------------------------------------------------
+# Public Sharing Operations
+# ---------------------------------------------------------------------------
+async def get_shared_conversation_by_token(
+    conn: DbConn,
+    share_token: str,
+    limit: int = 100,
+) -> Optional[Dict[str, Any]]:
+    """Retrieve a shared conversation and its message history by cryptographically secure share_token.
+    Enforces that is_shared is TRUE. Returns None if not found, revoked, or unshared.
+    Guarantees that knowing a conversation's database ID alone does not grant access.
+    """
+    if not share_token or not isinstance(share_token, str):
+        return None
+
+    clean_token = share_token.strip()
+    if not clean_token:
+        return None
+
+    await ensure_conversation_columns(conn)
+
+    conv_row = await conn.fetchrow(
+        """
+        SELECT id, started_at, last_active_at, COALESCE(title, 'Chat Session') AS title, is_shared, share_token
+        FROM conversations
+        WHERE share_token = $1 AND is_shared = TRUE
+        """,
+        clean_token,
+    )
+    if not conv_row:
+        return None
+
+    cid_str = str(conv_row["id"])
+    rows = await get_recent_messages(conn, cid_str, limit=limit)
+    messages = [
+        {
+            "id": r["id"],
+            "role": r["role"],
+            "content": r["content"],
+            "skill_called": r.get("skill_called"),
+            "created_at": r["created_at"].isoformat() if hasattr(r["created_at"], "isoformat") else str(r["created_at"]),
+        }
+        for r in rows
+    ]
+
+    return {
+        "share_token": clean_token,
+        "title": conv_row["title"],
+        "started_at": conv_row["started_at"].isoformat() if hasattr(conv_row["started_at"], "isoformat") else str(conv_row["started_at"]),
+        "last_active_at": conv_row["last_active_at"].isoformat() if hasattr(conv_row["last_active_at"], "isoformat") else str(conv_row["last_active_at"]),
+        "messages": messages,
+    }
 
 
 # ---------------------------------------------------------------------------

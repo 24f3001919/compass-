@@ -1,6 +1,19 @@
 import React, { useState, useEffect } from 'react'
 import { updateConversation, deleteConversation } from '../../api/client'
 import ChatConversationItem from './ChatConversationItem'
+import {
+  History,
+  X,
+  Plus,
+  MessageSquare,
+  ClipboardList,
+  Brain,
+  Archive,
+  Search,
+  CheckCircle2,
+  Trash2,
+  Package
+} from 'lucide-react'
 
 export default function ChatHistoryDrawer({
   isOpen,
@@ -14,6 +27,7 @@ export default function ChatHistoryDrawer({
   onSelectPastChat,
   onNewChat,
   onSelectPastPlan,
+  onShareChat,
   onCheckScheduleClashes,
   showToast,
   tasks = [],
@@ -131,20 +145,21 @@ export default function ChatHistoryDrawer({
           background: 'var(--bg-card-soft)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '16px' }}>📜</span>
+            <History size={16} style={{ color: 'var(--text-muted)' }} />
             <span style={{ fontSize: '13px', fontWeight: '800', color: 'var(--text-primary)' }}>
               History & Memory
             </span>
           </div>
           <button
             onClick={onClose}
+            aria-label="Close drawer"
             style={{
               background: 'none', border: 'none', color: 'var(--text-muted)',
-              fontSize: '16px', cursor: 'pointer', padding: '2px 6px'
+              cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}
             title="Close drawer"
           >
-            ✕
+            <X size={16} />
           </button>
         </div>
 
@@ -155,8 +170,8 @@ export default function ChatHistoryDrawer({
             style={{
               width: '100%',
               padding: '9px 14px',
-              borderRadius: '8px',
-              background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+              borderRadius: 'var(--radius-btn, 6px)',
+              background: 'var(--brand)',
               color: '#ffffff',
               border: 'none',
               fontSize: '12.5px',
@@ -165,11 +180,10 @@ export default function ChatHistoryDrawer({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '6px',
-              boxShadow: '0 3px 10px rgba(37, 99, 235, 0.3)'
+              gap: '6px'
             }}
           >
-            <span>+</span> Start New Chat
+            <Plus size={14} /> Start New Chat
           </button>
         </div>
 
@@ -177,24 +191,25 @@ export default function ChatHistoryDrawer({
           <div style={{
             margin: '8px 12px',
             padding: '8px 12px',
-            borderRadius: '8px',
-            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.15))',
-            border: '1px solid rgba(139, 92, 246, 0.3)',
+            borderRadius: 'var(--radius-btn, 6px)',
+            background: 'var(--bg-card-soft)',
+            border: '1px solid var(--border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: '8px',
           }}>
-            <div style={{ fontSize: '11px', color: 'var(--text-primary)' }}>
-              📦 <strong>{guestMigrationCount} guest chat{guestMigrationCount === 1 ? '' : 's'}</strong> available
+            <div style={{ fontSize: '11px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Package size={14} style={{ color: 'var(--text-muted)' }} />
+              <span><strong>{guestMigrationCount} guest chat{guestMigrationCount === 1 ? '' : 's'}</strong> available</span>
             </div>
             <button
               onClick={onOpenMigration}
               style={{
                 padding: '3px 8px',
-                borderRadius: '5px',
+                borderRadius: 'var(--radius-btn, 6px)',
                 border: 'none',
-                background: '#6366f1',
+                background: 'var(--brand)',
                 color: '#fff',
                 fontSize: '10px',
                 fontWeight: '600',
@@ -210,31 +225,39 @@ export default function ChatHistoryDrawer({
         {/* Drawer Sub-tab selector */}
         <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '6px 12px', gap: '6px', background: 'var(--bg-app)' }}>
           {[
-            { key: 'chats', label: `Chats (${pastConversations.length})`, icon: '💬' },
-            { key: 'plans', label: `Plans (${pastPlans.length})`, icon: '📋' },
-            { key: 'memory', label: 'Memory Bank', icon: '🧠' },
-          ].map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setHistoryTab(tab.key)}
-              style={{
-                flex: 1,
-                padding: '6px 4px',
-                borderRadius: '6px',
-                border: 'none',
-                background: historyTab === tab.key ? 'var(--bg-card)' : 'transparent',
-                color: historyTab === tab.key ? 'var(--text-primary)' : 'var(--text-secondary)',
-                fontWeight: historyTab === tab.key ? '700' : '500',
-                fontSize: '11px',
-                cursor: 'pointer',
-                boxShadow: historyTab === tab.key ? 'var(--shadow-sm)' : 'none',
-                textAlign: 'center',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {tab.icon} {tab.label}
-            </button>
-          ))}
+            { key: 'chats', label: `Chats (${pastConversations.length})`, Icon: MessageSquare },
+            { key: 'plans', label: `Plans (${pastPlans.length})`, Icon: ClipboardList },
+            { key: 'memory', label: 'Memory Bank', Icon: Brain },
+          ].map(tab => {
+            const TabIcon = tab.Icon
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setHistoryTab(tab.key)}
+                style={{
+                  flex: 1,
+                  padding: '6px 4px',
+                  borderRadius: 'var(--radius-btn, 6px)',
+                  border: 'none',
+                  background: historyTab === tab.key ? 'var(--bg-card)' : 'transparent',
+                  color: historyTab === tab.key ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  fontWeight: historyTab === tab.key ? '700' : '500',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                  boxShadow: historyTab === tab.key ? 'var(--shadow-sm)' : 'none',
+                  textAlign: 'center',
+                  whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '5px'
+                }}
+              >
+                <TabIcon size={12} />
+                <span>{tab.label}</span>
+              </button>
+            )
+          })}
         </div>
 
         {/* Drawer Body Items */}
@@ -273,7 +296,9 @@ export default function ChatHistoryDrawer({
 
               {visibleConversations.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '30px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>
-                  <div style={{ fontSize: '24px', marginBottom: '8px' }}>{showArchived ? '🗃️' : '💬'}</div>
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px', color: 'var(--text-muted)' }}>
+                    {showArchived ? <Archive size={24} /> : <MessageSquare size={24} />}
+                  </div>
                   <div>{showArchived ? 'No archived chats.' : 'No previous chats yet.'}</div>
                   <div style={{ fontSize: '11px', marginTop: '4px' }}>
                     {showArchived ? 'Chats you archive will be stored here.' : 'Chats are automatically stored and remembered across sessions.'}
@@ -298,6 +323,7 @@ export default function ChatHistoryDrawer({
                       onTogglePin={handleTogglePin}
                       onToggleArchive={handleToggleArchive}
                       onOpenDeleteConfirm={handleOpenDeleteConfirm}
+                      onShareChat={onShareChat}
                     />
                   ))}
                 </div>
@@ -308,7 +334,9 @@ export default function ChatHistoryDrawer({
           {historyTab === 'plans' && (
             pastPlans.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '30px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>
-                <div style={{ fontSize: '24px', marginBottom: '8px' }}>📋</div>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px', color: 'var(--text-muted)' }}>
+                  <ClipboardList size={24} />
+                </div>
                 <div>No previous plans yet.</div>
                 <div style={{ fontSize: '11px', marginTop: '4px' }}>Goals decomposed by the Planner will be recorded here.</div>
               </div>
@@ -320,7 +348,7 @@ export default function ChatHistoryDrawer({
                     onClick={() => onSelectPastPlan(plan)}
                     style={{
                       padding: '10px 12px',
-                      borderRadius: '8px',
+                      borderRadius: 'var(--radius-btn, 6px)',
                       border: '1px solid var(--border)',
                       background: 'var(--bg-card)',
                       cursor: 'pointer',
@@ -339,7 +367,7 @@ export default function ChatHistoryDrawer({
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px' }}>
                       <span style={{
                         padding: '2px 7px',
-                        borderRadius: '6px',
+                        borderRadius: 'var(--radius-btn, 6px)',
                         fontSize: '10px',
                         fontWeight: '700',
                         background: plan.status === 'completed' ? 'var(--code-bg)' : 'var(--hackathon-bg)',
@@ -360,16 +388,16 @@ export default function ChatHistoryDrawer({
 
           {historyTab === 'memory' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div style={{ padding: '12px', borderRadius: '8px', background: 'var(--code-bg)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+              <div style={{ padding: '12px', borderRadius: 'var(--radius-btn, 6px)', background: 'var(--code-bg)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: '700', color: 'var(--code-text)', marginBottom: '4px' }}>
-                  <span>🟢</span> Cross-Session Recall Active
+                  <CheckCircle2 size={14} /> Cross-Session Recall Active
                 </div>
                 <p style={{ margin: 0, fontSize: '11.5px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
                   Compass automatically recalls your past chats, deadlines, and schedule commitments in new chats so schedules never clash.
                 </p>
               </div>
 
-              <div style={{ padding: '12px', borderRadius: '8px', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+              <div style={{ padding: '12px', borderRadius: 'var(--radius-btn, 6px)', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
                 <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '8px' }}>
                   Memory Metrics
                 </div>
@@ -394,7 +422,7 @@ export default function ChatHistoryDrawer({
                 }}
                 style={{
                   padding: '9px 12px',
-                  borderRadius: '8px',
+                  borderRadius: 'var(--radius-btn, 6px)',
                   background: 'var(--bg-card-soft)',
                   border: '1px solid var(--border)',
                   color: 'var(--text-primary)',
@@ -407,7 +435,7 @@ export default function ChatHistoryDrawer({
                   gap: '6px'
                 }}
               >
-                <span>🔍</span> Check for Schedule Clashes Now
+                <Search size={14} /> Check for Schedule Clashes Now
               </button>
             </div>
           )}
@@ -435,7 +463,7 @@ export default function ChatHistoryDrawer({
             style={{
               background: 'var(--bg-card)',
               border: '1px solid var(--border)',
-              borderRadius: '14px',
+              borderRadius: 'var(--radius-btn, 6px)',
               padding: '22px',
               maxWidth: '400px',
               width: '100%',
@@ -447,11 +475,11 @@ export default function ChatHistoryDrawer({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{
-                width: '38px', height: '38px', borderRadius: '10px',
+                width: '38px', height: '38px', borderRadius: 'var(--radius-btn, 6px)',
                 background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
               }}>
-                🗑️
+                <Trash2 size={18} />
               </div>
               <div>
                 <h3 style={{ margin: 0, fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)' }}>
