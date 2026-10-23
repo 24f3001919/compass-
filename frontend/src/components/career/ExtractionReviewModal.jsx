@@ -313,6 +313,7 @@ export default function ExtractionReviewModal({
                   <input
                     type="text"
                     value={proj.title || ''}
+                    placeholder="Project Title"
                     onChange={(e) => {
                       const updated = [...content.projects]
                       updated[idx].title = e.target.value
@@ -322,16 +323,54 @@ export default function ExtractionReviewModal({
                   />
                   <textarea
                     value={proj.description || ''}
+                    placeholder="Project Description"
                     onChange={(e) => {
                       const updated = [...content.projects]
                       updated[idx].description = e.target.value
                       setContent({ ...content, projects: updated })
                     }}
                     rows={2}
-                    style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                    style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid var(--border)', marginBottom: proj.technologies?.length ? '6px' : '0' }}
                   />
+                  {proj.technologies && proj.technologies.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', marginRight: '4px' }}>Tech:</span>
+                      {proj.technologies.map((t, tIdx) => (
+                        <span key={tIdx} style={{ fontSize: '11px', background: 'var(--bg-card)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)' }}>
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
+
+              {((content.experience && content.experience.length > 0) || (content.internships && content.internships.length > 0)) && (
+                <div style={{ marginTop: '20px' }}>
+                  <h4 style={{ margin: '0 0 10px', fontSize: '13px', color: 'var(--text-muted)' }}>Extracted Experience & Internships</h4>
+                  {[...(content.experience || []), ...(content.internships || [])].map((exp, idx) => (
+                    <div key={idx} style={{ background: 'var(--bg-card-soft)', padding: '12px', borderRadius: '8px', marginBottom: '8px', border: '1px solid var(--border)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <span style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)' }}>
+                          {exp.role_title} — {exp.company}
+                        </span>
+                        {(exp.start_date || exp.end_date) && (
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            {exp.start_date || ''} {exp.end_date ? `– ${exp.end_date}` : ''}
+                          </span>
+                        )}
+                      </div>
+                      {exp.highlights && exp.highlights.length > 0 && (
+                        <ul style={{ margin: '4px 0 0', paddingLeft: '18px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                          {exp.highlights.map((h, hIdx) => (
+                            <li key={hIdx} style={{ marginBottom: '3px', lineHeight: '1.4' }}>{h}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -348,6 +387,19 @@ export default function ExtractionReviewModal({
                   style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid var(--border)' }}
                 />
               </div>
+              {content.certifications && content.certifications.length > 0 && (
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                    Certificates & Licenses
+                  </label>
+                  <textarea
+                    value={(content.certifications || []).join('\n')}
+                    onChange={(e) => setContent({ ...content, certifications: e.target.value.split('\n').filter(Boolean) })}
+                    rows={2}
+                    style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid var(--border)' }}
+                  />
+                </div>
+              )}
               <div style={{ marginBottom: '14px' }}>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', marginBottom: '4px' }}>
                   Detected Links & Profiles
