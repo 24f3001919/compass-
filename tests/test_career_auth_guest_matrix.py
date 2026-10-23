@@ -278,6 +278,20 @@ async def test_career_cookie_guest_authentication_and_export(client: AsyncClient
     assert master["user_id"] == guest_id
     resume_id = master["id"]
 
+    # Populate required profile fields via cookie to satisfy empty profile export guard
+    update_resp = await client.put(
+        "/api/career/resumes/master",
+        json={
+            "full_name": "Aarav Sharma",
+            "email": "aarav.sharma@example.edu",
+            "phone": "+91 98765 43210",
+            "location": "Bengaluru, India",
+            "summary": "Full stack engineer specializing in distributed systems.",
+            "skills": ["Python", "FastAPI", "React", "PostgreSQL"],
+        },
+    )
+    assert update_resp.status_code == 200
+
     # 3. GET HTML export using cookie
     html_resp = await client.get(f"/api/career/resumes/{resume_id}/export/html")
     assert html_resp.status_code == 200
