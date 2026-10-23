@@ -199,7 +199,12 @@ async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRe
     Writes seeded tasks and memories strictly bound to the caller's identity.
     """
     env = getattr(settings, "ENVIRONMENT", "").lower()
-    enable_seeding = getattr(settings, "ENABLE_DEMO_SEEDING", False)
+    raw_enable = getattr(settings, "ENABLE_DEMO_SEEDING", False)
+    if isinstance(raw_enable, str):
+        enable_seeding = raw_enable.strip().lower() in ("true", "1", "yes", "on", "t")
+    else:
+        enable_seeding = bool(raw_enable)
+
     if env == "production" and not enable_seeding:
         raise HTTPException(
             status_code=403,
