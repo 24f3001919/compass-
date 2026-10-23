@@ -3,13 +3,62 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Compass</title>
+    <title>Compass — AI Copilot for Students, Developers &amp; Hackathons</title>
+    <meta name="description" content="Compass helps students and developers organize tasks, remember project context, research technical questions, manage deadlines, and prepare for career opportunities using an AI-powered workspace." />
+    <link rel="canonical" href="https://compass-farmlytics.vercel.app/" />
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://compass-farmlytics.vercel.app/" />
+    <meta property="og:title" content="Compass — AI Copilot for Students, Developers &amp; Hackathons" />
+    <meta property="og:description" content="Compass helps students and developers organize tasks, remember project context, research technical questions, manage deadlines, and prepare for career opportunities using an AI-powered workspace." />
+    <meta property="og:site_name" content="Compass" />
+    <meta property="og:image" content="https://compass-farmlytics.vercel.app/logo.png?v=3" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://compass-farmlytics.vercel.app/" />
+    <meta name="twitter:title" content="Compass — AI Copilot for Students, Developers &amp; Hackathons" />
+    <meta name="twitter:description" content="Compass helps students and developers organize tasks, remember project context, research technical questions, manage deadlines, and prepare for career opportunities using an AI-powered workspace." />
+    <meta name="twitter:image" content="https://compass-farmlytics.vercel.app/logo.png?v=3" />
+
+    <!-- Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://compass-farmlytics.vercel.app/#website",
+          "url": "https://compass-farmlytics.vercel.app/",
+          "name": "Compass",
+          "description": "AI Copilot for Students, Developers & Hackathons",
+          "inLanguage": "en-US"
+        },
+        {
+          "@type": "SoftwareApplication",
+          "@id": "https://compass-farmlytics.vercel.app/#software",
+          "name": "Compass",
+          "url": "https://compass-farmlytics.vercel.app/",
+          "applicationCategory": "ProductivityApplication",
+          "operatingSystem": "Web",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          },
+          "description": "Compass helps students and developers organize tasks, remember project context, research technical questions, manage deadlines, and prepare for career opportunities using an AI-powered workspace."
+        }
+      ]
+    }
+    </script>
+
     <link rel="icon" href="/favicon.ico?v=3" sizes="48x48" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=3" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=3" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=3" />
-    <meta property="og:image" content="/logo.png?v=3" />
-    <meta name="twitter:image" content="/logo.png?v=3" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:ital,wght@0,700;1,600&display=swap" rel="stylesheet">
@@ -25,7 +74,131 @@
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Semantic crawlable HTML shell for search engine discovery and pre-render -->
+      <header style="max-width: 1100px; margin: 0 auto; padding: 24px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0;">
+        <div style="font-weight: 700; font-size: 20px; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+          <span>Compass</span>
+        </div>
+        <nav aria-label="Main Navigation">
+          <ul style="display: flex; gap: 20px; list-style: none; margin: 0; padding: 0; font-size: 14px;">
+            <li><a href="/" style="color: #0f172a; text-decoration: none; font-weight: 600;">Dashboard</a></li>
+            <li><a href="/compass" style="color: #475569; text-decoration: none;">Assistant &amp; Planner</a></li>
+            <li><a href="/schedule" style="color: #475569; text-decoration: none;">Schedule</a></li>
+            <li><a href="/career" style="color: #475569; text-decoration: none;">Career Copilot</a></li>
+            <li><a href="/timeline" style="color: #475569; text-decoration: none;">Timeline</a></li>
+          </ul>
+        </nav>
+      </header>
+
+      <main style="max-width: 1100px; margin: 0 auto; padding: 48px 20px; font-family: Inter, system-ui, sans-serif; color: #1e293b; line-height: 1.6;">
+        <section style="text-align: center; margin-bottom: 60px;">
+          <h1 style="font-size: 38px; line-height: 1.2; font-weight: 800; color: #0f172a; letter-spacing: -0.02em; margin-bottom: 18px;">
+            Your AI Copilot for Projects, Coursework and Hackathons
+          </h1>
+          <p style="font-size: 18px; color: #475569; max-width: 780px; margin: 0 auto 28px; line-height: 1.6;">
+            Compass helps students and developers organize tasks, remember project context, research technical questions, manage deadlines, and prepare for career opportunities using an AI-powered workspace.
+          </p>
+          <div style="display: flex; gap: 14px; justify-content: center; flex-wrap: wrap;">
+            <a href="/compass" style="background: #f59e0b; color: #ffffff; padding: 12px 24px; border-radius: 6px; font-weight: 600; text-decoration: none; display: inline-block;">
+              Launch Compass Assistant
+            </a>
+            <a href="/career" style="background: #0f172a; color: #ffffff; padding: 12px 24px; border-radius: 6px; font-weight: 600; text-decoration: none; display: inline-block;">
+              Explore Career Copilot
+            </a>
+          </div>
+        </section>
+
+        <section style="margin-bottom: 48px;">
+          <h2 style="font-size: 24px; font-weight: 700; color: #0f172a; margin-bottom: 14px;">
+            What is Compass?
+          </h2>
+          <p style="font-size: 16px; color: #334155;">
+            Compass is an intelligent, multi-domain workspace engineered for collegiate engineers, hackathon participants, and modern software developers. Unlike conventional chat windows that forget everything after a session closes, Compass combines persistent contextual memory with an active execution planner. It tracks your academic deadlines, synthesizes deep technical research, maintains architectural project context, and guides career preparation.
+          </p>
+        </section>
+
+        <section style="margin-bottom: 48px;">
+          <h2 style="font-size: 24px; font-weight: 700; color: #0f172a; margin-bottom: 14px;">
+            Designed for Students, Hackathons &amp; Developers
+          </h2>
+          <p style="font-size: 16px; color: #334155; margin-bottom: 16px;">
+            Technical projects demand different mental models than daily chores. Compass categorizes workflows into dedicated context domains:
+          </p>
+          <ul style="font-size: 15px; color: #334155; padding-left: 24px; line-height: 1.8;">
+            <li><strong>Hackathons:</strong> Rapid 48-hour sprint tracking, team milestone management, live judging criteria checklists, and demo preparation.</li>
+            <li><strong>Coursework:</strong> Academic problem sets, exam schedules, lab submissions, and lecture synthesis.</li>
+            <li><strong>Code &amp; Engineering:</strong> Architecture decisions, debugging notes, package trade-off analyses, and repository documentation.</li>
+            <li><strong>Career &amp; Internships:</strong> Real-time opportunity discovery, application stage tracking, and ATS-tailored resume generation.</li>
+          </ul>
+        </section>
+
+        <section style="margin-bottom: 48px;">
+          <h2 style="font-size: 24px; font-weight: 700; color: #0f172a; margin-bottom: 14px;">
+            Organize Tasks and Never Miss Deadlines
+          </h2>
+          <p style="font-size: 16px; color: #334155;">
+            Compass automatically classifies deadlines into actionable urgency tiers—overdue alerts, due today, urgent (&lt;24h), due soon, and scheduled upcoming tasks. Integrated schedule views support direct Google Calendar synchronization and .ics calendar exports, ensuring your commitments stay synchronized across all devices.
+          </p>
+        </section>
+
+        <section style="margin-bottom: 48px;">
+          <h2 style="font-size: 24px; font-weight: 700; color: #0f172a; margin-bottom: 14px;">
+            Retain Project and Code Context Across Sessions
+          </h2>
+          <p style="font-size: 16px; color: #334155;">
+            Every discussion, prompt, and tool invocation is anchored to your project context. When you return to a repository or problem set days later, Compass immediately recalls prior architectural choices, debugging iterations, and task dependencies without requiring you to re-explain your codebase.
+          </p>
+        </section>
+
+        <section style="margin-bottom: 48px;">
+          <h2 style="font-size: 24px; font-weight: 700; color: #0f172a; margin-bottom: 14px;">
+            Accelerate Technical Research and Hackathon Planning
+          </h2>
+          <p style="font-size: 16px; color: #334155;">
+            Powered by live web search and structured analytical reasoning, Compass assists in evaluating open-source libraries, discovering developer APIs, troubleshooting runtime stack traces, and breaking ambitious hackathon ideas into deliverable MVPs before the submission clock runs out.
+          </p>
+        </section>
+
+        <section style="margin-bottom: 48px;">
+          <h2 style="font-size: 24px; font-weight: 700; color: #0f172a; margin-bottom: 14px;">
+            Career Copilot &amp; Verified Opportunity Radar
+          </h2>
+          <p style="font-size: 16px; color: #334155;">
+            The built-in Career Copilot features an Opportunity Radar tracking actively hiring software engineering internships and tech roles. Build verified candidate profiles, track applications through custom stages, and generate clean ATS-ready PDF/Word resumes tailored directly from your master profile.
+          </p>
+        </section>
+
+        <section style="margin-bottom: 48px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 32px; text-align: center;">
+          <h2 style="font-size: 22px; font-weight: 700; color: #0f172a; margin-bottom: 12px;">
+            Get Started with Compass Today
+          </h2>
+          <p style="font-size: 15px; color: #475569; max-width: 600px; margin: 0 auto 20px;">
+            Start immediately as a guest or sign in to synchronize your workspaces across devices. No credit card required.
+          </p>
+          <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+            <a href="/compass" style="background: #0f172a; color: #ffffff; padding: 10px 20px; border-radius: 6px; font-weight: 600; text-decoration: none; font-size: 14px;">
+              Open Assistant
+            </a>
+            <a href="/schedule" style="background: #ffffff; color: #0f172a; border: 1px solid #cbd5e1; padding: 10px 20px; border-radius: 6px; font-weight: 600; text-decoration: none; font-size: 14px;">
+              View Schedule
+            </a>
+            <a href="/timeline" style="background: #ffffff; color: #0f172a; border: 1px solid #cbd5e1; padding: 10px 20px; border-radius: 6px; font-weight: 600; text-decoration: none; font-size: 14px;">
+              Project Timeline
+            </a>
+          </div>
+        </section>
+      </main>
+
+      <footer style="max-width: 1100px; margin: 0 auto; padding: 24px 20px 48px; border-top: 1px solid #e2e8f0; font-size: 13px; color: #64748b; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div>&copy; 2026 Compass. All rights reserved.</div>
+        <div style="display: flex; gap: 16px;">
+          <a href="/terms" style="color: #64748b; text-decoration: none;">Terms of Service</a>
+          <a href="/privacy" style="color: #64748b; text-decoration: none;">Privacy Policy</a>
+          <a href="https://github.com/Ratnesh-101/compass" style="color: #64748b; text-decoration: none;" rel="noopener noreferrer" target="_blank">GitHub</a>
+        </div>
+      </footer>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

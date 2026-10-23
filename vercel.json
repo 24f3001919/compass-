@@ -1,5 +1,16 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "index, follow"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/health",
@@ -14,7 +25,7 @@
       "destination": "https://compass-backend-qryu.onrender.com/api/:path*"
     },
     {
-      "source": "/((?!api/|chat|health|google[a-zA-Z0-9_-]+\\.html).*)",
+      "source": "/((?!api/|chat|health|robots\\.txt|sitemap\\.xml|google[a-zA-Z0-9_-]+\\.html).*)",
       "destination": "/index.html"
     }
   ]
