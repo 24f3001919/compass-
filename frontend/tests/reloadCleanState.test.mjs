@@ -1,14 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { fetchTasks } from '../src/api/tasksApi.js'
-
-function isDemoTask(t) {
-  if (!t) return false
-  if (t.is_demo || t.is_fallback) return true
-  if (Array.isArray(t.tags) && t.tags.includes('demo')) return true
-  if (t.trusted_event_url && String(t.trusted_event_url).toLowerCase().includes('demo')) return true
-  return false
-}
+import { isDemoTask } from '../src/utils/demoConstants.js'
 
 test('isDemoTask correctly distinguishes dummy demo tasks from genuine user tasks', () => {
   const dummyTask1 = {
@@ -26,6 +19,13 @@ test('isDemoTask correctly distinguishes dummy demo tasks from genuine user task
     id: '3',
     title: 'Fallback Task',
     is_fallback: true,
+  }
+  // Legacy untagged demo tasks with trusted_event_url null and is_demo undefined
+  const legacyUntaggedDemoTask = {
+    id: '453',
+    title: 'CS 61C Midterm Review: Cache Hierarchies & Virtual Memory',
+    trusted_event_url: null,
+    domain: 'coursework',
   }
 
   const userTask1 = {
@@ -46,6 +46,7 @@ test('isDemoTask correctly distinguishes dummy demo tasks from genuine user task
   assert.equal(isDemoTask(dummyTask1), true)
   assert.equal(isDemoTask(dummyTask2), true)
   assert.equal(isDemoTask(dummyTask3), true)
+  assert.equal(isDemoTask(legacyUntaggedDemoTask), true, 'Legacy untagged demo task must be identified as demo')
 
   assert.equal(isDemoTask(userTask1), false)
   assert.equal(isDemoTask(userTask2), false)

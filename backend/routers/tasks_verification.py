@@ -68,6 +68,34 @@ async def remove_task_dependency_endpoint(task_id: int, depends_on_task_id: int)
         return {"status": "ok", "deleted": deleted}
 
 
+# Known Judge Persona and legacy dummy demo task titles
+DEMO_TASK_TITLES: List[str] = [
+    # Legacy seed titles (commit c34cf7b)
+    "36-hour Hackathon Sprint: Final Demo Build",
+    "CS 61C Lab 4: RISC-V Pipeline Synthesis",
+    "Record 3-minute Devpost demo video",
+    "Nebius Buildathon Phase 2 Submission",
+    "Deploy Compass backend to Nebius Serverless Endpoints",
+    "CS 61C Midterm Review: Cache Hierarchies & Virtual Memory",
+    "Embeddings truncation and Matryoshka dimension verification",
+    # Current Judge Persona seed titles
+    "Nebius Buildathon Phase 1 Submission",
+    "CS 61C Homework 3: RISC-V Calling Conventions",
+    "Configure Production SSL & CORS Headers",
+    "Organize Hackathon Pitch Slide Deck",
+    "Final Paper: Scalable Hybrid Search in Pgvector",
+    "General Quarterly Study Group Retrospective",
+    "Distributed Systems Term Project Checkpoint",
+    "Nebius Cloud GPU Quota and Capacity Review",
+    "Explore Quantized GGUF Local Inference Fallback",
+    "Organize CS 61C Discussion Group Study Guide",
+    "CS 61C Logisim ALU Control Hazard Resolution",
+    "Enterprise SSO Integration for University Directory",
+    "Initial Compass Schema Migration to Neon Postgres",
+    "Set Up GitHub Actions CI Pipeline for Lint and Pytest",
+]
+
+
 async def clear_demo_tasks(conn, user_id: str) -> int:
     """Delete all demo persona dummy tasks for a user, leaving genuine user tasks completely intact."""
     if not user_id:
@@ -80,9 +108,14 @@ async def clear_demo_tasks(conn, user_id: str) -> int:
                 """
                 SELECT id FROM tasks
                 WHERE user_id = $1
-                  AND (trusted_event_url LIKE 'compass://demo-persona/%' OR trusted_event_url ILIKE '%demo%')
+                  AND (
+                    trusted_event_url LIKE 'compass://demo-persona/%'
+                    OR trusted_event_url ILIKE '%demo%'
+                    OR title = ANY($2)
+                  )
                 """,
                 user_id,
+                DEMO_TASK_TITLES,
             )
             task_ids = [r["id"] for r in rows if r and "id" in r]
         except Exception as e:
@@ -91,8 +124,17 @@ async def clear_demo_tasks(conn, user_id: str) -> int:
         if hasattr(conn, "fetch"):
             try:
                 res = await conn.fetch(
-                    "SELECT id FROM tasks WHERE user_id = $1 AND (trusted_event_url LIKE 'compass://demo-persona/%' OR trusted_event_url ILIKE '%demo%')",
+                    """
+                    SELECT id FROM tasks
+                    WHERE user_id = $1
+                      AND (
+                        trusted_event_url LIKE 'compass://demo-persona/%'
+                        OR trusted_event_url ILIKE '%demo%'
+                        OR title = ANY($2)
+                      )
+                    """,
                     user_id,
+                    DEMO_TASK_TITLES,
                 )
                 if isinstance(res, list):
                     task_ids = [r["id"] for r in res if isinstance(r, dict) and "id" in r]

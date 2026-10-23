@@ -33,7 +33,10 @@ from backend.models import (
     TimelineResponse,
     UpdateTaskRequest,
 )
-from backend.routers.tasks_verification import router as tasks_verification_router
+from backend.routers.tasks_verification import (
+    DEMO_TASK_TITLES,
+    router as tasks_verification_router,
+)
 from backend.services.task_service import (
     build_frontend_task,
     format_countdown,
@@ -310,7 +313,8 @@ async def get_frontend_tasks(
             for t in raw_tasks:
                 if not include_demo:
                     trusted_url = str(t.get("trusted_event_url") or "").lower()
-                    if "demo" in trusted_url or t.get("is_demo"):
+                    title = str(t.get("title") or "")
+                    if "demo" in trusted_url or t.get("is_demo") or title in DEMO_TASK_TITLES:
                         continue
                 proj_name = t.get("project", {}).get("name", "General") if t.get("project") else "General"
                 result.append(build_frontend_task(t, proj_name=proj_name))

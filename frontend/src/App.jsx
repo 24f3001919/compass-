@@ -22,14 +22,7 @@ import {
   fetchMigrationStatus,
   clearDemoPersona,
 } from './api/client'
-
-function isDemoTask(t) {
-  if (!t) return false
-  if (t.is_demo || t.is_fallback) return true
-  if (Array.isArray(t.tags) && t.tags.includes('demo')) return true
-  if (t.trusted_event_url && String(t.trusted_event_url).toLowerCase().includes('demo')) return true
-  return false
-}
+import { isDemoTask } from './utils/demoConstants'
 
 export default function App() {
   const [tasks, setTasks] = useState([])

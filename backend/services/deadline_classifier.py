@@ -130,12 +130,16 @@ def classify_deadline(
 
     # Dimension 4: Data Origin
     task_id_str = str(task.get("id") or "")
+    trusted_url = str(task.get("trusted_event_url") or "").lower()
+    from backend.routers.tasks_verification import DEMO_TASK_TITLES
     is_demo = bool(
         task.get("is_demo")
         or task.get("is_fallback")
         or task_id_str.startswith(("demo-", "mock-", "sim-"))
         or "demo" in task.get("tags", [])
+        or "demo" in trusted_url
         or (task.get("notes") and "demo persona" in str(task.get("notes")).lower())
+        or str(task.get("title") or "").strip() in DEMO_TASK_TITLES
     )
     origin = "demo" if is_demo else "user"
 

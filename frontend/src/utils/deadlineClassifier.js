@@ -20,6 +20,8 @@
  * Timestamp-based deadlines transition to overdue the instant they pass.
  */
 
+import { isDemoTask } from './demoConstants.js'
+
 /**
  * Robust timezone-safe local date parser.
  * Converts YYYY-MM-DD into a local Date at 23:59:59 so date-only deadlines
@@ -98,7 +100,8 @@ export function classifyDeadline(task, now = new Date()) {
     taskIdStr.startsWith('sim-') ||
     (Array.isArray(task.tags) && task.tags.includes('demo')) ||
     (task.trusted_event_url && String(task.trusted_event_url).toLowerCase().includes('demo')) ||
-    (task.notes && String(task.notes).toLowerCase().includes('demo persona'))
+    (task.notes && String(task.notes).toLowerCase().includes('demo persona')) ||
+    isDemoTask(task)
   )
   const origin = isDemo ? 'demo' : 'user'
 

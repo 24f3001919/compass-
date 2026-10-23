@@ -487,3 +487,38 @@ async def test_get_frontend_tasks_include_demo_filter():
         assert user_only_res[0].title == "User Personal Milestone: Study for GRE"
 
 
+@pytest.mark.asyncio
+async def test_legacy_untagged_demo_tasks_filtered_and_cleared():
+    """Legacy demo tasks with trusted_event_url=None and is_demo=None are filtered out when include_demo=False."""
+    from backend.routers.tasks import get_frontend_tasks
+
+    mock_request = MagicMock()
+    mock_ident = MagicMock(id="himynameisratnesh12@gmail.com", is_guest=False)
+    mock_pool = MagicMock()
+    mock_conn = AsyncMock()
+    mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+
+    # 7 legacy untagged tasks + 1 real user task
+    mock_raw_tasks = [
+        {"id": 448, "title": "36-hour Hackathon Sprint: Final Demo Build", "trusted_event_url": None, "domain": "hackathon"},
+        {"id": 449, "title": "CS 61C Lab 4: RISC-V Pipeline Synthesis", "trusted_event_url": None, "domain": "coursework"},
+        {"id": 450, "title": "Nebius Buildathon Phase 2 Submission", "trusted_event_url": None, "domain": "hackathon"},
+        {"id": 451, "title": "Embeddings truncation and Matryoshka dimension verification", "trusted_event_url": None, "domain": "code"},
+        {"id": 452, "title": "Record 3-minute Devpost demo video", "trusted_event_url": None, "domain": "hackathon"},
+        {"id": 453, "title": "CS 61C Midterm Review: Cache Hierarchies & Virtual Memory", "trusted_event_url": None, "domain": "coursework"},
+        {"id": 454, "title": "Deploy Compass backend to Nebius Serverless Endpoints", "trusted_event_url": None, "domain": "code"},
+        {"id": 999, "title": "My Genuine User Task: Learn React 19", "trusted_event_url": None, "domain": "code"},
+    ]
+
+    with patch("backend.routers.tasks.get_pool", AsyncMock(return_value=mock_pool)), \
+         patch("backend.routers.tasks._get_current_identity", return_value=mock_ident), \
+         patch("backend.routers.tasks.structured.list_tasks", AsyncMock(return_value=mock_raw_tasks)):
+
+        # include_demo=False must filter out all 7 legacy demo tasks, returning only the genuine user task
+        user_tasks = await get_frontend_tasks(mock_request, include_demo=False)
+        assert len(user_tasks) == 1
+        assert user_tasks[0].id == "999"
+        assert user_tasks[0].title == "My Genuine User Task: Learn React 19"
+
+
+
