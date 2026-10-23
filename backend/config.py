@@ -181,6 +181,21 @@ class Settings(BaseSettings):
         "https://compass.nebius.app",
     ]
 
+    @field_validator("ENABLE_DEMO_SEEDING", mode="before")
+    @classmethod
+    def parse_enable_demo_seeding(cls, v: Any) -> bool:
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, (int, float)):
+            return bool(v)
+        if isinstance(v, str):
+            val = v.strip().lower()
+            if val in ("true", "1", "yes", "on", "t"):
+                return True
+            if val in ("false", "0", "no", "off", "f", ""):
+                return False
+        return bool(v)
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: Any) -> list[str]:
