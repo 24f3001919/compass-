@@ -3,19 +3,22 @@
 
 export const RENDER_BACKEND_URL = 'https://compass-backend-qryu.onrender.com'
 
-// Proactively clear obsolete compass_user_id cookie from browser on script initialization
-if (typeof document !== 'undefined') {
+function clearObsoleteCookie() {
+  if (typeof document === 'undefined') return
   try {
-    const expired = '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure'
-    document.cookie = `compass_user_id${expired}`
+    document.cookie = 'compass_user_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure;'
     if (typeof window !== 'undefined' && window.location?.hostname) {
-      document.cookie = `compass_user_id${expired}; domain=${window.location.hostname}`
-      document.cookie = `compass_user_id${expired}; domain=.${window.location.hostname}`
+      const host = window.location.hostname
+      document.cookie = `compass_user_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure; domain=${host}`
+      document.cookie = `compass_user_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure; domain=.${host}`
     }
   } catch {
     /* ignore cookie cleanup error */
   }
 }
+
+// Proactively clear obsolete compass_user_id cookie from browser on script initialization
+clearObsoleteCookie()
 
 const isLocalDevHost = typeof window !== 'undefined' &&
   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
@@ -216,18 +219,7 @@ export function setCurrentUserId(userId) {
     /* ignore storage access error */
   }
   // Proactively clear obsolete compass_user_id cookie that triggers impersonation errors
-  if (typeof document !== 'undefined') {
-    try {
-      const expired = '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure'
-      document.cookie = `compass_user_id${expired}`
-      if (typeof window !== 'undefined' && window.location?.hostname) {
-        document.cookie = `compass_user_id${expired}; domain=${window.location.hostname}`
-        document.cookie = `compass_user_id${expired}; domain=.${window.location.hostname}`
-      }
-    } catch {
-      /* ignore cookie cleanup error */
-    }
-  }
+  clearObsoleteCookie()
 }
 
 export function getAuthHeaders(extraHeaders = {}) {
