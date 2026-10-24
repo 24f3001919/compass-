@@ -21,7 +21,6 @@ import {
   fetchCurrentUser,
   initGuestSession,
   fetchMigrationStatus,
-  clearDemoPersona,
 } from './api/client'
 import { isDemoTask } from './utils/demoConstants'
 
@@ -205,11 +204,6 @@ export default function App() {
     return () => window.removeEventListener('compass:demo-persona-loaded', handleDemoLoaded)
   }, [selectedDomain, loadTasks])
 
-  // On site reload/mount: clear any lingering dummy demo persona tasks from DB
-  // ensuring only genuine user-created tasks exist after reload
-  useEffect(() => {
-    clearDemoPersona().catch(() => {})
-  }, [])
 
   // Re-fetch tasks from server whenever the domain filter or demo active state changes
   useEffect(() => {

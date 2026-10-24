@@ -108,14 +108,9 @@ async def clear_demo_tasks(conn, user_id: str) -> int:
                 """
                 SELECT id FROM tasks
                 WHERE user_id = $1
-                  AND (
-                    trusted_event_url LIKE 'compass://demo-persona/%'
-                    OR trusted_event_url ILIKE '%demo%'
-                    OR title = ANY($2)
-                  )
+                  AND trusted_event_url LIKE 'compass://demo-persona/%'
                 """,
                 user_id,
-                DEMO_TASK_TITLES,
             )
             task_ids = [r["id"] for r in rows if r and "id" in r]
         except Exception as e:
@@ -127,14 +122,9 @@ async def clear_demo_tasks(conn, user_id: str) -> int:
                     """
                     SELECT id FROM tasks
                     WHERE user_id = $1
-                      AND (
-                        trusted_event_url LIKE 'compass://demo-persona/%'
-                        OR trusted_event_url ILIKE '%demo%'
-                        OR title = ANY($2)
-                      )
+                      AND trusted_event_url LIKE 'compass://demo-persona/%'
                     """,
                     user_id,
-                    DEMO_TASK_TITLES,
                 )
                 if isinstance(res, list):
                     task_ids = [r["id"] for r in res if isinstance(r, dict) and "id" in r]
@@ -191,7 +181,6 @@ async def clear_demo_tasks_endpoint(request: Request):
 
 
 # ---- 1-Click Judge Demo Persona Seeding ------------------------------------
-@router.post("/api/demo/seed", dependencies=[Depends(rate_limit)])
 @router.post("/api/demo/seed-persona", dependencies=[Depends(rate_limit)])
 async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRequest] = None):
     """Seed or refresh the Dual-Degree Hackathon Competitor demo persona for judges.
@@ -662,6 +651,12 @@ async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRe
         "task_ids": seeded_task_ids,
         "user_id": user_id,
     }
+
+
+@router.post("/api/demo/seed", include_in_schema=False, dependencies=[Depends(rate_limit)])
+async def seed_demo_persona_legacy_alias(request: Request, body: Optional[DemoSeedRequest] = None):
+    """Legacy alias redirecting to /api/demo/seed-persona."""
+    return await seed_demo_persona_endpoint(request, body)
 
 
 # ---- Tavily Live Deadline Verification -------------------------------------
