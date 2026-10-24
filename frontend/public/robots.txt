@@ -1,4 +1,5 @@
 User-agent: *
-Allow: /
+Allow: /$
+Disallow: /api/
 
 Sitemap: https://compass-farmlytics.vercel.app/sitemap.xml

@@ -14,8 +14,33 @@ OUTPUT_DIR = Path("C:/Users/Ratnesh Singh/.gemini/antigravity-ide/brain/28e0e8fb
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def assert_backend_database_safe(backend_url: str = "http://localhost:8001"):
+    import urllib.request
+    import json
+    import urllib.parse
+    try:
+        with urllib.request.urlopen(f"{backend_url}/health", timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            if data.get("status") not in ("ok", "connected"):
+                print(f"⚠️ Preflight: backend health status is {data.get('status')}")
+    except Exception as e:
+        print(f"⚠️ Preflight: backend at {backend_url} /health check returned: {e}")
+        return
+    db_url = os.environ.get("DATABASE_URL", "")
+    db_host = urllib.parse.urlparse(db_url).hostname or "" if db_url else ""
+    protected_hosts = [h.strip().lower() for h in os.environ.get("PROTECTED_DB_HOSTS", "ep-sweet-fire-b2y9w95z").split(",") if h.strip()]
+    for p in protected_hosts:
+        if p and p in db_host.lower():
+            raise RuntimeError(
+                f"ABORTED: Acceptance test is configured with protected database host '{db_host}'! "
+                f"Local acceptance testing must use an isolated development database branch."
+            )
+    print(f"✅ Verified: Acceptance test environment target is safe.")
+
+
 async def run_browser_acceptance():
     print("Starting Playwright Persona Acceptance Test...")
+    assert_backend_database_safe()
     print(f"Screenshots destination (strictly outside repo): {OUTPUT_DIR}")
     async with async_playwright() as p:
         browser = await p.chromium.launch(channel="chrome", headless=True)

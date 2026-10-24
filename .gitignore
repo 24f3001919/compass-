@@ -46,3 +46,17 @@ Thumbs.db
 *.exe
 .neon
 
+# Baseline & Diagnostic Scripts
+scripts/run_production_baseline*
+scripts/test_resume_export_prod*
+scripts/debug_*
+scripts/clause_proof.py
+scripts/reproduce_head_bug.py
+scripts/update_temp_env.py
+scripts/verify_hotfix.py
+scripts/wp1_reproduce.py
+scripts/run_suites_summary.py
+scripts/query_prod_rows.py
+scripts/test_styles.py
+
+
