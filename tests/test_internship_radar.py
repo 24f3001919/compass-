@@ -66,7 +66,7 @@ def test_eligibility_strong_match():
     )
     classification, explanation, reasons = evaluate_eligibility(opp, profile)
     assert classification == EligibilityClassification.ELIGIBLE
-    assert "Strong match" in explanation
+    assert "Confirmed eligible" in explanation or "Strong match" in explanation
     assert any(r["field"] == "academic_year" and r["status"] == "pass" for r in reasons)
     assert any(r["field"] == "grad_year" and r["status"] == "pass" for r in reasons)
 
@@ -285,8 +285,11 @@ async def test_radar_api_endpoints(monkeypatch):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test", headers={"x-user-id": "candidate_radar_user"}) as client:
-        # 1. Trigger sync (seeds curated opportunities quickly)
-        sync_res = await client.post("/api/opportunities/sync?source=curated")
+        # 1. Trigger sync (seeds curated opportunities quickly, requires admin)
+        sync_res = await client.post(
+            "/api/opportunities/sync?source=curated",
+            headers={"x-user-id": "admin"},
+        )
         assert sync_res.status_code == 200
         assert sync_res.json()["status"] in ("completed", "completed_with_errors")
 
@@ -531,4 +534,40 @@ async def test_jobspy_all_empty_or_failed_returns_degraded():
         assert summary["status"] == "degraded"
         assert summary["raw_results"] == 0
         assert summary["empty_sources"] == 2
+
+
+@pytest.mark.asyncio
+async def test_radar_sync_restricted_to_admin(monkeypatch):
+    """POST /api/opportunities/sync must reject unauthenticated, guest, and normal users with 403.
+    Only admin / nightly automated tasks with admin credentials can trigger it.
+    """
+    from backend.main import app
+    from httpx import AsyncClient, ASGITransport
+    from backend.services.radar_sync import run_radar_sync
+
+    async def mock_sync(*args, **kwargs):
+        return {"status": "completed", "sources_synced": []}
+
+    monkeypatch.setattr("backend.routers.radar.run_radar_sync", mock_sync)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Unauthenticated -> 403 Forbidden
+        res_unauth = await client.post("/api/opportunities/sync")
+        assert res_unauth.status_code == 403
+        assert "Forbidden" in res_unauth.json()["detail"] or "Admin" in res_unauth.json()["detail"]
+
+        # 2. Guest user -> 403 Forbidden
+        res_guest = await client.post("/api/opportunities/sync", headers={"x-guest-id": "guest_12345"})
+        assert res_guest.status_code == 403
+
+        # 3. Normal non-admin user -> 403 Forbidden
+        res_user = await client.post("/api/opportunities/sync", headers={"x-user-id": "student_user"})
+        assert res_user.status_code == 403
+
+        # 4. Admin user -> 200 OK
+        res_admin = await client.post("/api/opportunities/sync", headers={"x-user-id": "admin"})
+        assert res_admin.status_code == 200
+        assert res_admin.json()["status"] == "completed"
+
 

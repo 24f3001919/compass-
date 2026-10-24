@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from backend.dependencies import _get_or_create_user_id
+from backend.dependencies import _get_or_create_user_id, _get_current_identity
 from backend.memory.radar import (
     add_status_history,
     delete_user_saved_opportunity,
@@ -332,8 +332,16 @@ async def update_profile_endpoint(body: UserOpportunityProfileIn, request: Reque
 
 
 @router.post("/sync")
-async def trigger_sync_endpoint(source: Optional[str] = Query(None)):
-    """Trigger an on-demand source discovery and verification synchronization run."""
+async def trigger_sync_endpoint(request: Request, source: Optional[str] = Query(None)):
+    """Trigger an on-demand source discovery and verification synchronization run.
+    Restricted to admin / nightly automation.
+    """
+    ident = _get_current_identity(request)
+    if not (ident and ident.is_admin):
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: Admin or nightly automation credentials required to trigger source synchronization.",
+        )
     res = await run_radar_sync(source_filter=source)
     return res
 
