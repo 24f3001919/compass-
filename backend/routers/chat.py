@@ -11,7 +11,7 @@ from datetime import date
 from typing import Any, List, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 
 from openai import AsyncOpenAI, AsyncStream
 try:
@@ -355,10 +355,11 @@ async def delete_past_conversation(conversation_id: str, request: Request):
 
 
 # ---- GET /api/chat/shared/{token} ----------------------------------------
-@router.get("/api/chat/shared/{token}")
+@router.get("/api/chat/shared/{token}", dependencies=[Depends(rate_limit)])
 async def get_shared_chat_by_token(token: str, request: Request):
     """Public read-only endpoint to retrieve a shared conversation by its secure share_token.
     Enforces that only valid stored share tokens resolve, never database conversation IDs.
+    Returns Cache-Control: no-store and X-Robots-Tag: noindex, nofollow.
     """
     clean_token = (token or "").strip()
     if not clean_token:
@@ -373,7 +374,13 @@ async def get_shared_chat_by_token(token: str, request: Request):
             shared = await conversations.get_shared_conversation_by_token(conn, clean_token)
             if not shared:
                 raise HTTPException(status_code=404, detail="Shared conversation not found or link has expired")
-            return shared
+            return JSONResponse(
+                content=shared,
+                headers={
+                    "Cache-Control": "no-store, private",
+                    "X-Robots-Tag": "noindex, nofollow",
+                },
+            )
     except HTTPException:
         raise
     except Exception as e:

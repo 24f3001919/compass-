@@ -1,61 +1,75 @@
 import React, { useState, useEffect } from 'react'
-import { Link2, X, Check, Copy, ExternalLink, Loader2 } from 'lucide-react'
+import { Link2, X, Check, Copy, ExternalLink } from 'lucide-react'
 import { updateConversation } from '../api/client'
 
 export default function ShareModal({ isOpen, onClose, conversation, onConversationUpdated }) {
   const [copied, setCopied] = useState(false)
   const [shareToken, setShareToken] = useState(conversation?.share_token || null)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isRevoking, setIsRevoking] = useState(false)
   const [error, setError] = useState(null)
+  const [showRegenConfirm, setShowRegenConfirm] = useState(false)
 
   useEffect(() => {
-    let isMounted = true
-
-    async function ensureShareToken() {
-      if (!isOpen || !conversation) return
-      setError(null)
-
-      if (conversation.share_token) {
-        setShareToken(conversation.share_token)
-        return
-      }
-
-      setIsGenerating(true)
-      try {
-        const result = await updateConversation(conversation.id, { is_shared: true })
-        if (!isMounted) return
-
-        if (result && result.share_token) {
-          setShareToken(result.share_token)
-          if (onConversationUpdated) {
-            onConversationUpdated({
-              ...conversation,
-              is_shared: true,
-              share_token: result.share_token,
-            })
-          }
-        } else {
-          setError('Failed to generate secure share link. Please try again.')
-        }
-      } catch {
-        if (isMounted) {
-          setError('Failed to generate secure share link. Please check your connection.')
-        }
-      } finally {
-        if (isMounted) {
-          setIsGenerating(false)
-        }
-      }
+    if (!isOpen || !conversation) return
+    setError(null)
+    setShowRegenConfirm(false)
+    if (conversation.share_token) {
+      setShareToken(conversation.share_token)
+    } else {
+      setShareToken(null)
     }
-
-    ensureShareToken()
-
-    return () => {
-      isMounted = false
-    }
-  }, [isOpen, conversation, onConversationUpdated])
+  }, [isOpen, conversation])
 
   if (!isOpen || !conversation) return null
+
+  const isAlreadyShared = Boolean(conversation.is_shared)
+  const hasVisibleToken = Boolean(shareToken)
+
+  const handleGenerateLink = async () => {
+    setIsGenerating(true)
+    setError(null)
+    setShowRegenConfirm(false)
+    try {
+      const result = await updateConversation(conversation.id, { is_shared: true })
+      if (result && result.share_token) {
+        setShareToken(result.share_token)
+        if (onConversationUpdated) {
+          onConversationUpdated({
+            ...conversation,
+            is_shared: true,
+            share_token: result.share_token,
+          })
+        }
+      } else {
+        setError('Failed to generate secure share link. Please try again.')
+      }
+    } catch {
+      setError('Failed to generate secure share link. Please check your connection.')
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const handleRevoke = async () => {
+    setIsRevoking(true)
+    setError(null)
+    try {
+      await updateConversation(conversation.id, { is_shared: false })
+      setShareToken(null)
+      if (onConversationUpdated) {
+        onConversationUpdated({
+          ...conversation,
+          is_shared: false,
+          share_token: null,
+        })
+      }
+    } catch {
+      setError('Failed to revoke share link. Please try again.')
+    } finally {
+      setIsRevoking(false)
+    }
+  }
 
   const shareUrl = shareToken
     ? `${window.location.origin}/?share=${encodeURIComponent(shareToken)}`
@@ -194,91 +208,193 @@ export default function ShareModal({ isOpen, onClose, conversation, onConversati
           </div>
         )}
 
-        {/* Link Input & Copy Button */}
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <input
-            id="share-link-input"
-            type="text"
-            readOnly
-            value={isGenerating ? 'Generating secure share link…' : shareUrl}
-            placeholder={isGenerating ? 'Generating secure share link…' : 'Share link'}
-            onClick={e => {
-              if (shareUrl) e.target.select()
-            }}
-            style={{
-              flex: 1,
+        {/* Shared state controls */}
+        {hasVisibleToken ? (
+          <>
+            {/* Link Input & Copy Button */}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                id="share-link-input"
+                type="text"
+                readOnly
+                value={shareUrl}
+                placeholder="Share link"
+                onClick={e => {
+                  if (shareUrl) e.target.select()
+                }}
+                style={{
+                  flex: 1,
+                  padding: '10px 14px',
+                  borderRadius: 'var(--radius-btn, 6px)',
+                  background: 'var(--bg-app)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-primary)',
+                  fontSize: '13px',
+                  outline: 'none',
+                  fontFamily: 'monospace',
+                  minHeight: '44px',
+                }}
+              />
+              <button
+                id="btn-copy-share-link"
+                onClick={handleCopy}
+                disabled={!shareUrl}
+                className="btn-touch-target btn-primary-amber"
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: 'var(--radius-btn, 6px)',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  whiteSpace: 'nowrap',
+                  minHeight: '44px',
+                }}
+              >
+                {copied ? (
+                  <>
+                    <Check size={14} strokeWidth={1.8} />
+                    <span>Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy size={14} strokeWidth={1.8} />
+                    <span>Copy Link</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Footer info & open in new tab */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '4px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                Link is active and viewable by anyone with the link.
+              </span>
+              <button
+                onClick={handleOpenLink}
+                style={{
+                  background: 'none', border: 'none',
+                  color: 'var(--accent)',
+                  fontSize: '13px', fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '4px',
+                  minHeight: '36px',
+                }}
+              >
+                <span>Open preview</span>
+                <ExternalLink size={12} strokeWidth={1.8} />
+              </button>
+            </div>
+          </>
+        ) : isAlreadyShared ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{
+              background: 'rgba(34, 197, 94, 0.08)',
+              border: '1px solid rgba(34, 197, 94, 0.25)',
+              borderRadius: '6px',
               padding: '10px 14px',
-              borderRadius: 'var(--radius-btn, 6px)',
-              background: 'var(--bg-app)',
-              border: '1px solid var(--border)',
-              color: isGenerating ? 'var(--text-muted)' : 'var(--text-primary)',
               fontSize: '13px',
-              outline: 'none',
-              fontFamily: shareUrl ? 'monospace' : 'inherit',
-              minHeight: '44px',
-            }}
-          />
-          <button
-            id="btn-copy-share-link"
-            onClick={handleCopy}
-            disabled={!shareUrl || isGenerating}
-            className="btn-touch-target btn-primary-amber"
-            style={{
-              padding: '10px 18px',
-              borderRadius: 'var(--radius-btn, 6px)',
-              fontSize: '13px',
-              fontWeight: '600',
-              cursor: (!shareUrl || isGenerating) ? 'not-allowed' : 'pointer',
-              opacity: (!shareUrl || isGenerating) ? 0.6 : 1,
+              color: 'var(--text-primary)',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              whiteSpace: 'nowrap',
-              minHeight: '44px',
-            }}
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 size={14} className="animate-spin" />
-                <span>Generating…</span>
-              </>
-            ) : copied ? (
-              <>
-                <Check size={14} strokeWidth={1.8} />
-                <span>Copied!</span>
-              </>
-            ) : (
-              <>
-                <Copy size={14} strokeWidth={1.8} />
-                <span>Copy Link</span>
-              </>
-            )}
-          </button>
-        </div>
+              gap: '8px'
+            }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />
+              <span>This conversation is currently shared. Active links remain valid until revoked.</span>
+            </div>
 
-        {/* Footer info & open in new tab */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '4px' }}>
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            {shareToken ? 'Link is active and viewable by anyone with the link.' : 'Generating snapshot…'}
-          </span>
-          <button
-            onClick={handleOpenLink}
-            disabled={!shareUrl || isGenerating}
-            style={{
-              background: 'none', border: 'none',
-              color: (!shareUrl || isGenerating) ? 'var(--text-muted)' : 'var(--accent)',
-              fontSize: '13px', fontWeight: '600',
-              cursor: (!shareUrl || isGenerating) ? 'not-allowed' : 'pointer',
-              opacity: (!shareUrl || isGenerating) ? 0.5 : 1,
-              display: 'flex', alignItems: 'center', gap: '4px',
-              minHeight: '36px',
-            }}
-          >
-            <span>Open preview</span>
-            <ExternalLink size={12} strokeWidth={1.8} />
-          </button>
-        </div>
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+              To protect your privacy, plaintext tokens are not retained in storage. You can create a new link below or revoke access.
+            </p>
+
+            {showRegenConfirm ? (
+              <div style={{
+                background: 'rgba(234, 179, 8, 0.1)',
+                border: '1px solid rgba(234, 179, 8, 0.3)',
+                borderRadius: '6px',
+                padding: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+              }}>
+                <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-primary)' }}>
+                  ⚠️ Warning: Creating a new link will immediately revoke the existing link. Anyone with the old link will lose access.
+                </span>
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => setShowRegenConfirm(false)}
+                    className="btn-touch-target btn-secondary"
+                    style={{ padding: '6px 12px', fontSize: '12px', cursor: 'pointer' }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    id="btn-confirm-regen-link"
+                    onClick={handleGenerateLink}
+                    disabled={isGenerating}
+                    className="btn-touch-target btn-primary-amber"
+                    style={{ padding: '6px 14px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}
+                  >
+                    {isGenerating ? 'Creating…' : 'Yes, create new link'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '4px' }}>
+                <button
+                  id="btn-revoke-share"
+                  onClick={handleRevoke}
+                  disabled={isRevoking}
+                  className="btn-touch-target btn-secondary"
+                  style={{
+                    padding: '8px 14px',
+                    fontSize: '12px',
+                    color: '#ef4444',
+                    borderColor: 'rgba(239, 68, 68, 0.3)',
+                    cursor: isRevoking ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {isRevoking ? 'Revoking…' : 'Revoke link'}
+                </button>
+                <button
+                  id="btn-create-new-link"
+                  onClick={() => setShowRegenConfirm(true)}
+                  className="btn-touch-target btn-primary-amber"
+                  style={{ padding: '8px 16px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}
+                >
+                  Create new link
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-muted)' }}>
+              No active share link. Generate a secure, read-only link to share a snapshot of this chat.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                id="btn-create-share-link"
+                onClick={handleGenerateLink}
+                disabled={isGenerating}
+                className="btn-touch-target btn-primary-amber"
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: 'var(--radius-btn, 6px)',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: isGenerating ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {isGenerating ? 'Generating…' : 'Create share link'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
 }
+

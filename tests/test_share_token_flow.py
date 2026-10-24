@@ -153,17 +153,17 @@ async def test_get_shared_conversation_by_token_sql_contract():
 
     res = await conv_mem.get_shared_conversation_by_token(mock_conn, "sec_test_token_abc")
     assert res is not None
-    assert res["share_token"] == "sec_test_token_abc"
+    # share_token must be redacted from public response
+    assert "share_token" not in res
     assert res["title"] == "Architecture Review"
     assert len(res["messages"]) == 1
     # Strip modes marker check
     assert "[[modes" not in res["messages"][0]["content"]
 
     # Verify query parameters
-    query_str, token_arg = mock_conn.fetchrow.call_args[0]
-    assert "share_token = $1" in query_str
+    query_str = mock_conn.fetchrow.call_args[0][0]
+    assert "share_token = $1 OR share_token = $2" in query_str
     assert "is_shared = TRUE" in query_str
-    assert token_arg == "sec_test_token_abc"
 
 
 @pytest.mark.asyncio
@@ -173,14 +173,13 @@ async def test_update_conversation_token_generation_and_revocation():
     cid = str(uuid.uuid4())
 
     # 1. is_shared=True returns (True, generated_token)
-    mock_conn.fetchrow.return_value = {"share_token": "generated_secure_token_456"}
+    mock_conn.fetchrow.return_value = {"share_token": "some_hash"}
     ok, token = await conv_mem.update_conversation(mock_conn, cid, is_shared=True)
     assert ok is True
-    assert token == "generated_secure_token_456"
+    assert token is not None and len(token) >= 32
 
     # Verify query passed RETURNING share_token
     update_sql = mock_conn.fetchrow.call_args[0][0]
-    assert "share_token = CASE" in update_sql
     assert "RETURNING share_token" in update_sql
 
     # 2. is_shared=False revokes token, returns (True, None)

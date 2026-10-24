@@ -291,13 +291,21 @@ def _get_current_identity(request: Request) -> Optional[Identity]:
 
     settings = get_settings()
 
-    # 1. Reject explicit x-user-id impersonation header outside dev/test unconditionally
+    # 1. Reject explicit x-user-id / x-guest-id impersonation headers outside dev/test unconditionally
     user_header = request.headers.get("x-user-id")
     if user_header and user_header.strip():
         if not (settings.is_development() or settings.is_test()):
             raise HTTPException(
                 status_code=403,
                 detail="x-user-id / compass_user_id impersonation is strictly forbidden outside development or test environments. Set ENVIRONMENT=development in your environment or .env for local development.",
+            )
+
+    guest_id_header = request.headers.get("x-guest-id")
+    if guest_id_header and guest_id_header.strip():
+        if not (settings.is_development() or settings.is_test()):
+            raise HTTPException(
+                status_code=403,
+                detail="Raw x-guest-id impersonation is strictly forbidden outside development or test environments. Use cryptographically signed x-guest-token instead.",
             )
 
     session_token = request.cookies.get("compass_session")
@@ -349,10 +357,14 @@ def _get_current_identity(request: Request) -> Optional[Identity]:
                 headers={"Set-Cookie": "compass_user_id=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax"},
             )
 
-    # 6. Dev-only x-user-id header fallback (never trust cookie as identity)
+    # 6. Dev-only x-user-id / x-guest-id header fallback (never trust cookie as identity)
     if user_header and user_header.strip() and (settings.is_development() or settings.is_test()):
         target = user_header.strip().lower()
         return Identity(id=target, is_admin=(target == "admin"), is_guest=False, user_id=target, guest_id=verified_guest)
+
+    if guest_id_header and guest_id_header.strip() and (settings.is_development() or settings.is_test()):
+        target_guest = guest_id_header.strip()
+        return Identity(id=target_guest, is_admin=False, is_guest=True, user_id=None, guest_id=target_guest)
 
     return None
 

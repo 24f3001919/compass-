@@ -7,6 +7,7 @@ Provides database access for chat conversations and message history in PostgreSQ
 from typing import Optional, Union, List, Dict, Any
 import logging
 import secrets
+import hashlib
 import uuid
 import asyncpg
 from asyncpg.pool import PoolConnectionProxy
@@ -315,13 +316,15 @@ async def list_conversations(
             title = r.get("title") or r.get("first_user_msg") or "Chat Session"
             if len(title) > 60:
                 title = title[:57] + "..."
+            stored_st = str(r["share_token"]) if r.get("share_token") else None
+            is_hex_hash = bool(stored_st and len(stored_st) == 64 and all(c in "0123456789abcdefABCDEF" for c in stored_st))
             conversations_list.append({
                 "id": str(r["id"]),
                 "title": title,
                 "is_pinned": bool(r.get("is_pinned", False)),
                 "is_archived": bool(r.get("is_archived", False)),
                 "is_shared": bool(r.get("is_shared", False)),
-                "share_token": str(r["share_token"]) if r.get("share_token") else None,
+                "share_token": stored_st if (stored_st and not is_hex_hash) else None,
                 "started_at": r["started_at"].isoformat() if hasattr(r["started_at"], "isoformat") else str(r["started_at"]),
                 "last_active_at": r["last_active_at"].isoformat() if hasattr(r["last_active_at"], "isoformat") else str(r["last_active_at"]),
                 "message_count": int(r["message_count"] or 0),
@@ -351,7 +354,8 @@ async def update_conversation(
             return True, None
 
         await ensure_conversation_columns(conn)
-        cand_token = secrets.token_urlsafe(32) if is_shared is True else None
+        raw_token = secrets.token_urlsafe(32) if is_shared is True else None
+        token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest() if raw_token else None
 
         query = """
             UPDATE conversations
@@ -360,7 +364,7 @@ async def update_conversation(
                 is_archived = CASE WHEN $6::boolean THEN $7::boolean ELSE is_archived END,
                 is_shared = CASE WHEN $8::boolean THEN $9::boolean ELSE is_shared END,
                 share_token = CASE
-                    WHEN $8::boolean AND $9::boolean THEN COALESCE(share_token, $10::text)
+                    WHEN $8::boolean AND $9::boolean THEN $10::text
                     WHEN $8::boolean AND NOT $9::boolean THEN NULL
                     ELSE share_token
                 END
@@ -378,10 +382,10 @@ async def update_conversation(
             bool(is_archived) if is_archived is not None else False,
             is_shared is not None,
             bool(is_shared) if is_shared is not None else False,
-            cand_token,
+            token_hash,
         )
-        st = str(row["share_token"]) if row and row.get("share_token") else None
-        return True, st
+        returned_token = raw_token if (is_shared is True and raw_token) else None
+        return True, returned_token
     except Exception as e:
         logger.error(f"update_conversation failed: {e}", exc_info=True)
         return False, None
@@ -508,17 +512,43 @@ async def get_shared_conversation_by_token(
         return None
 
     await ensure_conversation_columns(conn)
+    token_hash = hashlib.sha256(clean_token.encode("utf-8")).hexdigest()
 
     conv_row = await conn.fetchrow(
         """
         SELECT id, started_at, last_active_at, COALESCE(title, 'Chat Session') AS title, is_shared, share_token
         FROM conversations
-        WHERE share_token = $1 AND is_shared = TRUE
+        WHERE is_shared = TRUE
+          AND (
+            share_token = $1
+            OR (
+              share_token = $2
+              AND (LENGTH(share_token) != 64 OR share_token !~ '^[0-9a-fA-F]{64}$')
+            )
+          )
         """,
+        token_hash,
         clean_token,
     )
     if not conv_row:
         return None
+
+    # Transitional upgrade: If the matched row stored the legacy plaintext token,
+    # automatically upgrade it to sha256 hash on first access.
+    if conv_row.get("share_token") == clean_token and clean_token != token_hash:
+        try:
+            await conn.execute(
+                """
+                UPDATE conversations
+                SET share_token = $1
+                WHERE id = $2 AND share_token = $3
+                """,
+                token_hash,
+                conv_row["id"],
+                clean_token,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to upgrade legacy share token to sha256: {e}")
 
     cid_str = str(conv_row["id"])
     rows = await get_recent_messages(conn, cid_str, limit=limit)
@@ -534,7 +564,6 @@ async def get_shared_conversation_by_token(
     ]
 
     return {
-        "share_token": clean_token,
         "title": conv_row["title"],
         "started_at": conv_row["started_at"].isoformat() if hasattr(conv_row["started_at"], "isoformat") else str(conv_row["started_at"]),
         "last_active_at": conv_row["last_active_at"].isoformat() if hasattr(conv_row["last_active_at"], "isoformat") else str(conv_row["last_active_at"]),
