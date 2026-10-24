@@ -6,6 +6,7 @@ export default function TaskCard({
   onSelectTask,
   onDeleteTask,
   onToggleStatus,
+  isHighlighted = false,
 }) {
   const isOverdue = (task.countdown || '').toLowerCase().includes('overdue')
   const isCompleted = task.status === 'completed' || task.status === 'done'
@@ -13,15 +14,17 @@ export default function TaskCard({
 
   return (
     <div
-      className={`timeline-card card-${task.domain}`}
+      id={`task-card-${task.id}`}
+      className={`timeline-card card-${task.domain} ${isHighlighted ? 'task-highlighted' : ''}`}
       onClick={() => onSelectTask(task)}
       role="button"
       tabIndex={0}
       style={{
         opacity: isCompleted ? 0.75 : 1,
-        transition: 'all 0.15s ease',
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border)',
+        transition: 'all 0.25s ease',
+        background: isHighlighted ? 'rgba(217, 119, 6, 0.08)' : 'var(--bg-card)',
+        border: isHighlighted ? '2px solid #d97706' : '1px solid var(--border)',
+        boxShadow: isHighlighted ? '0 0 0 3px rgba(217, 119, 6, 0.2), 0 4px 14px rgba(217, 119, 6, 0.15)' : 'none',
         borderRadius: 'var(--radius-card, 8px)',
         padding: '16px',
         marginBottom: '12px',

@@ -221,14 +221,23 @@ export default function ChatMessageList({
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                           {msg.text ? <MarkdownRenderer content={msg.text} /> : null}
                           {msg.error && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: msg.text ? '6px' : '0' }}>
+                            <div style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '8px',
+                              marginTop: msg.text ? '10px' : '0',
+                              padding: msg.text ? '8px 12px' : '0',
+                              background: msg.text ? 'rgba(239, 68, 68, 0.08)' : 'transparent',
+                              borderRadius: msg.text ? '6px' : '0',
+                              border: msg.text ? '1px solid rgba(239, 68, 68, 0.2)' : 'none',
+                            }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--danger, #ef4444)', fontSize: '13px' }}>
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                                   <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
                                   <line x1="12" y1="9" x2="12" y2="13" />
                                   <line x1="12" y1="17" x2="12.01" y2="17" />
                                 </svg>
-                                <span>{msg.error}</span>
+                                <span>{msg.text ? `Stream interrupted: ${msg.error} (partial output preserved)` : msg.error}</span>
                               </div>
                               {msg.canRetry && msg.retryPrompt && (
                                 <button
@@ -247,7 +256,7 @@ export default function ChatMessageList({
                                     alignItems: 'center',
                                     gap: '6px',
                                     padding: '0 12px',
-                                    minHeight: '36px',
+                                    minHeight: '32px',
                                     borderRadius: 'var(--radius-btn, 6px)',
                                     fontSize: '12px',
                                     cursor: 'pointer',

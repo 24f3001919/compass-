@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react'
-import { X, Check } from 'lucide-react'
+import { X } from 'lucide-react'
 import DarkModeToggle from './DarkModeToggle'
 import { getDomainMeta } from './timeline/domainMeta'
 import AddDeadlineModal from './timeline/AddDeadlineModal'
@@ -63,6 +63,27 @@ function getUrgencyBadgeStyle(urgency) {
   }
 }
 
+function formatActivityTimestamp(ts) {
+  if (!ts) return 'Recently'
+  try {
+    const d = new Date(ts)
+    if (isNaN(d.getTime())) return ts
+    const now = new Date()
+    const diffMs = now.getTime() - d.getTime()
+    if (diffMs >= 0 && diffMs < 60000) return 'Just now'
+    if (diffMs >= 0 && diffMs < 3600000) return `${Math.floor(diffMs / 60000)}m ago`
+    return d.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+    }) + ', ' + d.toLocaleTimeString(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+  } catch {
+    return ts
+  }
+}
+
 export default function Dashboard({
 
   tasks = [],
@@ -87,6 +108,7 @@ export default function Dashboard({
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [seedingPersona, setSeedingPersona] = useState(false)
   const [seedSuccess, setSeedSuccess] = useState(false)
+  const [seedNotice, setSeedNotice] = useState(null) // { type: 'success' | 'error' | 'disabled', text: string }
   const [lastRefreshedAt, setLastRefreshedAt] = useState(() => new Date())
 
   const handleClearFilters = useCallback(() => {
@@ -97,13 +119,29 @@ export default function Dashboard({
   const handleSeedJudgePersona = useCallback(async () => {
     if (seedingPersona) return
     setSeedingPersona(true)
+    setSeedNotice(null)
     try {
       await seedJudgeDemoPersona()
       setSeedSuccess(true)
-      setTimeout(() => setSeedSuccess(false), 3000)
+      setSeedNotice({
+        type: 'success',
+        text: 'Judge Persona loaded successfully! 21 multi-domain tasks & timeline populated.',
+      })
+      setTimeout(() => setSeedSuccess(false), 4000)
       if (onTasksUpdated) await onTasksUpdated()
     } catch (err) {
-      alert(`Could not load judge persona: ${err.message}`)
+      const msg = err.message || ''
+      if (msg.includes('disabled in production') || msg.includes('403') || msg.includes('ENABLE_DEMO_SEEDING')) {
+        setSeedNotice({
+          type: 'disabled',
+          text: 'Demo persona seeding is disabled in this environment (ENABLE_DEMO_SEEDING is not enabled).',
+        })
+      } else {
+        setSeedNotice({
+          type: 'error',
+          text: `Could not load judge persona: ${msg}`,
+        })
+      }
     } finally {
       setSeedingPersona(false)
     }
@@ -393,6 +431,25 @@ export default function Dashboard({
     [onTasksUpdated]
   )
 
+  // Navigate to task in Timeline and highlight
+  const handleNavigateToTask = useCallback(
+    (task) => {
+      if (!task) return
+      try {
+        window.sessionStorage.setItem('compass_highlight_task_id', String(task.id))
+        window.dispatchEvent(
+          new window.CustomEvent('compass:highlight-task', { detail: { taskId: String(task.id) } })
+        )
+      } catch {
+        /* ignore storage access error */
+      }
+      if (onSelectTab) {
+        onSelectTab('timeline')
+      }
+    },
+    [onSelectTab]
+  )
+
   // Manual Refresh Handler
   const handleManualRefresh = useCallback(() => {
     setIsRefreshing(true)
@@ -609,6 +666,67 @@ export default function Dashboard({
           </div>
         </div>
       </div>
+
+      {/* Inline Judge Persona Feedback Banner */}
+      {seedNotice && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            padding: '10px 14px',
+            marginBottom: '16px',
+            borderRadius: '6px',
+            background:
+              seedNotice.type === 'success'
+                ? 'rgba(16, 185, 129, 0.12)'
+                : seedNotice.type === 'disabled'
+                ? 'rgba(217, 119, 6, 0.12)'
+                : 'rgba(239, 68, 68, 0.12)',
+            border:
+              seedNotice.type === 'success'
+                ? '1px solid rgba(16, 185, 129, 0.35)'
+                : seedNotice.type === 'disabled'
+                ? '1px solid rgba(217, 119, 6, 0.35)'
+                : '1px solid rgba(239, 68, 68, 0.35)',
+            color:
+              seedNotice.type === 'success'
+                ? '#059669'
+                : seedNotice.type === 'disabled'
+                ? '#d97706'
+                : '#dc2626',
+            fontSize: '13px',
+            fontWeight: '500',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontWeight: '600' }}>
+              {seedNotice.type === 'success' ? '✓' : seedNotice.type === 'disabled' ? '⚠️' : '✕'}
+            </span>
+            <span>{seedNotice.text}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSeedNotice(null)}
+            className="btn-touch-target"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'inherit',
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+            aria-label="Dismiss message"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* SECTION: Today's Focus Card */}
       <div className="dashboard-focus-card" role="region" aria-label="Today's focus area" style={{ borderRadius: '8px', border: '1px solid var(--border)' }}>
@@ -1571,6 +1689,16 @@ export default function Dashboard({
                 return (
                   <div
                     key={task.id}
+                    id={`recent-activity-task-${task.id}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleNavigateToTask(task)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        handleNavigateToTask(task)
+                      }
+                    }}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -1581,12 +1709,18 @@ export default function Dashboard({
                       background: 'var(--bg-card)',
                       border: '1px solid var(--border)',
                       opacity: isCompleted ? 0.85 : 1,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
                     }}
+                    aria-label={`Navigate to task: ${task.title || 'Untitled task'}`}
                   >
                     {/* Toggle button */}
                     <button
                       type="button"
-                      onClick={() => handleToggleTaskStatus(task.id, isCompleted)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleToggleTaskStatus(task.id, isCompleted)
+                      }}
                       className="btn-touch-target"
                       style={{
                         width: '32px',
@@ -1633,7 +1767,7 @@ export default function Dashboard({
                           <span>{meta.label}</span>
                         </span>
                         <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                          {task.timestamp || 'Recently'}
+                          {formatActivityTimestamp(task.timestamp || task.created_at)}
                         </span>
                       </div>
                       <div
@@ -1646,32 +1780,40 @@ export default function Dashboard({
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                         }}
-                        title={task.title}
+                        aria-label={task.title || 'Untitled task'}
                       >
                         {task.title || 'Untitled task'}
                       </div>
                     </div>
 
-                    <div style={{ flexShrink: 0 }}>
+                    {/* Non-button status chip */}
+                    <div style={{ flexShrink: 0, pointerEvents: 'none' }}>
                       <span
                         style={{
                           fontSize: '11px',
                           fontWeight: '500',
-                          padding: '3px 8px',
-                          borderRadius: '6px',
-                          background: 'var(--bg-card-soft)',
-                          color: isCompleted ? 'var(--domain-code)' : 'var(--text-secondary)',
-                          border: '1px solid var(--border)',
+                          padding: '3px 9px',
+                          borderRadius: '12px',
+                          background: isCompleted ? 'rgba(16, 185, 129, 0.12)' : 'var(--bg-card-soft)',
+                          color: isCompleted ? '#059669' : 'var(--text-secondary)',
+                          border: isCompleted ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid var(--border)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          userSelect: 'none',
                         }}
+                        aria-label={`Status: ${isCompleted ? 'Completed' : 'Open'}`}
                       >
-                        {isCompleted ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                            <Check size={11} strokeWidth={2.5} />
-                            <span>Done</span>
-                          </span>
-                        ) : (
-                          'Open'
-                        )}
+                        <span
+                          style={{
+                            width: '6px',
+                            height: '6px',
+                            borderRadius: '50%',
+                            background: isCompleted ? '#059669' : 'var(--text-muted)',
+                          }}
+                          aria-hidden="true"
+                        />
+                        <span>{isCompleted ? 'Completed' : 'Open'}</span>
                       </span>
                     </div>
                   </div>

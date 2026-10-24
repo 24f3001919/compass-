@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import {
   deleteTask,
   updateTask,
@@ -41,6 +41,43 @@ export default function Timeline({
   const [showAddModal, setShowAddModal] = useState(false)
   const [seedingPersona, setSeedingPersona] = useState(false)
   const [seedSuccess, setSeedSuccess] = useState(false)
+  const [highlightedTaskId, setHighlightedTaskId] = useState(() => {
+    try {
+      return window.sessionStorage.getItem('compass_highlight_task_id') || null
+    } catch {
+      return null
+    }
+  })
+
+  useEffect(() => {
+    const handleHighlight = (e) => {
+      const tid = e.detail?.taskId
+      if (tid) {
+        setHighlightedTaskId(String(tid))
+      }
+    }
+    window.addEventListener('compass:highlight-task', handleHighlight)
+    return () => window.removeEventListener('compass:highlight-task', handleHighlight)
+  }, [])
+
+  useEffect(() => {
+    if (highlightedTaskId) {
+      const el = document.getElementById(`task-card-${highlightedTaskId}`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+      const timer = setTimeout(() => {
+        setHighlightedTaskId(null)
+        try {
+          window.sessionStorage.removeItem('compass_highlight_task_id')
+        } catch {
+          /* ignore storage error */
+        }
+      }, 3500)
+      return () => clearTimeout(timer)
+    }
+  }, [highlightedTaskId])
+
   const [verifyingDeadlines, setVerifyingDeadlines] = useState(false)
   const [verificationSummary, setVerificationSummary] = useState(null)
 
@@ -367,6 +404,7 @@ export default function Timeline({
           <TaskCard
             key={task.id}
             task={task}
+            isHighlighted={String(highlightedTaskId) === String(task.id)}
             onSelectTask={setSelectedTask}
             onDeleteTask={handleDelete}
             onToggleStatus={handleToggleStatus}
