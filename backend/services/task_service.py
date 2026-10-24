@@ -4,7 +4,7 @@ Handles task creation, conflict detection, countdown formatting, and memory chun
 """
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any, List, Optional
 
 from fastapi import HTTPException
@@ -46,11 +46,17 @@ def build_frontend_task(
     c = classify_deadline(row, now=now)
     countdown_str = c["label"]
 
-    created_at = row.get("created_at") or datetime.now()
-    if isinstance(created_at, (datetime, date)):
-        ts_str = created_at.strftime("%b %d, %H:%M")
+    created_at = row.get("created_at") or datetime.now(timezone.utc)
+    if isinstance(created_at, datetime):
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        ts_str = created_at.astimezone(timezone.utc).isoformat()
+    elif isinstance(created_at, date):
+        ts_str = datetime.combine(created_at, datetime.min.time(), tzinfo=timezone.utc).isoformat()
+    elif isinstance(created_at, str):
+        ts_str = created_at
     else:
-        ts_str = "Just now"
+        ts_str = datetime.now(timezone.utc).isoformat()
 
     domain_val = row.get("domain", "general")
     tags = [domain_val]

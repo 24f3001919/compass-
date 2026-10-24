@@ -650,7 +650,7 @@ async def generate_chat_events(
                     done_payload2['evidence'] = evidence2
             if result.get('is_truncated') or (isinstance(raw_data2, dict) and raw_data2.get('is_truncated')):
                 done_payload2['is_truncated'] = True
-            yield f"data: {json.dumps(done_payload2)}\n\n"
+            yield f"data: {json.dumps(done_payload2, default=str)}\n\n"
             _schedule_stream_persistence(conv_id, message, response_text, user_id, guest_id, skill_used, evidence=done_payload2.get('evidence'))
             return
 
@@ -668,11 +668,11 @@ async def generate_chat_events(
             skill_used = result.get("skill_used") or "chat"
             thought = (result.get("data") or {}).get("thought") if isinstance(result.get("data"), dict) else None
             if thought:
-                yield f"data: {json.dumps({'type': 'thought', 'value': thought})}\n\n"
+                yield f"data: {json.dumps({'type': 'thought', 'value': thought}, default=str)}\n\n"
 
             if not response_text.strip():
                 if not is_greeting_intent(message):
-                    yield f"data: {json.dumps({'type': 'error', 'detail': result.get('error') or 'The model returned an empty response. Please retry.', 'can_retry': True})}\n\n"
+                    yield f"data: {json.dumps({'type': 'error', 'detail': result.get('error') or 'The model returned an empty response. Please retry.', 'can_retry': True}, default=str)}\n\n"
                     return
                 response_text = "How can I help you today?"
 
@@ -695,7 +695,7 @@ async def generate_chat_events(
                     done_payload_orchestrator['evidence'] = ev
             if result.get('is_truncated') or (isinstance(raw_data_orch, dict) and raw_data_orch.get('is_truncated')):
                 done_payload_orchestrator['is_truncated'] = True
-            yield f"data: {json.dumps(done_payload_orchestrator)}\n\n"
+            yield f"data: {json.dumps(done_payload_orchestrator, default=str)}\n\n"
             _schedule_stream_persistence(conv_id, message, response_text, user_id, guest_id, skill_used)
             return
 
@@ -711,7 +711,7 @@ async def generate_chat_events(
         done_payload_final: dict[str, Any] = {'type': 'done', 'conversation_id': conv_id, 'skill_used': 'chat'}
         if last_finish_reason == "length":
             done_payload_final['is_truncated'] = True
-        yield f"data: {json.dumps(done_payload_final)}\n\n"
+        yield f"data: {json.dumps(done_payload_final, default=str)}\n\n"
 
     except asyncio.CancelledError:
         logger.info("Chat SSE stream cancelled by client disconnect.")
@@ -724,4 +724,13 @@ async def generate_chat_events(
         logger.error("SSE stream outer error: %s", e, exc_info=True)
         if stream and hasattr(stream, "aclose"):
             await stream.aclose()
-        yield f"data: {json.dumps({'type': 'error', 'detail': 'Internal error occurred while processing stream.', 'terminal': True})}\n\n"
+        err_payload = {
+            'type': 'error',
+            'detail': 'Internal error occurred while processing stream.',
+            'can_retry': True,
+            'terminal': True,
+        }
+        if full_text.strip():
+            err_payload['partialResponse'] = full_text.strip()
+            _schedule_stream_persistence(conv_id, message, full_text.strip(), user_id, guest_id, "chat")
+        yield f"data: {json.dumps(err_payload, default=str)}\n\n"
