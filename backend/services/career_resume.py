@@ -517,9 +517,9 @@ def _is_skill_category_header(line: str) -> bool:
 
 def _is_tech_stack_line(line: str) -> Optional[str]:
     clean = line.lstrip(" \t*•-–—+·\u2022\u25cf\u25cb\u25aa\u25ab")
-    m = re.match(r"^(?:tech\s*stack|technologies|tools|stack)[\s:]+(.*)$", clean, re.IGNORECASE)
+    m = re.match(r"^(?:tech\s*stack|technologies|tools|stack)[\s:]+", clean, re.IGNORECASE)
     if m:
-        return m.group(1).strip()
+        return clean[m.end():].strip()
     return None
 
 
@@ -787,7 +787,7 @@ def parse_uploaded_resume_text(raw_text: str) -> ResumeContent:
                 if date_match:
                     d_str = date_match.group(1)
                     comp = comp.replace(d_str, "").strip(" \t|,-–—")
-                    norm_d = re.sub(r"\s+to\s+", "-", d_str, flags=re.IGNORECASE)
+                    norm_d = re.sub(r"\bto\b", "-", d_str, flags=re.IGNORECASE)
                     parts = [p.strip() for p in re.split(r"[-–—~]", norm_d) if p.strip()]
                     start_d = parts[0] if parts else None
                     end_d = parts[1] if len(parts) > 1 else None

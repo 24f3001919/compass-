@@ -601,7 +601,7 @@ def extract_claim_and_entity_from_text(text: str, user_query: str = "") -> Tuple
         return "", None
 
     # Strip [[modes...]] markers if present without backtracking
-    clean_text = re.sub(r"\[\[[^\]\n]*\]\]", "", clean_text).strip()
+    clean_text = re.sub(r"\[\[[^\[\]\n]*\]\]", "", clean_text).strip()
 
     # 1. Identify Target Entity
     target_entity: Optional[str] = None
