@@ -6,10 +6,15 @@ All model IDs, database URLs, and auth tokens are configured here.
 """
 
 import json
+import os
 from functools import lru_cache
 from typing import Any
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+DEFAULT_PROTECTED_DB_HOSTS: tuple[str, ...] = ("ep-sweet-fire-b2y9w95z",)
+PROTECTED_DB_HOSTS: tuple[str, ...] = DEFAULT_PROTECTED_DB_HOSTS
 
 
 class Settings(BaseSettings):
@@ -17,6 +22,9 @@ class Settings(BaseSettings):
 
     # --- Database ---
     DATABASE_URL: str = "postgresql://compass:compass@localhost:5432/compass"
+    DATABASE_URL_UNPOOLED: str = ""
+    TEST_DATABASE_URL: str = ""
+    PROTECTED_DB_HOSTS: str = "ep-sweet-fire-b2y9w95z"  # Comma-separated list of protected endpoint IDs / hostnames
 
     # --- Nebius Token Factory ---
     NEBIUS_API_KEY: str = ""  # Required — set in .env
@@ -167,6 +175,95 @@ class Settings(BaseSettings):
                 + "\nAll 4 secrets (AUTH_TOKEN, GUEST_SIGNING_SECRET, EDGE_HMAC_SECRET, TOKEN_ENCRYPTION_KEY) "
                 "must be independently generated with strong random values (e.g. `openssl rand -hex 32`)."
             )
+
+    def get_masked_database_url(self) -> str:
+        """Return DATABASE_URL with password masked for safe logging."""
+        if not self.DATABASE_URL:
+            return "NOT CONFIGURED"
+        try:
+            import urllib.parse
+            p = urllib.parse.urlparse(self.DATABASE_URL)
+            user = p.username or ""
+            host = p.hostname or "unknown"
+            port = f":{p.port}" if p.port else ""
+            path = p.path or ""
+            return f"{p.scheme}://{user}:***@{host}{port}{path}"
+        except Exception:
+            return "INVALID_DATABASE_URL"
+
+    def validate_database_target(self) -> None:
+        """Startup guard: refuse to start when DATABASE_URL, DATABASE_URL_UNPOOLED,
+        TEST_DATABASE_URL, or any other *_DATABASE_URL* env var matches any entry in
+        PROTECTED_DB_HOSTS and the process is not running on Render (no RENDER env var),
+        regardless of ENVIRONMENT (including unset).
+        TEST_DATABASE_URL must NEVER point to a protected host even on Render."""
+        protected = [h.strip().lower() for h in self.PROTECTED_DB_HOSTS.split(",") if h.strip()]
+        if not protected:
+            return
+
+        import urllib.parse
+        is_render = bool(os.environ.get("RENDER"))
+
+        urls_to_check: list[tuple[str, str]] = []
+        if self.DATABASE_URL:
+            urls_to_check.append(("DATABASE_URL", self.DATABASE_URL))
+        if getattr(self, "DATABASE_URL_UNPOOLED", None):
+            urls_to_check.append(("DATABASE_URL_UNPOOLED", self.DATABASE_URL_UNPOOLED))
+        if getattr(self, "TEST_DATABASE_URL", None):
+            urls_to_check.append(("TEST_DATABASE_URL", self.TEST_DATABASE_URL))
+
+        for k, v in os.environ.items():
+            if "DATABASE_URL" in k.upper() and k not in [x[0] for x in urls_to_check]:
+                urls_to_check.append((k, v))
+
+        for var_name, url_val in urls_to_check:
+            if not url_val or not isinstance(url_val, str):
+                continue
+            try:
+                p = urllib.parse.urlparse(url_val)
+                host = (p.hostname or "").lower()
+            except Exception:
+                continue
+
+            for prot in protected:
+                if prot in host:
+                    if "TEST" in var_name.upper():
+                        raise RuntimeError(
+                            f"STARTUP REFUSED: {var_name} targets protected database host '{host}' matching '{prot}'. "
+                            f"Test database URLs must NEVER point to protected hosts, even in CI/Render environments."
+                        )
+                    if not is_render:
+                        raise RuntimeError(
+                            f"STARTUP REFUSED: {var_name} targets protected database host '{host}' matching '{prot}'. "
+                            f"Local development, testing, or non-Render execution must use an isolated development database branch."
+                        )
+
+    def get_masked_database_hosts(self) -> dict[str, str]:
+        """Return masked hostnames for all configured database URLs."""
+        import urllib.parse
+        masked: dict[str, str] = {}
+        urls: list[tuple[str, str]] = [
+            ("DATABASE_URL", self.DATABASE_URL),
+            ("DATABASE_URL_UNPOOLED", getattr(self, "DATABASE_URL_UNPOOLED", "")),
+            ("TEST_DATABASE_URL", getattr(self, "TEST_DATABASE_URL", "")),
+        ]
+        for k, v in os.environ.items():
+            if "DATABASE_URL" in k.upper() and k not in [x[0] for x in urls]:
+                urls.append((k, v))
+        for name, val in urls:
+            if not val:
+                masked[name] = "<not set>"
+                continue
+            try:
+                p = urllib.parse.urlparse(val)
+                h = p.hostname or "unknown"
+                if len(h) > 8:
+                    masked[name] = f"{h[:4]}...{h[-4:]}"
+                else:
+                    masked[name] = "***"
+            except Exception:
+                masked[name] = "<invalid>"
+        return masked
 
     CORS_ORIGINS: list[str] = [
         "http://localhost:5173",

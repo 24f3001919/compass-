@@ -25,9 +25,8 @@ sys.unraisablehook = _quiet_unraisablehook
 from dotenv import load_dotenv
 load_dotenv()
 
-# Capture pre-override production DATABASE_URL and optional configured production marker
+# Capture pre-override production DATABASE_URL
 _ORIGINAL_PROD_DB_URL = os.environ.get("DATABASE_URL", "").strip()
-_CONFIGURED_PROD_MARKER = os.environ.get("PROD_DATABASE_MARKER", "production").strip().lower()
 
 test_db_url = os.environ.get("TEST_DATABASE_URL", "").strip()
 
@@ -37,7 +36,7 @@ if test_db_url:
 os.environ["ENVIRONMENT"] = "test"
 
 from backend.main import app
-from backend.config import get_settings
+from backend.config import get_settings, PROTECTED_DB_HOSTS
 
 settings = get_settings()
 settings.ENVIRONMENT = "test"
@@ -48,11 +47,10 @@ if test_db_url:
 def validate_test_db_guard(
     test_url: str,
     prod_url: str,
-    prod_marker: str = "",
 ) -> None:
     """Validate positive separation between test and production databases.
     Aborts via pytest.exit if test_url is missing, invalid, identical to prod_url,
-    or contains prod_marker.
+    or if either matches PROTECTED_DB_HOSTS.
     """
     if not test_url:
         pytest.exit(
@@ -70,28 +68,33 @@ def validate_test_db_guard(
             returncode=1,
         )
 
+    if any(h in test_hostname for h in PROTECTED_DB_HOSTS):
+        pytest.exit(
+            f"ABORTED: TEST_DATABASE_URL targets protected production host '{test_hostname}'. Refusing to run tests.",
+            returncode=1,
+        )
+
     if prod_url:
         parsed_prod = urlparse(prod_url)
         prod_hostname = (parsed_prod.hostname or "").lower()
         prod_db = (parsed_prod.path or "").strip("/").lower()
 
-        # Always verify positive separation: host AND db name must differ
-        if prod_hostname and (test_hostname == prod_hostname and test_db == prod_db):
+        if any(h in prod_hostname for h in PROTECTED_DB_HOSTS):
+            pytest.exit(
+                f"ABORTED: Pre-override DATABASE_URL targets protected production host '{prod_hostname}'. Refusing to run tests.",
+                returncode=1,
+            )
+
+        if test_url == prod_url or (prod_hostname and test_hostname == prod_hostname and test_db == prod_db):
             pytest.exit(
                 "ABORTED: TEST_DATABASE_URL targets the identical host and database as DATABASE_URL. Refusing to run tests.",
                 returncode=1,
             )
 
-    if prod_marker and prod_marker.lower() in test_hostname:
-        pytest.exit(
-            f"ABORTED: TEST_DATABASE_URL hostname contains configured production marker '{prod_marker}'.",
-            returncode=1,
-        )
-
 
 def pytest_configure(config):
     """Guard against executing test runs against production database."""
-    validate_test_db_guard(test_db_url, _ORIGINAL_PROD_DB_URL, _CONFIGURED_PROD_MARKER)
+    validate_test_db_guard(test_db_url, _ORIGINAL_PROD_DB_URL)
 
 
 @pytest_asyncio.fixture

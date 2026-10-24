@@ -100,7 +100,10 @@ logger = logging.getLogger("compass")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application startup and shutdown."""
-    # 0. Startup Secrets Validation (logs exact missing/duplicate secret names; does not take prod down)
+    # 0. Startup Database Safety Guard & Secrets Validation
+    settings.validate_database_target()
+    logger.info(f"🧭 Compass database target: {settings.get_masked_database_url()}")
+
     try:
         settings.validate_production_secrets()
         logger.info("✅ Production secrets validation: all required secrets set distinctly")
