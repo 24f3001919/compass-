@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     TRUSTED_PROXY_HOPS: int = 1
     TRUST_CF_CONNECTING_IP: bool = True
     TRUST_TRUE_CLIENT_IP: bool = False
+    TRUSTED_PROXY_CIDR_RESOLUTION: bool = False
     EDGE_HMAC_SECRET: str = "compass_vercel_edge_hmac_secret_2026"
     VERCEL_EDGE_SECRET: str | None = None
 

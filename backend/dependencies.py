@@ -131,7 +131,8 @@ async def verify_token(
     if not settings.AUTH_TOKEN:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    if not hmac.compare_digest(credentials.credentials, settings.AUTH_TOKEN):
+    from backend.services.rate_limiter import safe_token_compare
+    if not safe_token_compare(credentials.credentials, settings.AUTH_TOKEN):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     return credentials.credentials
@@ -336,7 +337,8 @@ def _get_current_identity(request: Request) -> Optional[Identity]:
             logger.debug("Session token lookup failed: %s", e)
 
     # 3. Server-to-server AUTH_TOKEN with impersonation gate
-    if bearer_token and settings.AUTH_TOKEN and isinstance(settings.AUTH_TOKEN, str) and hmac.compare_digest(bearer_token, settings.AUTH_TOKEN):
+    from backend.services.rate_limiter import safe_token_compare
+    if bearer_token and settings.AUTH_TOKEN and safe_token_compare(bearer_token, settings.AUTH_TOKEN):
         return Identity(id="admin", is_admin=True, is_guest=False, user_id="admin", guest_id=verified_guest)
 
     # 4. Verified guest token

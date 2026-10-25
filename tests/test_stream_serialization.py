@@ -82,7 +82,11 @@ async def test_stream_serialization_handles_date_datetime_decimal_uuid(client: A
     has_error_frame = False
     saw_done_frame = False
 
-    async with client.stream("POST", "/api/chat/stream", json=payload, timeout=10.0) as resp:
+    from backend.dependencies import generate_guest_token
+    _, guest_token = generate_guest_token()
+    headers = {"x-guest-token": guest_token}
+
+    async with client.stream("POST", "/api/chat/stream", json=payload, headers=headers, timeout=10.0) as resp:
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers.get("content-type", "")
 

@@ -27,7 +27,7 @@ DATE_PATTERN = re.compile(
 )
 
 
-def parse_date_candidate(text: str) -> Optional[date]:
+def parse_date_candidate(text: str, default_year: Optional[int] = None) -> Optional[date]:
     """Parse standard date candidate strings in both Month-Day and Day-Month formats."""
     clean = re.sub(r"(\d+)(st|nd|rd|th)", r"\1", text.strip())
     clean = clean.replace(",", " ")
@@ -37,6 +37,13 @@ def parse_date_candidate(text: str) -> Optional[date]:
             return datetime.datetime.strptime(clean, fmt).date()
         except ValueError:
             continue
+    if default_year:
+        for fmt in ("%d %B", "%d %b", "%B %d", "%b %d"):
+            try:
+                d = datetime.datetime.strptime(clean, fmt).date()
+                return d.replace(year=default_year)
+            except ValueError:
+                continue
     return None
 
 

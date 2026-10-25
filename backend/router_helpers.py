@@ -865,6 +865,33 @@ def is_schedule_or_agent_intent(message: str) -> bool:
     return False
 
 
+PERSONAL_SCOPE_TRIGGERS = (
+    "my ", "mine", "i have", "i need", "assigned to me", "show my", "list my",
+    "what should i", "my task", "my tasks", "my deadline", "my deadlines",
+    "work on first", "my coursework", "my hackathon", "tracked", "what do i"
+)
+
+PUBLIC_EVENT_INDICATORS = (
+    "when is the", "what is the deadline for", "official deadline", "global ai hackathon",
+    "nebius", "hackathon deadline for", "date of the", "rules for", "when does the"
+)
+
+
+def should_route_to_query_tasks(message: str) -> bool:
+    """Evaluate whether message should route to query_tasks internal database queries.
+
+    Public-event questions (e.g. Nebius deadline) return False.
+    Personal scope questions ('show my hackathon tasks') return True.
+    """
+    msg_l = message.lower()
+    is_public = any(ind in msg_l for ind in PUBLIC_EVENT_INDICATORS)
+    has_personal = any(p in msg_l for p in PERSONAL_SCOPE_TRIGGERS)
+    if is_public and not has_personal:
+        return False
+    has_task_terms = any(term in msg_l for term in ("task", "tasks", "due", "deliverable", "deadline", "coursework", "hackathon", "work on", "start with", "first", "roadmap", "prioritize"))
+    return has_task_terms and has_personal
+
+
 def _fallback_route(message: str, history: Optional[list[dict[str, str]]] = None) -> Tuple[Optional[str], Optional[dict[str, Any]], str]:
     """Fallback route logic when LLM router is unavailable or in mock mode."""
     msg_lower = message.lower()
@@ -1004,16 +1031,21 @@ def _fallback_route(message: str, history: Optional[list[dict[str, str]]] = None
         if not task_args.get("title"):
             return None, None, "What would you like to name this task? Please provide a title or description."
         return "add_task", task_args, ""
-    if history:
-        for h in reversed(history):
-            content = h.get("content", "")
-            if any(term in content.lower() for term in ("task", "deliverable", "due", "demo", "submit", "video")):
-                return "query_tasks", {"user_message": message, "query": message}, ""
-    if any(term in msg_lower for term in ("task", "tasks", "due", "deliverable", "deadline", "coursework", "hackathon", "work on", "start with", "first", "roadmap", "prioritize")):
-        query_args: dict[str, Any] = {"query": message, "user_message": message}
-        if any(w in msg_lower for w in ("roadmap", "plan", "today", "prioritize", "attention", "step-by-step", "step by step", "first", "work on first")):
-            query_args["intent"] = "roadmap"
-        return "query_tasks", query_args, ""
+
+    is_public = any(ind in msg_lower for ind in PUBLIC_EVENT_INDICATORS)
+    has_personal = any(p in msg_lower for p in PERSONAL_SCOPE_TRIGGERS)
+
+    if not (is_public and not has_personal):
+        if history:
+            for h in reversed(history):
+                content = h.get("content", "")
+                if any(term in content.lower() for term in ("task", "deliverable", "due", "demo", "submit", "video")):
+                    return "query_tasks", {"user_message": message, "query": message}, ""
+        if should_route_to_query_tasks(message) or any(term in msg_lower for term in ("task", "tasks", "due", "deliverable", "deadline", "coursework", "hackathon", "work on", "start with", "first", "roadmap", "prioritize")):
+            query_args: dict[str, Any] = {"query": message, "user_message": message}
+            if any(w in msg_lower for w in ("roadmap", "plan", "today", "prioritize", "attention", "step-by-step", "step by step", "first", "work on first")):
+                query_args["intent"] = "roadmap"
+            return "query_tasks", query_args, ""
     if is_greeting_intent(message):
         return None, None, (
             "I am Compass, your AI copilot with long-term memory across hackathons, coursework, "

@@ -14,12 +14,19 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import AsyncClient
 
+from backend.dependencies import generate_guest_token
 from backend.router import message_needs_tools
 from backend.services.chat_stream import persist_stream_messages
 
 
+@pytest.fixture
+def signed_guest_headers():
+    _, token = generate_guest_token()
+    return {"x-guest-token": token}
+
+
 @pytest.mark.asyncio
-async def test_streaming_tool_call(client: AsyncClient, monkeypatch):
+async def test_streaming_tool_call(client: AsyncClient, monkeypatch, signed_guest_headers: dict):
     """Test that a task-creation message over SSE triggers tool calling and executes add_task."""
     class DummyDelta:
         content = None
@@ -55,7 +62,7 @@ async def test_streaming_tool_call(client: AsyncClient, monkeypatch):
         "message": "add a task: Complete pyright streaming verification, domain coursework",
     }
     events = []
-    async with client.stream("POST", "/api/chat/stream", json=payload, timeout=30.0) as resp:
+    async with client.stream("POST", "/api/chat/stream", json=payload, headers=signed_guest_headers, timeout=30.0) as resp:
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers.get("content-type", "")
         async for line in resp.aiter_lines():
@@ -71,7 +78,7 @@ async def test_streaming_tool_call(client: AsyncClient, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_sse_disconnect_cleanup(client: AsyncClient, monkeypatch):
+async def test_sse_disconnect_cleanup(client: AsyncClient, monkeypatch, signed_guest_headers: dict):
     """Test that premature client disconnect from SSE stream triggers clean resource termination."""
     class DummyDelta:
         content = "Once upon a time in deep space..."
@@ -102,7 +109,7 @@ async def test_sse_disconnect_cleanup(client: AsyncClient, monkeypatch):
     monkeypatch.setattr("backend.services.chat_stream.openai.AsyncOpenAI", lambda **kwargs: mock_client)
 
     payload = {"message": "Tell me a long story about space exploration."}
-    async with client.stream("POST", "/api/chat/stream", json=payload, timeout=15.0) as resp:
+    async with client.stream("POST", "/api/chat/stream", json=payload, headers=signed_guest_headers, timeout=15.0) as resp:
         assert resp.status_code == 200
         async for line in resp.aiter_lines():
             if line.startswith("data: "):
@@ -204,7 +211,7 @@ async def test_persist_stream_messages_forced_failure_is_logged(caplog):
 
 
 @pytest.mark.asyncio
-async def test_streaming_conversational_chunks(client: AsyncClient, monkeypatch):
+async def test_streaming_conversational_chunks(client: AsyncClient, monkeypatch, signed_guest_headers: dict):
     """Test multi-chunk conversational token streaming and final metadata done event."""
     chunks = ["Hello", " there!", " How", " can", " I", " help", " you", " today?"]
 
@@ -232,7 +239,7 @@ async def test_streaming_conversational_chunks(client: AsyncClient, monkeypatch)
 
     events = []
     payload = {"message": "Hello Compass"}
-    async with client.stream("POST", "/api/chat/stream", json=payload, timeout=15.0) as resp:
+    async with client.stream("POST", "/api/chat/stream", json=payload, headers=signed_guest_headers, timeout=15.0) as resp:
         assert resp.status_code == 200
         async for line in resp.aiter_lines():
             if line.startswith("data: "):
@@ -252,7 +259,7 @@ async def test_streaming_conversational_chunks(client: AsyncClient, monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_streaming_replace_event_on_tool_switch(client: AsyncClient, monkeypatch):
+async def test_streaming_replace_event_on_tool_switch(client: AsyncClient, monkeypatch, signed_guest_headers: dict):
     """Test that tool-call path emits a replace event when leaked tokens must be cleanly replaced."""
     class MockStream:
         def __aiter__(self):
@@ -293,7 +300,7 @@ async def test_streaming_replace_event_on_tool_switch(client: AsyncClient, monke
 
     events = []
     payload = {"message": "Plan my schedule for tomorrow"}
-    async with client.stream("POST", "/api/chat/stream", json=payload, timeout=15.0) as resp:
+    async with client.stream("POST", "/api/chat/stream", json=payload, headers=signed_guest_headers, timeout=15.0) as resp:
         assert resp.status_code == 200
         async for line in resp.aiter_lines():
             if line.startswith("data: "):
@@ -305,7 +312,7 @@ async def test_streaming_replace_event_on_tool_switch(client: AsyncClient, monke
 
 
 @pytest.mark.asyncio
-async def test_streaming_mid_stream_model_error(client: AsyncClient, monkeypatch):
+async def test_streaming_mid_stream_model_error(client: AsyncClient, monkeypatch, signed_guest_headers: dict):
     """Test that mid-stream exception from model stream yields terminal error event."""
     class FailingStream:
         def __aiter__(self):
@@ -331,7 +338,7 @@ async def test_streaming_mid_stream_model_error(client: AsyncClient, monkeypatch
 
     events = []
     payload = {"message": "Tell me a story"}
-    async with client.stream("POST", "/api/chat/stream", json=payload, timeout=15.0) as resp:
+    async with client.stream("POST", "/api/chat/stream", json=payload, headers=signed_guest_headers, timeout=15.0) as resp:
         assert resp.status_code == 200
         async for line in resp.aiter_lines():
             if line.startswith("data: "):

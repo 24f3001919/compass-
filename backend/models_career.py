@@ -39,6 +39,7 @@ class CareerApplicationStatus(str, Enum):
     SUBMISSION_FAILED = "SUBMISSION_FAILED"
     SUBMISSION_OUTCOME_UNKNOWN = "SUBMISSION_OUTCOME_UNKNOWN"
     MANUAL_SUBMISSION_REQUIRED = "MANUAL_SUBMISSION_REQUIRED"
+    HANDOFF_KIT_READY = "HANDOFF_KIT_READY"
     ASSESSMENT_RECEIVED = "ASSESSMENT_RECEIVED"
     INTERVIEW = "INTERVIEW"
     REJECTED = "REJECTED"
@@ -117,6 +118,7 @@ class ResumeContent(BaseModel):
     relevant_links: List[str] = Field(default_factory=list)
     evidence_classifications: Dict[str, str] = Field(default_factory=dict)
     evidence_notes: Dict[str, str] = Field(default_factory=dict)
+    learning_skills: List[str] = Field(default_factory=list)
 
 
 class OriginalResumeDocument(BaseModel):
@@ -378,6 +380,15 @@ class JobAnalysisReport(BaseModel):
     match_score: float = 0.0
     summary_verdict: str = ""
     missing_critical_skills: List[str] = Field(default_factory=list)
+    # Honest Gap Analysis ("Path to 100%") fields
+    skill_overlap_estimate: float = 0.0
+    matched_skills: List[str] = Field(default_factory=list)
+    missing_skills: List[str] = Field(default_factory=list)
+    partial_skills: List[str] = Field(default_factory=list)
+    gap_actions: List[Dict[str, Any]] = Field(default_factory=list)
+    has_complete_profile: bool = True
+    profile_missing_message: Optional[str] = None
+    formula_explanation: str = "Skill overlap estimate = (matched + 0.5 * partial) / total required skills"
 
 
 class CommitExtractedResumeRequest(BaseModel):
@@ -385,4 +396,33 @@ class CommitExtractedResumeRequest(BaseModel):
     original_document_id: Optional[str] = None
     resolved_conflicts: Optional[Dict[str, Any]] = None
     target: str = "master"  # "master" or "new_draft"
+
+
+class HandoffKitOut(BaseModel):
+    application_id: int
+    opportunity_id: int
+    company_name: str
+    role_title: str
+    portal_url: Optional[str] = None
+    application_email: Optional[str] = None
+    status: str
+    tailored_resume_id: Optional[int] = None
+    export_html_url: Optional[str] = None
+    export_docx_url: Optional[str] = None
+    is_export_blocked: bool = False
+    block_reason: Optional[str] = None
+    cover_letter: Optional[str] = None
+    common_answers: Dict[str, Optional[str]] = Field(default_factory=dict)
+    missing_profile_fields: List[str] = Field(default_factory=list)
+    checklist: Dict[str, bool] = Field(default_factory=dict)
+    timeline: List[Dict[str, Any]] = Field(default_factory=list)
+    follow_up_reminder_days: int = 14
+
+
+class AddSkillRequest(BaseModel):
+    skill: str
+    category: str = "verified"  # "verified" or "learning"
+    evidence_note: Optional[str] = None
+    evidence_url: Optional[str] = None
+
 

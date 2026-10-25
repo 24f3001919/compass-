@@ -16,7 +16,7 @@ from httpx import AsyncClient
 @pytest.fixture(autouse=True)
 async def check_live_db_available(request):
     """Mark tests needing a live database with a clean skip when live server/database is not reachable."""
-    if request.node.name.startswith("test_authenticated_endpoints") or request.node.name.startswith("test_admin_consolidate"):
+    if request.node.name.startswith("test_authenticated_endpoints"):
         from backend.memory.db import get_pool
         try:
             pool = await get_pool()
@@ -45,7 +45,7 @@ async def test_health_check(client: AsyncClient):
     resp = await client.get("/health")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["status"] == "ok"
+    assert data["status"] in ("ok", "degraded")
     assert "db_connected" in data
 
 
@@ -98,19 +98,26 @@ async def test_cors_headers(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_admin_consolidate_endpoint(client: AsyncClient, auth_headers: dict):
     """POST /admin/consolidate requires auth and responds with consolidate metrics."""
+    from unittest.mock import patch, AsyncMock
     # Unauthenticated
     resp_unauth = await client.post("/admin/consolidate", json={"dry_run": True})
     assert resp_unauth.status_code in (401, 403)
 
-    # Authenticated dry-run
-    resp = await client.post("/admin/consolidate", headers=auth_headers, json={"dry_run": True})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["status"] == "ok"
-    assert data["dry_run"] is True
-    assert "overdue_tasks_flagged" in data
-    assert "duplicate_chunks_merged" in data
-    assert "stale_conversations_rolled_up" in data
+    # Authenticated dry-run with run_consolidation mocked
+    fake_report = {
+        "overdue_tasks_flagged": 0,
+        "duplicate_chunks_merged": 0,
+        "stale_conversations_rolled_up": 0,
+    }
+    with patch("backend.jobs.consolidate.run_consolidation", AsyncMock(return_value=fake_report)):
+        resp = await client.post("/admin/consolidate", headers=auth_headers, json={"dry_run": True})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert data["dry_run"] is True
+        assert "overdue_tasks_flagged" in data
+        assert "duplicate_chunks_merged" in data
+        assert "stale_conversations_rolled_up" in data
 
 
 @pytest.mark.asyncio

@@ -202,7 +202,7 @@ async def enforce_mint_rate_limit(request: Request) -> None:
     auth_hdr = request.headers.get("authorization") or ""
     if auth_hdr.lower().startswith("bearer "):
         bearer_token = auth_hdr.split(" ", 1)[1].strip()
-        if settings.AUTH_TOKEN and hmac.compare_digest(bearer_token, settings.AUTH_TOKEN):
+        if safe_token_compare(bearer_token, settings.AUTH_TOKEN):
             return
 
     try:
@@ -432,4 +432,155 @@ async def enforce_seeding_rate_limits(request: Request, user_id: str) -> None:
                 pass
         else:
             _MEM_BUCKETS[key_global_ident] = {"tokens": 1.0, "last_updated": time.monotonic()}
+
+
+def safe_token_compare(provided_token: Optional[str], secret_token: Optional[str]) -> bool:
+    """Constant-time token comparison that safely handles non-ASCII bytes without raising 500."""
+    try:
+        if not provided_token or not secret_token:
+            return False
+        a_bytes = str(provided_token).encode("utf-8", errors="replace")
+        b_bytes = str(secret_token).encode("utf-8")
+        return hmac.compare_digest(a_bytes, b_bytes)
+    except Exception:
+        return False
+
+
+_DAILY_ACTION_USAGE: dict[str, dict[str, int]] = {}  # date_str -> {identity_action_key -> count}
+
+
+def check_identity_daily_cap(
+    identity_id: str,
+    action: str,
+    cap: int,
+    is_admin: bool = False,
+) -> Tuple[bool, int]:
+    """Check identity daily usage for a given action. Admin identities are exempt.
+    Returns (allowed: bool, retry_after_seconds: int).
+    """
+    if is_admin:
+        return True, 0
+
+    from datetime import date, datetime, timezone
+    today_str = date.today().isoformat()
+    if today_str not in _DAILY_ACTION_USAGE:
+        _DAILY_ACTION_USAGE.clear()
+        _DAILY_ACTION_USAGE[today_str] = {}
+
+    key = f"{identity_id}:{action}"
+    current = _DAILY_ACTION_USAGE[today_str].get(key, 0)
+    if current >= cap:
+        now = datetime.now(timezone.utc)
+        midnight = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+        retry_after = max(1, int((midnight - now).total_seconds()))
+        return False, retry_after
+
+    _DAILY_ACTION_USAGE[today_str][key] = current + 1
+    return True, 0
+
+
+async def enforce_company_intel_guard(request: Request) -> None:
+    """Cost guard for /company-intel: rate limit + 10/day guest cap (admin exempt)."""
+    from backend.config import get_settings
+    from backend.dependencies import _get_current_identity
+    settings = get_settings()
+
+    auth_hdr = request.headers.get("authorization") or ""
+    if auth_hdr.lower().startswith("bearer "):
+        bearer_token = auth_hdr.split(" ", 1)[1].strip()
+        if safe_token_compare(bearer_token, settings.AUTH_TOKEN):
+            return
+
+    ident = _get_current_identity(request)
+    if ident and ident.is_admin:
+        return
+
+    identity_id = ident.id if ident else get_client_ip(request)
+    is_guest = not ident or ident.is_guest or not ident.user_id
+
+    # 1. Burst rate limit
+    try:
+        allowed, retry_after = await _consume_token(
+            f"burst:company_intel:{identity_id}",
+            capacity=15.0,
+            refill_rate_per_sec=15.0 / 60.0,
+        )
+        if not allowed:
+            raise HTTPException(
+                status_code=429,
+                detail={"detail": "Rate limit exceeded for company intelligence requests.", "code": "rate_limit_exceeded"},
+                headers={"Retry-After": str(retry_after)},
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        if settings.is_production():
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "rate_limiter_unavailable", "detail": "Service unavailable: rate limiter is unreachable."},
+                headers={"Retry-After": "5"},
+            ) from e
+
+    # 2. Daily cap (10/day for guests)
+    if is_guest:
+        allowed, retry_after = check_identity_daily_cap(identity_id, "company_intel", cap=10)
+        if not allowed:
+            raise HTTPException(
+                status_code=429,
+                detail={"detail": "Daily cap of 10 company intelligence briefs reached for this session. Please try again tomorrow.", "code": "daily_cap_exceeded"},
+                headers={"Retry-After": str(retry_after)},
+            )
+
+
+async def enforce_feasibility_guard(request: Request) -> None:
+    """Cost guard for /feasibility: rate limit + 5/day guest cap (admin exempt)."""
+    from backend.config import get_settings
+    from backend.dependencies import _get_current_identity
+    settings = get_settings()
+
+    auth_hdr = request.headers.get("authorization") or ""
+    if auth_hdr.lower().startswith("bearer "):
+        bearer_token = auth_hdr.split(" ", 1)[1].strip()
+        if safe_token_compare(bearer_token, settings.AUTH_TOKEN):
+            return
+
+    ident = _get_current_identity(request)
+    if ident and ident.is_admin:
+        return
+
+    identity_id = ident.id if ident else get_client_ip(request)
+    is_guest = not ident or ident.is_guest or not ident.user_id
+
+    # 1. Burst rate limit
+    try:
+        allowed, retry_after = await _consume_token(
+            f"burst:feasibility:{identity_id}",
+            capacity=10.0,
+            refill_rate_per_sec=10.0 / 60.0,
+        )
+        if not allowed:
+            raise HTTPException(
+                status_code=429,
+                detail={"detail": "Rate limit exceeded for feasibility requests.", "code": "rate_limit_exceeded"},
+                headers={"Retry-After": str(retry_after)},
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        if settings.is_production():
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "rate_limiter_unavailable", "detail": "Service unavailable: rate limiter is unreachable."},
+                headers={"Retry-After": "5"},
+            ) from e
+
+    # 2. Daily cap (5/day for guests)
+    if is_guest:
+        allowed, retry_after = check_identity_daily_cap(identity_id, "feasibility", cap=5)
+        if not allowed:
+            raise HTTPException(
+                status_code=429,
+                detail={"detail": "Daily cap of 5 feasibility reviews reached for this session. Please try again tomorrow.", "code": "daily_cap_exceeded"},
+                headers={"Retry-After": str(retry_after)},
+            )
 

@@ -25,6 +25,14 @@ from backend.services.deadline_classifier import classify_deadline, filter_tasks
 from backend.services.task_service import build_frontend_task
 
 
+@pytest.fixture(autouse=True)
+def reset_rate_limits():
+    from backend.services.rate_limiter import _MEM_BUCKETS
+    _MEM_BUCKETS.clear()
+    yield
+    _MEM_BUCKETS.clear()
+
+
 @pytest.mark.asyncio
 async def test_new_guest_or_identity_has_zero_tasks_by_default():
     """A fresh user or guest identity has exactly 0 tasks from the API."""
@@ -204,13 +212,15 @@ async def test_judge_persona_idempotent_reseed_and_date_shift():
                 return t
         return None
 
+    clock = [1000.0]
     with patch("backend.routers.tasks_verification.settings") as mock_settings, \
          patch("backend.routers.tasks_verification._get_current_identity", return_value=mock_ident), \
          patch("backend.routers.tasks_verification.get_pool", AsyncMock(return_value=mock_pool)), \
          patch("backend.routers.tasks_verification.structured.get_or_create_project", AsyncMock(return_value={"id": 10})), \
          patch("backend.routers.tasks_verification.structured.create_task", side_effect=mock_create), \
          patch("backend.routers.tasks_verification.structured.update_task", side_effect=mock_update), \
-         patch("backend.services.embeddings.get_embedding", AsyncMock(return_value=[0.05] * 768)):
+         patch("backend.services.embeddings.get_embedding", AsyncMock(return_value=[0.05] * 768)), \
+         patch("backend.services.rate_limiter.time.monotonic", side_effect=lambda: clock[0]):
 
         mock_settings.ENVIRONMENT = "development"
 
@@ -219,13 +229,15 @@ async def test_judge_persona_idempotent_reseed_and_date_shift():
         assert res1["tasks_seeded"] == 21
         assert len(db_tasks) == 21
 
-        # 2. Second click on same day: all 21 exist in DB
+        # 2. Second click on same day: advance injected clock past 60s cap
+        clock[0] += 65.0
         mock_conn.fetch.return_value = [{"id": t["id"], "trusted_event_url": uri} for uri, t in db_tasks.items()]
         res2 = await seed_demo_persona_endpoint(mock_request, body=DemoSeedRequest(reference_date=ref_day1))
         assert res2["tasks_seeded"] == 21
         assert len(db_tasks) == 21  # NO DUPLICATES!
 
-        # 3. Third seed 7 days later (Nov 1): updates dates relative to Nov 1
+        # 3. Third seed 7 days later (Nov 1): advance injected clock past 60s cap
+        clock[0] += 65.0
         res3 = await seed_demo_persona_endpoint(mock_request, body=DemoSeedRequest(reference_date=ref_day2))
         assert res3["tasks_seeded"] == 21
         assert len(db_tasks) == 21  # Still 21 tasks
@@ -367,13 +379,15 @@ async def test_reseed_preserves_user_completed_status():
                 return t
         return None
 
+    clock = [1000.0]
     with patch("backend.routers.tasks_verification.settings") as mock_settings, \
          patch("backend.routers.tasks_verification._get_current_identity", return_value=mock_ident), \
          patch("backend.routers.tasks_verification.get_pool", AsyncMock(return_value=mock_pool)), \
          patch("backend.routers.tasks_verification.structured.get_or_create_project", AsyncMock(return_value={"id": 10})), \
          patch("backend.routers.tasks_verification.structured.create_task", side_effect=mock_create), \
          patch("backend.routers.tasks_verification.structured.update_task", side_effect=mock_update), \
-         patch("backend.services.embeddings.get_embedding", AsyncMock(return_value=[0.05] * 768)):
+         patch("backend.services.embeddings.get_embedding", AsyncMock(return_value=[0.05] * 768)), \
+         patch("backend.services.rate_limiter.time.monotonic", side_effect=lambda: clock[0]):
 
         mock_settings.ENVIRONMENT = "development"
 
@@ -385,7 +399,8 @@ async def test_reseed_preserves_user_completed_status():
         phase1_key = next(k for k in db_tasks if "nebius_buildathon_phase_1" in k)
         db_tasks[phase1_key]["status"] = "completed"
 
-        # 3. User re-seeds 7 days later
+        # 3. User re-seeds 7 days later: advance clock past 60s cap
+        clock[0] += 65.0
         mock_conn.fetch.return_value = [{"id": t["id"], "trusted_event_url": uri} for uri, t in db_tasks.items()]
         await seed_demo_persona_endpoint(mock_request, body=DemoSeedRequest(reference_date=ref_day2))
 

@@ -452,7 +452,9 @@ async def trigger_nightly_consolidation_endpoint(_token: str = Depends(verify_to
     return {"status": "ok", "consolidation": result}
 
 
-@router.post("/feasibility", dependencies=[Depends(agent_rate_limit)])
+from backend.services.rate_limiter import enforce_feasibility_guard
+
+@router.post("/feasibility", dependencies=[Depends(agent_rate_limit), Depends(enforce_feasibility_guard)])
 async def agent_feasibility(request: Request, req: FeasibilityRequest):
     """Stream feasibility evaluation via SSE."""
     from backend.agents.feasibility import run_feasibility_review
