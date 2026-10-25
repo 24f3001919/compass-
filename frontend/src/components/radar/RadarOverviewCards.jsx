@@ -6,9 +6,40 @@ export default function RadarOverviewCards({
   profile,
   onOpenProfile,
   onSelectTab,
+  error = null,
+  onRetry = null,
 }) {
   const missingProfileFields = profile?.missing_fields_limiting_eligibility || []
   const hasIncompleteProfile = missingProfileFields.includes('academic_year') || missingProfileFields.includes('grad_year')
+
+  if (error) {
+    return (
+      <div
+        data-testid="radar-overview-error"
+        style={{
+          padding: '16px 20px',
+          borderRadius: 'var(--radius-card, 8px)',
+          background: 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid rgba(239, 68, 68, 0.3)',
+          color: 'var(--text-primary)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '24px',
+        }}
+      >
+        <div>
+          <div style={{ fontWeight: 600, color: '#ef4444' }}>Unable to load radar metrics</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{error}</div>
+        </div>
+        {onRetry && (
+          <button type="button" onClick={onRetry} style={{ padding: '6px 12px', borderRadius: '4px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', cursor: 'pointer' }}>
+            Retry
+          </button>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
@@ -92,7 +123,7 @@ export default function RadarOverviewCards({
             />
           </div>
           <div style={{ fontSize: '26px', fontWeight: 700, color: 'var(--text-primary)' }}>
-            {stats?.open_count ?? 0}
+            {stats?.verified_open_count ?? (stats?.open_count ?? 0)}
           </div>
           <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
             Open confirmed opportunities
