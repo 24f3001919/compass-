@@ -11,7 +11,7 @@ export function mapPersonaError(err) {
   const retryHeader = err && err.retryAfter
   const retryDelay = Math.min(10, Math.max(1, Number(retryHeader) || 5))
 
-  if (code === 'seeding_disabled' || status === 403) {
+  if (code === 'seeding_disabled') {
     return {
       type: 'disabled',
       text: 'Demo loading is turned off on this server.',
@@ -24,6 +24,14 @@ export function mapPersonaError(err) {
       type: 'error',
       text: 'Session expired. Please refresh.',
       canRetry: false,
+    }
+  }
+
+  if (status === 403 || code === 'auth_forbidden') {
+    return {
+      type: 'error',
+      text: 'Session expired or updating credentials. Please retry.',
+      canRetry: true,
     }
   }
 
