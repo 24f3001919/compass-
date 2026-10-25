@@ -489,24 +489,19 @@ async def test_get_frontend_tasks_include_demo_filter():
 
 @pytest.mark.asyncio
 async def test_legacy_untagged_demo_tasks_filtered_and_cleared():
-    """Legacy demo tasks with trusted_event_url=None and is_demo=None are filtered out when include_demo=False."""
+    """Demo tasks marked with persona marker compass://demo-persona/ are filtered out when include_demo=False."""
     from backend.routers.tasks import get_frontend_tasks
 
     mock_request = MagicMock()
-    mock_ident = MagicMock(id="himynameisratnesh12@gmail.com", is_guest=False)
+    mock_ident = MagicMock(id="user_test_account", is_guest=False)
     mock_pool = MagicMock()
     mock_conn = AsyncMock()
     mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-    # 7 legacy untagged tasks + 1 real user task
+    # Persona demo tasks marked with compass://demo-persona/ + 1 real user task
     mock_raw_tasks = [
-        {"id": 448, "title": "36-hour Hackathon Sprint: Final Demo Build", "trusted_event_url": None, "domain": "hackathon"},
-        {"id": 449, "title": "CS 61C Lab 4: RISC-V Pipeline Synthesis", "trusted_event_url": None, "domain": "coursework"},
-        {"id": 450, "title": "Nebius Buildathon Phase 2 Submission", "trusted_event_url": None, "domain": "hackathon"},
-        {"id": 451, "title": "Embeddings truncation and Matryoshka dimension verification", "trusted_event_url": None, "domain": "code"},
-        {"id": 452, "title": "Record 3-minute Devpost demo video", "trusted_event_url": None, "domain": "hackathon"},
-        {"id": 453, "title": "CS 61C Midterm Review: Cache Hierarchies & Virtual Memory", "trusted_event_url": None, "domain": "coursework"},
-        {"id": 454, "title": "Deploy Compass backend to Nebius Serverless Endpoints", "trusted_event_url": None, "domain": "code"},
+        {"id": 448, "title": "36-hour Hackathon Sprint: Final Demo Build", "trusted_event_url": "compass://demo-persona/36-hour-sprint", "domain": "hackathon"},
+        {"id": 449, "title": "CS 61C Lab 4: RISC-V Pipeline Synthesis", "trusted_event_url": "compass://demo-persona/cs61c-lab-4", "domain": "coursework"},
         {"id": 999, "title": "My Genuine User Task: Learn React 19", "trusted_event_url": None, "domain": "code"},
     ]
 
@@ -514,11 +509,50 @@ async def test_legacy_untagged_demo_tasks_filtered_and_cleared():
          patch("backend.routers.tasks._get_current_identity", return_value=mock_ident), \
          patch("backend.routers.tasks.structured.list_tasks", AsyncMock(return_value=mock_raw_tasks)):
 
-        # include_demo=False must filter out all 7 legacy demo tasks, returning only the genuine user task
         user_tasks = await get_frontend_tasks(mock_request, include_demo=False)
         assert len(user_tasks) == 1
         assert user_tasks[0].id == "999"
         assert user_tasks[0].title == "My Genuine User Task: Learn React 19"
+
+
+@pytest.mark.asyncio
+async def test_user_task_matching_demo_title_preserved():
+    """A genuine user task whose title matches a demo title is NOT hidden when include_demo=False because it lacks the persona marker."""
+    from backend.routers.tasks import get_frontend_tasks
+
+    mock_request = MagicMock()
+    mock_ident = MagicMock(id="user_test_account", is_guest=False)
+    mock_pool = MagicMock()
+    mock_conn = AsyncMock()
+    mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+
+    # Real user task having the exact title of a demo task, but no demo marker
+    mock_raw_tasks = [
+        {
+            "id": 1001,
+            "title": "36-hour Hackathon Sprint: Final Demo Build",
+            "trusted_event_url": None,
+            "is_demo": False,
+            "domain": "hackathon",
+        },
+        {
+            "id": 1002,
+            "title": "Nebius Buildathon Phase 1 Submission",
+            "trusted_event_url": "compass://demo-persona/nebius-buildathon",
+            "is_demo": True,
+            "domain": "hackathon",
+        },
+    ]
+
+    with patch("backend.routers.tasks.get_pool", AsyncMock(return_value=mock_pool)), \
+         patch("backend.routers.tasks._get_current_identity", return_value=mock_ident), \
+         patch("backend.routers.tasks.structured.list_tasks", AsyncMock(return_value=mock_raw_tasks)):
+
+        # include_demo=False filters out 1002 (has persona marker) but PRESERVES 1001 (genuine user task)
+        user_tasks = await get_frontend_tasks(mock_request, include_demo=False)
+        assert len(user_tasks) == 1
+        assert user_tasks[0].id == "1001"
+        assert user_tasks[0].title == "36-hour Hackathon Sprint: Final Demo Build"
 
 
 
