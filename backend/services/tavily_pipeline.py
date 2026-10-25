@@ -123,13 +123,34 @@ def sanitize_verification_query(query: str) -> str:
     return clean
 
 
+PARSER_VERSION = "v2_anchor_aware"
+
+
+def make_cache_key(query: str) -> str:
+    norm = f"{query.strip().lower()}|{PARSER_VERSION}"
+    return hashlib.sha256(norm.encode("utf-8")).hexdigest()
+
+
 def _raw_cache_key(query: str, domains: Optional[List[str]] = None) -> str:
-    norm = f"{query.strip().lower()}:{sorted(domains or [])}"
+    norm = f"{query.strip().lower()}:{sorted(domains or [])}|{PARSER_VERSION}"
     return hashlib.sha256(norm.encode("utf-8")).hexdigest()
 
 
 def _cache_key(query: str, domains: Optional[List[str]], trusted_event_url: Optional[str] = None) -> str:
     return _raw_cache_key(query, domains)
+
+
+def check_domain_independence(url1: str, url2: str) -> bool:
+    """Check if two URLs belong to distinct root domains (e.g. devpost pages share root domain)."""
+    import urllib.parse
+    host1 = urllib.parse.urlsplit(url1).hostname or ""
+    host2 = urllib.parse.urlsplit(url2).hostname or ""
+
+    def root_domain(h: str) -> str:
+        parts = h.split(".")
+        return ".".join(parts[-2:]) if len(parts) >= 2 else h
+
+    return root_domain(host1) != root_domain(host2)
 
 
 async def decompose_query(query: str) -> List[str]:
@@ -299,21 +320,22 @@ class ExplicitDateTime(datetime):
     has_time: bool = False
 
 
-def _parse_explicit_year_date(date_str: Optional[str]) -> Tuple[Optional[datetime], str]:
+def _parse_explicit_year_date(date_str: Optional[str], default_year: Optional[int] = None) -> Tuple[Optional[datetime], str]:
     """Parse date string extracting date candidate using semantic selection attached to deadline labels.
 
     Ignores dates attached to judging, winners announcement, changelog, or maintenance banners.
     For ranges ('start – end'), selects the END date only when the phrase is a submission period.
     If several deadline-labelled dates conflict, returns (None, 'conflicting').
-    Returns (aware timezone datetime or None, 'explicit_in_quote' | 'inferred' | 'conflicting').
+    Returns (aware timezone datetime or None, 'explicit_in_quote' | 'year_inferred' | 'inferred' | 'conflicting').
     """
     if not date_str or not isinstance(date_str, str):
         return None, "inferred"
 
     year_match = re.search(r"\b((?:19|20)\d{2})\b", date_str)
-    if not year_match:
+    year = int(year_match.group(1)) if year_match else default_year
+    if not year:
         return None, "inferred"
-    year_provenance = "explicit_in_quote"
+    year_provenance = "explicit_in_quote" if year_match else "year_inferred"
 
     # Use DATE_PATTERN from tavily_deadline
     from backend.services.tavily_deadline import DATE_PATTERN, parse_date_candidate
@@ -334,7 +356,7 @@ def _parse_explicit_year_date(date_str: Optional[str]) -> Tuple[Optional[datetim
     candidates = []
     for m in DATE_PATTERN.finditer(date_str):
         raw_m = m.group(0)
-        parsed = parse_date_candidate(raw_m)
+        parsed = parse_date_candidate(raw_m, default_year=year)
         if parsed:
             start_idx, end_idx = m.span()
             # Window for time and label inspection
@@ -415,7 +437,31 @@ def _parse_explicit_year_date(date_str: Optional[str]) -> Tuple[Optional[datetim
         except Exception:
             pass
 
+    if default_year:
+        for fmt in (
+            "%B %d",
+            "%b %d",
+            "%d %B",
+            "%d %b",
+        ):
+            try:
+                dt = datetime.strptime(date_str.strip(), fmt)
+                dt = dt.replace(year=default_year)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt, year_provenance
+            except Exception:
+                pass
+
     return None, year_provenance
+
+
+def parse_time_utc(date_str: str, default_year: Optional[int] = None) -> Tuple[Optional[datetime], str]:
+    """Parse string to UTC datetime using semantic parsing and timezone awareness."""
+    dt, prov = _parse_explicit_year_date(date_str, default_year=default_year)
+    if dt:
+        return dt.astimezone(ZoneInfo("UTC")), prov
+    return None, prov
 
 
 def evaluate_deterministic_verdict(
@@ -591,9 +637,21 @@ def evaluate_deterministic_verdict(
                 if cl_dt and parsed_dt and cl_dt.astimezone(timezone.utc) == parsed_dt.astimezone(timezone.utc):
                     if not _COUNTDOWN_PATTERN.search(cl.get("claim", "")) and not _COUNTDOWN_PATTERN.search(cl.get("exact_quote", "")):
                         agreeing_sources.add(cl_url)
-            verdict = "VERIFIED" if len(agreeing_sources) >= 2 else "UNVERIFIED"
+            if len(agreeing_sources) >= 2:
+                has_independent_domains = any(
+                    check_domain_independence(u1, u2)
+                    for u1 in agreeing_sources
+                    for u2 in agreeing_sources
+                    if u1 != u2
+                )
+                verdict = "VERIFIED" if has_independent_domains else "PARTIALLY_VERIFIED"
+            else:
+                verdict = "UNVERIFIED"
         else:
             verdict = "UNVERIFIED"
+
+        if verdict == "VERIFIED" and year_provenance == "year_inferred":
+            verdict = "PARTIALLY_VERIFIED"
 
         utc_iso = None
         ist_str = None
