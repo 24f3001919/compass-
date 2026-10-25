@@ -115,7 +115,7 @@ Similarity search uses HNSW cosine indexing (`<->`), enabling sub-5ms retrieval 
 | Component | Host | URL |
 |-----------|------|-----|
 | Frontend | Vercel | https://compass-farmlytics.vercel.app |
-| Backend API | Render | https://compass-backend-qryu.onrender.com |
+| Backend API | Render | https://compass-backend-qryu-vcfv.onrender.com |
 | Database | Neon Cloud | Serverless PostgreSQL + pgvector |
 | AI Inference | Nebius Token Factory | All model calls |
 
