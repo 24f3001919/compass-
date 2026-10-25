@@ -108,9 +108,11 @@ async def client():
 
 
 @pytest.fixture
-def auth_headers():
+def auth_headers(monkeypatch):
     """Valid authorization bearer header fixture."""
-    return {"Authorization": f"Bearer {settings.AUTH_TOKEN}"}
+    token = settings.AUTH_TOKEN or "compass-test-auth-token"
+    monkeypatch.setattr(settings, "AUTH_TOKEN", token)
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest_asyncio.fixture(autouse=True)

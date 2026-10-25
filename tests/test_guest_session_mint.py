@@ -32,8 +32,10 @@ async def test_mint_guest_through_real_handler_isolated_db(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_mint_guest_db_limiter_error_returns_503(client: AsyncClient):
-    """When the DB rate limiter encounters a database failure, return 503 (NOT 500)."""
+async def test_mint_guest_db_limiter_error_returns_503(client: AsyncClient, monkeypatch):
+    """When the DB rate limiter encounters a database failure in production, return 503 (NOT 500)."""
+    settings = get_settings()
+    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
     with patch(
         "backend.services.rate_limiter.get_pool",
         side_effect=Exception("FATAL: Neon connection pool exhausted"),
@@ -45,9 +47,10 @@ async def test_mint_guest_db_limiter_error_returns_503(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_mint_limiter_hourly_budget_and_admin_override(client: AsyncClient):
+async def test_mint_limiter_hourly_budget_and_admin_override(client: AsyncClient, monkeypatch):
     """Hourly budget limits client IP minting, returns clear 429, and allows admin override."""
     settings = get_settings()
+    monkeypatch.setattr(settings, "AUTH_TOKEN", "test-auth-override-token")
     client_ip = "198.51.100.77"
     headers = {"X-Forwarded-For": client_ip}
 

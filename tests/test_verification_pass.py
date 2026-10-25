@@ -191,9 +191,90 @@ from backend.memory.db import get_pool
 
 # --- 4. DB PENDING ACTIONS (CONFIRM / UNDO) ---
 
+class FakeActionPool:
+    def __init__(self):
+        self.actions = {}
+
+    def acquire(self):
+        return FakeActionConnContext(self)
+
+
+class FakeActionConnContext:
+    def __init__(self, pool):
+        self.pool = pool
+
+    async def __aenter__(self):
+        return FakeActionConn(self.pool)
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+
+class FakeActionConn:
+    def __init__(self, pool):
+        self.pool = pool
+
+    def transaction(self):
+        return self
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+    async def execute(self, query, *args):
+        if "INSERT INTO pending_actions" in query:
+            action_id = args[0]
+            timeout = float(args[6])
+            from datetime import datetime, timezone, timedelta
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=timeout)
+            self.pool.actions[action_id] = {
+                "action_id": action_id,
+                "run_id": args[1],
+                "owner_identity": args[2],
+                "tool": args[3],
+                "args_hash": args[4],
+                "original_args": args[5],
+                "status": "pending",
+                "expires_at": expires_at,
+            }
+        elif "UPDATE pending_actions" in query:
+            if "status = 'claimed'" in query:
+                action_id = args[1]
+                if action_id in self.pool.actions:
+                    self.pool.actions[action_id]["status"] = "claimed"
+            elif "status = 'expired'" in query:
+                action_id = args[0]
+                if action_id in self.pool.actions:
+                    self.pool.actions[action_id]["status"] = "expired"
+
+    async def fetchval(self, query, *args):
+        if "UPDATE pending_actions" in query and "status = 'claimed'" in query:
+            action_id = args[0]
+            if action_id in self.pool.actions:
+                if self.pool.actions[action_id]["status"] == "pending":
+                    self.pool.actions[action_id]["status"] = "claimed"
+                    return action_id
+        return None
+
+    async def fetchrow(self, query, *args):
+        if "WHERE action_id = $1" in query:
+            action_id = args[0]
+            return self.pool.actions.get(action_id)
+        elif "WHERE run_id = $1" in query:
+            run_id = args[0]
+            for act in reversed(list(self.pool.actions.values())):
+                if act["run_id"] == run_id:
+                    return act
+            return None
+        return None
+
+
 @pytest.mark.asyncio
 async def test_pending_action_tampering_and_cross_user():
-    pool = await get_pool()
+    from backend.memory.db import get_pool
+    pool = await get_pool() or FakeActionPool()
     args = {"task_id": "tsk_99", "new_date": "2026-10-10"}
 
     action_id = await register_pending_action(
@@ -238,7 +319,8 @@ async def test_pending_action_tampering_and_cross_user():
 
 @pytest.mark.asyncio
 async def test_pending_action_expiry():
-    pool = await get_pool()
+    from backend.memory.db import get_pool
+    pool = await get_pool() or FakeActionPool()
     args = {"test": 1}
     action_id = await register_pending_action(
         pool=pool,
@@ -322,7 +404,10 @@ def test_memory_content_hash_normalization():
 async def test_migration_concurrency_zero_duplicates():
     import uuid
     from backend.memory.conversation_migration import migrate_single_conversation
+    from backend.memory.db import get_pool
     pool = await get_pool()
+    if not pool:
+        pytest.skip("PostgreSQL pool required for migration concurrency test")
     guest_id = f"guest_{uuid.uuid4().hex[:8]}"
     user_id = f"user_{uuid.uuid4().hex[:8]}"
 
