@@ -405,3 +405,96 @@ def test_tier_2_requires_agreeing_sources_unless_trusted_event_url():
     assert verdict_trusted == "VERIFIED"
     assert evidence_trusted[0]["verdict"] == "VERIFIED"
 
+
+def test_dst_transition_timezone_handling():
+    """Verify timezone and DST handling on both sides of the 2026-11-01 transition.
+    Before DST change (2026-10-30): 1:00pm EDT equals 10:00 PDT (-07:00) and 17:00 UTC.
+    After DST change (2026-11-05): 1:00pm EST equals 10:00 PST (-08:00) and 18:00 UTC.
+    Range parsing selects the deadline candidate's time (13:00 EDT), never range-start 09:00.
+    """
+    from datetime import timezone
+    from zoneinfo import ZoneInfo
+    from backend.services.tavily_pipeline import _parse_explicit_year_date
+
+    # Side A: Before DST ends (Oct 30, 2026) -> Daylight Time (EDT / PDT)
+    quote_before = "Submission Deadline: Friday, October 30, 2026 (1:00pm EDT)"
+    dt_before, prov_before = _parse_explicit_year_date(quote_before)
+    assert dt_before is not None
+    assert dt_before.year == 2026 and dt_before.month == 10 and dt_before.day == 30
+    assert dt_before.hour == 13 and dt_before.minute == 0
+    # Equivalent to 17:00 UTC
+    assert dt_before.astimezone(timezone.utc).hour == 17
+    # Equivalent to 10:00 PDT (-07:00)
+    pdt_dt = dt_before.astimezone(ZoneInfo("America/Los_Angeles"))
+    assert pdt_dt.hour == 10
+    assert pdt_dt.strftime("%z") == "-0700"
+
+    # Side B: After DST ends (Nov 5, 2026) -> Standard Time (EST / PST)
+    quote_after = "Submission Deadline: Thursday, November 5, 2026 (1:00pm EST)"
+    dt_after, prov_after = _parse_explicit_year_date(quote_after)
+    assert dt_after is not None
+    assert dt_after.year == 2026 and dt_after.month == 11 and dt_after.day == 5
+    assert dt_after.hour == 13 and dt_after.minute == 0
+    # Equivalent to 18:00 UTC
+    assert dt_after.astimezone(timezone.utc).hour == 18
+    # Equivalent to 10:00 PST (-08:00)
+    pst_dt = dt_after.astimezone(ZoneInfo("America/Los_Angeles"))
+    assert pst_dt.hour == 10
+    assert pst_dt.strftime("%z") == "-0800"
+
+    # Side C: Nebius range with start time 9:00 am PT and end time 1:00pm EDT
+    range_quote = (
+        "Submission Period: Wednesday, August 26, 2026 (9:00 am Pacific Time) – "
+        "Friday, October 30, 2026 (1:00pm EDT)"
+    )
+    dt_range, _ = _parse_explicit_year_date(range_quote)
+    assert dt_range is not None
+    assert dt_range.day == 30 and dt_range.month == 10
+    assert dt_range.hour == 13  # Never 9:00 am from start
+    assert dt_range.astimezone(timezone.utc).hour == 17
+    assert dt_range.astimezone(ZoneInfo("America/Los_Angeles")).hour == 10
+
+
+def test_deadlines_at_midnight_and_day_end_and_timezones():
+    """Verify deadlines at 00:00 and 23:59 local across EDT, EST, PDT, PST, and IST.
+    Ensures explicit found_time metadata is preserved and hour=0 (midnight) is not dropped.
+    """
+    from datetime import timezone
+    from zoneinfo import ZoneInfo
+    from backend.services.tavily_pipeline import _parse_explicit_year_date, evaluate_deterministic_verdict
+
+    # 1. Midnight 00:00 EDT (October 25, 2026) -> 04:00 UTC
+    quote_midnight_edt = "Application deadline closes on October 25, 2026 at 12:00 am EDT"
+    dt_m_edt, _ = _parse_explicit_year_date(quote_midnight_edt)
+    assert dt_m_edt is not None
+    assert dt_m_edt.hour == 0 and dt_m_edt.minute == 0
+    assert getattr(dt_m_edt, "has_time", False) is True
+    assert dt_m_edt.astimezone(timezone.utc).hour == 4
+
+    # 2. 23:59 PDT (October 25, 2026) -> 06:59 UTC on October 26
+    quote_eod_pdt = "Project submission due on October 25, 2026 at 11:59 pm PDT"
+    dt_eod_pdt, _ = _parse_explicit_year_date(quote_eod_pdt)
+    assert dt_eod_pdt is not None
+    assert dt_eod_pdt.hour == 23 and dt_eod_pdt.minute == 59
+    assert getattr(dt_eod_pdt, "has_time", False) is True
+    assert dt_eod_pdt.astimezone(timezone.utc).hour == 6
+    assert dt_eod_pdt.astimezone(timezone.utc).minute == 59
+
+    # 3. 23:59 IST (November 10, 2026) -> 18:29 UTC on November 10
+    quote_eod_ist = "Registration closes on November 10, 2026 at 11:59 pm IST"
+    dt_eod_ist, _ = _parse_explicit_year_date(quote_eod_ist)
+    assert dt_eod_ist is not None
+    assert dt_eod_ist.hour == 23 and dt_eod_ist.minute == 59
+    assert getattr(dt_eod_ist, "has_time", False) is True
+    assert dt_eod_ist.astimezone(timezone.utc).hour == 18
+    assert dt_eod_ist.astimezone(timezone.utc).minute == 29
+
+    # 4. 00:00 PST (December 1, 2026) -> 08:00 UTC
+    quote_midnight_pst = "Entries open on December 1, 2026 at 00:00 PST"
+    dt_m_pst, _ = _parse_explicit_year_date(quote_midnight_pst)
+    assert dt_m_pst is not None
+    assert dt_m_pst.hour == 0 and dt_m_pst.minute == 0
+    assert getattr(dt_m_pst, "has_time", False) is True
+    assert dt_m_pst.astimezone(timezone.utc).hour == 8
+
+
