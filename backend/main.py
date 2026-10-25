@@ -17,9 +17,9 @@ import sys
 import urllib.parse
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 
 from backend.config import get_settings
 from backend.memory.db import init_pool, close_pool
@@ -221,6 +221,17 @@ app = FastAPI(
     redoc_url="/redoc" if _is_dev else None,
     openapi_url="/openapi.json" if _is_dev else None,
 )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    headers = getattr(exc, "headers", None)
+    if isinstance(exc.detail, dict):
+        content = dict(exc.detail)
+        if "detail" not in content and "code" in content:
+            content["detail"] = str(content["code"])
+        return JSONResponse(status_code=exc.status_code, content=content, headers=headers)
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=headers)
 
 # ---------------------------------------------------------------------------
 # Middleware — Security Headers & CORS
