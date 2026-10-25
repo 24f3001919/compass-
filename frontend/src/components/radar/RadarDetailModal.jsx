@@ -56,15 +56,10 @@ export default function RadarDetailModal({
   }
 
   const {
-    company_name,
-    role_title,
-    location,
     work_arrangement,
-    current_status,
     official_application_url,
     canonical_url,
     description,
-    compensation,
     duration,
     eligibility_classification,
     eligibility_explanation,
