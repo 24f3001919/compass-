@@ -17,7 +17,7 @@ import sys
 import urllib.parse
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, JSONResponse
 
@@ -270,6 +270,25 @@ app.include_router(parked_router)
 app.include_router(specialist_router)
 app.include_router(radar_router)
 app.include_router(career_router)
+
+from backend.services.rate_limiter import enforce_company_intel_guard
+
+@app.get(
+    "/opportunities/{opportunity_id}/company-intel",
+    include_in_schema=False,
+    dependencies=[Depends(enforce_company_intel_guard)],
+)
+async def company_intel_alias(opportunity_id: int, request: Request):
+    from backend.routers.career import get_company_intel_endpoint
+    return await get_company_intel_endpoint(opportunity_id, request)
+
+@app.get(
+    "/opportunities/{opportunity_id}/job-analysis",
+    include_in_schema=False,
+)
+async def job_analysis_alias(opportunity_id: int, request: Request):
+    from backend.routers.career import get_job_analysis_report_endpoint
+    return await get_job_analysis_report_endpoint(opportunity_id, request)
 
 
 @app.get("/")

@@ -13,10 +13,11 @@ import re
 import uuid
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, File, HTTPException, Query, Request, Response, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse
 
 from backend.services import winning_features
+from backend.services.rate_limiter import enforce_company_intel_guard
 from backend.services.career_file_parser import extract_resume_from_file_bytes, ResumeParseResult
 
 from backend.dependencies import _get_current_identity, _get_or_create_user_id
@@ -392,7 +393,10 @@ async def analyze_opportunity_job_endpoint(
     )
 
 
-@router.get("/opportunities/{opportunity_id}/company-intel")
+@router.get(
+    "/opportunities/{opportunity_id}/company-intel",
+    dependencies=[Depends(enforce_company_intel_guard)],
+)
 async def get_company_intel_endpoint(opportunity_id: int, request: Request):
     """
     Generates a strategic intelligence brief for a specific opportunity.
