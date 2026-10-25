@@ -1,6 +1,13 @@
 // Chat & Memory History API
 
-import { API_BASE, getAuthHeaders, fetchWithGuestRetry } from './baseClient.js'
+import {
+  API_BASE,
+  getAuthHeaders,
+  fetchWithGuestRetry,
+  getGuestToken,
+  setGuestSession,
+  initGuestSession,
+} from './baseClient.js'
 
 /**
  * Send a chat message to the Nebius-powered assistant.
@@ -376,9 +383,21 @@ export async function seedJudgeDemoPersona() {
     } catch {
       /* fallback to UTC */
     }
+
+    let guestToken = getGuestToken()
+    if (!guestToken) {
+      const initData = await initGuestSession()
+      if (initData) {
+        guestToken = initData.guest_token || initData.token
+      }
+    }
+
     const res = await fetchWithGuestRetry(`${API_BASE}/api/demo/seed-persona`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(guestToken ? { 'x-guest-token': guestToken } : {})
+      },
       body: JSON.stringify({ tz }),
     })
     if (!res.ok) {
@@ -391,12 +410,14 @@ export async function seedJudgeDemoPersona() {
       const retryHeader = res.headers.get('retry-after')
       const retryAfterSec = retryHeader ? parseInt(retryHeader, 10) : null
       const detailObj = typeof errPayload.detail === 'object' && errPayload.detail ? errPayload.detail : {}
+      const detailText = detailObj.detail || (typeof errPayload.detail === 'string' ? errPayload.detail : '') || errPayload.message || `HTTP ${res.status}`
+      const isExplicitlyDisabled = errPayload.code === 'seeding_disabled' || detailObj.code === 'seeding_disabled' || detailText.toLowerCase().includes('disabled')
       const code = errPayload.code || detailObj.code || (
-        res.status === 403 ? 'seeding_disabled' :
+        isExplicitlyDisabled ? 'seeding_disabled' :
+        res.status === 403 ? 'auth_forbidden' :
         res.status === 503 ? 'db_unavailable' :
         res.status === 401 ? 'unauthorized' : 'unknown_error'
       )
-      const detailText = detailObj.detail || (typeof errPayload.detail === 'string' ? errPayload.detail : '') || errPayload.message || `HTTP ${res.status}`
       const error = new Error(detailText)
       error.status = res.status
       error.code = code
@@ -404,6 +425,9 @@ export async function seedJudgeDemoPersona() {
       throw error
     }
     const data = await res.json()
+    if (data.guest_id && data.guest_token) {
+      setGuestSession(data.guest_id, data.guest_token)
+    }
     if (typeof window !== 'undefined' && typeof window.CustomEvent === 'function') {
       window.dispatchEvent(new window.CustomEvent('compass:demo-persona-loaded'))
     }
