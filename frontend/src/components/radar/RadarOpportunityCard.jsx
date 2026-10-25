@@ -277,9 +277,26 @@ export default function RadarOpportunityCard({
           {cleaned.footerLine}
         </div>
 
-        {/* Action Controls: at most ONE amber button */}
+        {/* Action Controls */}
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          {/* In-app Details Action: Secondary button */}
+          {!application_status && (
+            <button
+              type="button"
+              onClick={() => onApply(opportunity)}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 'var(--radius-btn, 6px)',
+                background: 'var(--primary, #2563eb)',
+                color: '#ffffff',
+                border: 'none',
+                fontSize: '12px',
+                fontWeight: '600',
+                cursor: 'pointer',
+              }}
+            >
+              🚀 Prepare Application
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onOpenDetail(opportunity)}
@@ -290,15 +307,13 @@ export default function RadarOpportunityCard({
               background: 'var(--bg-card-soft, #f2eee6)',
               color: 'var(--text-primary, #1b1a17)',
               fontSize: '12px',
-              fontWeight: 600,
+              fontWeight: '600',
               cursor: 'pointer',
             }}
           >
-            View details
+            {application_status ? 'View Progress' : 'View details'}
           </button>
-
-          {/* Validated External Original Listing Action: Single primary amber button */}
-          {hasValidExternalUrl ? (
+          {hasValidExternalUrl && (
             <a
               href={originalUrl}
               target="_blank"
@@ -313,7 +328,7 @@ export default function RadarOpportunityCard({
                 color: 'var(--accent-text, #1b1a17)',
                 border: 'none',
                 fontSize: '12px',
-                fontWeight: 600,
+                fontWeight: '600',
                 textDecoration: 'none',
                 cursor: 'pointer',
               }}
@@ -322,28 +337,6 @@ export default function RadarOpportunityCard({
               <span>Open original listing</span>
               <ExternalLink size={12} strokeWidth={2} />
             </a>
-          ) : (
-            <button
-              type="button"
-              disabled
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '6px 12px',
-                borderRadius: 'var(--radius-btn, 6px)',
-                background: 'var(--bg-card-soft, #f2eee6)',
-                color: 'var(--text-muted, #5f5a52)',
-                border: '1px solid var(--border, #e6e1d6)',
-                fontSize: '12px',
-                fontWeight: 500,
-                cursor: 'not-allowed',
-                opacity: 0.6,
-              }}
-              title="Original listing URL unavailable"
-            >
-              <span>Open original listing</span>
-            </button>
           )}
         </div>
       </div>

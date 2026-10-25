@@ -16,15 +16,18 @@ Strict Requirements & Principles:
 """
 from __future__ import annotations
 
-import re
-from typing import Any, Dict, List, Optional, Set, Tuple
-from backend.models_radar import (
-    EligibilityClassification,
-    OpportunityOut,
-    OpportunityRequirementsOut,
-    UserOpportunityProfileIn,
-)
+from backend.services.embeddings import get_embedding
 
+def _compute_cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
+    """Compute cosine similarity between two normalized vectors."""
+    return sum(a * b for a, b in zip(vec1, vec2))
+
+async def _is_semantic_match(skill_a: str, skill_b: str, threshold: float = 0.85) -> Tuple[bool, float]:
+    """Check if two skills match semantically using embeddings."""
+    vec_a = await get_embedding(skill_a)
+    vec_b = await get_embedding(skill_b)
+    sim = _compute_cosine_similarity(vec_a, vec_b)
+    return sim >= threshold, sim
 
 def _normalize_string(val: Optional[str]) -> str:
     if not val:
@@ -52,12 +55,13 @@ def _degree_category(degree_str: str) -> str:
     return "other"
 
 
-def evaluate_eligibility(
+async def evaluate_eligibility(
     opportunity: OpportunityOut,
     profile: Optional[UserOpportunityProfileIn],
 ) -> Tuple[str, str, List[Dict[str, Any]]]:
     """
     Evaluates eligibility for a given opportunity and profile deterministically.
+    Now utilizes semantic embeddings for skill matching to prevent false negatives.
 
     Returns:
         (classification, explanation, reasons_list)
@@ -89,6 +93,13 @@ def evaluate_eligibility(
             "status": "unspecified",
             "detail": "The listing does not specify explicit academic year, degree, CGPA, or graduation cutoff requirements."
         })
+        # RELAXED: If we have a profile, don't block as INSUFFICIENT_INFORMATION just because reqs are empty
+        if profile:
+            return (
+                EligibilityClassification.POTENTIAL_MATCH,
+                "Opportunity requirements are unspecified. You appear to be a general match based on your profile.",
+                reasons
+            )
         return (
             EligibilityClassification.INSUFFICIENT_INFORMATION,
             "Mandatory eligibility requirements cannot be extracted with sufficient confidence. Manual review required.",
@@ -333,14 +344,34 @@ def evaluate_eligibility(
             })
 
     # 8. Mandatory Skills Check
-    # Rule: If skills are marked MANDATORY in requirements, lack of proficiency produces 'unknown' or 'fail'
+    # Rule: Use semantic matching to avoid filtering out qualified candidates who use different terminology
     skills_status = "pass"
     if reqs.required_skills:
-        req_skills_norm = {_normalize_string(s) for s in reqs.required_skills if s.strip()}
-        user_skills_norm = {_normalize_string(s) for s in (profile.skills or []) if s.strip()}
+        req_skills_norm = [s.strip() for s in reqs.required_skills if s.strip()]
+        user_skills_norm = [s.strip() for s in (profile.skills or []) if s.strip()]
 
-        missing_mandatory = [s for s in req_skills_norm if not any(s in u or u in s for u in user_skills_norm)]
-        matched_mandatory = [s for s in req_skills_norm if any(s in u or u in s for u in user_skills_norm)]
+        matched_mandatory = []
+        missing_mandatory = []
+
+        for req_s in req_skills_norm:
+            # 1. Try exact/substring match first (fast path)
+            exact_match = any(req_s.lower() in u.lower() or u.lower() in req_s.lower() for u in user_skills_norm)
+
+            if exact_match:
+                matched_mandatory.append(req_s)
+                continue
+
+            # 2. Fallback to Semantic Match (Slow path, high intelligence)
+            found_semantic = False
+            for u_s in user_skills_norm:
+                is_match, sim = await _is_semantic_match(req_s, u_s)
+                if is_match:
+                    matched_mandatory.append(f"{req_s} (via {u_s}, sim: {sim:.2f})")
+                    found_semantic = True
+                    break
+
+            if not found_semantic:
+                missing_mandatory.append(req_s)
 
         if missing_mandatory:
             reasons.append({
@@ -355,6 +386,7 @@ def evaluate_eligibility(
                 "status": "pass",
                 "detail": f"All published mandatory skills satisfied: [{', '.join(matched_mandatory)}]."
             })
+
 
     # 9. Preferred Skills Check (Informational ONLY — Never rejects or blocks ELIGIBLE)
     if reqs.preferred_skills:
