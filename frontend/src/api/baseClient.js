@@ -1,7 +1,7 @@
 // Compass Base API Client
 // Handles base URL resolution, guest identity, user session, and common headers.
 
-export const RENDER_BACKEND_URL = 'https://compass-backend-qryu.onrender.com'
+export const RENDER_BACKEND_URL = 'https://compass-backend-qryu-vcfv.onrender.com'
 
 function clearObsoleteCookie() {
   if (typeof document === 'undefined') return
