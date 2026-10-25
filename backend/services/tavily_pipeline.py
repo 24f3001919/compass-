@@ -294,6 +294,11 @@ def determine_claim_deadline_type(claim_text: str) -> str:
     return "submission"
 
 
+class ExplicitDateTime(datetime):
+    """DateTime subclass preserving explicit has_time metadata for exact verification."""
+    has_time: bool = False
+
+
 def _parse_explicit_year_date(date_str: Optional[str]) -> Tuple[Optional[datetime], str]:
     """Parse date string extracting date candidate using semantic selection attached to deadline labels.
 
@@ -365,13 +370,20 @@ def _parse_explicit_year_date(date_str: Optional[str]) -> Tuple[Optional[datetim
                 score = 4
 
             # Local neighborhood for time: check after_text first to avoid banner time bleed
-            h_after, m_after, tz_after = _parse_time_and_tz(date_str[end_idx:min(len(date_str), end_idx + 45)])
-            if h_after != 23 or m_after != 59 or tz_after != timezone.utc:
+            h_after, m_after, tz_after, found_after = _parse_time_and_tz_detail(date_str[end_idx:min(len(date_str), end_idx + 60)])
+            has_explicit_time = False
+            if found_after:
                 hour, minute, tz = h_after, m_after, tz_after
+                has_explicit_time = True
             else:
-                hour, minute, tz = _parse_time_and_tz(date_str[ctx_start:ctx_end])
+                h_before, m_before, tz_before, found_before = _parse_time_and_tz_detail(date_str[ctx_start:start_idx][-45:])
+                if found_before:
+                    hour, minute, tz = h_before, m_before, tz_before
+                    has_explicit_time = True
+                else:
+                    hour, minute, tz = 0, 0, timezone.utc
 
-            candidates.append((parsed, hour, minute, tz, score, raw_m))
+            candidates.append((parsed, hour, minute, tz, score, raw_m, has_explicit_time))
 
     if candidates:
         high_score = max(c[4] for c in candidates)
@@ -382,8 +394,10 @@ def _parse_explicit_year_date(date_str: Optional[str]) -> Tuple[Optional[datetim
         if len(distinct_dates) > 1:
             return None, "conflicting"
 
-        chosen_date, hour, minute, tz, _, _ = best_candidates[-1]
-        return datetime(chosen_date.year, chosen_date.month, chosen_date.day, hour, minute, 0, tzinfo=tz), year_provenance
+        chosen_date, hour, minute, tz, _, _, has_explicit_time = best_candidates[-1]
+        dt = ExplicitDateTime(chosen_date.year, chosen_date.month, chosen_date.day, hour, minute, 0, tzinfo=tz)
+        dt.has_time = has_explicit_time
+        return dt, year_provenance
 
     # Direct format attempts
     for fmt in (
@@ -501,11 +515,12 @@ def evaluate_deterministic_verdict(
         tier = url_tier_map.get(source_url, AuthorityTier.TIER_3_GENERAL.value)
         cand_text_for_time = f"{raw_date or ''} {claim_text or ''} {quote or ''}"
         parsed_dt, year_provenance = _parse_explicit_year_date(cand_text_for_time)
-        item_has_time = False
-        if parsed_dt:
+        item_has_time = getattr(parsed_dt, "has_time", False)
+        if not item_has_time:
             item_h, item_m, item_tz, item_has_time = _parse_time_and_tz_detail(cand_text_for_time)
-            if item_has_time:
-                parsed_dt = datetime(parsed_dt.year, parsed_dt.month, parsed_dt.day, item_h, item_m, 0, tzinfo=item_tz)
+            if item_has_time and parsed_dt:
+                parsed_dt = ExplicitDateTime(parsed_dt.year, parsed_dt.month, parsed_dt.day, item_h, item_m, 0, tzinfo=item_tz)
+                parsed_dt.has_time = True
 
         # Label classification for evidence candidate
         item_label = classify_deadline_label(quote, claim_text, raw_date or "")
