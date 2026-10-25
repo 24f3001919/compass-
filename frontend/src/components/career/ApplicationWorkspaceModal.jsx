@@ -10,6 +10,7 @@ import {
   getResumeExportUrl,
   getResumeExportDocxUrl,
   fetchJobAnalysis,
+  fetchCompanyIntel,
 } from '../../api/careerApi'
 import { downloadAuthedFile, openAuthedHtml } from '../../api/baseClient.js'
 
@@ -64,6 +65,10 @@ export default function ApplicationWorkspaceModal({
   const [loadingAnalysis, setLoadingAnalysis] = useState(false)
   const [customJobDesc, setCustomJobDesc] = useState(opportunity?.description || '')
 
+  // Company Intel state
+  const [companyIntel, setCompanyIntel] = useState(null)
+  const [loadingIntel, setLoadingIntel] = useState(false)
+
   // Preparation Checklist state (stored in application metadata / notes or locally)
   const [checklist, setChecklist] = useState({
     resumeTailored: false,
@@ -84,6 +89,20 @@ export default function ApplicationWorkspaceModal({
       console.warn('Could not load detailed job analysis:', err)
     } finally {
       setLoadingAnalysis(false)
+    }
+  }, [opportunity?.id])
+
+  // Load company intelligence
+  const loadCompanyIntelData = useCallback(async () => {
+    if (!opportunity?.id) return
+    setLoadingIntel(true)
+    try {
+      const intel = await fetchCompanyIntel(opportunity.id)
+      setCompanyIntel(intel)
+    } catch (err) {
+      console.warn('Could not load company intelligence:', err)
+    } finally {
+      setLoadingIntel(false)
     }
   }, [opportunity?.id])
 
@@ -123,6 +142,7 @@ export default function ApplicationWorkspaceModal({
       }
       setIsInitialLoaded(true)
       loadJobAnalysisData()
+      loadCompanyIntelData()
     } catch (err) {
       console.error('Error loading application workspace:', err)
       setError(err.message || 'Failed to prepare application workspace.')
@@ -393,6 +413,7 @@ export default function ApplicationWorkspaceModal({
 
   const TABS = [
     { key: 'overview', icon: '📋', label: 'Role & Match' },
+    { key: 'company_intel', icon: '🛰️', label: 'Company Intel' },
     { key: 'job_analysis', icon: '🎯', label: 'Job Analysis' },
     { key: 'resume', icon: '📄', label: 'Tailored Resume' },
     { key: 'cover_letter', icon: '✍️', label: 'Cover Letter' },
@@ -654,8 +675,132 @@ export default function ApplicationWorkspaceModal({
                 </div>
               )}
 
-              {/* TAB 1: Role Overview & Deterministic Match Analysis */}
-              {activeTab === 'overview' && (
+              {/* TAB: Company Intel Brief (War Room View) */}
+              {activeTab === 'company_intel' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  <div style={{ padding: '18px 20px', borderRadius: '12px', background: 'var(--bg-app)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+                    <div>
+                      <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--brand)', marginBottom: '4px' }}>
+                        Strategic Intelligence Brief
+                      </div>
+                      <h3 style={{ margin: '0 0 6px 0', fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                        {opportunity.company_name} Intelligence Report
+                      </h3>
+                      <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                        Real-time research on company goals and technical pain points.
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={loadCompanyIntelData}
+                        disabled={loadingIntel}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          background: 'var(--bg-card)',
+                          border: '1px solid var(--border)',
+                          color: 'var(--text-primary)',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: loadingIntel ? 'not-allowed' : 'pointer',
+                        }}
+                      >
+                        {loadingIntel ? 'Updating...' : '🔄 Refresh Intel'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {loadingIntel ? (
+                    <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
+                      <div style={{ fontSize: '24px', marginBottom: '8px' }}>📡</div>
+                      <div>Scanning company data and technical milestones...</div>
+                    </div>
+                  ) : companyIntel ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+                      {/* Strategic Insights */}
+                      <div style={{ padding: '16px', borderRadius: '10px', background: 'var(--bg-app)', border: '1px solid var(--border)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                          <span style={{ fontSize: '16px' }}>🚀</span>
+                          <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>Strategic Insights</h4>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          {companyIntel.strategic_insights.length > 0 ? (
+                            companyIntel.strategic_insights.map((item, i) => (
+                              <div key={i} style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, padding: '8px', borderRadius: '6px', background: 'var(--bg-card)', borderLeft: '3px solid var(--brand)' }}>
+                                {item}
+                              </div>
+                            ))
+                          ) : (
+                            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No specific strategic insights found.</div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Technical Pain Points */}
+                      <div style={{ padding: '16px', borderRadius: '10px', background: 'var(--bg-app)', border: '1px solid var(--border)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                          <span style={{ fontSize: '16px' }}>🛠️</span>
+                          <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>Technical Pain Points</h4>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          {companyIntel.technical_pain_points.length > 0 ? (
+                            companyIntel.technical_pain_points.map((item, i) => (
+                              <div key={i} style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, padding: '8px', borderRadius: '6px', background: 'var(--bg-card)', borderLeft: '3px solid #ef4444' }}>
+                                {item}
+                              </div>
+                            ))
+                          ) : (
+                            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No specific technical pain points identified.</div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Recent News */}
+                      <div style={{ padding: '16px', borderRadius: '10px', background: 'var(--bg-app)', border: '1px solid var(--border)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                          <span style={{ fontSize: '16px' }}>📰</span>
+                          <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>Recent News & Milestones</h4>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          {companyIntel.recent_news.length > 0 ? (
+                            companyIntel.recent_news.map((item, i) => (
+                              <div key={i} style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, padding: '8px', borderRadius: '6px', background: 'var(--bg-card)', borderLeft: '3px solid #3b82f6' }}>
+                                {item}
+                              </div>
+                            ))
+                          ) : (
+                            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No recent news items found.</div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* High Impact Talking Points (Full Width) */}
+                      <div style={{ gridColumn: '1 / -1', padding: '16px', borderRadius: '10px', background: 'var(--bg-app)', border: '1px solid var(--border)', borderTop: '3px solid var(--brand)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                          <span style={{ fontSize: '16px' }}>💡</span>
+                          <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>Strategic Talking Points for Interviews</h4>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '12px' }}>
+                          {companyIntel.talking_points.length > 0 ? (
+                            companyIntel.talking_points.map((point, i) => (
+                              <div key={i} style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 600, padding: '10px', borderRadius: '8px', background: 'var(--bg-card)', border: '1px solid var(--border)', display: 'flex', gap: '10px' }}>
+                                <span style={{ color: 'var(--brand)' }}>•</span> {point}
+                              </div>
+                            ))
+                          ) : (
+                            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No talking points generated.</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
+                      <div>Intelligence report unavailable.</div>
+                    </div>
+                  )}
+                </div>
+              )}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   <div
                     style={{
