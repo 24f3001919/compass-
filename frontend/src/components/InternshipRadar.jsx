@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Radar, RefreshCw, Loader2, ArrowDown } from 'lucide-react'
+import { Radar, RefreshCw, Loader2, ArrowDown, Info, X } from 'lucide-react'
 import RadarOverviewCards from './radar/RadarOverviewCards'
 import RadarFilters from './radar/RadarFilters'
 import RadarOpportunityCard from './radar/RadarOpportunityCard'
@@ -52,6 +52,13 @@ export default function InternshipRadar({
 
   const [selectedDetailOpp, setSelectedDetailOpp] = useState(null)
   const [activeWorkspaceOpp, setActiveWorkspaceOpp] = useState(null)
+  const [bannerDismissed, setBannerDismissed] = useState(false)
+
+  const hasCandidateProfile = Boolean(
+    profile &&
+    profile.has_profile !== false &&
+    (profile.degree_level || (profile.skills && profile.skills.length > 0) || profile.grad_year)
+  )
 
   // Load analytics & profile
   const loadMetadata = useCallback(async () => {
@@ -612,6 +619,68 @@ export default function InternshipRadar({
         )
       ) : (
         <>
+          {/* Top Dismissible Candidate Profile Banner (replaces repeating per-card boxes) */}
+          {!hasCandidateProfile && !bannerDismissed && (
+            <div
+              role="status"
+              id="radar-missing-profile-banner"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                padding: '12px 16px',
+                marginBottom: '16px',
+                background: 'var(--bg-card-soft, #f2eee6)',
+                border: '1px solid var(--border, #e6e1d6)',
+                borderRadius: 'var(--radius-btn, 6px)',
+                fontSize: '13px',
+                color: 'var(--text-primary)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Info size={16} strokeWidth={1.8} style={{ color: 'var(--brand, #f5a623)', flexShrink: 0 }} />
+                <span>
+                  Add your profile in{' '}
+                  <button
+                    type="button"
+                    onClick={handleGoToResumeStudio}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      padding: 0,
+                      color: 'var(--brand, #f5a623)',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                      font: 'inherit',
+                    }}
+                  >
+                    Resume Studio
+                  </button>{' '}
+                  to check eligibility for these roles.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBannerDismissed(true)}
+                aria-label="Dismiss banner"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  color: 'var(--text-muted)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <X size={15} strokeWidth={1.8} />
+              </button>
+            </div>
+          )}
+
           <div
             style={{
               display: 'grid',

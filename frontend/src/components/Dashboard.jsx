@@ -567,9 +567,9 @@ export default function Dashboard({
                   <rect width="7" height="9" x="14" y="12" rx="1" />
                   <rect width="7" height="5" x="3" y="16" rx="1" />
                 </svg>
-                <span>Dashboard</span>
+                <span>Dashboard,</span>
                 <span style={{ color: 'var(--text-muted)', fontWeight: '400', fontSize: '15px' }}>
-                  , {today}
+                  {today}
                 </span>
               </h2>
             </div>
@@ -594,61 +594,30 @@ export default function Dashboard({
               <span>New Deadline</span>
             </button>
 
-            {onSelectTab && (
-              <>
-                <button
-                  type="button"
-                  id="dashboard-btn-open-schedule"
-                  onClick={() => onSelectTab('calendar')}
-                  className="btn-secondary"
-                  title="Open Schedule & Google Calendar sync"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <rect width="18" height="18" x="3" y="4" rx="2" />
-                    <path d="M3 10h18" />
-                    <path d="M8 2v4" />
-                    <path d="M16 2v4" />
-                  </svg>
-                  <span>Schedule</span>
-                </button>
-
-                <button
-                  type="button"
-                  id="dashboard-btn-open-compass"
-                  onClick={() => onSelectTab('compass')}
-                  className="btn-secondary"
-                  title="Open Compass AI Assistant & Planner"
-                >
-                  <Logo size={15} alt="" />
-                  <span>Compass</span>
-                </button>
-
-                <button
-                  type="button"
-                  id="dashboard-btn-load-judge-persona"
-                  onClick={handleSeedJudgePersona}
-                  disabled={seedingPersona}
-                  className="btn-secondary"
-                  title="Explicit 1-Click Demo: Populates sample multi-domain tasks and vector memory for hackathon judges"
-                  style={{
-                    cursor: seedingPersona ? 'wait' : 'pointer',
-                  }}
-                >
-                  {seedSuccess ? (
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--domain-code, #1c8a62)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  ) : (
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <circle cx="12" cy="12" r="10" />
-                      <circle cx="12" cy="12" r="6" />
-                      <circle cx="12" cy="12" r="2" />
-                    </svg>
-                  )}
-                  <span>{seedingPersona ? 'Loading…' : seedSuccess ? 'Persona Loaded!' : 'Load Judge Persona'}</span>
-                </button>
-              </>
-            )}
+            <button
+              type="button"
+              id="dashboard-btn-load-judge-persona"
+              onClick={handleSeedJudgePersona}
+              disabled={seedingPersona}
+              className="btn-secondary"
+              title="Explicit 1-Click Demo: Populates sample multi-domain tasks and vector memory for hackathon judges"
+              style={{
+                cursor: seedingPersona ? 'wait' : 'pointer',
+              }}
+            >
+              {seedSuccess ? (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--domain-code, #1c8a62)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              ) : (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="6" />
+                  <circle cx="12" cy="12" r="2" />
+                </svg>
+              )}
+              <span>{seedingPersona ? 'Loading…' : seedSuccess ? 'Persona Loaded!' : 'Load Judge Persona'}</span>
+            </button>
 
             <button
               type="button"
@@ -657,6 +626,14 @@ export default function Dashboard({
               className="btn-secondary"
               aria-label="Refresh dashboard data"
               title={`Last synced: ${timeSinceUpdate}`}
+              style={{
+                minHeight: '44px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '0 12px',
+                borderRadius: 'var(--radius-btn, 6px)',
+              }}
             >
               <svg
                 width="14"
@@ -669,6 +646,7 @@ export default function Dashboard({
                 strokeLinejoin="round"
                 aria-hidden="true"
                 style={{
+                  flexShrink: 0,
                   animation: isRefreshing ? 'spin 0.6s linear infinite' : 'none',
                 }}
               >
@@ -677,7 +655,7 @@ export default function Dashboard({
                 <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
                 <path d="M16 21h5v-5" />
               </svg>
-              <span style={{ fontSize: '12px' }}>{timeSinceUpdate}</span>
+              <span style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>{timeSinceUpdate}</span>
             </button>
 
             <div style={{ flexShrink: 0 }}>
@@ -782,113 +760,94 @@ export default function Dashboard({
         </div>
       )}
 
-      {/* SECTION: Today's Focus Card */}
-      <div className="dashboard-focus-card" role="region" aria-label="Today's focus area" style={{ borderRadius: '8px', border: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
-          <div
-            style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '6px',
-              background: 'var(--bg-card-soft)',
-              border: '1px solid var(--border)',
-              color: 'var(--text-primary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-            }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="10" />
-              <circle cx="12" cy="12" r="6" />
-              <circle cx="12" cy="12" r="2" />
-            </svg>
-          </div>
-
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)' }}>
-                {todayFocus.count > 0
-                  ? `${todayFocus.count} ${todayFocus.count === 1 ? 'task needs' : 'tasks need'} attention today`
-                  : "You're all caught up for today!"}
-              </span>
-              {todayFocus.nextUrgency && (
-                <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    padding: '2px 8px',
-                    borderRadius: '4px',
-                    background: todayFocus.nextUrgency.isOverdue
-                      ? 'var(--danger-bg)'
-                      : 'var(--bg-card-soft)',
-                    color: todayFocus.nextUrgency.isOverdue ? 'var(--danger-text)' : 'var(--text-primary)',
-                    border: '1px solid var(--border)',
-                  }}
-                >
-                  {todayFocus.nextUrgency.label}
-                </span>
-              )}
-            </div>
-
+      {/* SECTION: Today's Caught Up Banner (Shown only when user has tasks and none are overdue or due today) */}
+      {cleanTasks.length > 0 && viewCounts.overdue === 0 && viewCounts.due_today === 0 && (
+        <div className="dashboard-focus-card" role="region" aria-label="Today's focus area" style={{ borderRadius: '8px', border: '1px solid var(--border)', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
             <div
               style={{
-                fontSize: '13px',
-                color: 'var(--text-muted)',
-                marginTop: '2px',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
+                width: '38px',
+                height: '38px',
+                borderRadius: '6px',
+                background: 'var(--bg-card-soft)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-primary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
               }}
-              title={todayFocus.nextItem ? todayFocus.nextItem.title : ''}
             >
-              {todayFocus.nextItem ? (
-                <>
-                  Next up: <strong style={{ color: 'var(--text-primary)' }}>{todayFocus.nextItem.title}</strong>{' '}
-                  <span style={{ color: 'var(--text-muted)' }}>({todayFocus.nextItem.project || todayFocus.nextItem.domain})</span>
-                </>
-              ) : (
-                'Enjoy your focused time or plan your upcoming schedule with Compass.'
-              )}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <circle cx="12" cy="12" r="6" />
+                <circle cx="12" cy="12" r="2" />
+              </svg>
+            </div>
+
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)' }}>
+                  You're all caught up for today!
+                </span>
+                {todayFocus.nextUrgency && (
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: '600',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      background: 'var(--bg-card-soft)',
+                      color: 'var(--text-primary)',
+                      border: '1px solid var(--border)',
+                    }}
+                  >
+                    {todayFocus.nextUrgency.label}
+                  </span>
+                )}
+              </div>
+
+              <div
+                style={{
+                  fontSize: '13px',
+                  color: 'var(--text-muted)',
+                  marginTop: '2px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+                title={todayFocus.nextItem ? todayFocus.nextItem.title : ''}
+              >
+                {todayFocus.nextItem ? (
+                  <>
+                    Next up: <strong style={{ color: 'var(--text-primary)' }}>{todayFocus.nextItem.title}</strong>{' '}
+                    <span style={{ color: 'var(--text-muted)' }}>({todayFocus.nextItem.project || todayFocus.nextItem.domain})</span>
+                  </>
+                ) : (
+                  'Enjoy your focused time or plan your upcoming schedule with Compass.'
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Focus Actions: min 44px tap target */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-          {todayFocus.nextItem && (
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => handleToggleTaskStatus(todayFocus.nextItem.id, false)}
-              title="Mark this focus task as completed"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-              <span>Complete</span>
-            </button>
-          )}
-
-          {onOpenCompass && (
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => {
-                const prompt =
-                  todayFocus.count > 0
-                    ? `I have ${todayFocus.count} tasks needing attention today. Please analyze my deadlines and suggest an optimal step-by-step roadmap for today.`
-                    : 'Please review my upcoming tasks and projects and propose a focus schedule for this week.'
-                onOpenCompass(prompt)
-              }}
-            >
-              <Logo size={14} alt="" />
-              <span>Ask Compass to Plan</span>
-            </button>
-          )}
+          {/* Focus Actions: min 44px tap target */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+            {onOpenCompass && (
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  const prompt = 'Please review my upcoming tasks and projects and propose a focus schedule for this week.'
+                  onOpenCompass(prompt)
+                }}
+              >
+                <Logo size={14} alt="" />
+                <span>Ask Compass to Plan</span>
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
 
       {/* DOMAIN FILTER BAR */}
@@ -1324,60 +1283,64 @@ export default function Dashboard({
       )}
 
 
-      {/* SECTION 2 & 3: Main Two-Column Row */}
-      <div className="dashboard-main-grid">
-        {/* Tasks by Domain */}
-        <div className="dashboard-section-card" role="region" aria-label="Tasks distributed by domain">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
-                <circle cx="7" cy="7" r=".5" fill="currentColor" />
-              </svg>
-              <span>Tasks by Domain</span>
-            </h3>
-            {onSelectTab && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (onSelectDomain && selectedDomainFilter !== 'all') {
-                    onSelectDomain(selectedDomainFilter)
-                  }
-                  onSelectTab('timeline')
-                }}
-                className="btn-secondary"
-                style={{
-                  minHeight: '36px',
-                  padding: '0 10px',
-                  fontSize: '12px',
-                }}
-              >
-                Timeline view →
-              </button>
-            )}
+      {/* SECTION 2 & 3: Main Two-Column Row or Single Page Empty State */}
+      {cleanTasks.length === 0 ? (
+        <div
+          className="dashboard-section-card dashboard-page-empty-state"
+          role="region"
+          aria-label="Dashboard empty state"
+          style={{
+            padding: '48px 24px',
+            textAlign: 'center',
+            background: 'var(--bg-card)',
+            borderRadius: 'var(--radius-card, 8px)',
+            border: '1px solid var(--border)',
+            marginBottom: '20px',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '14px' }}>
+            <Logo size={36} alt="Compass logo" />
           </div>
-
-          {cleanTasks.length === 0 ? (
-            <div className="dashboard-empty-state">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginBottom: '8px', color: 'var(--text-muted)' }}>
-                <rect width="20" height="16" x="2" y="4" rx="2" />
-                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-              </svg>
-              <p style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>
-                No tasks tracked yet
-              </p>
-              <p style={{ margin: '4px 0 14px 0', fontSize: '13px', color: 'var(--text-muted)', maxWidth: '300px' }}>
-                Create your first deadline or ask Compass Assistant to synthesize your workload.
-              </p>
-              <button
-                type="button"
-                onClick={() => setShowAddModal(true)}
-                className="btn-primary-amber"
-              >
-                + Create First Task
-              </button>
+          <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)', margin: '0 0 8px 0' }}>
+            No tasks or deadlines tracked yet
+          </h3>
+          <p style={{ fontSize: '13.5px', color: 'var(--text-secondary)', maxWidth: '520px', margin: '0 auto', lineHeight: 1.5 }}>
+            Use the <strong>New Deadline</strong> button in the header above to create your first milestone, or click <strong>Load Judge Persona</strong> to populate demo multi-domain tasks and telemetry.
+          </p>
+        </div>
+      ) : (
+        <div className="dashboard-main-grid">
+          {/* Tasks by Domain */}
+          <div className="dashboard-section-card" role="region" aria-label="Tasks distributed by domain">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
+                  <circle cx="7" cy="7" r=".5" fill="currentColor" />
+                </svg>
+                <span>Tasks by Domain</span>
+              </h3>
+              {onSelectTab && selectedDomainFilter !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onSelectDomain) {
+                      onSelectDomain(selectedDomainFilter)
+                    }
+                    onSelectTab('timeline')
+                  }}
+                  className="btn-secondary"
+                  style={{
+                    minHeight: '36px',
+                    padding: '0 10px',
+                    fontSize: '12px',
+                  }}
+                >
+                  Timeline view →
+                </button>
+              )}
             </div>
-          ) : (
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {domainBreakdown.map((item) => (
                 <div
@@ -1434,171 +1397,141 @@ export default function Dashboard({
                 </div>
               ))}
             </div>
-          )}
-        </div>
-
-        {/* Deadlines & Milestones — Varied Urgency Spotlight (Overdue, Due Today, Urgent, Upcoming) */}
-        <div className="dashboard-section-card" role="region" aria-label="Upcoming deadlines list">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
-                <span>Deadlines & Milestones</span>
-              </h3>
-
-              {/* Quick interactive filter pills on the card */}
-              {(viewCounts.overdue > 0 || viewCounts.due_today > 0 || viewCounts.due_soon > 0 || viewCounts.upcoming > 0) && (
-                <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-card-soft)', padding: '2px', borderRadius: '6px', border: '1px solid var(--border)', flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    onClick={() => setPriorityFilter('all')}
-                    style={{
-                      padding: '3px 8px',
-                      fontSize: '11px',
-                      fontWeight: priorityFilter === 'all' ? '600' : '400',
-                      borderRadius: '4px',
-                      border: 'none',
-                      background: priorityFilter === 'all' ? 'var(--bg-card)' : 'transparent',
-                      color: priorityFilter === 'all' ? 'var(--text-primary)' : 'var(--text-muted)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    All ({viewCounts.overdue + viewCounts.due_today + viewCounts.due_soon + viewCounts.upcoming})
-                  </button>
-                  {viewCounts.overdue > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setPriorityFilter('overdue')}
-                      style={{
-                        padding: '3px 8px',
-                        fontSize: '11px',
-                        fontWeight: priorityFilter === 'overdue' ? '600' : '400',
-                        borderRadius: '4px',
-                        border: 'none',
-                        background: priorityFilter === 'overdue' ? 'rgba(230, 81, 0, 0.15)' : 'transparent',
-                        color: priorityFilter === 'overdue' ? '#e65100' : 'var(--text-muted)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Overdue ({viewCounts.overdue})
-                    </button>
-                  )}
-                  {viewCounts.due_today > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setPriorityFilter('today')}
-                      style={{
-                        padding: '3px 8px',
-                        fontSize: '11px',
-                        fontWeight: priorityFilter === 'today' ? '600' : '400',
-                        borderRadius: '4px',
-                        border: 'none',
-                        background: priorityFilter === 'today' ? 'rgba(217, 119, 6, 0.15)' : 'transparent',
-                        color: priorityFilter === 'today' ? '#d97706' : 'var(--text-muted)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Today ({viewCounts.due_today})
-                    </button>
-                  )}
-                  {viewCounts.due_soon > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setPriorityFilter('due_soon')}
-                      style={{
-                        padding: '3px 8px',
-                        fontSize: '11px',
-                        fontWeight: priorityFilter === 'due_soon' ? '600' : '400',
-                        borderRadius: '4px',
-                        border: 'none',
-                        background: priorityFilter === 'due_soon' ? 'rgba(14, 165, 233, 0.15)' : 'transparent',
-                        color: priorityFilter === 'due_soon' ? '#0284c7' : 'var(--text-muted)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Due Soon ({viewCounts.due_soon})
-                    </button>
-                  )}
-                  {viewCounts.upcoming > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setPriorityFilter('upcoming')}
-                      style={{
-                        padding: '3px 8px',
-                        fontSize: '11px',
-                        fontWeight: priorityFilter === 'upcoming' ? '600' : '400',
-                        borderRadius: '4px',
-                        border: 'none',
-                        background: priorityFilter === 'upcoming' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
-                        color: priorityFilter === 'upcoming' ? '#059669' : 'var(--text-muted)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Upcoming ({viewCounts.upcoming})
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                if (onSelectTab) onSelectTab('timeline')
-              }}
-              className="btn-secondary"
-              style={{
-                minHeight: '32px',
-                padding: '0 10px',
-                fontSize: '12px',
-              }}
-            >
-              View all in Timeline →
-            </button>
           </div>
 
-          {priorityDeadlines.length === 0 ? (
-            <div className="dashboard-empty-state">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginBottom: '8px', color: 'var(--text-muted)' }}>
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                <polyline points="22 4 12 14.01 9 11.01" />
-              </svg>
-              <p style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>
-                {cleanTasks.length === 0 ? 'No tasks yet' : 'No pending deadlines'}
-              </p>
-              <p style={{ margin: '4px 0 14px 0', fontSize: '13px', color: 'var(--text-muted)', maxWidth: '300px' }}>
-                {cleanTasks.length === 0
-                  ? 'Add your first deadline or load the Judge Persona to explore demo data.'
-                  : 'You have cleared all scheduled deadlines! Take a breather or log a new milestone.'}
-              </p>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                <button
-                  type="button"
-                  id="dashboard-empty-add-deadline"
-                  onClick={() => setShowAddModal(true)}
-                  className="btn-primary-amber"
-                >
-                  Add deadline
-                </button>
-                <button
-                  type="button"
-                  id="dashboard-empty-seed-persona"
-                  onClick={handleSeedJudgePersona}
-                  disabled={seedingPersona}
-                  className="btn-secondary"
-                  title="Populates sample multi-domain tasks and hackathon deadlines for judges"
-                  style={{
-                    cursor: seedingPersona ? 'wait' : 'pointer',
-                  }}
-                >
-                  {seedSuccess ? 'Persona Loaded!' : seedingPersona ? 'Loading…' : 'Load Judge Persona'}
-                </button>
+          {/* Deadlines & Milestones: Varied Urgency Spotlight */}
+          <div className="dashboard-section-card" role="region" aria-label="Upcoming deadlines list">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <h3 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  <span>Deadlines & Milestones</span>
+                </h3>
+
+                {/* Quick interactive filter pills on the card */}
+                {(viewCounts.overdue > 0 || viewCounts.due_today > 0 || viewCounts.due_soon > 0 || viewCounts.upcoming > 0) && (
+                  <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-card-soft)', padding: '2px', borderRadius: '6px', border: '1px solid var(--border)', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => setPriorityFilter('all')}
+                      style={{
+                        padding: '3px 8px',
+                        fontSize: '11px',
+                        fontWeight: priorityFilter === 'all' ? '600' : '400',
+                        borderRadius: '4px',
+                        border: 'none',
+                        background: priorityFilter === 'all' ? 'var(--bg-card)' : 'transparent',
+                        color: priorityFilter === 'all' ? 'var(--text-primary)' : 'var(--text-muted)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      All ({viewCounts.overdue + viewCounts.due_today + viewCounts.due_soon + viewCounts.upcoming})
+                    </button>
+                    {viewCounts.overdue > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setPriorityFilter('overdue')}
+                        style={{
+                          padding: '3px 8px',
+                          fontSize: '11px',
+                          fontWeight: priorityFilter === 'overdue' ? '600' : '400',
+                          borderRadius: '4px',
+                          border: 'none',
+                          background: priorityFilter === 'overdue' ? 'rgba(230, 81, 0, 0.15)' : 'transparent',
+                          color: priorityFilter === 'overdue' ? '#e65100' : 'var(--text-muted)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Overdue ({viewCounts.overdue})
+                      </button>
+                    )}
+                    {viewCounts.due_today > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setPriorityFilter('today')}
+                        style={{
+                          padding: '3px 8px',
+                          fontSize: '11px',
+                          fontWeight: priorityFilter === 'today' ? '600' : '400',
+                          borderRadius: '4px',
+                          border: 'none',
+                          background: priorityFilter === 'today' ? 'rgba(217, 119, 6, 0.15)' : 'transparent',
+                          color: priorityFilter === 'today' ? '#d97706' : 'var(--text-muted)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Today ({viewCounts.due_today})
+                      </button>
+                    )}
+                    {viewCounts.due_soon > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setPriorityFilter('due_soon')}
+                        style={{
+                          padding: '3px 8px',
+                          fontSize: '11px',
+                          fontWeight: priorityFilter === 'due_soon' ? '600' : '400',
+                          borderRadius: '4px',
+                          border: 'none',
+                          background: priorityFilter === 'due_soon' ? 'rgba(14, 165, 233, 0.15)' : 'transparent',
+                          color: priorityFilter === 'due_soon' ? '#0284c7' : 'var(--text-muted)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Due Soon ({viewCounts.due_soon})
+                      </button>
+                    )}
+                    {viewCounts.upcoming > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setPriorityFilter('upcoming')}
+                        style={{
+                          padding: '3px 8px',
+                          fontSize: '11px',
+                          fontWeight: priorityFilter === 'upcoming' ? '600' : '400',
+                          borderRadius: '4px',
+                          border: 'none',
+                          background: priorityFilter === 'upcoming' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+                          color: priorityFilter === 'upcoming' ? '#059669' : 'var(--text-muted)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Upcoming ({viewCounts.upcoming})
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (onSelectTab) onSelectTab('timeline')
+                }}
+                className="btn-secondary"
+                style={{
+                  minHeight: '32px',
+                  padding: '0 10px',
+                  fontSize: '12px',
+                }}
+              >
+                View all in Timeline →
+              </button>
             </div>
-          ) : (
+
+            {priorityDeadlines.length === 0 ? (
+              <div className="dashboard-empty-state">
+                <p style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>
+                  No pending deadlines in this view
+                </p>
+                <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--text-muted)' }}>
+                  You have cleared all scheduled deadlines in this category.
+                </p>
+              </div>
+            ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {priorityDeadlines.map((task) => {
                 const meta = getDomainMeta(task.domain)
@@ -1701,11 +1634,13 @@ export default function Dashboard({
           )}
         </div>
       </div>
+    )}
 
       {/* SECTION 4 & 5: Recent Activity & System Status */}
       <div className="dashboard-main-grid">
         {/* Recent Activity */}
-        <div className="dashboard-section-card" role="region" aria-label="Recent activity feed">
+        {cleanTasks.length > 0 && (
+          <div className="dashboard-section-card" role="region" aria-label="Recent activity feed">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1876,6 +1811,7 @@ export default function Dashboard({
             </div>
           )}
         </div>
+      )}
 
         {/* System & Telemetry Status */}
         <div className="dashboard-section-card" role="region" aria-label="System connectivity and model telemetry">
