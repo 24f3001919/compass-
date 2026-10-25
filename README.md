@@ -15,7 +15,7 @@
 
 Compass is a persistent-memory AI copilot that bridges your tasks, hackathon deadlines, coursework, code context, and career pipeline into one unified, agent-driven workspace. Instead of serving as a stateless chat prompt, Compass reasons across all your work domains, queries live web sources, validates candidate eligibility, tailors verifiable resumes, and halts at strict human confirmation gates before mutating data or submitting applications.
 
-**[🌐 Live Web Application](https://compass-farmlytics.vercel.app)** · **[🔌 API Health Endpoint](https://compass-backend-qryu.onrender.com/health)** · **[🎥 Demo Video Walkthrough Script](docs/demo_script.md)**
+**[🌐 Live Web Application](https://compass-farmlytics.vercel.app)** · **[🔌 API Health Endpoint](https://compass-backend-qryu-vcfv.onrender.com/health)** · **[🎥 Demo Video Walkthrough Script](docs/demo_script.md)**
 
 ---
 
