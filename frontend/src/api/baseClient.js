@@ -225,14 +225,10 @@ export function setCurrentUserId(userId) {
 export function getAuthHeaders(extraHeaders = {}) {
   const headers = { ...extraHeaders }
   // Identity comes exclusively from verified guest token or authenticated session.
-  // Never send x-user-id or compass_user_id.
+  // Never send raw x-user-id or x-guest-id headers.
   const guestToken = getGuestToken()
   if (guestToken) {
     headers['x-guest-token'] = guestToken
-  }
-  const guestId = getGuestId()
-  if (guestId) {
-    headers['x-guest-id'] = guestId
   }
   try {
     const token = typeof localStorage !== 'undefined' ? localStorage.getItem('compass_auth_token') : null
@@ -246,7 +242,7 @@ export function getAuthHeaders(extraHeaders = {}) {
 }
 
 /**
- * Perform a fetch request with automatic guest token minting and 1-time retry on 401.
+ * Perform a fetch request with automatic guest token minting and 1-time retry on 401/403.
  * Strict rules:
  * - Retry only for guest identities, max 1 retry (_retried: true).
  * - NEVER replace or overwrite an authenticated user's identity. If authenticated, dispatch 'compass:session_expired'.
@@ -260,7 +256,7 @@ export async function fetchWithGuestRetry(url, options = {}) {
     credentials: options.credentials || 'include',
   }
   let res = await fetch(url, init)
-  if (res.status === 401 && !options._retried) {
+  if ((res.status === 401 || res.status === 403) && !options._retried) {
     const hasAuthToken = typeof localStorage !== 'undefined' && Boolean(localStorage.getItem('compass_auth_token'))
     const hasAuthEmail = typeof localStorage !== 'undefined' && Boolean(localStorage.getItem('compass_user_email'))
     const isAuthenticated = hasAuthToken || hasAuthEmail
