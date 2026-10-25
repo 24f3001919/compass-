@@ -149,7 +149,7 @@ export default function ApplicationWorkspaceModal({
     } finally {
       setLoading(false)
     }
-  }, [opportunity?.id, loadJobAnalysisData])
+  }, [opportunity?.id, loadJobAnalysisData, loadCompanyIntelData])
 
   useEffect(() => {
     loadWorkspaceData()
@@ -801,6 +801,9 @@ export default function ApplicationWorkspaceModal({
                   )}
                 </div>
               )}
+
+              {/* TAB: Role & Match Overview */}
+              {activeTab === 'overview' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   <div
                     style={{
@@ -978,7 +981,7 @@ export default function ApplicationWorkspaceModal({
                         </div>
                         <button
                           type="button"
-                          onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: '/resume-studio' }))}
+                          onClick={() => window.dispatchEvent(new window.CustomEvent('navigate', { detail: '/resume-studio' }))}
                           style={{
                             background: 'transparent',
                             border: 'none',

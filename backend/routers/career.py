@@ -536,9 +536,9 @@ async def draft_cover_letter_endpoint(body: DraftCoverLetterRequest, request: Re
 
 @router.post("/track-external-application", response_model=CareerApplicationOut)
 async def track_external_application_endpoint(
+    request: Request,
     opportunity_id: int = Query(...),
     source: Optional[str] = Query("external_website"),
-    request: Request,
 ):
     """
     Webhook for external websites to notify Compass that an application has been submitted.

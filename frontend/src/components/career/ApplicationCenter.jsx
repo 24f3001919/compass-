@@ -348,7 +348,7 @@ export default function ApplicationCenter() {
                               <span>⚠️ Missing: {app.missing_fields.join(', ')}</span>
                               <button
                                 type="button"
-                                onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: '/resume-studio' }))}
+                                onClick={() => window.dispatchEvent(new window.CustomEvent('navigate', { detail: '/resume-studio' }))}
                                 style={{
                                   background: 'transparent',
                                   border: 'none',

@@ -7,7 +7,7 @@ export default function RadarOpportunityCard({
   onOpenDetail,
   onToggleSave,
   onUpdateAppStatus: _onUpdateAppStatus,
-  onApply: _onApply,
+  onApply,
 }) {
   const {
     id,
