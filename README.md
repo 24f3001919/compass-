@@ -15,6 +15,16 @@
 
 Compass is a persistent-memory AI copilot that bridges your tasks, hackathon deadlines, coursework, code context, and career pipeline into one unified, agent-driven workspace. Instead of serving as a stateless chat prompt, Compass reasons across all your work domains, queries live web sources, validates candidate eligibility, tailors verifiable resumes, and halts at strict human confirmation gates before mutating data or submitting applications.
 
+## 🌟 Winning Intelligence Features
+
+Compass goes beyond simple AI integration to provide a high-fidelity career engine:
+
+- **Semantic Skill Mapping:** Uses 768-dim embeddings (Qwen3-Embedding-8B) to match candidates' skills to job requirements conceptually, not just by keywords.
+- **Actionable Gap Analysis:** Transforms "Ineligible" results into a growth roadmap, identifying specific missing qualifications and suggesting real-world bridge actions.
+- **Company Intelligence Briefs:** Automatically researches target employers via Tavily to generate "War Room" briefs, highlighting technical pain points and strategic goals for tailoring applications.
+- **ATS Stress-Testing:** Simulates machine-parsing of resumes to reveal invisible formatting errors and keyword gaps before submission.
+- **Predictive Hiring Radar:** Leverages historical cycle data to forecast upcoming internship windows for top-tier companies.
+
 **[🌐 Live Web Application](https://compass-farmlytics.vercel.app)** · **[🔌 API Health Endpoint](https://compass-backend-qryu-vcfv.onrender.com/health)** · **[🎥 Demo Video Walkthrough Script](docs/demo_script.md)**
 
 ---

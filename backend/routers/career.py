@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse
 
+from backend.services import winning_features
 from backend.services.career_file_parser import extract_resume_from_file_bytes, ResumeParseResult
 
 from backend.dependencies import _get_current_identity, _get_or_create_user_id
@@ -389,6 +390,21 @@ async def analyze_opportunity_job_endpoint(
         master=master.content,
         custom_description=custom_desc,
     )
+
+
+@router.get("/opportunities/{opportunity_id}/company-intel")
+async def get_company_intel_endpoint(opportunity_id: int, request: Request):
+    """
+    Generates a strategic intelligence brief for a specific opportunity.
+    Used in the Application Workspace to help candidates tailor their application.
+    """
+    user_id = _get_or_create_user_id(request)
+    opp = await get_opportunity_by_id(opportunity_id, user_id)
+    if not opp:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+
+    brief = await winning_features.generate_company_intel_brief(opp)
+    return brief
 
 
 
