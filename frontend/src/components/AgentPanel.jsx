@@ -195,6 +195,7 @@ export default function AgentPanel({ onTaskMutated, conversationId }) {
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        credentials: 'include',
         body: JSON.stringify(reqBody),
         signal: controller.signal,
       })
