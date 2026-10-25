@@ -35,7 +35,7 @@ def assert_backend_database_safe(backend_url: str = "http://localhost:8001"):
                 f"ABORTED: Acceptance test is configured with protected database host '{db_host}'! "
                 f"Local acceptance testing must use an isolated development database branch."
             )
-    print(f"✅ Verified: Acceptance test environment target is safe.")
+    print("✅ Verified: Acceptance test environment target is safe.")
 
 
 async def run_browser_acceptance():

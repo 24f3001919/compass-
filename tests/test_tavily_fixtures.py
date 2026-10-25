@@ -412,7 +412,6 @@ def test_dst_transition_timezone_handling():
     After DST change (2026-11-05): 1:00pm EST equals 10:00 PST (-08:00) and 18:00 UTC.
     Range parsing selects the deadline candidate's time (13:00 EDT), never range-start 09:00.
     """
-    from datetime import timezone
     from zoneinfo import ZoneInfo
     from backend.services.tavily_pipeline import _parse_explicit_year_date
 
@@ -459,7 +458,6 @@ def test_deadlines_at_midnight_and_day_end_and_timezones():
     """Verify deadlines at 00:00 and 23:59 local across EDT, EST, PDT, PST, and IST.
     Ensures explicit found_time metadata is preserved and hour=0 (midnight) is not dropped.
     """
-    from datetime import timezone
     from zoneinfo import ZoneInfo
     from backend.services.tavily_pipeline import _parse_explicit_year_date, evaluate_deterministic_verdict
 
