@@ -382,8 +382,26 @@ export async function seedJudgeDemoPersona() {
       body: JSON.stringify({ tz }),
     })
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.detail || `Failed to seed demo persona (HTTP ${res.status})`)
+      let errPayload = {}
+      try {
+        errPayload = await res.json()
+      } catch {
+        /* non-JSON response e.g. 503 HTML from proxy */
+      }
+      const retryHeader = res.headers.get('retry-after')
+      const retryAfterSec = retryHeader ? parseInt(retryHeader, 10) : null
+      const detailObj = typeof errPayload.detail === 'object' && errPayload.detail ? errPayload.detail : {}
+      const code = errPayload.code || detailObj.code || (
+        res.status === 403 ? 'seeding_disabled' :
+        res.status === 503 ? 'db_unavailable' :
+        res.status === 401 ? 'unauthorized' : 'unknown_error'
+      )
+      const detailText = detailObj.detail || (typeof errPayload.detail === 'string' ? errPayload.detail : '') || errPayload.message || `HTTP ${res.status}`
+      const error = new Error(detailText)
+      error.status = res.status
+      error.code = code
+      error.retryAfter = retryAfterSec
+      throw error
     }
     const data = await res.json()
     if (typeof window !== 'undefined' && typeof window.CustomEvent === 'function') {
