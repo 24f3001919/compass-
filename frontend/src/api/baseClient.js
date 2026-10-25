@@ -370,10 +370,10 @@ export async function checkBackendHealth(force = false) {
       }
 
       const data = await res.json()
-      if (data.db_connected || data.status === 'ok') {
+      if (data.db_connected || data.status === 'ok' || data.database === 'connected') {
         return 'Live • Neon Connected'
       }
-      return 'Edge Online • Syncing'
+      return 'Live • Edge Connected'
     } catch {
       return 'Waking up the server…'
     } finally {
