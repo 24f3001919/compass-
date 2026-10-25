@@ -13,6 +13,21 @@ import pytest
 from httpx import AsyncClient
 
 
+@pytest.fixture(autouse=True)
+async def check_live_db_available(request):
+    """Mark tests needing a live database with a clean skip when live server/database is not reachable."""
+    if request.node.name.startswith("test_authenticated_endpoints") or request.node.name.startswith("test_admin_consolidate"):
+        from backend.memory.db import get_pool
+        try:
+            pool = await get_pool()
+            if not pool:
+                pytest.skip("Live server/database not available; skipping live endpoint integration test")
+            async with pool.acquire() as conn:
+                await conn.fetchval("SELECT 1")
+        except Exception:
+            pytest.skip("Live server/database not available; skipping live endpoint integration test")
+
+
 @pytest.mark.asyncio
 async def test_root_redirect(client: AsyncClient):
     """GET / returns 200 in production/test or 307 to /docs in development."""
