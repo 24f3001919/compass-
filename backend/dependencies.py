@@ -402,7 +402,7 @@ def _get_or_create_user_id(request: Request) -> str:
         return ident.id
     raise HTTPException(
         status_code=401,
-        detail="Authentication or valid guest token required",
+        detail="Authentication required: active session or valid guest token required",
     )
 
 
