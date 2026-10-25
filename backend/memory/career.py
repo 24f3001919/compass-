@@ -1027,3 +1027,29 @@ async def log_application_event(application_id: int, event_type: str, details: D
             event_type,
             json.dumps(details),
         )
+
+
+async def list_application_events(application_id: int) -> List[Dict[str, Any]]:
+    """Return historical timeline events for an application (database or in-memory fallback)."""
+    pool = await get_pool()
+    if pool is None:
+        return [e for e in _in_memory_events if e.get("application_id") == application_id]
+
+    try:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT event_type, details, created_at FROM application_events WHERE application_id = $1 ORDER BY created_at DESC LIMIT 50",
+                application_id,
+            )
+            return [
+                {
+                    "event_type": r["event_type"],
+                    "payload": json.loads(r["details"]) if isinstance(r["details"], str) else (r["details"] or {}),
+                    "created_at": r["created_at"],
+                }
+                for r in rows
+            ]
+    except Exception as exc:
+        logger.warning(f"Failed to fetch application events from DB: {exc}")
+        return [e for e in _in_memory_events if e.get("application_id") == application_id]
+

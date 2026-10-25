@@ -253,6 +253,8 @@ class UserOpportunityProfileIn(BaseModel):
     preferred_work_arrangements: List[str] = Field(default_factory=lambda: ["remote", "hybrid", "onsite"])
     preferred_roles: List[str] = Field(default_factory=list)
     skills: List[str] = Field(default_factory=list)
+    learning_skills: List[str] = Field(default_factory=list)
+    auto_prepare_strongest_matches: bool = False
     min_compensation: Optional[str] = None
     resume_url: Optional[str] = None
 

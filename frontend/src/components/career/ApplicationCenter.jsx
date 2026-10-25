@@ -10,6 +10,8 @@ import {
 } from '../../api/careerApi'
 import BatchApprovalModal from './BatchApprovalModal'
 import HandoffKitModal from './HandoffKitModal'
+import HandoffKitDrawer from './HandoffKitDrawer'
+import ReturnSubmissionPrompt from './ReturnSubmissionPrompt'
 import CoverLetterModal from './CoverLetterModal'
 import { cleanOpportunity } from '../../utils/jobCardCleaner'
 
@@ -19,6 +21,7 @@ export default function ApplicationCenter() {
   const [currentBatch, setCurrentBatch] = useState(null)
   const [showApprovalModal, setShowApprovalModal] = useState(false)
   const [activeKit, setActiveKit] = useState(null)
+  const [activeDrawerApp, setActiveDrawerApp] = useState(null)
   const [activeLetterApp, setActiveLetterApp] = useState(null)
   const [letterDraftingId, setLetterDraftingId] = useState(null)
   const [statusFilter, setStatusFilter] = useState('ALL')
@@ -249,6 +252,7 @@ export default function ApplicationCenter() {
       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
         {[
           { id: 'ALL', label: `All (${applications.length})` },
+          { id: 'HANDOFF_READY', label: `Handoff Ready (${applications.filter(a => a.status === 'HANDOFF_KIT_READY').length})` },
           { id: 'NEEDS_REVIEW', label: `Needs Review (${applications.filter(a => ['READY_FOR_REVIEW', 'READY_FOR_APPROVAL', 'PREPARING'].includes(a.status)).length})` },
           { id: 'APPROVED', label: `Approved (${applications.filter(a => a.status === 'APPROVED_FOR_SUBMISSION').length})` },
           { id: 'SUBMITTED', label: `Submitted (${applications.filter(a => ['SUBMITTED', 'MANUAL_SUBMISSION_REQUIRED'].includes(a.status)).length})` },
@@ -309,6 +313,7 @@ export default function ApplicationCenter() {
                 {applications
                   .filter(a => {
                     if (statusFilter === 'ALL') return true
+                    if (statusFilter === 'HANDOFF_READY') return a.status === 'HANDOFF_KIT_READY'
                     if (statusFilter === 'NEEDS_REVIEW') return ['READY_FOR_REVIEW', 'READY_FOR_APPROVAL', 'PREPARING'].includes(a.status)
                     if (statusFilter === 'APPROVED') return a.status === 'APPROVED_FOR_SUBMISSION'
                     if (statusFilter === 'SUBMITTED') return ['SUBMITTED', 'MANUAL_SUBMISSION_REQUIRED'].includes(a.status)
@@ -449,13 +454,13 @@ export default function ApplicationCenter() {
                           {app.target_deadline || opp.confirmed_close_date || 'Rolling'}
                         </td>
                         <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                          {app.submission_payload?.portal_url ? (
+                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
                             <button
                               type="button"
-                              onClick={() => setActiveKit(app.submission_payload)}
+                              onClick={() => setActiveDrawerApp(app)}
                               style={{
-                                background: 'var(--primary)',
-                                color: '#fff',
+                                background: 'var(--brand, #3b82f6)',
+                                color: '#ffffff',
                                 border: 'none',
                                 padding: '4px 10px',
                                 borderRadius: '6px',
@@ -464,25 +469,24 @@ export default function ApplicationCenter() {
                                 cursor: 'pointer',
                               }}
                             >
-                              Handoff Kit
+                              📋 Handoff Kit
                             </button>
-                          ) : opp.official_application_url ? (
-                            <a
-                              href={opp.official_application_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              style={{
-                                color: 'var(--primary)',
-                                fontSize: '12px',
-                                fontWeight: '600',
-                                textDecoration: 'none',
-                              }}
-                            >
-                              Official Portal ↗
-                            </a>
-                          ) : (
-                            <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>-</span>
-                          )}
+                            {opp.official_application_url && (
+                              <a
+                                href={opp.official_application_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{
+                                  color: 'var(--primary)',
+                                  fontSize: '12px',
+                                  fontWeight: '600',
+                                  textDecoration: 'none',
+                                }}
+                              >
+                                ↗
+                              </a>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     )
@@ -519,6 +523,25 @@ export default function ApplicationCenter() {
         activeLetterApp={activeLetterApp}
         onClose={() => setActiveLetterApp(null)}
         onSave={handleSaveCoverLetter}
+      />
+
+      {/* Comprehensive Tenant-Scoped Handoff Kit Drawer */}
+      <HandoffKitDrawer
+        isOpen={Boolean(activeDrawerApp)}
+        onClose={() => setActiveDrawerApp(null)}
+        applicationId={activeDrawerApp?.id}
+        opportunity={activeDrawerApp?.opportunity}
+        onMarkApplied={async () => {
+          await loadData()
+          setActiveDrawerApp(null)
+        }}
+      />
+
+      {/* Dismissible Post-External-Return Prompt */}
+      <ReturnSubmissionPrompt
+        onSubmissionConfirmed={async () => {
+          await loadData()
+        }}
       />
     </div>
   )

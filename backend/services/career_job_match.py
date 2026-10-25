@@ -110,22 +110,68 @@ def analyze_job_and_match(
 
     skills_list = sorted(list(req_skills))
 
+    # Check if candidate profile is complete
+    is_empty_profile = (
+        not master
+        or (not master.skills and not master.projects and not master.education and not (master.full_name or "").strip())
+    )
+
+    if is_empty_profile:
+        gap_actions = [
+            {
+                "skill": s,
+                "learning_resource_type": "Official documentation, interactive courses, and hands-on tutorials",
+                "project_idea": f"Create a demonstration project showcasing practical {s} implementation with test suites",
+                "evidence_appearance": f"Public GitHub repository with verifiable commits and CI/CD demonstrating {s}",
+            }
+            for s in skills_list
+        ]
+        return JobAnalysisReport(
+            opportunity_id=opportunity.id,
+            role_title=opportunity.role_title,
+            company_name=opportunity.company_name,
+            mandatory_qualifications=mandatory,
+            preferred_qualifications=preferred,
+            responsibilities=responsibilities,
+            required_skills=skills_list,
+            location_and_eligibility={
+                "location": opportunity.location or "Not specified",
+                "is_remote": getattr(opportunity, "work_arrangement", "") == "remote",
+                "target_years": getattr(opportunity.requirements, "eligible_graduation_years", []) if opportunity.requirements else [],
+            },
+            matches=[],
+            match_score=0.0,
+            summary_verdict="Complete your profile to view your skill overlap estimate and personalized action plan.",
+            missing_critical_skills=skills_list,
+            skill_overlap_estimate=0.0,
+            matched_skills=[],
+            missing_skills=skills_list,
+            partial_skills=[],
+            gap_actions=gap_actions,
+            has_complete_profile=False,
+            profile_missing_message="Complete your profile to view skill overlap analysis. No verified skills found.",
+            formula_explanation="Skill overlap estimate = (matched + 0.5 * partial) / total required skills",
+        )
+
     # Build Master Profile evidence index
     master_skills_norm = {s.strip().lower(): s for s in master.skills}
+    learning_skills_norm = {s.strip().lower(): s for s in getattr(master, "learning_skills", [])}
     master_projects_text = " ".join(
         f"{p.title} {p.description} {' '.join(p.highlights)} {' '.join(p.technologies)}"
         for p in master.projects
     ).lower()
 
     matches: List[JobMatchEvidence] = []
-    supported_count = 0
-    missing_critical: List[str] = []
+    matched_skills: List[str] = []
+    partial_skills: List[str] = []
+    missing_skills: List[str] = []
+    gap_actions: List[Dict[str, Any]] = []
 
     # 1. Match Required Skills
     for skill in skills_list:
         s_low = skill.lower()
         if s_low in master_skills_norm:
-            supported_count += 1
+            matched_skills.append(skill)
             matches.append(
                 JobMatchEvidence(
                     requirement=skill,
@@ -137,21 +183,28 @@ def analyze_job_and_match(
                     confidence=1.0,
                 )
             )
-        elif s_low in master_projects_text:
-            supported_count += 0.5
+        elif s_low in master_projects_text or s_low in learning_skills_norm:
+            partial_skills.append(skill)
+            source = "learning list" if s_low in learning_skills_norm else "project implementations"
             matches.append(
                 JobMatchEvidence(
                     requirement=skill,
                     category="technical_skill",
                     is_mandatory=True,
                     match_status="partial",
-                    supporting_facts=["Mentioned in project implementations."],
-                    reasoning=f"Skill {skill} is applied in verified project work but not highlighted in primary skills.",
+                    supporting_facts=[f"Mentioned in candidate {source}."],
+                    reasoning=f"Skill {skill} is tracked in candidate {source} but not yet a verified primary competency.",
                     confidence=0.8,
                 )
             )
         else:
-            missing_critical.append(skill)
+            missing_skills.append(skill)
+            gap_actions.append({
+                "skill": skill,
+                "learning_resource_type": "Official documentation, interactive courses, and hands-on tutorials",
+                "project_idea": f"Create a demonstration project showcasing practical {skill} implementation with test suites",
+                "evidence_appearance": f"Public GitHub repository with verifiable commits and CI/CD demonstrating {skill}",
+            })
             matches.append(
                 JobMatchEvidence(
                     requirement=skill,
@@ -161,7 +214,7 @@ def analyze_job_and_match(
                     supporting_facts=[],
                     reasoning=(
                         f"Skill '{skill}' is required by {opportunity.company_name} but absent from verified master profile. "
-                        "Do not fabricate — confirm with candidate."
+                        "Do not fabricate — deliberate candidate action required to verify."
                     ),
                     confidence=0.9,
                 )
@@ -199,16 +252,17 @@ def analyze_job_and_match(
                     )
                 )
 
-    # Compute honest match score (0 - 100)
+    # Compute honest skill overlap estimate (0 - 100)
     total_eval = max(len(skills_list), 1)
-    match_score = round(min(100.0, (supported_count / total_eval) * 100.0), 1)
+    skill_overlap = round(min(100.0, ((len(matched_skills) + 0.5 * len(partial_skills)) / total_eval) * 100.0), 1)
 
-    if match_score >= 80:
-        verdict = f"Strong alignment ({match_score}%): Most required technical competencies verified."
-    elif match_score >= 50:
-        verdict = f"Moderate alignment ({match_score}%): Core skills verified, but some required tools are missing evidence."
+    # Transparent, non-promising verdict
+    if skill_overlap >= 80:
+        verdict = f"Skill overlap estimate: {skill_overlap}%. High requirement coverage with {len(matched_skills)} verified and {len(partial_skills)} partial competencies."
+    elif skill_overlap >= 50:
+        verdict = f"Skill overlap estimate: {skill_overlap}%. Moderate requirement coverage: core skills verified with {len(missing_skills)} actionable skill gaps."
     else:
-        verdict = f"Emerging alignment ({match_score}%): Significant skills gaps detected between profile and requirements."
+        verdict = f"Skill overlap estimate: {skill_overlap}%. Foundational overlap: {len(missing_skills)} required skills identified for active skill building."
 
     return JobAnalysisReport(
         opportunity_id=opportunity.id,
@@ -224,7 +278,16 @@ def analyze_job_and_match(
             "target_years": getattr(opportunity.requirements, "eligible_graduation_years", []) if opportunity.requirements else [],
         },
         matches=matches,
-        match_score=match_score,
+        match_score=skill_overlap,
         summary_verdict=verdict,
-        missing_critical_skills=missing_critical,
+        missing_critical_skills=missing_skills,
+        skill_overlap_estimate=skill_overlap,
+        matched_skills=matched_skills,
+        missing_skills=missing_skills,
+        partial_skills=partial_skills,
+        gap_actions=gap_actions,
+        has_complete_profile=True,
+        profile_missing_message=None,
+        formula_explanation="Skill overlap estimate = (matched + 0.5 * partial) / total required skills",
     )
+

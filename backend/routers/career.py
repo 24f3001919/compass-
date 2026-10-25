@@ -11,11 +11,16 @@ from __future__ import annotations
 import logging
 import re
 import uuid
-from typing import Any, Dict, List, Optional
+from datetime import date, datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Set
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse
 
+from backend.services.career_auto_prepare import (
+    execute_auto_prepare_for_user,
+    get_user_quota_status,
+)
 from backend.services import winning_features
 from backend.services.rate_limiter import enforce_company_intel_guard
 from backend.services.career_file_parser import extract_resume_from_file_bytes, ResumeParseResult
@@ -32,6 +37,7 @@ from backend.memory.career import (
     get_master_resume,
     get_original_resume_document,
     get_resume_by_id,
+    list_application_events,
     list_career_applications,
     list_original_resume_documents,
     list_resumes,
@@ -57,6 +63,8 @@ from backend.models_career import (
     ExternalProfileImportRequest,
     GitHubImportRequest,
     GitHubProfileIntelligence,
+    HandoffKitOut,
+    AddSkillRequest,
     JobAnalysisReport,
     OriginalResumeDocument,
     ResumeContent,
@@ -731,13 +739,114 @@ async def set_application_cover_letter_endpoint(app_id: int, body: Dict[str, Any
     return app
 
 
+ALLOWED_STATUS_TRANSITIONS: Dict[str, Set[str]] = {
+    CareerApplicationStatus.SAVED.value: {
+        CareerApplicationStatus.PREPARING.value,
+        CareerApplicationStatus.READY_FOR_REVIEW.value,
+        CareerApplicationStatus.HANDOFF_KIT_READY.value,
+        CareerApplicationStatus.WITHDRAWN.value,
+    },
+    CareerApplicationStatus.PREPARING.value: {
+        CareerApplicationStatus.READY_FOR_REVIEW.value,
+        CareerApplicationStatus.HANDOFF_KIT_READY.value,
+        CareerApplicationStatus.WITHDRAWN.value,
+    },
+    CareerApplicationStatus.READY_FOR_REVIEW.value: {
+        CareerApplicationStatus.READY_FOR_APPROVAL.value,
+        CareerApplicationStatus.HANDOFF_KIT_READY.value,
+        CareerApplicationStatus.WITHDRAWN.value,
+    },
+    CareerApplicationStatus.READY_FOR_APPROVAL.value: {
+        CareerApplicationStatus.APPROVED_FOR_SUBMISSION.value,
+        CareerApplicationStatus.HANDOFF_KIT_READY.value,
+        CareerApplicationStatus.WITHDRAWN.value,
+    },
+    CareerApplicationStatus.APPROVED_FOR_SUBMISSION.value: {
+        CareerApplicationStatus.SUBMITTING.value,
+        CareerApplicationStatus.HANDOFF_KIT_READY.value,
+        CareerApplicationStatus.WITHDRAWN.value,
+    },
+    CareerApplicationStatus.SUBMITTING.value: {
+        CareerApplicationStatus.SUBMITTED.value,
+        CareerApplicationStatus.SUBMISSION_FAILED.value,
+        CareerApplicationStatus.HANDOFF_KIT_READY.value,
+        CareerApplicationStatus.WITHDRAWN.value,
+    },
+    CareerApplicationStatus.HANDOFF_KIT_READY.value: {
+        CareerApplicationStatus.SUBMITTED.value,
+        CareerApplicationStatus.MANUAL_SUBMISSION_REQUIRED.value,
+        CareerApplicationStatus.READY_FOR_REVIEW.value,
+        CareerApplicationStatus.WITHDRAWN.value,
+    },
+    CareerApplicationStatus.MANUAL_SUBMISSION_REQUIRED.value: {
+        CareerApplicationStatus.HANDOFF_KIT_READY.value,
+        CareerApplicationStatus.SUBMITTED.value,
+        CareerApplicationStatus.WITHDRAWN.value,
+    },
+    CareerApplicationStatus.SUBMITTED.value: {
+        CareerApplicationStatus.ASSESSMENT_RECEIVED.value,
+        CareerApplicationStatus.INTERVIEW.value,
+        CareerApplicationStatus.OFFER_RECEIVED.value,
+        CareerApplicationStatus.REJECTED.value,
+        CareerApplicationStatus.WITHDRAWN.value,
+    },
+    CareerApplicationStatus.ASSESSMENT_RECEIVED.value: {
+        CareerApplicationStatus.INTERVIEW.value,
+        CareerApplicationStatus.OFFER_RECEIVED.value,
+        CareerApplicationStatus.REJECTED.value,
+        CareerApplicationStatus.WITHDRAWN.value,
+    },
+    CareerApplicationStatus.INTERVIEW.value: {
+        CareerApplicationStatus.OFFER_RECEIVED.value,
+        CareerApplicationStatus.REJECTED.value,
+        CareerApplicationStatus.WITHDRAWN.value,
+    },
+    CareerApplicationStatus.OFFER_RECEIVED.value: {
+        CareerApplicationStatus.CLOSED.value,
+        CareerApplicationStatus.WITHDRAWN.value,
+        CareerApplicationStatus.REJECTED.value,
+    },
+    CareerApplicationStatus.REJECTED.value: {
+        CareerApplicationStatus.CLOSED.value,
+    },
+    CareerApplicationStatus.WITHDRAWN.value: {
+        CareerApplicationStatus.CLOSED.value,
+        CareerApplicationStatus.SAVED.value,
+    },
+}
+
+
 @router.patch("/applications/{app_id}", response_model=CareerApplicationOut)
 async def update_application_endpoint(app_id: int, body: UpdateApplicationStatusRequest, request: Request):
-    """Update application status, answers, or private notes."""
+    """
+    Update application status, answers, or private notes.
+    Enforces allowed state transition rules and idempotent updates.
+    """
     user_id = _get_or_create_user_id(request)
+    existing_app = await get_career_application_by_id(app_id, user_id)
+    if not existing_app:
+        raise HTTPException(status_code=404, detail="Application not found")
+
     updates: Dict[str, Any] = {}
+
     if body.status:
-        updates["status"] = body.status.value
+        new_st = body.status.value
+        curr_st = existing_app.status.value if hasattr(existing_app.status, "value") else str(existing_app.status)
+        if new_st != curr_st:
+            allowed = ALLOWED_STATUS_TRANSITIONS.get(curr_st, set())
+            if new_st not in allowed:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid status transition from '{curr_st}' to '{new_st}'. Allowed transitions: {sorted(list(allowed))}.",
+                )
+            updates["status"] = new_st
+
+            if new_st == CareerApplicationStatus.SUBMITTED.value:
+                updates["submitted_at"] = datetime.now(timezone.utc)
+                if body.target_deadline is None and existing_app.target_deadline is None:
+                    # 14-day follow-up reminder
+                    updates["target_deadline"] = date.today() + timedelta(days=14)
+
     if body.submission_method:
         updates["submission_method"] = body.submission_method.value
     if body.form_answers is not None:
@@ -747,14 +856,267 @@ async def update_application_endpoint(app_id: int, body: UpdateApplicationStatus
     if body.private_notes is not None:
         updates["private_notes"] = body.private_notes
 
+    # Idempotent: If no updates required, return existing
+    if not updates:
+        opp = await get_opportunity_by_id(existing_app.opportunity_id, user_id)
+        existing_app.opportunity = opp
+        return existing_app
+
     app = await update_career_application(app_id, user_id, updates)
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
 
     opp = await get_opportunity_by_id(app.opportunity_id, user_id)
     app.opportunity = opp
-    await log_application_event(app.id, "updated", updates)
+    await log_application_event(app.id, "status_changed", updates)
     return app
+
+
+@router.get("/applications/{app_id}/handoff-kit", response_model=HandoffKitOut)
+async def get_application_handoff_kit_endpoint(app_id: int, request: Request):
+    """
+    Tenant-scoped Handoff Kit for direct portal submission.
+    Transitions pre-submission application to HANDOFF_KIT_READY.
+    Extracts common answers strictly from the master profile (never guessed).
+    Verifies tailored resume validity (blocks export if name/email are empty or placeholders).
+    """
+    user_id = _get_or_create_user_id(request)
+    app = await get_career_application_by_id(app_id, user_id)
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    opp = await get_opportunity_by_id(app.opportunity_id, user_id)
+    if not opp:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+
+    profile = await get_user_opportunity_profile(user_id)
+    master = await get_master_resume(user_id)
+    master_content = master.content if master else ResumeContent()
+
+    # Automatically transition to HANDOFF_KIT_READY if in preparatory states
+    pre_states = {
+        CareerApplicationStatus.SAVED.value,
+        CareerApplicationStatus.PREPARING.value,
+        CareerApplicationStatus.READY_FOR_REVIEW.value,
+        CareerApplicationStatus.READY_FOR_APPROVAL.value,
+        CareerApplicationStatus.APPROVED_FOR_SUBMISSION.value,
+    }
+    curr_st = app.status.value if hasattr(app.status, "value") else str(app.status)
+    if curr_st in pre_states:
+        app = await update_career_application(app.id, user_id, {
+            "status": CareerApplicationStatus.HANDOFF_KIT_READY.value,
+        })
+        await log_application_event(app.id, "status_changed", {"to": CareerApplicationStatus.HANDOFF_KIT_READY.value})
+
+    # Tailored resume export validity check
+    is_blocked = False
+    block_msg = None
+    PLACEHOLDER_NAMES = {"compass candidate", "candidate", ""}
+    PLACEHOLDER_EMAILS = {"candidate@compass.local", ""}
+
+    name = (master_content.full_name or "").strip()
+    email = (master_content.email or "").strip()
+    if not name or name.lower() in PLACEHOLDER_NAMES:
+        is_blocked = True
+        block_msg = "Resume export blocked: Candidate full name is empty or a placeholder. Complete your profile before downloading."
+    elif not email or email.lower() in PLACEHOLDER_EMAILS or "@" not in email:
+        is_blocked = True
+        block_msg = "Resume export blocked: Candidate email is empty or a placeholder. Complete your profile before downloading."
+
+    # Common answers generated strictly from profile (never guessed)
+    common_answers: Dict[str, Optional[str]] = {}
+    missing_fields: List[str] = []
+
+    # Graduation year
+    if profile and profile.grad_year:
+        common_answers["graduation_year"] = str(profile.grad_year)
+    else:
+        common_answers["graduation_year"] = None
+        missing_fields.append("graduation_year")
+
+    # Degree
+    if profile and profile.degree:
+        common_answers["degree"] = profile.degree
+    elif master_content.education and master_content.education[0].degree:
+        common_answers["degree"] = master_content.education[0].degree
+    else:
+        common_answers["degree"] = None
+        missing_fields.append("degree")
+
+    # Links
+    common_answers["linkedin_url"] = master_content.linkedin_url or None
+    if not common_answers["linkedin_url"]:
+        missing_fields.append("linkedin_url")
+
+    common_answers["github_url"] = master_content.github_or_portfolio or None
+    if not common_answers["github_url"]:
+        missing_fields.append("github_url")
+
+    common_answers["portfolio_url"] = profile.resume_url if profile and profile.resume_url else None
+    if not common_answers["portfolio_url"]:
+        missing_fields.append("portfolio_url")
+
+    # Work Authorization
+    if profile and profile.work_authorization:
+        common_answers["work_authorization"] = profile.work_authorization
+    else:
+        common_answers["work_authorization"] = None
+        missing_fields.append("work_authorization")
+
+    # Notice / Availability
+    if profile and profile.preferred_work_arrangements:
+        common_answers["notice_or_availability"] = f"Available for {', '.join(profile.preferred_work_arrangements)} arrangements"
+    else:
+        common_answers["notice_or_availability"] = None
+        missing_fields.append("notice_or_availability")
+
+    # Check for direct listing application email
+    opp_desc = opp.description or ""
+    email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", opp_desc)
+    app_email = email_match.group(0) if email_match else None
+
+    events = await list_application_events(app.id)
+
+    return HandoffKitOut(
+        application_id=app.id,
+        opportunity_id=opp.id,
+        company_name=opp.company_name,
+        role_title=opp.role_title,
+        portal_url=opp.official_application_url or opp.canonical_url,
+        application_email=app_email,
+        status=app.status.value if hasattr(app.status, "value") else str(app.status),
+        tailored_resume_id=app.resume_id,
+        export_html_url=f"/api/career/resumes/{app.resume_id}/export/html" if app.resume_id else None,
+        export_docx_url=f"/api/career/resumes/{app.resume_id}/export/docx" if app.resume_id else None,
+        is_export_blocked=is_blocked,
+        block_reason=block_msg,
+        cover_letter=app.cover_letter,
+        common_answers=common_answers,
+        missing_profile_fields=missing_fields,
+        checklist={
+            "resume_attached": bool(app.resume_id and not is_blocked),
+            "cover_letter_reviewed": bool(app.cover_letter),
+            "questions_answered": len(missing_fields) == 0,
+            "submitted_on_portal": curr_st == CareerApplicationStatus.SUBMITTED.value,
+        },
+        timeline=[
+            {
+                "event_type": e.get("event_type", "event"),
+                "timestamp": e.get("created_at", datetime.now(timezone.utc)).isoformat() if hasattr(e.get("created_at"), "isoformat") else str(e.get("created_at")),
+                "payload": e.get("payload", {}),
+            }
+            for e in events[:10]
+        ],
+        follow_up_reminder_days=14,
+    )
+
+
+@router.post("/applications/{app_id}/mark-applied", response_model=CareerApplicationOut)
+async def mark_application_applied_endpoint(app_id: int, request: Request):
+    """
+    Explicit user confirmation that the application was submitted on the external portal.
+    NEVER set automatically. Schedules a 14-day follow-up reminder and logs timeline event.
+    """
+    user_id = _get_or_create_user_id(request)
+    app = await get_career_application_by_id(app_id, user_id)
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    now = datetime.now(timezone.utc)
+    follow_up = date.today() + timedelta(days=14)
+
+    updated = await update_career_application(app_id, user_id, {
+        "status": CareerApplicationStatus.SUBMITTED.value,
+        "submitted_at": now,
+        "target_deadline": follow_up,
+    })
+    await log_application_event(app.id, "applied_confirmed_by_user", {
+        "submitted_at": now.isoformat(),
+        "follow_up_reminder": str(follow_up),
+    })
+
+    opp = await get_opportunity_by_id(app.opportunity_id, user_id)
+    updated.opportunity = opp
+    return updated
+
+
+@router.post("/skills/add")
+async def add_skill_deliberate_endpoint(body: AddSkillRequest, request: Request):
+    """
+    Deliberate candidate action to add a skill:
+    - If verified: Requires an explicit evidence note or URL.
+    - If learning: Added to candidate's learning skills list (never exported on resumes).
+    """
+    user_id = _get_or_create_user_id(request)
+    skill_clean = body.skill.strip()
+    if not skill_clean:
+        raise HTTPException(status_code=400, detail="Skill name is required.")
+
+    master = await get_master_resume(user_id)
+    if not master:
+        profile = await get_user_opportunity_profile(user_id) or UserOpportunityProfileIn()
+        master = await upsert_master_resume(user_id, build_default_master_from_profile(profile), "Master Resume")
+
+    content = master.content
+    if body.category == "verified":
+        if not (body.evidence_note or "").strip() and not (body.evidence_url or "").strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Verified skills require evidence: please provide an evidence note or link demonstrating implementation.",
+            )
+        if skill_clean not in content.skills:
+            content.skills.append(skill_clean)
+            if body.evidence_note:
+                content.evidence_notes[skill_clean] = body.evidence_note.strip()
+            if body.evidence_url:
+                content.relevant_links.append(f"{skill_clean}: {body.evidence_url.strip()}")
+            # Remove from learning list if present
+            content.learning_skills = [s for s in content.learning_skills if s.lower() != skill_clean.lower()]
+            await update_resume(master.id, user_id, {"content": content.model_dump()})
+        return {
+            "status": "added_verified",
+            "skill": skill_clean,
+            "category": "verified",
+            "message": f"Skill '{skill_clean}' added to verified profile with supporting evidence.",
+        }
+    else:
+        # Category learning: saved separately, never exported to resume
+        if skill_clean not in content.learning_skills:
+            content.learning_skills.append(skill_clean)
+            await update_resume(master.id, user_id, {"content": content.model_dump()})
+        return {
+            "status": "added_learning",
+            "skill": skill_clean,
+            "category": "learning",
+            "message": f"Skill '{skill_clean}' added to 'Skills I'm learning'. This is omitted from resume exports.",
+        }
+
+
+@router.post("/auto-prepare")
+async def trigger_auto_prepare_endpoint(request: Request):
+    """
+    Opt-in, cost-guarded auto-prepare endpoint.
+    Processes at most 3 watchlisted opportunities with ELIGIBLE status for candidates with complete profiles.
+    Returns 429 if daily limit exceeded.
+    """
+    user_id = _get_or_create_user_id(request)
+    result = await execute_auto_prepare_for_user(user_id)
+    if result.get("status") == "rate_limited":
+        retry_after = result.get("retry_after", 86400)
+        raise HTTPException(
+            status_code=429,
+            detail=result.get("message", "Daily auto-prepare rate limit exceeded."),
+            headers={"Retry-After": str(retry_after)},
+        )
+    return result
+
+
+@router.get("/auto-prepare/status")
+async def get_auto_prepare_status_endpoint(request: Request):
+    """Inspect daily auto-prepare quota usage, remaining drafts, and cooldown countdown."""
+    user_id = _get_or_create_user_id(request)
+    return get_user_quota_status(user_id)
+
 
 
 # ===========================================================================
