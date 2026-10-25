@@ -21,6 +21,7 @@ from backend.dependencies import (
 from backend.memory import structured
 from backend.memory.db import get_pool
 from backend.models import AddDependencyBody
+from backend.services.rate_limiter import enforce_seeding_rate_limits
 
 logger = logging.getLogger("compass.routers.tasks_verification")
 settings = get_settings()
@@ -193,9 +194,9 @@ async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRe
     Requires an authenticated user session or verified guest identity.
     Writes seeded tasks and memories strictly bound to the caller's identity.
     """
-    raw_enable = getattr(settings, "ENABLE_DEMO_SEEDING", True)
+    raw_enable = getattr(settings, "ENABLE_DEMO_SEEDING", False)
     if isinstance(raw_enable, str):
-        enable_seeding = raw_enable.strip().lower() not in ("false", "0", "no", "off", "f")
+        enable_seeding = raw_enable.strip().lower() in ("true", "1", "yes", "on", "t")
     else:
         enable_seeding = bool(raw_enable)
 
@@ -205,19 +206,27 @@ async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRe
             detail={"code": "seeding_disabled", "detail": "Demo data seeding is disabled on this server."},
         )
 
-    ident = _get_current_identity(request)
+    ident = None
+    try:
+        ident = _get_current_identity(request)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Identity resolution failed due to DB/system error: %s", e)
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "db_unavailable", "detail": "The server database is waking up or temporarily unavailable."},
+            headers={"Retry-After": "5"},
+        ) from e
+
     user_id = ident.id if ident else None
-    minted_token = None
     if not user_id:
-        verified_guest = _extract_verified_guest_id(request)
-        if verified_guest:
-            user_id = verified_guest
-        else:
-            try:
-                user_id = _get_or_create_user_id(request)
-            except Exception:
-                gid, minted_token = generate_guest_token()
-                user_id = gid
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "auth_required", "detail": "Authentication required: valid session or signed guest token required to seed demo data."},
+        )
+
+    await enforce_seeding_rate_limits(request, user_id)
 
     try:
         pool = await get_pool()
@@ -677,9 +686,6 @@ async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRe
         "task_ids": seeded_task_ids,
         "user_id": user_id,
     }
-    if minted_token:
-        res_payload["guest_id"] = user_id
-        res_payload["guest_token"] = minted_token
     return res_payload
 
 

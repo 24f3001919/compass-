@@ -37,6 +37,15 @@ test('mapPersonaError maps 403 seeding_disabled properly', () => {
   assert.equal(res.canRetry, false)
 })
 
+test('mapPersonaError maps 429 seeding_rate_limited properly', () => {
+  const err429 = { status: 429, code: 'seeding_rate_limited', message: 'Seeding rate limit reached. Please wait before retrying.', retryAfter: 30 }
+  const res = mapPersonaError(err429)
+  assert.equal(res.type, 'error')
+  assert.equal(res.text, 'Seeding rate limit reached. Please wait before retrying.')
+  assert.equal(res.canRetry, false)
+})
+
+
 test('mapPersonaError maps 401 session expired properly', () => {
   const err401 = { status: 401, code: 'unauthorized' }
   const res = mapPersonaError(err401)

@@ -19,7 +19,16 @@ export function mapPersonaError(err) {
     }
   }
 
-  if (status === 401 || code === 'unauthorized' || code === 'authentication_required') {
+  if (status === 429 || code === 'seeding_rate_limited') {
+    return {
+      type: 'error',
+      text: err.message || 'Seeding rate limit reached. Please wait before retrying.',
+      retryDelay,
+      canRetry: false,
+    }
+  }
+
+  if (status === 401 || code === 'unauthorized' || code === 'authentication_required' || code === 'auth_required') {
     return {
       type: 'error',
       text: 'Session expired. Please refresh.',

@@ -414,9 +414,10 @@ export async function seedJudgeDemoPersona() {
       const isExplicitlyDisabled = errPayload.code === 'seeding_disabled' || detailObj.code === 'seeding_disabled' || detailText.toLowerCase().includes('disabled')
       const code = errPayload.code || detailObj.code || (
         isExplicitlyDisabled ? 'seeding_disabled' :
+        res.status === 429 ? 'seeding_rate_limited' :
         res.status === 403 ? 'auth_forbidden' :
         res.status === 503 ? 'db_unavailable' :
-        res.status === 401 ? 'unauthorized' : 'unknown_error'
+        res.status === 401 ? 'auth_required' : 'unknown_error'
       )
       const error = new Error(detailText)
       error.status = res.status

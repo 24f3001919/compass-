@@ -265,3 +265,171 @@ async def cleanup_stale_rate_limit_buckets(older_than_hours: int = 24) -> int:
     except Exception as e:
         logger.warning("Failed to clean up stale rate limit buckets: %s", e)
     return 0
+
+
+async def enforce_seeding_rate_limits(request: Request, user_id: str) -> None:
+    """Enforce strict multi-tier rate limits for demo persona seeding:
+    1. Per identity: 1 seed / 60 s and 10 / day
+    2. Per IP: 10 seeds / hour counting DISTINCT identities
+    3. Global daily cap on persona-seeded identities (setting, default 300)
+    
+    Each violation returns 429 {code: "seeding_rate_limited"} with Retry-After header.
+    Backed by DB rate limiter (fails closed in production or unset ENVIRONMENT).
+    """
+    from datetime import date
+    from backend.config import get_settings
+    settings = get_settings()
+
+    # Admin exemption via Authorization Bearer token
+    auth_hdr = ""
+    if hasattr(request, "headers") and request.headers:
+        auth_hdr = request.headers.get("authorization") or ""
+    if isinstance(auth_hdr, str) and auth_hdr.lower().startswith("bearer "):
+        bearer_token = auth_hdr.split(" ", 1)[1].strip()
+        auth_token = getattr(settings, "AUTH_TOKEN", None)
+        if isinstance(auth_token, str) and auth_token and hmac.compare_digest(bearer_token, auth_token):
+            return
+
+    # Cap 1a: Per identity 1 seed / 60 seconds
+    key_ident_min = f"seed:ident:min:{user_id}"
+    allowed_min, retry_min = await _consume_token(key_ident_min, capacity=1.0, refill_rate_per_sec=1.0 / 60.0)
+    if not allowed_min:
+        raise HTTPException(
+            status_code=429,
+            detail={"code": "seeding_rate_limited", "detail": "Demo seeding limit reached: maximum 1 seed per 60 seconds per identity."},
+            headers={"Retry-After": str(retry_min)},
+        )
+
+    # Cap 1b: Per identity 10 seeds / day
+    key_ident_day = f"seed:ident:day:{user_id}"
+    allowed_day, retry_day = await _consume_token(key_ident_day, capacity=10.0, refill_rate_per_sec=10.0 / 86400.0)
+    if not allowed_day:
+        raise HTTPException(
+            status_code=429,
+            detail={"code": "seeding_rate_limited", "detail": "Daily demo seeding limit reached for this identity (maximum 10 seeds per day)."},
+            headers={"Retry-After": str(retry_day)},
+        )
+
+    # Cap 2: Per IP 10 seeds / hour counting DISTINCT identities
+    client_ip = get_client_ip(request) or "unknown"
+    key_ip_ident = f"seed:ip_ident:{client_ip}:{user_id}"
+    key_ip_hour = f"seed:ip:hour:{client_ip}"
+
+    # Check if this identity was already counted for this IP in the current 1-hour window
+    pool = None
+    try:
+        pool = await get_pool()
+    except Exception as e:
+        if settings.is_production():
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "rate_limiter_unavailable", "detail": "Service unavailable: rate limiter database is unreachable."},
+                headers={"Retry-After": "5"},
+            ) from e
+
+    already_counted_ip = False
+    if pool:
+        try:
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT EXTRACT(EPOCH FROM (now() - last_updated)) AS elapsed FROM rate_limit_buckets WHERE key = $1",
+                    key_ip_ident,
+                )
+                if row and row["elapsed"] is not None and float(row["elapsed"]) < 3600.0:
+                    already_counted_ip = True
+        except HTTPException:
+            raise
+        except Exception as e:
+            if settings.is_production():
+                raise HTTPException(
+                    status_code=503,
+                    detail={"code": "rate_limiter_unavailable", "detail": "Service unavailable: rate limiter database is unreachable."},
+                    headers={"Retry-After": "5"},
+                ) from e
+    else:
+        # In-memory check
+        bucket = _MEM_BUCKETS.get(key_ip_ident)
+        if bucket and (time.monotonic() - bucket["last_updated"]) < 3600.0:
+            already_counted_ip = True
+
+    if not already_counted_ip:
+        allowed_ip, retry_ip = await _consume_token(key_ip_hour, capacity=10.0, refill_rate_per_sec=10.0 / 3600.0)
+        if not allowed_ip:
+            raise HTTPException(
+                status_code=429,
+                detail={"code": "seeding_rate_limited", "detail": "Hourly demo seeding limit reached for this IP (maximum 10 distinct identities per hour)."},
+                headers={"Retry-After": str(retry_ip)},
+            )
+        # Record identity for this IP
+        if pool:
+            try:
+                async with pool.acquire() as conn:
+                    await conn.execute(
+                        """
+                        INSERT INTO rate_limit_buckets (key, tokens, last_updated)
+                        VALUES ($1, 1.0, now())
+                        ON CONFLICT (key) DO UPDATE
+                        SET tokens = 1.0, last_updated = now()
+                        """,
+                        key_ip_ident,
+                    )
+            except Exception:
+                pass
+        else:
+            _MEM_BUCKETS[key_ip_ident] = {"tokens": 1.0, "last_updated": time.monotonic()}
+
+    # Cap 3: Global daily cap on persona-seeded identities (setting, default 300)
+    global_cap = int(getattr(settings, "GLOBAL_DAILY_DEMO_SEED_CAP", 300))
+    today_str = date.today().isoformat()
+    key_global_ident = f"seed:global_ident:{today_str}:{user_id}"
+    key_global_day = f"seed:global:day:{today_str}"
+
+    already_counted_global = False
+    if pool:
+        try:
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT 1 FROM rate_limit_buckets WHERE key = $1",
+                    key_global_ident,
+                )
+                if row:
+                    already_counted_global = True
+        except HTTPException:
+            raise
+        except Exception as e:
+            if settings.is_production():
+                raise HTTPException(
+                    status_code=503,
+                    detail={"code": "rate_limiter_unavailable", "detail": "Service unavailable: rate limiter database is unreachable."},
+                    headers={"Retry-After": "5"},
+                ) from e
+    else:
+        if key_global_ident in _MEM_BUCKETS:
+            already_counted_global = True
+
+    if not already_counted_global:
+        allowed_glob, retry_glob = await _consume_token(key_global_day, capacity=float(global_cap), refill_rate_per_sec=float(global_cap) / 86400.0)
+        if not allowed_glob:
+            raise HTTPException(
+                status_code=429,
+                detail={"code": "seeding_rate_limited", "detail": f"Global daily demo seeding limit ({global_cap} identities) reached. Paused until tomorrow."},
+                headers={"Retry-After": str(retry_glob)},
+            )
+        # Record global identity for today
+        if pool:
+            try:
+                async with pool.acquire() as conn:
+                    await conn.execute(
+                        """
+                        INSERT INTO rate_limit_buckets (key, tokens, last_updated)
+                        VALUES ($1, 1.0, now())
+                        ON CONFLICT (key) DO UPDATE
+                        SET tokens = 1.0, last_updated = now()
+                        """,
+                        key_global_ident,
+                    )
+            except Exception:
+                pass
+        else:
+            _MEM_BUCKETS[key_global_ident] = {"tokens": 1.0, "last_updated": time.monotonic()}
+
