@@ -280,6 +280,52 @@ def extract_signed_edge_client_ip(sig_header: Optional[str], secret: str, max_ag
     return None
 
 
+# Known reverse proxy CIDRs
+TRUSTED_PROXY_NETWORKS = [
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("76.76.21.0/24"),      # Vercel proxy range
+    ipaddress.ip_network("18.144.0.0/16"),     # AWS Singapore (Vercel egress)
+    ipaddress.ip_network("54.176.0.0/16"),     # AWS US-West (Vercel egress)
+    ipaddress.ip_network("13.57.0.0/16"),      # AWS US-West (Vercel egress)
+    ipaddress.ip_network("13.235.0.0/16"),     # AWS India (Vercel egress)
+]
+
+
+def is_trusted_proxy(ip_str: str, networks: Optional[List[Union[ipaddress.IPv4Network, ipaddress.IPv6Network]]] = None) -> bool:
+    """Check if an IP string belongs to trusted reverse proxy networks."""
+    nets = networks if networks is not None else TRUSTED_PROXY_NETWORKS
+    try:
+        ip = ipaddress.ip_address(ip_str.strip())
+        return any(ip in net for net in nets)
+    except ValueError:
+        return False
+
+
+def get_client_ip_safe(
+    xff_header: Optional[str],
+    client_host: str,
+    networks: Optional[List[Union[ipaddress.IPv4Network, ipaddress.IPv6Network]]] = None,
+) -> str:
+    """Extract real client IP by walking X-Forwarded-For from right to left past trusted proxy CIDRs."""
+    if not xff_header or not xff_header.strip():
+        return client_host
+    parts = [p.strip() for p in xff_header.split(",") if p.strip()]
+    nets = networks if networks is not None else TRUSTED_PROXY_NETWORKS
+
+    # Walk from the right: skip all trusted proxies until the first external IP
+    for ip in reversed(parts):
+        try:
+            ip_obj = ipaddress.ip_address(ip)
+            if not any(ip_obj in net for net in nets):
+                return ip  # First untrusted IP from right = actual client
+        except ValueError:
+            continue
+    return client_host
+
+
 def get_client_ip(request: Request) -> str:
     """Safely extract client IP address behind trusted reverse proxies (Render / Cloudflare / Vercel).
 
@@ -288,6 +334,7 @@ def get_client_ip(request: Request) -> str:
     - If valid edge signature header is present ('client_ip|timestamp|signature' signed with EDGE_HMAC_SECRET),
       the backend trusts that signed client_ip.
     - If valid edge signature over timestamp only is present (legacy), trusts parts[-2] in XFF.
+    - If TRUSTED_PROXY_CIDR_RESOLUTION is True, strips known proxy CIDRs from XFF right-to-left.
     - Evaluates TRUSTED_PROXY_HOPS: extracts parts[-hops] if len(parts) >= hops, otherwise falls back to TCP peer.
     - If direct connection without valid proxy chain/signature, uses TCP peer address.
     """
@@ -310,9 +357,14 @@ def get_client_ip(request: Request) -> str:
         if signed_ip:
             return signed_ip
 
-    # 2. Configurable Trusted Proxy Hops (Nth-from-right extraction)
-    hops = int(getattr(settings, "TRUSTED_PROXY_HOPS", 1))
+    # 2. Optional CIDR-aware resolution
     xff = request.headers.get("x-forwarded-for")
+    if getattr(settings, "TRUSTED_PROXY_CIDR_RESOLUTION", False) and xff:
+        client_host = request.client.host if request.client and request.client.host else "127.0.0.1"
+        return get_client_ip_safe(xff, client_host)
+
+    # 3. Configurable Trusted Proxy Hops (Nth-from-right extraction, default behavior)
+    hops = int(getattr(settings, "TRUSTED_PROXY_HOPS", 1))
     if xff and xff.strip():
         parts = [p.strip() for p in xff.split(",") if p.strip()]
         if len(parts) >= hops:
@@ -324,7 +376,7 @@ def get_client_ip(request: Request) -> str:
             if request.client and request.client.host and is_valid_ip(request.client.host):
                 return request.client.host
 
-    # 3. Direct TCP peer address
+    # 4. Direct TCP peer address
     if request.client and request.client.host and is_valid_ip(request.client.host):
         return request.client.host
 

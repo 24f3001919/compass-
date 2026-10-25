@@ -111,6 +111,19 @@ Untrusted Internet (Browser / Client / Web Pages)
   - Chat, memory, and task endpoints: 30 requests/minute per IP.
   - Agent runs: 10 runs/minute per IP.
 
+### 9. Trusted Proxy Hops & Reverse Proxy CIDR Measurement
+- **Proxy Topology**: Traffic commonly traverses an edge rewrite layer (e.g. Vercel) before reaching the application host (e.g. Render):
+  `Browser -> Vercel Edge Proxy -> Render FastAPI Backend`
+- **Safe Measurement Procedure (No Debug Route)**:
+  1. Inspect standard HTTP access logs on the backend hosting provider (e.g., Render access logs).
+  2. Inspect the raw `X-Forwarded-For` header pattern on incoming requests from known test traffic:
+     - `X-Forwarded-For: <Client-IP>, <Vercel-Egress-IP>`
+  3. When an edge proxy rewrite is active, the immediate upstream is hop 1 (Vercel egress IP). The client IP is hop 2.
+  4. Configure `TRUSTED_PROXY_HOPS=2` in the host environment settings so that `parts[-2]` extracts the isolated client IP rather than the shared proxy egress IP.
+  5. The default remains `TRUSTED_PROXY_HOPS=1` so behavior is safe and deterministic until configured.
+  6. Alternatively, set `TRUSTED_PROXY_CIDR_RESOLUTION=true` to enable automatic right-to-left traversal through known reverse proxy subnets (`127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `76.76.21.0/24`, Vercel AWS egress ranges) to find the first untrusted public IP.
+  7. **Security Invariant**: Never expose an unauthenticated diagnostic route echoing raw request headers or client IPs to measure hops. Measurement must be performed strictly via provider log inspection.
+
 ---
 
 ## 4. Security Changelog
