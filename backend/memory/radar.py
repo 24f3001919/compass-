@@ -937,6 +937,12 @@ async def get_user_opportunity_profile(user_id: str) -> Optional[UserOpportunity
 
 
 async def upsert_user_opportunity_profile(user_id: str, p: UserOpportunityProfileIn) -> None:
+    # Backend Validation: Ensure profile constraints are met to prevent eligibility engine drift
+    if p.academic_year is not None and not (1 <= p.academic_year <= 5):
+        raise ValueError(f"Academic year must be between 1 and 5 (received {p.academic_year})")
+    if p.grad_year is not None and not (2024 <= p.grad_year <= 2035):
+        raise ValueError(f"Graduation year must be between 2024 and 2035 (received {p.grad_year})")
+
     pool = await get_pool()
     if not pool:
         _in_memory_user_profiles[user_id] = p.model_dump()

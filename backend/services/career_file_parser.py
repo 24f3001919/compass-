@@ -144,6 +144,14 @@ def extract_resume_from_file_bytes(
     # 1. Plain Text and Markdown
     if ext in {".txt", ".md"}:
         try:
+            # Simple check to ensure it's not a binary file masquerading as text
+            if len(file_bytes) > 0 and file_bytes[0] == 0x00:
+                return ResumeParseResult(
+                    success=False,
+                    filename=filename,
+                    file_type=ext,
+                    error_message="File appears to be binary and cannot be read as text.",
+                )
             text = file_bytes.decode("utf-8", errors="replace").strip()
             if not text:
                 return ResumeParseResult(

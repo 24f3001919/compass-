@@ -378,8 +378,13 @@ def evaluate_eligibility(
         return (EligibilityClassification.INELIGIBLE, explanation, reasons)
 
     # 2. Conflicting requirements or unknown mandatory requirements => POTENTIAL_MATCH (POTENTIALLY_ELIGIBLE)
+    # STRICTNESS RULE: To be truly ELIGIBLE (Strong Match), critical criteria must be explicitly 'pass'.
+    # If key fields are 'unknown' or missing, it's only a Potential Match.
+    critical_fields = ["academic_year", "grad_year", "degree"]
+    missing_critical = [r["field"] for r in reasons if r.get("status") == "unknown" and r["field"] in critical_fields]
+
     unknown_reasons = [r for r in reasons if r.get("status") == "unknown"]
-    if unknown_reasons or reqs.has_conflicting_requirements:
+    if unknown_reasons or reqs.has_conflicting_requirements or missing_critical:
         unknown_fields = [u["field"] for u in unknown_reasons]
         explanation = f"Possible match: Aligns with profile, but requires verification of: {', '.join(unknown_fields)}."
         return (EligibilityClassification.POTENTIAL_MATCH, explanation, reasons)
