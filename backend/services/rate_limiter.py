@@ -41,11 +41,25 @@ async def _consume_token(
     is_fail_closed = fail_closed if fail_closed is not None else getattr(settings, "RATE_LIMIT_FAIL_CLOSED", True)
 
     try:
-        pool = await get_pool()
-        if not pool and is_fail_closed:
+        pool = None
+        try:
+            pool = await get_pool()
+        except Exception as e:
+            logger.error("DB rate limiter connection error: [%s]", type(e).__name__)
+            if is_fail_closed and settings.is_production():
+                raise HTTPException(
+                    status_code=503,
+                    detail={"code": "rate_limiter_unavailable", "detail": "Service unavailable: rate limiter database is unreachable."},
+                    headers={"Retry-After": "5"},
+                ) from e
+            logger.warning(f"DB rate limiter failure for key {key}: {e}")
+
+        if not pool and is_fail_closed and settings.is_production():
+            logger.error("DB rate limiter pool unavailable in fail-closed mode")
             raise HTTPException(
                 status_code=503,
-                detail="Service unavailable: rate limiter database connection is unavailable.",
+                detail={"code": "rate_limiter_unavailable", "detail": "Service unavailable: rate limiter database connection is unavailable."},
+                headers={"Retry-After": "5"},
             )
         if pool:
             async with pool.acquire() as conn:
@@ -86,11 +100,13 @@ async def _consume_token(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error("DB rate limiter transaction error: [%s]", type(e).__name__)
         logger.warning(f"DB rate limiter failure for key {key}: {e}")
-        if is_fail_closed:
+        if is_fail_closed and settings.is_production():
             raise HTTPException(
                 status_code=503,
-                detail="Service unavailable: rate limiter database is unreachable.",
+                detail={"code": "rate_limiter_unavailable", "detail": "Service unavailable: rate limiter database is unreachable."},
+                headers={"Retry-After": "5"},
             ) from e
 
     # Fallback: In-memory token bucket
@@ -202,9 +218,11 @@ async def enforce_mint_rate_limit(request: Request) -> None:
     await check_global_mint_cap()
 
     # 3. Configurable hourly capacity per IP/key
-    default_limit = 1000 if (settings.is_development() or settings.is_test()) else 5
-    configured_limit = getattr(settings, "GUEST_MINT_HOURLY_IP_LIMIT", default_limit)
-    hourly_limit = int(configured_limit) if configured_limit != 5 or not (settings.is_development() or settings.is_test()) else 1000
+    configured_limit = getattr(settings, "GUEST_MINT_HOURLY_IP_LIMIT", None)
+    if configured_limit is not None:
+        hourly_limit = int(configured_limit)
+    else:
+        hourly_limit = 5
     capacity = float(hourly_limit)
     refill_rate = capacity / 3600.0
 
