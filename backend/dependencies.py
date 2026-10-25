@@ -83,7 +83,7 @@ async def agent_rate_limit(request: Request) -> None:
             identity_refill_per_sec=10.0 / 60.0,
         )
     except HTTPException as e:
-        if "Agent rate limit exceeded" not in str(e.detail):
+        if "Agent rate limit exceeded" not in e.detail:
             e.detail = f"Agent rate limit exceeded: {e.detail}"
         raise e
     timestamps.append(now)
@@ -336,7 +336,7 @@ def _get_current_identity(request: Request) -> Optional[Identity]:
             logger.debug("Session token lookup failed: %s", e)
 
     # 3. Server-to-server AUTH_TOKEN with impersonation gate
-    if bearer_token and settings.AUTH_TOKEN and isinstance(settings.AUTH_TOKEN, str) and hmac.compare_digest(str(bearer_token), str(settings.AUTH_TOKEN)):
+    if bearer_token and settings.AUTH_TOKEN and isinstance(settings.AUTH_TOKEN, str) and hmac.compare_digest(bearer_token, settings.AUTH_TOKEN):
         return Identity(id="admin", is_admin=True, is_guest=False, user_id="admin", guest_id=verified_guest)
 
     # 4. Verified guest token
