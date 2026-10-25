@@ -1,9 +1,10 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import DarkModeToggle from './DarkModeToggle'
 import { getDomainMeta } from './timeline/domainMeta'
 import AddDeadlineModal from './timeline/AddDeadlineModal'
 import { updateTask, seedJudgeDemoPersona } from '../api/client'
+import { mapPersonaError } from '../utils/personaNotice'
 import Logo from './Logo'
 import TimelineFilterBar from './timeline/TimelineFilterBar'
 import {
@@ -116,30 +117,53 @@ export default function Dashboard({
     setDueFilter('all')
   }, [])
 
-  const handleSeedJudgePersona = useCallback(async () => {
-    if (seedingPersona) return
+  const retryTimeoutRef = useRef(null)
+
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current)
+    }
+  }, [])
+
+  const handleSeedJudgePersona = useCallback(async (isRetry = false) => {
+    if (seedingPersona && !isRetry) return
+    if (!isRetry && retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current)
+      retryTimeoutRef.current = null
+    }
     setSeedingPersona(true)
-    setSeedNotice(null)
+    if (!isRetry) {
+      setSeedNotice(null)
+    }
     try {
       await seedJudgeDemoPersona()
       setSeedSuccess(true)
       setSeedNotice({
         type: 'success',
         text: 'Judge Persona loaded successfully! 21 multi-domain tasks & timeline populated.',
+        canRetry: false,
       })
       setTimeout(() => setSeedSuccess(false), 4000)
       if (onTasksUpdated) await onTasksUpdated()
     } catch (err) {
-      const msg = err.message || ''
-      if (msg.includes('disabled in production') || msg.includes('403') || msg.includes('ENABLE_DEMO_SEEDING')) {
+      const mapped = mapPersonaError(err)
+      if (mapped.is503 && !isRetry) {
         setSeedNotice({
-          type: 'disabled',
-          text: 'Demo persona seeding is disabled in this environment (ENABLE_DEMO_SEEDING is not enabled).',
+          type: 'info',
+          text: mapped.text,
+          canRetry: true,
         })
+        const delay = (mapped.retryDelay || 5) * 1000
+        retryTimeoutRef.current = setTimeout(() => {
+          handleSeedJudgePersona(true)
+        }, delay)
       } else {
         setSeedNotice({
-          type: 'error',
-          text: `Could not load judge persona: ${msg}`,
+          type: mapped.type === 'info' ? 'error' : mapped.type,
+          text: mapped.is503
+            ? 'The server is waking up or temporarily unavailable.'
+            : mapped.text,
+          canRetry: mapped.canRetry,
         })
       }
     } finally {
@@ -685,18 +709,24 @@ export default function Dashboard({
                 ? 'rgba(16, 185, 129, 0.12)'
                 : seedNotice.type === 'disabled'
                 ? 'rgba(217, 119, 6, 0.12)'
+                : seedNotice.type === 'info'
+                ? 'rgba(59, 130, 246, 0.12)'
                 : 'rgba(239, 68, 68, 0.12)',
             border:
               seedNotice.type === 'success'
                 ? '1px solid rgba(16, 185, 129, 0.35)'
                 : seedNotice.type === 'disabled'
                 ? '1px solid rgba(217, 119, 6, 0.35)'
+                : seedNotice.type === 'info'
+                ? '1px solid rgba(59, 130, 246, 0.35)'
                 : '1px solid rgba(239, 68, 68, 0.35)',
             color:
               seedNotice.type === 'success'
                 ? '#059669'
                 : seedNotice.type === 'disabled'
                 ? '#d97706'
+                : seedNotice.type === 'info'
+                ? '#2563eb'
                 : '#dc2626',
             fontSize: '13px',
             fontWeight: '500',
@@ -704,27 +734,51 @@ export default function Dashboard({
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontWeight: '600' }}>
-              {seedNotice.type === 'success' ? '✓' : seedNotice.type === 'disabled' ? '⚠️' : '✕'}
+              {seedNotice.type === 'success' ? '✓' : seedNotice.type === 'disabled' ? '⚠️' : seedNotice.type === 'info' ? 'ℹ️' : '✕'}
             </span>
             <span>{seedNotice.text}</span>
           </div>
-          <button
-            type="button"
-            onClick={() => setSeedNotice(null)}
-            className="btn-touch-target"
-            style={{
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              color: 'inherit',
-              padding: '4px',
-              display: 'flex',
-              alignItems: 'center',
-            }}
-            aria-label="Dismiss message"
-          >
-            <X size={14} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {seedNotice.canRetry && (
+              <button
+                type="button"
+                onClick={() => handleSeedJudgePersona(true)}
+                disabled={seedingPersona}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid currentColor',
+                  borderRadius: '4px',
+                  padding: '2px 8px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: 'inherit',
+                  cursor: seedingPersona ? 'wait' : 'pointer',
+                }}
+              >
+                Retry
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current)
+                setSeedNotice(null)
+              }}
+              className="btn-touch-target"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'inherit',
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+              aria-label="Dismiss message"
+            >
+              <X size={14} />
+            </button>
+          </div>
         </div>
       )}
 
