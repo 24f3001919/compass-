@@ -111,3 +111,56 @@ async def test_demo_clear_scope_and_isolation():
         finally:
             # Clean up test rows
             await conn.execute("DELETE FROM tasks WHERE user_id IN ($1, $2)", tenant_a, tenant_b)
+
+
+@pytest.mark.asyncio
+async def test_user_task_with_marker_as_substring():
+    """Verify that a genuine user task whose URL merely contains the marker text
+    as a substring (e.g. in query params or path) is neither filtered out by include_demo
+    nor deleted by clear_demo_tasks."""
+    pool = await get_pool()
+    assert pool is not None, "Database pool must be available"
+
+    tenant = f"guest_substring_{uuid.uuid4().hex[:10]}"
+    substring_url = "https://myblog.org/article?ref=compass://demo-persona/nebius-buildathon"
+
+    async with pool.acquire() as conn:
+        try:
+            # 1. Insert user task with substring marker
+            user_task_id = await conn.fetchval(
+                """
+                INSERT INTO tasks (title, domain, user_id, trusted_event_url)
+                VALUES ($1, $2, $3, $4) RETURNING id
+                """,
+                "Real User Research Note", "code", tenant, substring_url
+            )
+
+            # 2. Insert genuine persona task starting with marker
+            persona_task_id = await conn.fetchval(
+                """
+                INSERT INTO tasks (title, domain, user_id, trusted_event_url)
+                VALUES ($1, $2, $3, $4) RETURNING id
+                """,
+                "Judge Persona Task", "hackathon", tenant, "compass://demo-persona/nebius-buildathon"
+            )
+
+            # 3. Test clear_demo_tasks only deletes the prefix match
+            deleted = await clear_demo_tasks(conn, tenant)
+            assert deleted == 1, f"Expected exactly 1 persona task deleted, got {deleted}"
+
+            # 4. Verify user task survived clear
+            surviving = await conn.fetch("SELECT id, trusted_event_url FROM tasks WHERE user_id = $1", tenant)
+            surviving_ids = [r["id"] for r in surviving]
+            assert user_task_id in surviving_ids, "User task with marker as substring must survive clear_demo_tasks"
+            assert persona_task_id not in surviving_ids, "Actual persona task must be deleted"
+
+            # 5. Verify include_demo=False filtering behavior:
+            # Prefix check must preserve the user task and not treat it as a demo task
+            raw_user_task = dict(surviving[0])
+            trusted_url = str(raw_user_task.get("trusted_event_url") or "").lower()
+            is_demo = raw_user_task.get("is_demo") or trusted_url.startswith("compass://demo-persona/")
+            assert not is_demo, "User task with substring marker must NOT be filtered out when include_demo=False"
+
+        finally:
+            await conn.execute("DELETE FROM tasks WHERE user_id = $1", tenant)
+
