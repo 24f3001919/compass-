@@ -124,6 +124,32 @@ async def setup_workspace_test_data():
             "current_status": "OPEN_CONFIRMED",
         }
 
+    # Seed master resumes with verified contact details so tests do not trip export placeholder guard
+    default_master = ResumeContent(
+        full_name="Alex Rivera",
+        email="alex.rivera@example.com",
+        phone="+1 555-0199",
+        location="Bengaluru, India",
+        skills=["Python", "C++", "ROS", "FastAPI", "PostgreSQL"],
+        education=[
+            ResumeEducationItem(
+                institution="National Institute of Technology",
+                degree="B.Tech",
+                field_of_study="Computer Science",
+                end_year=2026,
+            )
+        ],
+        projects=[
+            ResumeProjectItem(
+                title="Autonomous Rover",
+                technologies=["Python", "ROS"],
+                description="Designed navigation system using ROS.",
+            )
+        ],
+    )
+    await upsert_master_resume("workspace_user_1", default_master, "Master Resume")
+    await upsert_master_resume("workspace_user_2", default_master, "Master Resume")
+
 
 @pytest.mark.asyncio
 async def test_prepare_application_workspace_creates_isolated_record():

@@ -743,33 +743,57 @@ ALLOWED_STATUS_TRANSITIONS: Dict[str, Set[str]] = {
     CareerApplicationStatus.SAVED.value: {
         CareerApplicationStatus.PREPARING.value,
         CareerApplicationStatus.READY_FOR_REVIEW.value,
-        CareerApplicationStatus.HANDOFF_KIT_READY.value,
-        CareerApplicationStatus.WITHDRAWN.value,
-    },
-    CareerApplicationStatus.PREPARING.value: {
-        CareerApplicationStatus.READY_FOR_REVIEW.value,
-        CareerApplicationStatus.HANDOFF_KIT_READY.value,
-        CareerApplicationStatus.WITHDRAWN.value,
-    },
-    CareerApplicationStatus.READY_FOR_REVIEW.value: {
         CareerApplicationStatus.READY_FOR_APPROVAL.value,
         CareerApplicationStatus.HANDOFF_KIT_READY.value,
         CareerApplicationStatus.WITHDRAWN.value,
     },
-    CareerApplicationStatus.READY_FOR_APPROVAL.value: {
-        CareerApplicationStatus.APPROVED_FOR_SUBMISSION.value,
+    CareerApplicationStatus.PREPARING.value: {
+        CareerApplicationStatus.SAVED.value,
+        CareerApplicationStatus.READY_FOR_REVIEW.value,
+        CareerApplicationStatus.READY_FOR_APPROVAL.value,
         CareerApplicationStatus.HANDOFF_KIT_READY.value,
         CareerApplicationStatus.WITHDRAWN.value,
     },
+    CareerApplicationStatus.READY_FOR_REVIEW.value: {
+        CareerApplicationStatus.PREPARING.value,
+        CareerApplicationStatus.READY_FOR_APPROVAL.value,
+        CareerApplicationStatus.HANDOFF_KIT_READY.value,
+        CareerApplicationStatus.SUBMITTED.value,
+        CareerApplicationStatus.WITHDRAWN.value,
+    },
+    CareerApplicationStatus.READY_FOR_APPROVAL.value: {
+        CareerApplicationStatus.READY_FOR_REVIEW.value,
+        CareerApplicationStatus.APPROVED_FOR_SUBMISSION.value,
+        CareerApplicationStatus.HANDOFF_KIT_READY.value,
+        CareerApplicationStatus.SUBMITTED.value,
+        CareerApplicationStatus.WITHDRAWN.value,
+    },
     CareerApplicationStatus.APPROVED_FOR_SUBMISSION.value: {
+        CareerApplicationStatus.READY_FOR_APPROVAL.value,
         CareerApplicationStatus.SUBMITTING.value,
         CareerApplicationStatus.HANDOFF_KIT_READY.value,
+        CareerApplicationStatus.SUBMITTED.value,
         CareerApplicationStatus.WITHDRAWN.value,
     },
     CareerApplicationStatus.SUBMITTING.value: {
         CareerApplicationStatus.SUBMITTED.value,
         CareerApplicationStatus.SUBMISSION_FAILED.value,
+        CareerApplicationStatus.SUBMISSION_OUTCOME_UNKNOWN.value,
         CareerApplicationStatus.HANDOFF_KIT_READY.value,
+        CareerApplicationStatus.WITHDRAWN.value,
+    },
+    CareerApplicationStatus.SUBMISSION_OUTCOME_UNKNOWN.value: {
+        CareerApplicationStatus.SUBMITTED.value,
+        CareerApplicationStatus.SUBMISSION_FAILED.value,
+        CareerApplicationStatus.MANUAL_SUBMISSION_REQUIRED.value,
+        CareerApplicationStatus.HANDOFF_KIT_READY.value,
+        CareerApplicationStatus.WITHDRAWN.value,
+    },
+    CareerApplicationStatus.SUBMISSION_FAILED.value: {
+        CareerApplicationStatus.READY_FOR_REVIEW.value,
+        CareerApplicationStatus.HANDOFF_KIT_READY.value,
+        CareerApplicationStatus.MANUAL_SUBMISSION_REQUIRED.value,
+        CareerApplicationStatus.SUBMITTED.value,
         CareerApplicationStatus.WITHDRAWN.value,
     },
     CareerApplicationStatus.HANDOFF_KIT_READY.value: {
@@ -780,6 +804,8 @@ ALLOWED_STATUS_TRANSITIONS: Dict[str, Set[str]] = {
     },
     CareerApplicationStatus.MANUAL_SUBMISSION_REQUIRED.value: {
         CareerApplicationStatus.HANDOFF_KIT_READY.value,
+        CareerApplicationStatus.READY_FOR_REVIEW.value,
+        CareerApplicationStatus.READY_FOR_APPROVAL.value,
         CareerApplicationStatus.SUBMITTED.value,
         CareerApplicationStatus.WITHDRAWN.value,
     },

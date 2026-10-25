@@ -182,14 +182,14 @@ def test_tier2_corroboration_requires_matching_utc_instant():
         },
         {
             "claim": "Submission closes Friday, October 30, 2026 at 10:00 am Pacific Time",
-            "source_url": "https://devpost.com/page2",
+            "source_url": "https://mlh.io/page2",
             "exact_quote": "Submission closes Friday, October 30, 2026 at 10:00 am Pacific Time",
             "extracted_date": "October 30, 2026 at 10:00 am Pacific Time",
         },
     ]
     sources = [
         {"url": "https://devpost.com/page1", "authority_tier": AuthorityTier.TIER_2_TECHNICAL.value},
-        {"url": "https://devpost.com/page2", "authority_tier": AuthorityTier.TIER_2_TECHNICAL.value},
+        {"url": "https://mlh.io/page2", "authority_tier": AuthorityTier.TIER_2_TECHNICAL.value},
     ]
 
     overall, ledger = evaluate_deterministic_verdict(

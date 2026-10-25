@@ -1025,7 +1025,7 @@ async def log_application_event(application_id: int, event_type: str, details: D
             "INSERT INTO application_events (application_id, event_type, details, created_at) VALUES ($1, $2, $3::jsonb, now())",
             application_id,
             event_type,
-            json.dumps(details),
+            json.dumps(details, default=str),
         )
 
 
