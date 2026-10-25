@@ -32,7 +32,7 @@
       ]
     },
     {
-      "source": "/(.+)",
+      "source": "/((?!robots\\.txt$|sitemap\\.xml$|google[a-zA-Z0-9_-]+\\.html$).+)",
       "headers": [
         {
           "key": "X-Robots-Tag",
