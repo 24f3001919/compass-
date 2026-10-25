@@ -194,10 +194,10 @@ async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRe
     else:
         enable_seeding = bool(raw_enable)
 
-    if env == "production" and not enable_seeding:
+    if not enable_seeding:
         raise HTTPException(
             status_code=403,
-            detail="Demo data seeding is guarded and disabled in production. Set ENABLE_DEMO_SEEDING=True in server configuration to enable.",
+            detail={"code": "seeding_disabled", "detail": "Demo data seeding is disabled on this server."},
         )
 
     ident = _get_current_identity(request)
@@ -207,9 +207,23 @@ async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRe
             status_code=401,
             detail="Authentication required: You must have an active authenticated user session or verified guest identity to seed demo data.",
         )
-    pool = await get_pool()
+    try:
+        pool = await get_pool()
+    except Exception as e:
+        logger.error("DB pool initialization failed for seed endpoint: [%s]", type(e).__name__)
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "db_unavailable", "detail": "The server database is waking up or temporarily unavailable."},
+            headers={"Retry-After": "5"},
+        ) from e
+
     if not pool:
-        raise HTTPException(status_code=500, detail="Database unavailable")
+        logger.error("DB pool is None for seed endpoint")
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "db_unavailable", "detail": "The server database is waking up or temporarily unavailable."},
+            headers={"Retry-After": "5"},
+        )
 
     user_tz_name = (body.tz.strip() if body and body.tz else "UTC")
     try:
