@@ -41,7 +41,7 @@ test('Request builder: guest credentials include x-guest-token without x-user-id
 
   const headers = getAuthHeaders()
   assert.equal(headers['x-guest-token'], 'guest.token.sig')
-  assert.equal(headers['x-guest-id'], 'guest-uuid-1234')
+  assert.equal(headers['x-guest-id'], undefined, 'x-guest-id header must not be present')
   assert.equal(headers['x-user-id'], undefined, 'x-user-id header must remain strictly omitted')
   assert.equal(headers['compass_user_id'], undefined)
 })

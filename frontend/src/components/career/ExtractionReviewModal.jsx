@@ -352,7 +352,7 @@ export default function ExtractionReviewModal({
                     <div key={idx} style={{ background: 'var(--bg-card-soft)', padding: '12px', borderRadius: '8px', marginBottom: '8px', border: '1px solid var(--border)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                         <span style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)' }}>
-                          {exp.role_title} — {exp.company}
+                          {exp.role_title ? `${exp.role_title} · ${exp.company}` : exp.company}
                         </span>
                         {(exp.start_date || exp.end_date) && (
                           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>

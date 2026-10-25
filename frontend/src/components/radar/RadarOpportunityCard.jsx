@@ -1,11 +1,6 @@
 import React from 'react'
 import { Star, DollarSign, Calendar, ExternalLink } from 'lucide-react'
-
-function isCleanString(val) {
-  if (!val) return false
-  const s = String(val).trim().toLowerCase()
-  return s !== '' && s !== 'nan' && s !== 'null' && s !== 'undefined' && s !== 'none' && s !== 'n/a'
-}
+import { cleanOpportunity } from '../../utils/jobCardCleaner'
 
 export default function RadarOpportunityCard({
   opportunity,
@@ -16,144 +11,14 @@ export default function RadarOpportunityCard({
 }) {
   const {
     id,
-    company_name,
-    role_title,
-    location,
-    work_arrangement,
-    current_status,
-    official_source_confirmed,
-    sources = [],
-    eligibility_classification,
-    eligibility_explanation,
     official_application_url,
     canonical_url,
     prediction,
     is_saved,
     application_status,
-    last_verified_at,
-    posted_at,
-    confirmed_open_date,
-    compensation,
-    requirements,
-  } = opportunity
+  } = opportunity || {}
 
-  // Rectangular Status Label (At most 2 compact labels on top row)
-  const getStatusBadge = () => {
-    switch (current_status) {
-      case 'OPEN_CONFIRMED':
-        return {
-          label: 'Verified Open',
-          bg: 'rgba(28, 138, 98, 0.08)',
-          text: 'var(--domain-code, #1c8a62)',
-          border: 'rgba(28, 138, 98, 0.25)',
-        }
-      case 'UPCOMING_CONFIRMED':
-      case 'ANNOUNCED':
-        return {
-          label: 'Upcoming Confirmed',
-          bg: 'rgba(47, 100, 200, 0.08)',
-          text: 'var(--domain-coursework, #2f64c8)',
-          border: 'rgba(47, 100, 200, 0.25)',
-        }
-      case 'CLOSED_CONFIRMED':
-        return {
-          label: 'Closed',
-          bg: 'var(--bg-card-soft, #f2eee6)',
-          text: 'var(--text-muted, #5f5a52)',
-          border: 'var(--border, #e6e1d6)',
-        }
-      default:
-        return {
-          label: 'Needs Verification',
-          bg: 'var(--bg-card-soft, #f2eee6)',
-          text: 'var(--text-secondary, #3d3a35)',
-          border: 'var(--border, #e6e1d6)',
-        }
-    }
-  }
-
-  // Rectangular Eligibility Match Label
-  const getEligibilityBadge = () => {
-    switch (eligibility_classification) {
-      case 'ELIGIBLE':
-        return {
-          label: 'Confirmed Match',
-          bg: 'rgba(28, 138, 98, 0.08)',
-          text: 'var(--domain-code, #1c8a62)',
-          border: 'rgba(28, 138, 98, 0.25)',
-        }
-      case 'POTENTIAL_MATCH':
-      case 'POTENTIALLY_ELIGIBLE':
-        return {
-          label: 'Possible Match',
-          bg: 'rgba(245, 166, 35, 0.1)',
-          text: 'var(--brand-dark, #b47507)',
-          border: 'rgba(245, 166, 35, 0.3)',
-        }
-      case 'INELIGIBLE':
-        return {
-          label: 'Likely Ineligible',
-          bg: 'var(--danger-bg, #fdeaea)',
-          text: 'var(--danger-text, #b91c1c)',
-          border: 'rgba(185, 28, 28, 0.25)',
-        }
-      case 'INSUFFICIENT_INFORMATION':
-      default:
-        return {
-          label: 'Eligibility Unconfirmed',
-          bg: 'var(--bg-card-soft, #f2eee6)',
-          text: 'var(--text-muted, #5f5a52)',
-          border: 'var(--border, #e6e1d6)',
-        }
-    }
-  }
-
-  const statusBadge = getStatusBadge()
-  const eligBadge = getEligibilityBadge()
-
-  // Guard against malformed values
-  const cleanCompany = isCleanString(company_name) ? company_name.trim() : 'Company'
-  const cleanRole = isCleanString(role_title) ? role_title.trim() : 'Internship Opportunity'
-  const cleanLocation = isCleanString(location) ? location.trim() : null
-  const cleanCompensation = isCleanString(compensation) ? compensation.trim() : null
-  const cleanArrangement = isCleanString(work_arrangement) ? work_arrangement.trim() : 'unspecified'
-
-  // Surface restrictions near the title
-  const restrictions = []
-  if (requirements) {
-    if (requirements.eligible_graduation_years && requirements.eligible_graduation_years.length > 0) {
-      restrictions.push(`Batch: ${requirements.eligible_graduation_years.join('/')}`)
-    }
-    if (requirements.eligible_academic_years && requirements.eligible_academic_years.length > 0) {
-      restrictions.push(`Year: ${requirements.eligible_academic_years.join('/')}`)
-    }
-    if (requirements.eligible_degree_types && requirements.eligible_degree_types.length > 0) {
-      restrictions.push(`Degree: ${requirements.eligible_degree_types.join('/')}`)
-    }
-    if (requirements.no_active_backlogs === true) {
-      restrictions.push('0 Active Backlogs')
-    }
-    if (requirements.work_auth_required === true && opportunity.country && opportunity.country.toLowerCase() !== 'india') {
-      restrictions.push(`Requires ${opportunity.country} Work Auth`)
-    }
-    if (requirements.eligible_countries && requirements.eligible_countries.length > 0) {
-      restrictions.push(`Location: ${requirements.eligible_countries.join('/')}`)
-    }
-  }
-
-  // Format distinct dates: posting date vs verification date
-  const rawPostingDate = posted_at || confirmed_open_date
-  const formattedPosted = rawPostingDate
-    ? new Date(rawPostingDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-    : null
-
-  const formattedVerified = last_verified_at
-    ? new Date(last_verified_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-    : null
-
-  const primarySource = sources.length > 0
-    ? sources[0].source_name
-    : (official_source_confirmed ? 'Official Careers Site' : null)
+  const cleaned = cleanOpportunity(opportunity)
 
   // Validate external application URL
   const originalUrl = official_application_url || canonical_url
@@ -170,7 +35,7 @@ export default function RadarOpportunityCard({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        borderRadius: 'var(--radius-card, 8px)',
+        borderRadius: 'var(--radius-card, 6px)',
         background: 'var(--bg-card, #ffffff)',
         border: '1px solid var(--border, #e6e1d6)',
         boxShadow: 'var(--shadow-sm)',
@@ -191,7 +56,7 @@ export default function RadarOpportunityCard({
         }}
       >
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Label 1: Status Label (Rectangular) */}
+          {/* Label 1: Status Label (Rectangular, 6px/4px radius) */}
           <span
             style={{
               padding: '2px 8px',
@@ -199,15 +64,15 @@ export default function RadarOpportunityCard({
               fontSize: '11px',
               fontWeight: 600,
               letterSpacing: '0.2px',
-              background: statusBadge.bg,
-              color: statusBadge.text,
-              border: `1px solid ${statusBadge.border}`,
+              background: cleaned.verificationBadge.bg,
+              color: cleaned.verificationBadge.text,
+              border: `1px solid ${cleaned.verificationBadge.border}`,
             }}
           >
-            ● {statusBadge.label}
+            ● {cleaned.verificationBadge.label}
           </span>
 
-          {/* Label 2: Eligibility Match Label (Rectangular) */}
+          {/* Label 2: Eligibility Match Label (Rectangular, 6px/4px radius) */}
           <span
             style={{
               padding: '2px 8px',
@@ -215,12 +80,12 @@ export default function RadarOpportunityCard({
               fontSize: '11px',
               fontWeight: 600,
               letterSpacing: '0.2px',
-              background: eligBadge.bg,
-              color: eligBadge.text,
-              border: `1px solid ${eligBadge.border}`,
+              background: cleaned.eligibilityBadge.bg,
+              color: cleaned.eligibilityBadge.text,
+              border: `1px solid ${cleaned.eligibilityBadge.border}`,
             }}
           >
-            {eligBadge.label}
+            {cleaned.eligibilityBadge.label}
           </span>
         </div>
 
@@ -262,13 +127,13 @@ export default function RadarOpportunityCard({
             lineHeight: 1.3,
           }}
         >
-          {cleanRole}
+          {cleaned.role}
         </h3>
 
-        {/* Surface important job restrictions near the title */}
-        {restrictions.length > 0 && (
+        {/* Surface important job restrictions near the title (no separate Location: India tag) */}
+        {cleaned.restrictions.length > 0 && (
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', margin: '4px 0 6px 0' }}>
-            {restrictions.map((resText, idx) => (
+            {cleaned.restrictions.map((resText, idx) => (
               <span
                 key={idx}
                 style={{
@@ -287,7 +152,7 @@ export default function RadarOpportunityCard({
           </div>
         )}
 
-        {/* Company, Work Arrangement, and Location */}
+        {/* Company & Single Location Line */}
         <div
           style={{
             display: 'flex',
@@ -299,20 +164,14 @@ export default function RadarOpportunityCard({
             flexWrap: 'wrap',
           }}
         >
-          <span style={{ fontWeight: 600 }}>{cleanCompany}</span>
+          <span style={{ fontWeight: 600 }}>{cleaned.company}</span>
           <span>•</span>
-          <span style={{ textTransform: 'capitalize' }}>{cleanArrangement}</span>
-          {cleanLocation && (
-            <>
-              <span>•</span>
-              <span style={{ fontSize: '12px' }}>{cleanLocation}</span>
-            </>
-          )}
+          <span>{cleaned.locationLine}</span>
         </div>
       </div>
 
       {/* Validated Compensation Display */}
-      {cleanCompensation && (
+      {cleaned.salary && (
         <div
           style={{
             fontSize: '13px',
@@ -325,12 +184,12 @@ export default function RadarOpportunityCard({
           }}
         >
           <DollarSign size={13} strokeWidth={2} />
-          <span>{cleanCompensation}</span>
+          <span>{cleaned.salary}</span>
         </div>
       )}
 
-      {/* Grounded Concise Eligibility Result */}
-      {eligibility_explanation && (
+      {/* Grounded Concise Eligibility Result (Profile missing message moved to top banner) */}
+      {cleaned.cleanedExplanation && (
         <div
           style={{
             fontSize: '12px',
@@ -340,15 +199,15 @@ export default function RadarOpportunityCard({
             borderRadius: '4px',
             marginBottom: '10px',
             lineHeight: 1.4,
-            borderLeft: `3px solid ${eligBadge.border}`,
+            borderLeft: `3px solid ${cleaned.eligibilityBadge.border}`,
           }}
         >
-          {eligibility_explanation}
+          {cleaned.cleanedExplanation}
         </div>
       )}
 
       {/* Historical Window Forecast (if upcoming/announced) */}
-      {current_status !== 'OPEN_CONFIRMED' && prediction?.estimated_open_window && (
+      {opportunity?.current_status !== 'OPEN_CONFIRMED' && prediction?.estimated_open_window && (
         <div
           style={{
             fontSize: '11px',
@@ -413,22 +272,14 @@ export default function RadarOpportunityCard({
           gap: '8px',
         }}
       >
-        {/* Distinguish Posting Date from Last Checked Date */}
-        <div style={{ fontSize: '11px', color: 'var(--text-muted, #5f5a52)', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          <div>
-            {formattedPosted ? `Posted: ${formattedPosted}` : 'Posting date unrecorded'}
-            {formattedVerified && ` • Checked: ${formattedVerified}`}
-          </div>
-          {primarySource && (
-            <div style={{ fontSize: '10px', color: 'var(--text-muted, #5f5a52)' }}>
-              Source: {primarySource}
-            </div>
-          )}
+        {/* Single clean footer line: e.g. "Posted 23 Oct, checked 24 Oct via Glassdoor" */}
+        <div style={{ fontSize: '11px', color: 'var(--text-muted, #5f5a52)' }}>
+          {cleaned.footerLine}
         </div>
 
-        {/* Action Controls */}
+        {/* Action Controls: at most ONE amber button */}
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          {/* In-app Details Action */}
+          {/* In-app Details Action: Secondary button */}
           <button
             type="button"
             onClick={() => onOpenDetail(opportunity)}
@@ -446,7 +297,7 @@ export default function RadarOpportunityCard({
             View details
           </button>
 
-          {/* Validated External Original Listing Action */}
+          {/* Validated External Original Listing Action: Single primary amber button */}
           {hasValidExternalUrl ? (
             <a
               href={originalUrl}

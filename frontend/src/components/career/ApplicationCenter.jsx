@@ -11,6 +11,7 @@ import {
 import BatchApprovalModal from './BatchApprovalModal'
 import HandoffKitModal from './HandoffKitModal'
 import CoverLetterModal from './CoverLetterModal'
+import { cleanOpportunity } from '../../utils/jobCardCleaner'
 
 export default function ApplicationCenter() {
   const [applications, setApplications] = useState([])
@@ -317,6 +318,7 @@ export default function ApplicationCenter() {
                   .map((app) => {
                     const isSelected = selectedAppIds.has(app.id)
                     const opp = app.opportunity || {}
+                    const cleanedOpp = cleanOpportunity(opp)
                     const resume = app.resume || {}
 
                     return (
@@ -336,10 +338,10 @@ export default function ApplicationCenter() {
                         </td>
                         <td style={{ padding: '12px 16px' }}>
                           <div style={{ fontWeight: '700', color: 'var(--text-primary)' }}>
-                            {opp.company_name || `Opportunity #${app.opportunity_id}`}
+                            {cleanedOpp.company !== 'Company' ? cleanedOpp.company : (opp.company_name || `Opportunity #${app.opportunity_id}`)}
                           </div>
                           <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                            {opp.role_title || 'Role'}
+                            {cleanedOpp.role} {cleanedOpp.locationLine && cleanedOpp.locationLine !== 'Location unspecified' ? `• ${cleanedOpp.locationLine}` : ''}
                           </div>
                           {app.missing_fields && app.missing_fields.length > 0 && (
                             <span style={{ display: 'inline-block', fontSize: '11px', color: '#b91c1c', background: '#fee2e2', padding: '1px 6px', borderRadius: '4px', marginTop: '4px' }}>

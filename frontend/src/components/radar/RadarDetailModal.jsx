@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { ExternalLink, CheckCircle2, XCircle, AlertCircle, Info, RefreshCw } from 'lucide-react'
+import { cleanOpportunity, cleanText, cleanSource } from '../../utils/jobCardCleaner'
 
 const PIPELINE_STATUSES = [
   { id: 'interested', label: 'Interested' },
@@ -80,13 +81,14 @@ export default function RadarDetailModal({
     requirements,
   } = opportunity
 
-  // Data cleansing
-  const cleanCompany = isCleanString(company_name) ? company_name.trim() : 'Company'
-  const cleanRole = isCleanString(role_title) ? role_title.trim() : 'Internship Opportunity'
-  const cleanLocation = isCleanString(location) ? location.trim() : null
-  const cleanCompensation = isCleanString(compensation) ? compensation.trim() : null
-  const cleanDuration = isCleanString(duration) ? duration.trim() : null
-  const cleanDescription = isCleanString(description) ? description.trim() : null
+  // Data cleansing via unified helper
+  const cleaned = cleanOpportunity(opportunity)
+  const cleanCompany = cleaned.company
+  const cleanRole = cleaned.role
+  const cleanLocation = cleaned.locationLine
+  const cleanCompensation = cleaned.salary
+  const cleanDuration = cleanText(duration)
+  const cleanDescription = cleanText(description)
 
   // Format distinct dates
   const rawPostingDate = posted_at || confirmed_open_date
@@ -107,19 +109,7 @@ export default function RadarDetailModal({
     !originalUrl.toLowerCase().includes('javascript:')
   )
 
-  const getStatusLabel = () => {
-    switch (current_status) {
-      case 'OPEN_CONFIRMED':
-        return 'Verified Open'
-      case 'UPCOMING_CONFIRMED':
-      case 'ANNOUNCED':
-        return 'Upcoming Confirmed'
-      case 'CLOSED_CONFIRMED':
-        return 'Closed'
-      default:
-        return 'Needs Verification'
-    }
-  }
+  const getStatusLabel = () => cleaned.verificationBadge.label
 
   return (
     <div
@@ -401,7 +391,7 @@ export default function RadarDetailModal({
                         }}
                       >
                         <div>
-                          <strong>{src.source_name}</strong> ({src.source_type})
+                          <strong>{cleanSource(src.source_name) || src.source_name}</strong> ({src.source_type})
                           {src.source_url && (
                             <div style={{ color: 'var(--text-muted, #5f5a52)', fontSize: '11px' }}>
                               {src.source_url}

@@ -1475,6 +1475,12 @@ textarea {
     max-width: 68px !important;
     padding: 18px 8px !important;
   }
+
+  /* Single domain filter on desktop when sidebar is expanded; show page chips when collapsed or on mobile */
+  aside.sidebar-expanded ~ main .dashboard-filter-bar,
+  aside.sidebar-expanded ~ main .domain-filter-pills-row {
+    display: none !important;
+  }
 }
 
 @media (max-width: 768px) {
