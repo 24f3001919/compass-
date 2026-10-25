@@ -579,6 +579,11 @@ async def stream_chat(req: StreamChatRequest, request: Request, _rl: None = Depe
     from backend.services.chat_stream import generate_chat_events
 
     ident = _get_current_identity(request)
+    if not ident:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required: active session or valid guest token required",
+        )
     user_id = ident.id if ident and not ident.is_guest else None
     guest_id = ident.id if ident and ident.is_guest else None
 
