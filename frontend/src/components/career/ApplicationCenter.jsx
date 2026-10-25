@@ -344,9 +344,25 @@ export default function ApplicationCenter() {
                             {cleanedOpp.role} {cleanedOpp.locationLine && cleanedOpp.locationLine !== 'Location unspecified' ? `• ${cleanedOpp.locationLine}` : ''}
                           </div>
                           {app.missing_fields && app.missing_fields.length > 0 && (
-                            <span style={{ display: 'inline-block', fontSize: '11px', color: '#b91c1c', background: '#fee2e2', padding: '1px 6px', borderRadius: '4px', marginTop: '4px' }}>
-                              ⚠️ Missing: {app.missing_fields.join(', ')}
-                            </span>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#b91c1c', background: '#fee2e2', padding: '1px 6px', borderRadius: '4px', marginTop: '4px' }}>
+                              <span>⚠️ Missing: {app.missing_fields.join(', ')}</span>
+                              <button
+                                type="button"
+                                onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: '/resume-studio' }))}
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  color: '#b91c1c',
+                                  fontWeight: '700',
+                                  cursor: 'pointer',
+                                  padding: '0',
+                                  fontSize: '11px',
+                                  textDecoration: 'underline'
+                                }}
+                              >
+                                Fix now
+                              </button>
+                            </div>
                           )}
                         </td>
                         <td style={{ padding: '12px 16px' }}>

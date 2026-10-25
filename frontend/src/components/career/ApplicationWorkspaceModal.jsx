@@ -968,23 +968,31 @@ export default function ApplicationWorkspaceModal({
 
                   {/* Missing Critical Skills Alert */}
                   {jobAnalysis?.missing_critical_skills && jobAnalysis.missing_critical_skills.length > 0 && (
-                    <div
-                      style={{
-                        padding: '12px 16px',
-                        borderRadius: '8px',
-                        background: '#fef2f2',
-                        border: '1px solid #fecaca',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                      }}
-                    >
-                      <span style={{ fontSize: '18px' }}>⚠️</span>
-                      <div style={{ fontSize: '13px', color: '#991b1b', lineHeight: 1.4 }}>
-                        <strong>Missing Mandatory Qualifications:</strong>{' '}
-                        {jobAnalysis.missing_critical_skills.join(', ')}. If you possess these, update your master profile before submitting.
+                      <div style={{ padding: '12px 16px', borderRadius: '8px', background: '#fef2f2', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '13px', color: '#991b1b', lineHeight: 1.4 }}>
+                          <span style={{ fontSize: '18px' }}>⚠️</span>
+                          <div>
+                            <strong>Missing Mandatory Qualifications:</strong>{' '}
+                            {jobAnalysis.missing_critical_skills.join(', ')}. If you possess these, update your master profile before submitting.
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: '/resume-studio' }))}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#991b1b',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            textDecoration: 'underline',
+                            padding: '4px 8px'
+                          }}
+                        >
+                          Fix in Profile
+                        </button>
                       </div>
-                    </div>
                   )}
 
                   {/* Job Description Fine-Tuner */}
