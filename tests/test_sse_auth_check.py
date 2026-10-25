@@ -34,6 +34,7 @@ async def test_sse_flows(monkeypatch):
 
     mock_client = MagicMock()
     mock_client.chat.completions.create = AsyncMock(return_value=MockStream())
+    monkeypatch.setattr("backend.router.get_openai_client", lambda: mock_client)
     monkeypatch.setattr("backend.services.chat_stream.openai.AsyncOpenAI", lambda **kwargs: mock_client)
 
     # In production or when ENVIRONMENT is unset, GUEST_SIGNING_SECRET is required
@@ -95,4 +96,14 @@ async def test_sse_flows(monkeypatch):
         assert "compass_user_id=" in set_cookie
         assert "Max-Age=0" in set_cookie
 
-    print("ALL 4 SSE & AUTH SCENARIOS VERIFIED SUCCESSFULLY!")
+    # Scenario 5: Anonymous request with zero credentials -> 401
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/chat/stream",
+            json={"message": "hello"},
+        )
+        print(f"[5] Unauthenticated request -> status: {resp.status_code}")
+        assert resp.status_code == 401
+        assert "Authentication required" in resp.json().get("detail", "")
+
+    print("ALL 5 SSE & AUTH SCENARIOS VERIFIED SUCCESSFULLY!")
