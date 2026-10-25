@@ -252,8 +252,10 @@ async def test_calendar_status_endpoint(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_calendar_export_ics_endpoint(client: AsyncClient):
-    """GET /api/calendar/export.ics returns text/calendar format."""
-    resp = await client.get("/api/calendar/export.ics")
+    """GET /api/calendar/export.ics returns 200 with an empty calendar for a clean tenant, not 404."""
+    from backend.dependencies import generate_guest_token
+    _, token = generate_guest_token()
+    resp = await client.get("/api/calendar/export.ics", headers={"x-guest-token": token})
     assert resp.status_code == 200
     assert "text/calendar" in resp.headers.get("content-type", "")
     assert "BEGIN:VCALENDAR" in resp.text
