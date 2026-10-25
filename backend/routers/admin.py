@@ -79,14 +79,17 @@ async def get_public_usage_summary(request: Request):
 async def health_check():
     """Health check with SELECT 1 ping against the asyncpg connection pool."""
     db_status = "disconnected"
+    db_connected = False
     try:
         pool = await asyncio.wait_for(get_pool(), timeout=2.0)
         if pool is not None:
             async with pool.acquire(timeout=2.0) as conn:
-                await asyncio.wait_for(conn.fetchval("SELECT 1"), timeout=2.0)
-            db_status = "connected"
-    except Exception:
-        pass
+                val = await asyncio.wait_for(conn.fetchval("SELECT 1"), timeout=2.0)
+                if val == 1:
+                    db_status = "connected"
+                    db_connected = True
+    except Exception as e:
+        logger.warning("Database ping in /health failed: [%s]", type(e).__name__)
 
     raw_commit = os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "unknown"
     commit_sha = raw_commit[:7] if len(raw_commit) >= 7 and raw_commit != "unknown" else raw_commit
@@ -105,11 +108,13 @@ async def health_check():
     except Exception:
         config_ok = False
 
+    status = "ok" if (config_ok and db_connected) else ("config_error" if not config_ok else "degraded")
+
     return HealthResponse(
-        status="ok" if config_ok else "config_error",
+        status=status,
         version="0.1.0",
         database=db_status,
-        db_connected=(db_status == "connected"),
+        db_connected=db_connected,
         commit=commit_sha,
         config_ok=config_ok,
     )
