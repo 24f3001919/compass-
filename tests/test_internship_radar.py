@@ -66,7 +66,7 @@ def test_eligibility_strong_match():
     )
     classification, explanation, reasons = evaluate_eligibility(opp, profile)
     assert classification == EligibilityClassification.ELIGIBLE
-    assert "Confirmed eligible" in explanation or "Strong match" in explanation
+    assert "Confirmed eligible" in explanation
     assert any(r["field"] == "academic_year" and r["status"] == "pass" for r in reasons)
     assert any(r["field"] == "grad_year" and r["status"] == "pass" for r in reasons)
 
