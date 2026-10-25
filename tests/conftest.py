@@ -87,7 +87,7 @@ def validate_test_db_guard(
 
         if test_url == prod_url or (prod_hostname and test_hostname == prod_hostname and test_db == prod_db):
             pytest.exit(
-                "ABORTED: TEST_DATABASE_URL targets the identical host and database as DATABASE_URL. Refusing to run tests.",
+                "ABORTED: TEST_DATABASE_URL targets the identical host and database as DATABASE_URL. DATABASE_URL (dev) and TEST_DATABASE_URL must be different Neon branches (e.g., ci-test). Refusing to run tests.",
                 returncode=1,
             )
 
