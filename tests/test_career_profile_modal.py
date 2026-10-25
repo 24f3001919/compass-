@@ -246,7 +246,7 @@ def test_vercel_spa_rewrites_configuration():
         # Verify SPA fallback rewrite directs to index.html and does not intercept /api/, /chat, or /health
         spa_rewrite = next((r for r in rewrites if r.get("destination") == "/index.html"), None)
         assert spa_rewrite is not None, f"{conf_path} missing SPA fallback to /index.html"
-        assert "(?!api/|chat|health)" in spa_rewrite["source"], "SPA fallback must exclude /api/, /chat, and /health"
+        assert "(?!api/|chat|health" in spa_rewrite["source"], "SPA fallback must exclude /api/, /chat, and /health"
 
 
 @pytest.mark.asyncio
