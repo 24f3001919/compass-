@@ -4,7 +4,7 @@
 > Track: **Best Apps and Agents Track**  
 > Target Bonus Prizes: **Best Use of Tavily ($3,000)** & **Most Valuable Feedback Award ($100 + NVIDIA Swag)**  
 > Live Web App: [https://compass-farmlytics.vercel.app](https://compass-farmlytics.vercel.app)  
-> Live Backend API: [https://compass-backend-qryu.onrender.com/health](https://compass-backend-qryu.onrender.com/health)  
+> Live Backend API: [https://compass-backend-qryu-vcfv.onrender.com/health](https://compass-backend-qryu-vcfv.onrender.com/health)  
 > GitHub Repository: [https://github.com/Ratnesh-101/compass](https://github.com/Ratnesh-101/compass)  
 
 ---
