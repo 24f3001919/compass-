@@ -534,6 +534,44 @@ async def draft_cover_letter_endpoint(body: DraftCoverLetterRequest, request: Re
 # 2. Application Center Endpoints
 # ===========================================================================
 
+@router.post("/track-external-application", response_model=CareerApplicationOut)
+async def track_external_application_endpoint(
+    opportunity_id: int = Query(...),
+    source: Optional[str] = Query("external_website"),
+    request: Request,
+):
+    """
+    Webhook for external websites to notify Compass that an application has been submitted.
+    Automatically creates a record if missing and sets status to SUBMITTED.
+    """
+    user_id = _get_or_create_user_id(request)
+
+    # 1. Ensure the application record exists
+    from backend.memory.career import get_or_create_career_application
+    app = await get_or_create_career_application(user_id, opportunity_id)
+
+    # 2. Transition status to SUBMITTED and record timestamp
+    from datetime import datetime, timezone
+    updates = {
+        "status": CareerApplicationStatus.SUBMITTED.value,
+        "submitted_at": datetime.now(timezone.utc),
+        "submission_method": SubmissionMethod.MANUAL_HANDOFF.value, # Default for external
+    }
+
+    app = await update_career_application(app.id, user_id, updates)
+
+    # 3. Log the external event
+    await log_application_event(app.id, "EXTERNAL_SUBMISSION", {"source": source})
+
+    # 4. Enrich response
+    opp = await get_opportunity_by_id(opportunity_id, user_id)
+    app.opportunity = opp
+    resume = await get_resume_by_id(app.resume_id, user_id) if app.resume_id else None
+    app.resume = resume
+
+    return app
+
+
 @router.get("/applications", response_model=List[CareerApplicationOut])
 async def list_applications_endpoint(request: Request, status: Optional[str] = Query(None)):
     """List tracked applications with opportunities and resumes attached."""
