@@ -117,8 +117,11 @@ class Settings(BaseSettings):
         return self.ENVIRONMENT.lower() in ("staging", "stage")
 
     def is_production(self) -> bool:
-        """Check if running in production or staging mode for security controls."""
-        return self.ENVIRONMENT.lower() in ("production", "prod", "staging", "stage")
+        """Check if running in production or staging mode for security controls, or fail-closed when unset."""
+        env = (getattr(self, "ENVIRONMENT", "") or "").lower().strip()
+        if not env:
+            return True  # Fail-closed default: unset behaves as production
+        return env in ("production", "prod", "staging", "stage")
 
     def get_missing_production_secrets(self) -> tuple[list[str], list[str]]:
         """Return (missing_secret_names, duplicate_secret_names) for production configuration without exposing secret values."""
