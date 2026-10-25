@@ -29,7 +29,10 @@ async def get_calendar_status_endpoint(request: Request):
     from backend.services.calendar import get_calendar_connection_status
     ident = _get_current_identity(request)
     uid = ident.user_id if ident and not ident.is_guest else None
-    pool = await get_pool()
+    try:
+        pool = await get_pool()
+    except Exception:
+        pool = None
     status = await get_calendar_connection_status(pool=pool, user_id=uid)
     return {"status": "ok", "calendar": status}
 
@@ -41,7 +44,10 @@ async def get_calendar_availability_endpoint(
 ):
     """Retrieve busy blocks and available working windows."""
     from backend.skills import SKILL_REGISTRY
-    pool = await get_pool()
+    try:
+        pool = await get_pool()
+    except Exception:
+        pool = None
     handler = SKILL_REGISTRY.get("get_calendar_availability")
     if not handler:
         raise HTTPException(status_code=500, detail="Availability skill not registered")
@@ -53,7 +59,10 @@ async def get_calendar_availability_endpoint(
 async def propose_schedule_endpoint(body: ProposeScheduleBody):
     """Generate deterministic schedule proposal for tasks."""
     from backend.skills import SKILL_REGISTRY
-    pool = await get_pool()
+    try:
+        pool = await get_pool()
+    except Exception:
+        pool = None
     handler = SKILL_REGISTRY.get("propose_schedule")
     if not handler:
         raise HTTPException(status_code=500, detail="Schedule proposer skill not registered")
@@ -65,7 +74,10 @@ async def propose_schedule_endpoint(body: ProposeScheduleBody):
 async def commit_schedule_endpoint(body: CommitScheduleBody):
     """Commit approved time slots to tasks and calendar."""
     from backend.skills import SKILL_REGISTRY
-    pool = await get_pool()
+    try:
+        pool = await get_pool()
+    except Exception:
+        pool = None
     handler = SKILL_REGISTRY.get("commit_schedule")
     if not handler:
         raise HTTPException(status_code=500, detail="Schedule commit skill not registered")
@@ -84,7 +96,10 @@ async def export_calendar_ics_endpoint(
     if not ident:
         raise HTTPException(status_code=401, detail="Authentication or valid guest token required")
     target_user_id = ident.user_id if ident and not ident.is_guest else (ident.id if ident else None)
-    pool = await get_pool()
+    try:
+        pool = await get_pool()
+    except Exception:
+        pool = None
     tasks = []
     if pool is not None:
         async with pool.acquire() as conn:
