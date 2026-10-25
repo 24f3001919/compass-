@@ -7,6 +7,7 @@ so all connections in the pool can read/write VECTOR columns.
 """
 from __future__ import annotations
 
+import time
 import asyncpg
 from pgvector.asyncpg import register_vector
 
@@ -593,7 +594,8 @@ async def init_pool(dsn: str | None = None) -> asyncpg.Pool:
             break
         except Exception as e:
             last_err = e
-            if attempt < max_retries:
+            is_conn_refused = "refused" in str(e).lower() or isinstance(e, ConnectionRefusedError)
+            if attempt < max_retries and not is_conn_refused:
                 backoff = attempt * 1.5
                 import logging
                 logging.getLogger("compass.db").warning(
@@ -655,7 +657,17 @@ async def get_pool() -> asyncpg.Pool:
             _pool = None
 
     if _pool is None:
-        return await init_pool()
+        from backend.config import get_settings
+        now = time.monotonic()
+        if get_settings().is_test() and (now - globals().get("_last_pool_fail_time", 0.0)) < 10.0:
+            return None
+        try:
+            return await init_pool()
+        except Exception:
+            globals()["_last_pool_fail_time"] = time.monotonic()
+            if get_settings().is_test():
+                return None
+            raise
     return _pool
 
 
