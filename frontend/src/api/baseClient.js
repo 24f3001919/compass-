@@ -229,10 +229,6 @@ export function getAuthHeaders(extraHeaders = {}) {
   const guestToken = getGuestToken()
   if (guestToken) {
     headers['x-guest-token'] = guestToken
-    const guestId = getGuestId()
-    if (guestId) {
-      headers['x-guest-id'] = guestId
-    }
   }
   try {
     const token = typeof localStorage !== 'undefined' ? localStorage.getItem('compass_auth_token') : null
