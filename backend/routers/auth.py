@@ -795,6 +795,7 @@ def _validate_trusted_origin(request: Request) -> bool:
         "https://compass-farmlytics.vercel.app",
         "https://compass-kappa-nine.vercel.app",
         "https://compass-backend-qryu.onrender.com",
+        "https://compass-backend-qryu-vcfv.onrender.com",
     })
     return any(origin_clean.startswith(a) for a in allowed)
 
