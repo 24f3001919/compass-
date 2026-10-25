@@ -53,15 +53,15 @@
   "rewrites": [
     {
       "source": "/health",
-      "destination": "https://compass-backend-qryu.onrender.com/health"
+      "destination": "https://compass-backend-qryu-vcfv.onrender.com/health"
     },
     {
       "source": "/chat",
-      "destination": "https://compass-backend-qryu.onrender.com/chat"
+      "destination": "https://compass-backend-qryu-vcfv.onrender.com/chat"
     },
     {
       "source": "/api/:path*",
-      "destination": "https://compass-backend-qryu.onrender.com/api/:path*"
+      "destination": "https://compass-backend-qryu-vcfv.onrender.com/api/:path*"
     },
     {
       "source": "/((?!api/|chat|health|robots\\.txt|sitemap\\.xml|google[a-zA-Z0-9_-]+\\.html).*)",
