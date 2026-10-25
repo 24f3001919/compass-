@@ -257,9 +257,15 @@ export async function setApplicationCoverLetter(appId, coverLetter) {
   return res.json()
 }
 
-// ---------------------------------------------------------------------------
-// Application Center API
-// ---------------------------------------------------------------------------
+export async function fetchCompanyIntel(opportunityId) {
+  await ensureSession()
+  const res = await fetch(`${API_BASE}/opportunities/${opportunityId}/company-intel`, {
+    headers: getAuthHeaders(),
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error(`Failed to fetch company intelligence: ${res.statusText}`)
+  return res.json()
+}
 
 export async function fetchApplications(status = null) {
   await ensureSession()
@@ -366,6 +372,17 @@ export async function submitBatch(batchId, preferredMethod = 'manual_handoff') {
     const errData = await res.json().catch(() => ({}))
     throw new Error(errData.detail || `Failed to submit batch: ${res.statusText}`)
   }
+  return res.json()
+}
+
+export async function trackExternalApplication(opportunityId, source = 'external_website') {
+  await ensureSession()
+  const res = await fetch(`${API_BASE}/track-external-application?opportunity_id=${opportunityId}&source=${encodeURIComponent(source)}`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error(`Failed to track external application: ${res.statusText}`)
   return res.json()
 }
 
