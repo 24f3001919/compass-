@@ -291,7 +291,7 @@ def _get_current_identity(request: Request) -> Optional[Identity]:
 
     settings = get_settings()
 
-    # 1. Reject explicit x-user-id / x-guest-id impersonation headers outside dev/test unconditionally
+    # 1. Reject explicit x-user-id impersonation headers outside dev/test unconditionally
     user_header = request.headers.get("x-user-id")
     if user_header and user_header.strip():
         if not (settings.is_development() or settings.is_test()):
@@ -300,21 +300,23 @@ def _get_current_identity(request: Request) -> Optional[Identity]:
                 detail="x-user-id / compass_user_id impersonation is strictly forbidden outside development or test environments. Set ENVIRONMENT=development in your environment or .env for local development.",
             )
 
+    verified_guest = _extract_verified_guest_id(request)
+
     guest_id_header = request.headers.get("x-guest-id")
     if guest_id_header and guest_id_header.strip():
-        if not (settings.is_development() or settings.is_test()):
-            raise HTTPException(
-                status_code=403,
-                detail="Raw x-guest-id impersonation is strictly forbidden outside development or test environments. Use cryptographically signed x-guest-token instead.",
-            )
+        # Allow x-guest-id if accompanied by a valid signed token for the identical guest ID
+        if not (verified_guest and guest_id_header.strip() == verified_guest):
+            if not (settings.is_development() or settings.is_test()):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Raw x-guest-id impersonation is strictly forbidden outside development or test environments. Use cryptographically signed x-guest-token instead.",
+                )
 
     session_token = request.cookies.get("compass_session")
     auth_header = request.headers.get("authorization")
     bearer_token = None
     if auth_header and auth_header.lower().startswith("bearer "):
         bearer_token = auth_header[7:].strip()
-
-    verified_guest = _extract_verified_guest_id(request)
 
     # 2. Verified user session
     token_to_check = session_token or bearer_token
