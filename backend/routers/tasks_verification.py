@@ -11,7 +11,13 @@ from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from backend.config import get_settings
-from backend.dependencies import _get_current_identity, _get_or_create_user_id, rate_limit
+from backend.dependencies import (
+    _get_current_identity,
+    _get_or_create_user_id,
+    _extract_verified_guest_id,
+    generate_guest_token,
+    rate_limit,
+)
 from backend.memory import structured
 from backend.memory.db import get_pool
 from backend.models import AddDependencyBody
@@ -187,10 +193,9 @@ async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRe
     Requires an authenticated user session or verified guest identity.
     Writes seeded tasks and memories strictly bound to the caller's identity.
     """
-    env = getattr(settings, "ENVIRONMENT", "").lower()
     raw_enable = getattr(settings, "ENABLE_DEMO_SEEDING", True)
     if isinstance(raw_enable, str):
-        enable_seeding = raw_enable.strip().lower() in ("true", "1", "yes", "on", "t")
+        enable_seeding = raw_enable.strip().lower() not in ("false", "0", "no", "off", "f")
     else:
         enable_seeding = bool(raw_enable)
 
@@ -201,12 +206,19 @@ async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRe
         )
 
     ident = _get_current_identity(request)
-    user_id = ident.id if ident else _get_or_create_user_id(request)
+    user_id = ident.id if ident else None
+    minted_token = None
     if not user_id:
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication required: You must have an active authenticated user session or verified guest identity to seed demo data.",
-        )
+        verified_guest = _extract_verified_guest_id(request)
+        if verified_guest:
+            user_id = verified_guest
+        else:
+            try:
+                user_id = _get_or_create_user_id(request)
+            except Exception:
+                gid, minted_token = generate_guest_token()
+                user_id = gid
+
     try:
         pool = await get_pool()
     except Exception as e:
@@ -656,7 +668,7 @@ async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRe
             )
             seeded_mem_count += 1
 
-    return {
+    res_payload = {
         "status": "ok",
         "message": "Judge Demo Persona loaded successfully.",
         "persona": "Dual-Degree Hackathon Competitor",
@@ -665,6 +677,10 @@ async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRe
         "task_ids": seeded_task_ids,
         "user_id": user_id,
     }
+    if minted_token:
+        res_payload["guest_id"] = user_id
+        res_payload["guest_token"] = minted_token
+    return res_payload
 
 
 @router.post("/api/demo/seed", include_in_schema=False, dependencies=[Depends(rate_limit)])
