@@ -81,10 +81,10 @@ async def health_check():
     db_status = "disconnected"
     db_connected = False
     try:
-        pool = await asyncio.wait_for(get_pool(), timeout=2.0)
+        pool = await asyncio.wait_for(get_pool(), timeout=5.0)
         if pool is not None:
-            async with pool.acquire(timeout=2.0) as conn:
-                val = await asyncio.wait_for(conn.fetchval("SELECT 1"), timeout=2.0)
+            async with pool.acquire(timeout=5.0) as conn:
+                val = await asyncio.wait_for(conn.fetchval("SELECT 1"), timeout=5.0)
                 if val == 1:
                     db_status = "connected"
                     db_connected = True
