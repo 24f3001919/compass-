@@ -228,6 +228,7 @@ def _headers(admin: bool = False, admin_token: Optional[str] = None) -> dict:
     creds = load_credentials()
     guest_token = creds.get("guest_token")
     session_token = creds.get("session_token")
+    env_token = os.getenv("AUTH_TOKEN") or os.getenv("COMPASS_AUTH_TOKEN")
 
     if guest_token:
         return {
@@ -237,6 +238,10 @@ def _headers(admin: bool = False, admin_token: Optional[str] = None) -> dict:
     elif session_token:
         return {
             "Authorization": f"Bearer {session_token}",
+        }
+    elif env_token:
+        return {
+            "Authorization": f"Bearer {env_token}",
         }
     else:
         console_err.print(
@@ -306,7 +311,15 @@ def _stream_chat(payload: dict) -> tuple[str, str | None, str | None]:
     skill_used = None
 
     try:
-        with httpx.stream("POST", url, headers=_headers(), json=payload, timeout=60.0) as resp:
+        try:
+            req_headers = _headers()
+        except typer.Exit:
+            res = _post("/chat", payload)
+            resp_text = res.get("response", "")
+            console.print(resp_text)
+            return resp_text, res.get("conversation_id"), res.get("skill_used")
+
+        with httpx.stream("POST", url, headers=req_headers, json=payload, timeout=60.0) as resp:
             if resp.status_code != 200:
                 try:
                     res = _post("/chat", payload)
