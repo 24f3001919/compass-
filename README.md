@@ -403,6 +403,49 @@ npm run build
 
 ---
 
+## 🧭 Compass CLI
+
+Compass includes a full-featured terminal CLI (`compass`) for interacting with tasks, memory, chat, triage, and administrative maintenance directly from your terminal.
+
+### Installation & Packaging
+```bash
+pip install -e cli/
+compass --version
+# Compass CLI 0.1.0
+```
+
+### Authentication & Guest Isolation
+- **`compass login`**: Obtains an isolated cryptographic guest session via `POST /api/guest/session` or saves an existing session token (`--token <token>`). Tokens are stored in `~/.compass/credentials.json` with owner-only filesystem permissions (Windows ACL / POSIX 0600) and masked when displayed.
+- **Default Base URL**: `http://localhost:8000`. Configure a custom endpoint via `compass login --url <url>` or `compass config --url <url>`. When connected to a remote production host, a visible `Connected to <host>` banner is displayed.
+- **Admin Commands**: Commands under `compass admin ...` require the master `AUTH_TOKEN`, passed explicitly via `--token` or the `AUTH_TOKEN` environment variable. Master tokens are never stored to disk by default.
+
+### Key Commands
+```bash
+# Obtain guest session
+compass login
+
+# Task Management (isolated per caller identity)
+compass tasks                              # List current tasks
+compass add "Fix CLI formatting" --domain code # Add a task with domain & priority
+
+# Memory & Status
+compass status                             # Full terminal dashboard across domains
+compass log "Memory summary" --domain code # Log vector memory chunk (768-dim)
+compass projects                           # List tracked projects
+
+# Conversational & Agent Workflows
+compass ask "What deadlines do I have?"    # One-shot question with live token streaming
+compass chat                               # Interactive REPL with clean Ctrl+C handling (code 130)
+compass triage --days 5 --hours 4          # Interactive feasibility triage session
+compass agent "Plan sprint tasks"          # ReAct agent loop with confirmation gates
+
+# Admin Maintenance (requires master AUTH_TOKEN)
+compass admin usage --token <AUTH_TOKEN>   # Token consumption & cost breakdown
+compass admin-undo --run-id <run_id>       # Revert last state mutation
+```
+
+---
+
 ## Production Deployment
 
 Compass is deployed using continuous integration and deployment pipelines targeting provider-native cloud environments:

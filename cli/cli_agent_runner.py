@@ -11,23 +11,29 @@ import json
 from typing import Any, Dict, List, Optional
 
 import httpx
+import typer
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Prompt
 
-from cli.cli_formatters import STEP_COLORS, console
+from cli.cli_formatters import STEP_COLORS, console, console_err
 
 
 def run_interactive_agent_session(
     api_base: str,
-    auth_token: str,
-    goal: str,
+    auth_token: Optional[str] = None,
+    goal: str = "",
     max_steps: int = 8,
     no_critic: bool = False,
     demo_reject: bool = False,
     conversation_id: Optional[str] = None,
+    headers: Optional[Dict[str, str]] = None,
 ) -> None:
     """Run interactive SSE agent session in terminal with live step panels."""
+    req_headers = dict(headers) if headers else {}
+    if not req_headers and auth_token:
+        req_headers["Authorization"] = f"Bearer {auth_token}"
+
     console.print(Panel(
         f"[bold]Goal:[/] {goal}\n"
         f"[dim]Max steps: {max_steps} | Critic: {'disabled' if no_critic else 'enabled'}[/]",
@@ -49,6 +55,7 @@ def run_interactive_agent_session(
                 "confirmed_actions": [],
                 "conversation_id": conversation_id,
             },
+            headers=req_headers,
             timeout=120.0,
         ) as response:
             response.raise_for_status()
@@ -143,7 +150,7 @@ def run_interactive_agent_session(
                 resp = httpx.post(
                     f"{api_base}/api/agent/confirm",
                     json={"actions": pending_actions, "run_id": run_id if 'run_id' in locals() else None},
-                    headers={"Authorization": f"Bearer {auth_token}"},
+                    headers=req_headers,
                     timeout=30.0,
                 )
                 resp.raise_for_status()
@@ -154,9 +161,9 @@ def run_interactive_agent_session(
                     if status == "success":
                         console.print(f"  ✅ {tool_name}: success")
                     else:
-                        console.print(f"  ❌ {tool_name}: {r.get('message', 'failed')}")
+                        console_err.print(f"  ❌ {tool_name}: {r.get('message', 'failed')}")
             except Exception as e:
-                console.print(f"[compass.error]❌ Failed to execute actions: {e}[/]")
+                console_err.print(f"[compass.error]❌ Failed to execute actions: {e}[/]")
         else:
             if not feedback:
                 feedback = Prompt.ask("Reason / alternative plan instruction (optional)", default="User rejected this action")
@@ -172,6 +179,7 @@ def run_interactive_agent_session(
                             "action": "reject",
                             "feedback": feedback,
                         },
+                        headers=req_headers,
                         timeout=120.0,
                     ) as resp:
                         resp.raise_for_status()
@@ -195,7 +203,7 @@ def run_interactive_agent_session(
                                 elif stype != "done":
                                     console.print(Panel(c, title=f"[{col}]{lbl}[/]", border_style="blue", padding=(0, 1)))
                 except Exception as ex:
-                    console.print(f"[compass.error]❌ Re-planning failed: {ex}[/]")
+                    console_err.print(f"[compass.error]❌ Re-planning failed: {ex}[/]")
 
 
 def run_feasibility_triage_session(
@@ -228,4 +236,5 @@ def run_feasibility_triage_session(
                     if md:
                         console.print(Markdown(md))
     except Exception as e:
-        console.print(f"[compass.error]❌ Triage failed: {e}[/]")
+        console_err.print(f"[compass.error]❌ Triage failed: {e}[/]")
+        raise typer.Exit(1)
