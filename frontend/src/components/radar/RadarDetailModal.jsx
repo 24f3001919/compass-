@@ -200,13 +200,13 @@ export default function RadarDetailModal({
 
         {/* Modal Sub-tabs */}
         <div
+          role="tablist"
+          aria-label="Opportunity details sections"
+          className="unified-tablist"
           style={{
-            display: 'flex',
-            borderBottom: '1px solid var(--border, #e6e1d6)',
-            background: 'var(--bg-app, #f7f5ef)',
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--bg-app)',
             padding: '0 24px',
-            gap: '8px',
-            overflowX: 'auto',
           }}
         >
           {[
@@ -219,21 +219,15 @@ export default function RadarDetailModal({
             return (
               <button
                 key={tab.id}
+                role="tab"
+                id={`radar-detail-tab-${tab.id}`}
+                aria-selected={isActive}
+                tabIndex={isActive ? 0 : -1}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                style={{
-                  padding: '11px 14px',
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: isActive ? '2px solid var(--brand, #f5a623)' : '2px solid transparent',
-                  color: isActive ? 'var(--text-primary, #1b1a17)' : 'var(--text-secondary, #3d3a35)',
-                  fontWeight: isActive ? 600 : 500,
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
+                className={`unified-tab ${isActive ? 'active' : ''}`}
               >
-                {tab.label}
+                <span>{tab.label}</span>
               </button>
             )
           })}
@@ -709,21 +703,9 @@ export default function RadarDetailModal({
             type="button"
             onClick={() => onVerify && onVerify(opportunity.id)}
             disabled={isVerifying}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '7px 12px',
-              borderRadius: 'var(--radius-btn, 6px)',
-              border: '1px solid var(--border, #e6e1d6)',
-              background: 'var(--bg-card-soft, #f2eee6)',
-              color: 'var(--text-primary, #1b1a17)',
-              fontSize: '12px',
-              fontWeight: 500,
-              cursor: isVerifying ? 'not-allowed' : 'pointer',
-            }}
+            className="radar-card-btn radar-card-btn-secondary"
           >
-            <RefreshCw size={13} className={isVerifying ? 'spin' : ''} />
+            <RefreshCw size={14} className={isVerifying ? 'spin' : ''} strokeWidth={1.8} aria-hidden="true" />
             <span>{isVerifying ? 'Checking Official Status…' : 'Re-verify Status'}</span>
           </button>
 
@@ -733,43 +715,20 @@ export default function RadarDetailModal({
               href={originalUrl}
               target="_blank"
               rel="noopener noreferrer"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 16px',
-                borderRadius: 'var(--radius-btn, 6px)',
-                background: 'var(--brand, #f5a623)',
-                color: 'var(--accent-text, #1b1a17)',
-                fontSize: '13px',
-                fontWeight: 600,
-                textDecoration: 'none',
-                cursor: 'pointer',
-              }}
-              title="Open external original job posting in a new tab"
+              className="radar-card-btn radar-card-btn-secondary"
+              title="Open original listing"
+              aria-label="Open original listing"
             >
-              <span>Open original listing</span>
-              <ExternalLink size={13} strokeWidth={2} />
+              <span>Open listing</span>
+              <ExternalLink size={14} strokeWidth={1.8} aria-hidden="true" />
             </a>
           ) : (
             <button
               type="button"
               disabled
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 16px',
-                borderRadius: 'var(--radius-btn, 6px)',
-                background: 'var(--bg-card-soft, #f2eee6)',
-                color: 'var(--text-muted, #5f5a52)',
-                border: '1px solid var(--border, #e6e1d6)',
-                fontSize: '13px',
-                fontWeight: 500,
-                cursor: 'not-allowed',
-                opacity: 0.6,
-              }}
+              className="radar-card-btn radar-card-btn-secondary"
               title="Original listing URL unavailable"
+              aria-label="Original listing URL unavailable"
             >
               <span>Original listing unavailable</span>
             </button>

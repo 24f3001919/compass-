@@ -118,6 +118,10 @@
   --guide-purple-text: #6d28d9;
   --guide-purple-border: var(--border);
   --guide-link: var(--text-muted);
+
+  /* Unified Tab Indicators (>= 4.5:1 contrast against light cards #ffffff/#f7f5ef) */
+  --tab-active-text: var(--guide-amber-text);
+  --tab-active-indicator: var(--guide-amber-text);
 }
 
 :root[data-theme="dark"], html.dark {
@@ -235,6 +239,10 @@
   --guide-purple-text: #a78bfa;
   --guide-purple-border: var(--border);
   --guide-link: var(--text-muted);
+
+  /* Unified Tab Indicators (>= 4.5:1 contrast against dark card #1e1e1b) */
+  --tab-active-text: var(--accent);
+  --tab-active-indicator: var(--accent);
 }
 
 html, body {
@@ -2099,3 +2107,244 @@ textarea {
     display: none !important;
   }
 }
+
+/* ==========================================================================
+   Career Copilot: Unified Job Card Actions (Issue 1)
+   ========================================================================== */
+.radar-card {
+  container-type: inline-size;
+}
+
+.radar-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.radar-card-btn {
+  height: 44px;
+  min-height: 44px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 14px;
+  border-radius: var(--radius-btn, 6px);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.radar-card-btn:focus-visible {
+  outline: 2px solid var(--tab-active-indicator);
+  outline-offset: 2px;
+}
+
+.radar-card-btn-primary {
+  background: var(--accent);
+  color: var(--accent-text);
+  border: 1px solid var(--accent);
+}
+
+.radar-card-btn-primary:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+
+.radar-card-btn-secondary {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.radar-card-btn-secondary:hover {
+  background: var(--bg-card-soft);
+  border-color: var(--border);
+}
+
+.radar-card-btn:disabled,
+.radar-card-btn[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@container (max-width: 520px) {
+  .radar-card-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+  .radar-card-actions .radar-card-btn-primary {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+  .radar-card-actions .radar-card-btn-secondary {
+    width: 100%;
+  }
+  .radar-card-actions .radar-card-btn-secondary:only-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .radar-card-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+  .radar-card-actions .radar-card-btn-primary {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+  .radar-card-actions .radar-card-btn-secondary {
+    width: 100%;
+  }
+  .radar-card-actions .radar-card-btn-secondary:only-child {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ==========================================================================
+   Career Copilot: Unified Tab Bar & Tabs (Issue 2)
+   ========================================================================== */
+.unified-tablist-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+.unified-tablist {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scroll-behavior: smooth;
+  width: 100%;
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+
+.unified-tablist::-webkit-scrollbar {
+  display: none;
+}
+
+.unified-tab {
+  height: 44px;
+  min-height: 44px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px;
+  border-radius: var(--radius-tab, 6px) var(--radius-tab, 6px) 0 0;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+  user-select: none;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.unified-tab:hover {
+  background: var(--bg-card-soft);
+  color: var(--text-primary);
+}
+
+.unified-tab:focus-visible {
+  outline: 2px solid var(--tab-active-indicator);
+  outline-offset: -2px;
+}
+
+.unified-tab.active {
+  color: var(--tab-active-text);
+  border-bottom: 2px solid var(--tab-active-indicator);
+  background: transparent;
+}
+
+.unified-tab.active:hover {
+  background: var(--bg-card-soft);
+}
+
+.unified-tab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: currentColor;
+}
+
+.tab-scroll-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 44px;
+  background: var(--bg-card);
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  z-index: 2;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.tab-scroll-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-card-soft);
+}
+
+.tab-scroll-btn:focus-visible {
+  outline: 2px solid var(--tab-active-indicator);
+  outline-offset: -2px;
+}
+
+.tab-scroll-fade-left {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  pointer-events: none;
+  background: linear-gradient(to right, var(--bg-card), transparent);
+  z-index: 1;
+}
+
+.tab-scroll-fade-right {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  pointer-events: none;
+  background: linear-gradient(to left, var(--bg-card), transparent);
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .radar-card-btn,
+  .unified-tab,
+  .tab-scroll-btn {
+    transition: none !important;
+  }
+}
+

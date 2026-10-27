@@ -1,5 +1,5 @@
 import React from 'react'
-import { Star, DollarSign, Calendar, ExternalLink } from 'lucide-react'
+import { Star, DollarSign, Calendar, ExternalLink, Rocket } from 'lucide-react'
 import { cleanOpportunity } from '../../utils/jobCardCleaner'
 
 export default function RadarOpportunityCard({
@@ -278,38 +278,21 @@ export default function RadarOpportunityCard({
         </div>
 
         {/* Action Controls */}
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div className="radar-card-actions">
           {!application_status && (
             <button
               type="button"
               onClick={() => onApply(opportunity)}
-              style={{
-                padding: '6px 12px',
-                borderRadius: 'var(--radius-btn, 6px)',
-                background: 'var(--primary, #2563eb)',
-                color: '#ffffff',
-                border: 'none',
-                fontSize: '12px',
-                fontWeight: '600',
-                cursor: 'pointer',
-              }}
+              className="radar-card-btn radar-card-btn-primary"
             >
-              🚀 Prepare Application
+              <Rocket size={14} strokeWidth={1.8} aria-hidden="true" />
+              <span>Prepare Application</span>
             </button>
           )}
           <button
             type="button"
             onClick={() => onOpenDetail(opportunity)}
-            style={{
-              padding: '6px 12px',
-              borderRadius: 'var(--radius-btn, 6px)',
-              border: '1px solid var(--border, #e6e1d6)',
-              background: 'var(--bg-card-soft, #f2eee6)',
-              color: 'var(--text-primary, #1b1a17)',
-              fontSize: '12px',
-              fontWeight: '600',
-              cursor: 'pointer',
-            }}
+            className="radar-card-btn radar-card-btn-secondary"
           >
             {application_status ? 'View Progress' : 'View details'}
           </button>
@@ -318,24 +301,12 @@ export default function RadarOpportunityCard({
               href={originalUrl}
               target="_blank"
               rel="noopener noreferrer"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '6px 12px',
-                borderRadius: 'var(--radius-btn, 6px)',
-                background: 'var(--brand, #f5a623)',
-                color: 'var(--accent-text, #1b1a17)',
-                border: 'none',
-                fontSize: '12px',
-                fontWeight: '600',
-                textDecoration: 'none',
-                cursor: 'pointer',
-              }}
-              title="Open external original job posting in a new tab"
+              className="radar-card-btn radar-card-btn-secondary"
+              title="Open original listing"
+              aria-label="Open original listing"
             >
-              <span>Open original listing</span>
-              <ExternalLink size={12} strokeWidth={2} />
+              <span>Open listing</span>
+              <ExternalLink size={14} strokeWidth={1.8} aria-hidden="true" />
             </a>
           )}
         </div>

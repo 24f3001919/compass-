@@ -1,4 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import {
+  Building2,
+  MapPin,
+  ClipboardList,
+  Target,
+  FileText,
+  PenLine,
+  CheckSquare,
+  Send,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react'
+import { cleanOpportunity } from '../../utils/jobCardCleaner'
 import {
   prepareApplication,
   fetchResume,
@@ -21,6 +35,34 @@ import {
   inspectDraftConflict,
 } from '../../utils/workspaceDraft'
 import ValidationReportCard from './ValidationReportCard'
+
+const STATUS_LABELS = {
+  discovered: 'Discovered',
+  eligibility_checked: 'Eligibility checked',
+  preparing: 'Preparing',
+  saved: 'Saved',
+  ready_for_review: 'Ready for review',
+  ready_for_approval: 'Ready for approval',
+  approved: 'Approved',
+  approved_for_submission: 'Approved for submission',
+  submitted: 'Submitted',
+  manual_submission_required: 'Manual handoff',
+  handoff_kit_ready: 'Handoff kit ready',
+  interview: 'Interviewing',
+  offer_received: 'Offer received',
+  rejected: 'Rejected',
+  withdrawn: 'Withdrawn',
+}
+
+function formatStatusLabel(status) {
+  if (!status) return 'Preparing'
+  const key = String(status).trim().toLowerCase()
+  if (STATUS_LABELS[key]) return STATUS_LABELS[key]
+  return key
+    .split('_')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ')
+}
 
 export default function ApplicationWorkspaceModal({
   opportunity,
@@ -411,14 +453,85 @@ export default function ApplicationWorkspaceModal({
     !userSkills.some(us => us.toLowerCase() === s.toLowerCase())
   )
 
+  const cleanedOpp = cleanOpportunity(opportunity)
+
+  const tabListRef = useRef(null)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+
+  const checkTabScroll = useCallback(() => {
+    const el = tabListRef.current
+    if (!el) return
+    const { scrollLeft, scrollWidth, clientWidth } = el
+    setCanScrollLeft(scrollLeft > 4)
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 4)
+  }, [])
+
+  useEffect(() => {
+    const el = tabListRef.current
+    if (!el) return
+    checkTabScroll()
+    el.addEventListener('scroll', checkTabScroll, { passive: true })
+    window.addEventListener('resize', checkTabScroll)
+    return () => {
+      el.removeEventListener('scroll', checkTabScroll)
+      window.removeEventListener('resize', checkTabScroll)
+    }
+  }, [checkTabScroll])
+
+  useEffect(() => {
+    const el = tabListRef.current
+    if (!el) return
+    const activeEl = el.querySelector('[aria-selected="true"]')
+    if (activeEl) {
+      activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
+    }
+    checkTabScroll()
+  }, [activeTab, checkTabScroll])
+
+  const scrollTabs = (dir) => {
+    const el = tabListRef.current
+    if (!el) return
+    el.scrollBy({ left: dir === 'left' ? -200 : 200, behavior: 'smooth' })
+  }
+
+  const handleTabKeyDown = (e, index) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault()
+      const nextIdx = (index + 1) % TABS.length
+      setActiveTab(TABS[nextIdx].key)
+      const tabs = tabListRef.current?.querySelectorAll('[role="tab"]')
+      tabs?.[nextIdx]?.focus()
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      const prevIdx = (index - 1 + TABS.length) % TABS.length
+      setActiveTab(TABS[prevIdx].key)
+      const tabs = tabListRef.current?.querySelectorAll('[role="tab"]')
+      tabs?.[prevIdx]?.focus()
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      setActiveTab(TABS[0].key)
+      const tabs = tabListRef.current?.querySelectorAll('[role="tab"]')
+      tabs?.[0]?.focus()
+    } else if (e.key === 'End') {
+      e.preventDefault()
+      setActiveTab(TABS[TABS.length - 1].key)
+      const tabs = tabListRef.current?.querySelectorAll('[role="tab"]')
+      tabs?.[TABS.length - 1]?.focus()
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      setActiveTab(TABS[index].key)
+    }
+  }
+
   const TABS = [
-    { key: 'overview', icon: '📋', label: 'Role & Match' },
-    { key: 'company_intel', icon: '🛰️', label: 'Company Intel' },
-    { key: 'job_analysis', icon: '🎯', label: 'Job Analysis' },
-    { key: 'resume', icon: '📄', label: 'Tailored Resume' },
-    { key: 'cover_letter', icon: '✍️', label: 'Cover Letter' },
-    { key: 'checklist', icon: '✅', label: 'Checklist & Notes' },
-    { key: 'handoff', icon: '🚀', label: 'Official Submission' },
+    { key: 'overview', icon: ClipboardList, label: 'Role & Match' },
+    { key: 'company_intel', icon: Building2, label: 'Company Intel' },
+    { key: 'job_analysis', icon: Target, label: 'Job Analysis' },
+    { key: 'resume', icon: FileText, label: 'Tailored Resume' },
+    { key: 'cover_letter', icon: PenLine, label: 'Cover Letter' },
+    { key: 'checklist', icon: CheckSquare, label: 'Checklist & Notes' },
+    { key: 'handoff', icon: Send, label: 'Official Submission' },
   ]
 
   return (
@@ -470,11 +583,12 @@ export default function ApplicationWorkspaceModal({
               <span
                 style={{
                   fontSize: '11px',
-                  fontWeight: 800,
+                  fontWeight: 600,
                   padding: '3px 8px',
-                  borderRadius: '6px',
-                  background: 'var(--brand)',
-                  color: '#ffffff',
+                  borderRadius: 'var(--radius-chip, 6px)',
+                  background: 'var(--bg-card-soft)',
+                  color: 'var(--text-secondary)',
+                  border: '1px solid var(--border)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px',
                 }}
@@ -486,22 +600,28 @@ export default function ApplicationWorkspaceModal({
                   fontSize: '11px',
                   fontWeight: 600,
                   padding: '3px 8px',
-                  borderRadius: '6px',
-                  background: appStatus === 'submitted' ? '#dcfce7' : '#e0f2fe',
-                  color: appStatus === 'submitted' ? '#166534' : '#0369a1',
-                  textTransform: 'uppercase',
+                  borderRadius: 'var(--radius-chip, 6px)',
+                  background: 'var(--bg-card-soft)',
+                  color: 'var(--text-secondary)',
+                  border: '1px solid var(--border)',
                 }}
               >
-                Status: {appStatus}
+                Status: {formatStatusLabel(appStatus)}
               </span>
             </div>
             <h2 style={{ margin: '6px 0 2px 0', fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)' }}>
               {opportunity.role_title}
             </h2>
-            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <span>🏢 <strong>{opportunity.company_name}</strong></span>
-              <span>📍 {opportunity.location || 'Remote / Flexible'}</span>
-              <span>💼 {opportunity.work_arrangement}</span>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <Building2 size={14} strokeWidth={1.8} aria-hidden="true" />
+                <strong>{cleanedOpp.company}</strong>
+              </span>
+              <span>•</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <MapPin size={14} strokeWidth={1.8} aria-hidden="true" />
+                <span>{cleanedOpp.locationLine}</span>
+              </span>
             </div>
           </div>
 
@@ -560,43 +680,63 @@ export default function ApplicationWorkspaceModal({
         )}
 
         {/* Workspace Nav Tabs */}
-        <div
-          style={{
-            display: 'flex',
-            gap: '8px',
-            padding: '8px 20px',
-            background: 'var(--bg-card)',
-            borderBottom: '1px solid var(--border)',
-            overflowX: 'auto',
-          }}
-        >
-          {TABS.map(tab => {
-            const isActive = activeTab === tab.key
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setActiveTab(tab.key)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '7px 14px',
-                  borderRadius: '7px',
-                  border: isActive ? '1px solid var(--brand)' : '1px solid transparent',
-                  background: isActive ? 'var(--brand)' : 'transparent',
-                  color: isActive ? '#ffffff' : 'var(--text-secondary)',
-                  fontSize: '12px',
-                  fontWeight: isActive ? 700 : 500,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                <span>{tab.icon}</span>
-                <span>{tab.label}</span>
-              </button>
-            )
-          })}
+        <div className="unified-tablist-container">
+          {canScrollLeft && (
+            <button
+              type="button"
+              className="tab-scroll-btn"
+              onClick={() => scrollTabs('left')}
+              aria-label="Scroll tabs left"
+              tabIndex={-1}
+            >
+              <ChevronLeft size={16} strokeWidth={2} />
+            </button>
+          )}
+          {canScrollLeft && <div className="tab-scroll-fade-left" aria-hidden="true" />}
+
+          <div
+            ref={tabListRef}
+            role="tablist"
+            aria-label="Application workspace sections"
+            className="unified-tablist"
+          >
+            {TABS.map((tab, idx) => {
+              const isActive = activeTab === tab.key
+              const TabIcon = tab.icon
+              return (
+                <button
+                  key={tab.key}
+                  id={`tab-${tab.key}`}
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-controls={`panel-${tab.key}`}
+                  tabIndex={isActive ? 0 : -1}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  onKeyDown={(e) => handleTabKeyDown(e, idx)}
+                  className={`unified-tab ${isActive ? 'active' : ''}`}
+                >
+                  <span className="unified-tab-icon" aria-hidden="true">
+                    <TabIcon size={14} strokeWidth={1.8} />
+                  </span>
+                  <span>{tab.label}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          {canScrollRight && <div className="tab-scroll-fade-right" aria-hidden="true" />}
+          {canScrollRight && (
+            <button
+              type="button"
+              className="tab-scroll-btn"
+              onClick={() => scrollTabs('right')}
+              aria-label="Scroll tabs right"
+              tabIndex={-1}
+            >
+              <ChevronRight size={16} strokeWidth={2} />
+            </button>
+          )}
         </div>
 
         {/* Main Content Area */}
@@ -695,18 +835,10 @@ export default function ApplicationWorkspaceModal({
                         type="button"
                         onClick={loadCompanyIntelData}
                         disabled={loadingIntel}
-                        style={{
-                          padding: '6px 12px',
-                          borderRadius: '6px',
-                          background: 'var(--bg-card)',
-                          border: '1px solid var(--border)',
-                          color: 'var(--text-primary)',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          cursor: loadingIntel ? 'not-allowed' : 'pointer',
-                        }}
+                        className="radar-card-btn radar-card-btn-secondary"
                       >
-                        {loadingIntel ? 'Updating...' : '🔄 Refresh Intel'}
+                        <RefreshCw size={14} className={loadingIntel ? 'spin' : ''} strokeWidth={1.8} aria-hidden="true" />
+                        <span>{loadingIntel ? 'Updating…' : 'Refresh Intel'}</span>
                       </button>
                     </div>
                   </div>
