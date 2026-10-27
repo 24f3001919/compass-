@@ -374,6 +374,16 @@ def _stream_chat(payload: dict) -> tuple[str, str | None, str | None]:
         _handle_http_error(e)
         return "", None, None
     except (httpx.ConnectError, httpx.TimeoutException) as e:
+        if not full_text:
+            try:
+                res = _post("/chat", payload)
+                resp_text = res.get("response", "")
+                console.print(resp_text)
+                return resp_text, res.get("conversation_id"), res.get("skill_used")
+            except typer.Exit:
+                raise
+            except Exception:
+                pass
         if full_text:
             console.print()
         console_err.print(f"[compass.error]❌ Cannot connect to backend at {API_BASE} (error: {e}). Is the server running?[/]")
