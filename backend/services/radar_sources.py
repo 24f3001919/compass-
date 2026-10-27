@@ -98,6 +98,16 @@ def infer_employer_type(company_name: str, category: str = "general", source_nam
     if any(k in sn or k in cn for k in ["y combinator", "techstars", "sequoia", "accel", "seed", "series a", "series b", "early-stage", "startup"]):
         return EmployerType.STARTUP
 
+    try:
+        from backend.services.radar_inventory import SOURCE_INVENTORY
+        for item in SOURCE_INVENTORY:
+            emp = (item.get("employer") or "").lower()
+            cat = item.get("employer_category")
+            if emp and cat and (cn in emp or emp in cn):
+                return cat
+    except Exception:
+        pass
+
     return None
 
 

@@ -101,4 +101,4 @@ def test_trusted_event_url_elevates_to_tier_1_verified():
     assert verdict == "VERIFIED"
     assert len(evidence) == 1
     assert evidence[0]["verdict"] == "VERIFIED"
-    assert evidence[0]["parsed_date"] == "2026-10-30T00:00:00+00:00"
+    assert evidence[0]["parsed_date"] == "2026-10-30T10:00:00-07:00"

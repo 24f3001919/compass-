@@ -237,6 +237,7 @@ async def test_production_and_unset_environment_rate_limiter_fail_closed(client:
     """In production and unset ENVIRONMENT, DB rate limiter errors fail closed with 503."""
     settings = get_settings()
     monkeypatch.setattr(settings, "ENABLE_DEMO_SEEDING", True)
+    monkeypatch.setattr(settings, "GUEST_SIGNING_SECRET", "test-signing-secret-32-chars-long!")
 
     _, guest_token = generate_guest_token()
     headers = {"x-guest-token": guest_token}

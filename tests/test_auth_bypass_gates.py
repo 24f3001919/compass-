@@ -89,6 +89,7 @@ async def test_agent_admin_override_logged_to_audit():
 
     settings = get_settings()
     admin_token = settings.AUTH_TOKEN or "ci-test-token"
+    settings.AUTH_TOKEN = admin_token
 
     req = AgentConfirmRequest(
         run_id=run_id,

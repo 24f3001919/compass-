@@ -594,8 +594,7 @@ async def init_pool(dsn: str | None = None) -> asyncpg.Pool:
             break
         except Exception as e:
             last_err = e
-            is_conn_refused = "refused" in str(e).lower() or isinstance(e, ConnectionRefusedError)
-            if attempt < max_retries and not is_conn_refused:
+            if attempt < max_retries:
                 backoff = attempt * 1.5
                 import logging
                 logging.getLogger("compass.db").warning(

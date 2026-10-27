@@ -365,6 +365,7 @@ async def test_demo_seed_authorized_development_and_server_override():
         # In production with trusted server-side setting: succeeds
         mock_settings.ENVIRONMENT = "production"
         mock_settings.ENABLE_DEMO_SEEDING = True
+        mock_ident.id = "test-judge-user-prod"
         res_prod = await seed_demo_persona_endpoint(mock_request, body=DemoSeedRequest(reference_date="2026-10-20"))
         assert res_prod["status"] == "ok"
 

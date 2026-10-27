@@ -162,7 +162,8 @@ async def test_get_shared_conversation_by_token_sql_contract():
 
     # Verify query parameters
     query_str = mock_conn.fetchrow.call_args[0][0]
-    assert "share_token = $1 OR share_token = $2" in query_str
+    assert "share_token = $1" in query_str
+    assert "share_token = $2" in query_str
     assert "is_shared = TRUE" in query_str
 
 

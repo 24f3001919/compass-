@@ -19,6 +19,7 @@ from backend.dependencies import generate_guest_token
 from backend.routers.auth import create_session
 from backend.memory.db import get_pool
 from backend.memory.vector import store_chunk, search_chunks
+from backend.config import get_settings
 from backend.services.oauth import exchange_code_for_tokens
 from backend.router_helpers import is_schedule_or_agent_intent, _fallback_route
 
@@ -68,8 +69,9 @@ async def test_demo_seed_rejected_causes_zero_database_writes():
 
 
 @pytest.mark.asyncio
-async def test_demo_seed_authenticated_user_succeeds():
+async def test_demo_seed_authenticated_user_succeeds(monkeypatch):
     """A request with valid authenticated identity succeeds and seeds tasks."""
+    monkeypatch.setattr(get_settings(), "ENABLE_DEMO_SEEDING", True)
     user_email = f"tester_{uuid.uuid4().hex[:6]}@example.com"
     session_token = create_session(user_email)
     transport = ASGITransport(app=app)
@@ -148,14 +150,9 @@ async def test_vector_memory_isolation_across_tenants():
         assert not any("Guest A" in t for t in texts_ub)
         assert not any("Guest B" in t for t in texts_ub)
 
-        # 5. Anonymous / None searches: sees ONLY Public content, NEVER any private tenant chunks
+        # 5. Anonymous / None searches: fails closed under null-owner isolation (returns [])
         res_anon = await search_chunks(conn, "notes plan policy", domain=test_domain, user_id=None, limit=10)
-        texts_anon = [r["content"] for r in res_anon]
-        assert not any("Guest A" in t for t in texts_anon)
-        assert not any("Guest B" in t for t in texts_anon)
-        assert not any("User A" in t for t in texts_anon)
-        assert not any("User B" in t for t in texts_anon)
-        assert any("Public" in t for t in texts_anon)
+        assert res_anon == []
 
 
 # ===========================================================================

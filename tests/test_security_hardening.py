@@ -334,7 +334,9 @@ async def test_agent_confirm_proposal_integrity_and_replay_protection(client: As
     """Confirmation requires Bearer auth, validates proposal matching, and rejects replay."""
     from backend.config import get_settings
     settings = get_settings()
-    auth_header = {"Authorization": f"Bearer {settings.AUTH_TOKEN or 'dev-token'}"}
+    token = settings.AUTH_TOKEN or "dev-token"
+    monkeypatch.setattr(settings, "AUTH_TOKEN", token)
+    auth_header = {"Authorization": f"Bearer {token}"}
 
     # 1. Unauthenticated confirmation is rejected with 401
     unauth_resp = await client.post(
@@ -400,7 +402,9 @@ async def test_agent_undo_replay_protection(client: AsyncClient, monkeypatch):
     """Undo rejects unauthenticated callers and blocks replaying already-reverted actions."""
     from backend.config import get_settings
     settings = get_settings()
-    auth_header = {"Authorization": f"Bearer {settings.AUTH_TOKEN or 'dev-token'}"}
+    token = settings.AUTH_TOKEN or "dev-token"
+    monkeypatch.setattr(settings, "AUTH_TOKEN", token)
+    auth_header = {"Authorization": f"Bearer {token}"}
 
     # 1. Unauthenticated undo is rejected with 401
     unauth_resp = await client.post("/api/agent/undo", json={"run_id": "test_run"})

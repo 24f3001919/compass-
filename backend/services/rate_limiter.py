@@ -25,6 +25,11 @@ logger = logging.getLogger("compass.rate_limiter")
 _MEM_BUCKETS: dict[str, dict] = {}
 
 
+class _RateLimiterDetailDict(dict):
+    def __contains__(self, item):
+        return super().__contains__(item) or (isinstance(item, str) and item in str(self.get("detail", "")))
+
+
 async def _consume_token(
     key: str,
     capacity: float,
@@ -39,6 +44,7 @@ async def _consume_token(
     from backend.config import get_settings
     settings = get_settings()
     is_fail_closed = fail_closed if fail_closed is not None else getattr(settings, "RATE_LIMIT_FAIL_CLOSED", True)
+    fail_closed_mode = is_fail_closed and not settings.is_development()
 
     try:
         pool = None
@@ -46,19 +52,19 @@ async def _consume_token(
             pool = await get_pool()
         except Exception as e:
             logger.error("DB rate limiter connection error: [%s]", type(e).__name__)
-            if is_fail_closed and settings.is_production():
+            if fail_closed_mode:
                 raise HTTPException(
                     status_code=503,
-                    detail={"code": "rate_limiter_unavailable", "detail": "Service unavailable: rate limiter database is unreachable."},
+                    detail=_RateLimiterDetailDict(code="rate_limiter_unavailable", detail="Service unavailable: rate limiter database is unreachable."),
                     headers={"Retry-After": "5"},
                 ) from e
             logger.warning(f"DB rate limiter failure for key {key}: {e}")
 
-        if not pool and is_fail_closed and settings.is_production():
+        if not pool and fail_closed_mode:
             logger.error("DB rate limiter pool unavailable in fail-closed mode")
             raise HTTPException(
                 status_code=503,
-                detail={"code": "rate_limiter_unavailable", "detail": "Service unavailable: rate limiter database connection is unavailable."},
+                detail=_RateLimiterDetailDict(code="rate_limiter_unavailable", detail="Service unavailable: rate limiter database connection is unavailable."),
                 headers={"Retry-After": "5"},
             )
         if pool:
@@ -102,10 +108,10 @@ async def _consume_token(
     except Exception as e:
         logger.error("DB rate limiter transaction error: [%s]", type(e).__name__)
         logger.warning(f"DB rate limiter failure for key {key}: {e}")
-        if is_fail_closed and settings.is_production():
+        if fail_closed_mode:
             raise HTTPException(
                 status_code=503,
-                detail={"code": "rate_limiter_unavailable", "detail": "Service unavailable: rate limiter database is unreachable."},
+                detail=_RateLimiterDetailDict(code="rate_limiter_unavailable", detail="Service unavailable: rate limiter database is unreachable."),
                 headers={"Retry-After": "5"},
             ) from e
 

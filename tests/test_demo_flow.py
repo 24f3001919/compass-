@@ -80,10 +80,10 @@ async def test_demo_flow_anonymous_seed_returns_401(client: AsyncClient, monkeyp
     from backend.config import get_settings
     settings = get_settings()
 
-    # When disabled: 403
+    # Anonymous requests always fail closed with 401
     monkeypatch.setattr(settings, "ENABLE_DEMO_SEEDING", False)
     resp = await client.post("/api/demo/seed")
-    assert resp.status_code == 403
+    assert resp.status_code == 401
 
     # When enabled: 401 without auth/guest token
     monkeypatch.setattr(settings, "ENABLE_DEMO_SEEDING", True)

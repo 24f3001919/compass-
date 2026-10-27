@@ -120,15 +120,14 @@ def test_radar_profile_modal_immediate_close_and_error_preservation():
 
 
 def test_career_copilot_save_ux_and_navigation():
-    """CareerCopilot switches to radar tab, shows notification, and triggers async refresh."""
+    """CareerCopilot switches tabs, shows notification, and triggers async refresh."""
     copilot_code = (FRONTEND_SRC / "components" / "CareerCopilot.jsx").read_text(encoding="utf-8")
 
-    # 1. Verify handleProfileUpdated closes modal and returns user to Internship Radar
-    assert "setShowProfileModal(false)" in copilot_code, "Must close modal on profile updated"
-    assert "setActiveSubTab('radar')" in copilot_code, "Must return to Internship Radar view"
+    # 1. Verify navigation to Resume Studio for profile editing
+    assert "handleNavigateToResumeStudio" in copilot_code
+    assert "setActiveSubTab('resumes')" in copilot_code
 
     # 2. Verify notification banner exists with expected wording
-    assert "Profile saved! Refreshing your internship matches" in copilot_code
     assert "✓ Profile saved! Internship matches have been updated." in copilot_code
     assert "Profile saved, but could not refresh internship recommendations." in copilot_code
     assert "canRetry" in copilot_code

@@ -366,7 +366,7 @@ def _get_current_identity(request: Request) -> Optional[Identity]:
         target = user_header.strip().lower()
         return Identity(id=target, is_admin=(target == "admin"), is_guest=False, user_id=target, guest_id=verified_guest)
 
-    if guest_id_header and guest_id_header.strip() and (settings.is_development() or settings.is_test()):
+    if guest_id_header and guest_id_header.strip() and settings.is_development():
         target_guest = guest_id_header.strip()
         return Identity(id=target_guest, is_admin=False, is_guest=True, user_id=None, guest_id=target_guest)
 
@@ -406,8 +406,18 @@ def _get_or_create_user_id(request: Request) -> str:
         return ident.id
     raise HTTPException(
         status_code=401,
-        detail="Authentication required: active session or valid guest token required",
+        detail="Authentication or valid guest token required",
     )
+
+
+def require_identity(request: Request) -> Identity:
+    """Dependency that requires any verified caller identity (admin, user session, or signed guest token).
+    Raises HTTP 401 if unauthenticated.
+    """
+    ident = _get_current_identity(request)
+    if not ident:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return ident
 
 
 def _now_iso() -> str:

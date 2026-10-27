@@ -64,7 +64,6 @@ async def test_token_bucket_rate_limiter_throttles():
 
 @pytest.mark.asyncio
 async def test_mint_rate_limit_blocks_spam():
-    from backend.memory.db import get_pool
     pool = await get_pool()
     if pool:
         try:
@@ -273,7 +272,6 @@ class FakeActionConn:
 
 @pytest.mark.asyncio
 async def test_pending_action_tampering_and_cross_user():
-    from backend.memory.db import get_pool
     pool = await get_pool() or FakeActionPool()
     args = {"task_id": "tsk_99", "new_date": "2026-10-10"}
 
@@ -319,7 +317,6 @@ async def test_pending_action_tampering_and_cross_user():
 
 @pytest.mark.asyncio
 async def test_pending_action_expiry():
-    from backend.memory.db import get_pool
     pool = await get_pool() or FakeActionPool()
     args = {"test": 1}
     action_id = await register_pending_action(
@@ -404,7 +401,6 @@ def test_memory_content_hash_normalization():
 async def test_migration_concurrency_zero_duplicates():
     import uuid
     from backend.memory.conversation_migration import migrate_single_conversation
-    from backend.memory.db import get_pool
     pool = await get_pool()
     if not pool:
         pytest.skip("PostgreSQL pool required for migration concurrency test")

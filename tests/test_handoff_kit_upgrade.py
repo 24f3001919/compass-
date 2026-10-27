@@ -341,13 +341,13 @@ async def test_mark_applied_endpoint_schedules_followup():
 
     user_id = "user_submitter"
     opp_id = 8888
-    app = await get_or_create_career_application(user_id, opp_id)
+    career_app = await get_or_create_career_application(user_id, opp_id)
 
     scope = {"type": "http", "method": "POST", "headers": [(b"host", b"localhost")]}
     req = Request(scope)
     req.state.identity = Identity(id=user_id, is_admin=False, is_guest=False, user_id=user_id)
 
-    updated = await mark_application_applied_endpoint(app.id, req)
+    updated = await mark_application_applied_endpoint(career_app.id, req)
     assert updated.status == CareerApplicationStatus.SUBMITTED.value or updated.status == CareerApplicationStatus.SUBMITTED
     assert updated.submitted_at is not None
     assert updated.target_deadline == date.today() + timedelta(days=14)
