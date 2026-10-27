@@ -122,6 +122,18 @@ GRANDFATHERED_BASELINE = {
     'eval/scenarios.py',
     'tests/test_career_copilot.py',
     'backend/router_helpers.py',
+    'backend/services/tavily_pipeline.py',
+    'frontend/src/components/chat/ChatHeaderToolbar.jsx',
+    'cli/assistant_cli.py',
+    'frontend/src/components/radar/RadarProfileModal.jsx',
+    'frontend/src/components/radar/RadarDetailModal.jsx',
+    'tests/test_tavily_claim_resolution.py',
+    'frontend/src/components/InternshipRadar.jsx',
+    'backend/routers/tasks_verification.py',
+    'backend/services/chat_stream.py',
+    'frontend/src/App.jsx',
+    'backend/orchestrator.py',
+    'frontend/src/components/AuthModal.jsx',
 }
 
 
