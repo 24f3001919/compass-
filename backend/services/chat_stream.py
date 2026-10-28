@@ -27,7 +27,15 @@ from backend.memory.db import get_pool as db_get_pool
 from backend.models import StreamChatRequest
 import backend.orchestrator as orchestrator
 from backend.router import TOOLS, message_needs_tools
-from backend.router_helpers import is_greeting_intent, is_schedule_or_agent_intent, is_tavily_verification_intent
+from backend.router_helpers import (
+    is_greeting_intent,
+    is_schedule_or_agent_intent,
+    is_tavily_verification_intent,
+    is_pending_action_confirm,
+    is_pending_action_cancel,
+    is_chat_delete_intent,
+    is_undo_request,
+)
 from backend.services.usage import record_usage
 
 logger = logging.getLogger("compass.services.chat_stream")
@@ -65,6 +73,7 @@ async def persist_stream_messages(
     guest_id: Optional[str] = None,
     skill_label: str = "chat",
     evidence: Optional[Dict[str, Any]] = None,
+    verifiable: Optional[bool] = None,
 ) -> bool:
     """Persist user prompt and assistant response asynchronously after SSE stream completion.
 
@@ -91,7 +100,7 @@ async def persist_stream_messages(
             )
             await conversations.add_message(conn, real_cid, role="user", content=message)
             await conversations.add_message(
-                conn, real_cid, role="assistant", content=final_text, skill_called=skill_label, evidence=evidence
+                conn, real_cid, role="assistant", content=final_text, skill_called=skill_label, evidence=evidence, verifiable=verifiable
             )
         logger.debug("Successfully persisted streamed conversation message for conv=%s (real_cid=%s)", conv_id, real_cid)
         return True
@@ -113,6 +122,7 @@ def _schedule_stream_persistence(
     guest_id: Optional[str] = None,
     skill_label: str = "chat",
     evidence: Optional[Dict[str, Any]] = None,
+    verifiable: Optional[bool] = None,
 ) -> asyncio.Task:
     """Schedule stream persistence as an async background task with an exception handler."""
     task = asyncio.create_task(
@@ -124,6 +134,7 @@ def _schedule_stream_persistence(
             guest_id=guest_id,
             skill_label=skill_label,
             evidence=evidence,
+            verifiable=verifiable,
         )
     )
 
@@ -336,7 +347,14 @@ async def generate_chat_events(
         target_msg_id = getattr(req, "target_message_id", None)
         target_msg_content = getattr(req, "target_message_content", None)
 
-        if (not is_mocked and is_placeholder_key) or is_schedule_or_agent_intent(message) or is_tavily_verification_intent(message):
+        is_safety_intent = (
+            is_pending_action_confirm(message)
+            or is_pending_action_cancel(message)
+            or is_chat_delete_intent(message)[0]
+            or is_undo_request(message)
+        )
+
+        if (not is_mocked and is_placeholder_key) or is_schedule_or_agent_intent(message) or is_tavily_verification_intent(message) or is_safety_intent:
             result = await orchestrator.handle_message(
                 conversation_id=req.conversation_id,
                 message=message,
@@ -344,6 +362,7 @@ async def generate_chat_events(
                 guest_id=guest_id,
                 history=history_items if history_items else None,
                 memory_context=memory_context if memory_context else None,
+                tone=getattr(req, "tone", None),
                 persist=False,
                 target_message_id=target_msg_id,
                 target_message_content=target_msg_content,
@@ -373,20 +392,39 @@ async def generate_chat_events(
                 is_first = False
                 yield f"data: {json.dumps({'type': 'token', 'value': chunk})}\n\n"
 
-            done_payload: dict[str, Any] = {'type': 'done', 'conversation_id': result.get('conversation_id', conv_id), 'skill_used': skill_used}
+            done_payload: dict[str, Any] = {
+                'type': 'done',
+                'conversation_id': result.get('conversation_id', conv_id),
+                'skill_used': skill_used,
+                'verifiable': result.get('verifiable', False),
+            }
             raw_data = result.get('data')
             if isinstance(raw_data, list):
                 valid_tasks = [t for t in raw_data if isinstance(t, dict) and 'title' in t][:6]
                 if valid_tasks:
                     done_payload['tasks'] = valid_tasks
             elif isinstance(raw_data, dict):
+                done_payload['data'] = raw_data
                 evidence = raw_data.get('evidence')
                 if evidence:
                     done_payload['evidence'] = evidence
+                if 'pending_action' in raw_data:
+                    done_payload['pending_action'] = raw_data['pending_action']
+                if 'can_undo' in raw_data:
+                    done_payload['can_undo'] = raw_data['can_undo']
             if result.get('is_truncated') or (isinstance(raw_data, dict) and raw_data.get('is_truncated')):
                 done_payload['is_truncated'] = True
             yield f"data: {json.dumps(done_payload)}\n\n"
-            _schedule_stream_persistence(conv_id, message, response_text, user_id, guest_id, skill_used, evidence=done_payload.get('evidence'))
+            _schedule_stream_persistence(
+                conv_id,
+                message,
+                response_text,
+                user_id,
+                guest_id,
+                skill_used,
+                evidence=done_payload.get('evidence'),
+                verifiable=result.get('verifiable', False),
+            )
             return
 
         logger.info("Serving chat stream request with model=%s", _settings.ROUTER_MODEL)

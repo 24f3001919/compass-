@@ -160,8 +160,78 @@ def is_explicit_task_creation(message: str) -> bool:
 
 def is_undo_request(message: str) -> bool:
     """Check if message is an undo/revert command."""
-    msg = message.lower().strip()
-    return msg in ("undo", "undo that", "revert", "revert that", "undo last action", "undo task")
+    msg = message.lower().strip().rstrip(".!?")
+    return msg in (
+        "undo", "undo that", "revert", "revert that", "undo last action",
+        "undo task", "undo delete", "restore", "restore deleted", "restore task",
+        "restore tasks", "undo my delete", "undo the delete",
+    )
+
+
+def is_pending_action_confirm(message: str) -> bool:
+    """Check if message is an explicit confirmation of a pending action."""
+    msg = message.lower().strip().rstrip(".!?")
+    exact_matches = (
+        "yes", "confirm", "yes confirm", "confirm delete", "delete it", "yes delete it",
+        "do it", "sure", "proceed", "1", "first one", "the first one",
+        "delete the first one", "complete the first one", "yes, delete the first one",
+        "yes delete the first one", "yes please", "yeah", "yep",
+    )
+    if msg in exact_matches:
+        return True
+    if msg.startswith("yes,") or msg.startswith("confirm "):
+        return True
+    return False
+
+
+def is_pending_action_cancel(message: str) -> bool:
+    """Check if message is an explicit cancellation of a pending action."""
+    msg = message.lower().strip().rstrip(".!?")
+    exact_matches = (
+        "no", "cancel", "stop", "abort", "don't delete", "dont delete",
+        "never mind", "nevermind", "no cancel", "cancel action",
+        "no don't delete", "no dont delete",
+    )
+    if msg in exact_matches:
+        return True
+    if msg.startswith("cancel ") or msg.startswith("no,"):
+        return True
+    return False
+
+
+def is_chat_delete_intent(message: str) -> Tuple[bool, bool, str]:
+    """Detect if message is an intent to delete/remove tasks or clear schedule.
+    
+    Returns (is_delete, is_clear_all, target_query).
+    """
+    msg = message.lower().strip().rstrip(".!?")
+    
+    # 1. Clear entire schedule
+    clear_all_phrases = (
+        "clear all my schedule", "clear my schedule", "clear schedule",
+        "delete all tasks", "delete all my tasks", "remove all tasks",
+        "clear all tasks", "delete everything in schedule", "clear all my tasks",
+    )
+    if any(phrase == msg or msg.startswith(phrase) for phrase in clear_all_phrases):
+        return True, True, ""
+
+    # 2. Delete / remove specific task query (deterministic parsing without regex backtracking)
+    for prefix in ("delete", "remove", "drop"):
+        if msg == prefix:
+            continue
+        if msg.startswith(prefix + " "):
+            remainder = msg[len(prefix):].strip()
+            if remainder.startswith("the "):
+                remainder = remainder[4:].strip()
+            if remainder.startswith("task "):
+                remainder = remainder[5:].strip()
+            if remainder.endswith(" task"):
+                remainder = remainder[:-5].strip()
+            target = remainder.strip("'\"").strip()
+            if target and target not in ("first one", "the first one", "it", "this"):
+                return True, False, target
+
+    return False, False, ""
 
 
 def _parse_time(text: str) -> Tuple[Optional[str], Optional[str]]:
@@ -1024,6 +1094,13 @@ def _fallback_route(message: str, history: Optional[list[dict[str, str]]] = None
         f_days = int(days_match.group(1)) if days_match else 5
         f_hours = float(hours_match.group(1)) if hours_match else 4.0
         return "assess_feasibility", {"days": f_days, "hours_per_day": f_hours}, ""
+    if is_pending_action_confirm(message):
+        return "pending_action_confirm", {"message": message}, ""
+    if is_pending_action_cancel(message):
+        return "pending_action_cancel", {"message": message}, ""
+    is_del, is_clear, del_target = is_chat_delete_intent(message)
+    if is_del:
+        return "chat_delete_task", {"query": del_target, "clear_all": is_clear}, ""
     if is_undo_request(message):
         return "undo", {"message": message}, ""
     if is_explicit_task_creation(message):
@@ -1041,9 +1118,9 @@ def _fallback_route(message: str, history: Optional[list[dict[str, str]]] = None
                 content = h.get("content", "")
                 if any(term in content.lower() for term in ("task", "deliverable", "due", "demo", "submit", "video")):
                     return "query_tasks", {"user_message": message, "query": message}, ""
-        if should_route_to_query_tasks(message) or any(term in msg_lower for term in ("task", "tasks", "due", "deliverable", "deadline", "coursework", "hackathon", "work on", "start with", "first", "roadmap", "prioritize")):
+        if should_route_to_query_tasks(message) or any(term in msg_lower for term in ("task", "tasks", "due", "deliverable", "deadline", "coursework", "hackathon", "roadmap", "prioritize")):
             query_args: dict[str, Any] = {"query": message, "user_message": message}
-            if any(w in msg_lower for w in ("roadmap", "plan", "today", "prioritize", "attention", "step-by-step", "step by step", "first", "work on first")):
+            if any(w in msg_lower for w in ("roadmap", "plan", "today", "prioritize", "attention", "step-by-step", "step by step", "work on first", "start with")):
                 query_args["intent"] = "roadmap"
             return "query_tasks", query_args, ""
     if is_greeting_intent(message):

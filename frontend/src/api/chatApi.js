@@ -131,6 +131,10 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
     let lastTasks = null
     let lastEvidence = null
     let lastIsTruncated = false
+    let lastVerifiable = false
+    let lastPendingAction = null
+    let lastCanUndo = false
+    let lastData = null
     let sawDoneEvent = false
 
     const processLine = (line) => {
@@ -169,6 +173,10 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
         if (evt.tasks) lastTasks = evt.tasks
         if (evt.evidence) lastEvidence = evt.evidence
         if (evt.is_truncated) lastIsTruncated = true
+        if (evt.verifiable !== undefined) lastVerifiable = evt.verifiable
+        if (evt.pending_action) lastPendingAction = evt.pending_action
+        if (evt.can_undo !== undefined) lastCanUndo = evt.can_undo
+        if (evt.data) lastData = evt.data
       } else if (evt.type === 'error') {
         const errMsg = evt.detail || evt.message || 'Stream error'
         const errObj = new Error(errMsg)
@@ -218,6 +226,10 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
         tasks: lastTasks,
         evidence: lastEvidence,
         is_truncated: lastIsTruncated,
+        verifiable: lastVerifiable,
+        pending_action: lastPendingAction,
+        can_undo: lastCanUndo,
+        data: lastData,
       })
     }
     return {
@@ -227,6 +239,10 @@ export async function streamQueryFromAssistant(prompt, conversationId, { onToken
       tasks: lastTasks,
       evidence: lastEvidence,
       is_truncated: lastIsTruncated,
+      verifiable: lastVerifiable,
+      pending_action: lastPendingAction,
+      can_undo: lastCanUndo,
+      data: lastData,
     }
   } catch (err) {
     if (err && typeof err === 'object') {

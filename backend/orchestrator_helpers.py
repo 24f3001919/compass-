@@ -58,6 +58,7 @@ async def format_chat_response(
     guest_id: Optional[str],
     persist: bool,
     start_time: float,
+    verifiable: bool = False,
 ) -> Dict[str, Any]:
     """Format and persist canonical chat response payload."""
     from backend.router_helpers import is_greeting_intent
@@ -91,7 +92,7 @@ async def format_chat_response(
                         conn, conv_id, user_id=user_id, guest_id=guest_id
                     )
                     await conversations.add_message(conn, real_cid, role="user", content=message)
-                    await conversations.add_message(conn, real_cid, role="assistant", content=safe_reply, skill_called="chat")
+                    await conversations.add_message(conn, real_cid, role="assistant", content=safe_reply, skill_called="chat", verifiable=verifiable)
                     conv_id = real_cid
         except Exception as e:
             logger.debug(f"Could not persist message history: {e}")
@@ -105,5 +106,6 @@ async def format_chat_response(
         "success": chat_success,
         "error": chat_error,
         "data": {"can_retry": not chat_success} if not chat_success else None,
+        "verifiable": verifiable,
         "routing_latency_ms": latency_ms,
     }

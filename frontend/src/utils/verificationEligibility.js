@@ -92,6 +92,14 @@ export function isMessageEligibleForVerification(message) {
     // Error messages and messages that already have verification evidence should not display the button
     if (message.error || message.evidence) return false
 
+    // Explicit server-side verifiable boolean flag from orchestrator
+    if (message.verifiable === true) {
+      return true
+    }
+    if (message.verifiable === false) {
+      return false
+    }
+
     // Explicit server-side or metadata flag override
     if (message.needs_verification === true || message.metadata?.verification_eligible === true) {
       return true

@@ -135,7 +135,10 @@ async def handle_message(
     # 1. Route via Nemotron-3 Nano (bypass if already resolved upstream)
     if pre_routed_skill is not None:
         from backend.skills.registry import SKILL_REGISTRY
-        allowed_tools = frozenset(SKILL_REGISTRY.keys()) | {"add_task", "undo", "agent"}
+        allowed_tools = frozenset(SKILL_REGISTRY.keys()) | {
+            "add_task", "undo", "agent",
+            "pending_action_confirm", "pending_action_cancel", "chat_delete_task",
+        }
         import inspect
         sig = inspect.signature(route_message)
         has_var_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
@@ -206,67 +209,291 @@ async def handle_message(
     if history and isinstance(args, dict) and "history" not in args:
         args["history"] = history
 
-    # 2a. Skill Execution: undo
+    owner_identity = effective_user_id or "default_user"
+
+    # 2a. Skill Execution: pending_action_confirm
+    if skill_name == "pending_action_confirm":
+        from backend.memory.chat_pending import (
+            get_active_chat_pending_action,
+            resolve_chat_pending_action,
+            soft_delete_tasks,
+        )
+        pool = active_pool or await get_pool()
+        active_action = None
+        deleted: list = []
+        if pool:
+            async with pool.acquire() as conn:
+                active_action = await get_active_chat_pending_action(conn, owner_identity, conv_id)
+                if active_action:
+                    act_type = active_action.get("action")
+                    if act_type in ("delete_task", "clear_schedule"):
+                        task_ids = active_action.get("task_ids") or []
+                        deleted = await soft_delete_tasks(conn, task_ids, owner_identity)
+                        await resolve_chat_pending_action(conn, active_action["id"], "executed")
+                    elif act_type == "delete_task_disambiguation":
+                        task_ids = active_action.get("task_ids") or []
+                        raw_msg = (message or "").lower().strip()
+                        selected_id = task_ids[0] if task_ids else None
+                        if "2" in raw_msg or "second" in raw_msg and len(task_ids) > 1:
+                            selected_id = task_ids[1]
+                        elif "3" in raw_msg or "third" in raw_msg and len(task_ids) > 2:
+                            selected_id = task_ids[2]
+                        else:
+                            for tid in task_ids:
+                                if str(tid) in raw_msg:
+                                    selected_id = tid
+                                    break
+                        if selected_id:
+                            deleted = await soft_delete_tasks(conn, [selected_id], owner_identity)
+                        await resolve_chat_pending_action(conn, active_action["id"], "executed")
+
+        if active_action and deleted:
+            if len(deleted) == 1:
+                resp_msg = f"Deleted task '{deleted[0]['title']}'. You can undo this deletion within 10 minutes."
+            else:
+                resp_msg = f"Cleared {len(deleted)} tasks from your schedule. You can undo this deletion within 10 minutes."
+            ret_data: Optional[Dict[str, Any]] = {"deleted_tasks": deleted, "can_undo": True}
+            success = True
+        elif active_action:
+            resp_msg = "No tasks were modified."
+            ret_data = None
+            success = False
+        else:
+            resp_msg = "There are no pending actions to confirm. What would you like me to help you with?"
+            ret_data = None
+            success = False
+
+        if persist and pool:
+            try:
+                async with pool.acquire() as conn:
+                    real_cid = await conversations.get_or_create_conversation(conn, conv_id, user_id=user_id, guest_id=guest_id)
+                    await conversations.add_message(conn, real_cid, role="user", content=message)
+                    await conversations.add_message(conn, real_cid, role="assistant", content=resp_msg, skill_called="pending_action_confirm", verifiable=False)
+                    conv_id = real_cid
+            except Exception as e:
+                logger.debug(f"Could not persist pending_action_confirm history: {e}")
+
+        return {
+            "conversation_id": conv_id,
+            "response": resp_msg,
+            "message": resp_msg,
+            "skill_used": "pending_action_confirm",
+            "success": success,
+            "data": ret_data,
+            "verifiable": False,
+            "routing_latency_ms": int((time.perf_counter() - start_time) * 1000),
+        }
+
+    # 2b. Skill Execution: pending_action_cancel
+    if skill_name == "pending_action_cancel":
+        from backend.memory.chat_pending import (
+            get_active_chat_pending_action,
+            resolve_chat_pending_action,
+        )
+        pool = active_pool or await get_pool()
+        was_pending = False
+        if pool:
+            async with pool.acquire() as conn:
+                active_action = await get_active_chat_pending_action(conn, owner_identity, conv_id)
+                if active_action:
+                    was_pending = True
+                    await resolve_chat_pending_action(conn, active_action["id"], "cancelled")
+
+        resp_msg = "Action cancelled. No tasks were modified." if was_pending else "No action was pending."
+        if persist and pool:
+            try:
+                async with pool.acquire() as conn:
+                    real_cid = await conversations.get_or_create_conversation(conn, conv_id, user_id=user_id, guest_id=guest_id)
+                    await conversations.add_message(conn, real_cid, role="user", content=message)
+                    await conversations.add_message(conn, real_cid, role="assistant", content=resp_msg, skill_called="pending_action_cancel", verifiable=False)
+                    conv_id = real_cid
+            except Exception as e:
+                logger.debug(f"Could not persist pending_action_cancel history: {e}")
+
+        return {
+            "conversation_id": conv_id,
+            "response": resp_msg,
+            "message": resp_msg,
+            "skill_used": "pending_action_cancel",
+            "success": True,
+            "data": {"cancelled": was_pending},
+            "verifiable": False,
+            "routing_latency_ms": int((time.perf_counter() - start_time) * 1000),
+        }
+
+    # 2c. Skill Execution: chat_delete_task
+    if skill_name == "chat_delete_task":
+        from backend.memory.chat_pending import (
+            create_chat_pending_action,
+            search_active_tasks_for_delete,
+            get_all_active_tasks_for_user,
+        )
+        pool = active_pool or await get_pool()
+        is_clear = bool(args.get("clear_all")) if isinstance(args, dict) else False
+        del_query = (args.get("query") if isinstance(args, dict) else "") or message
+        ret_data = None
+        success = True
+
+        if is_clear:
+            all_active = []
+            if pool:
+                async with pool.acquire() as conn:
+                    all_active = await get_all_active_tasks_for_user(conn, owner_identity)
+                    if not all_active:
+                        resp_msg = "You have 0 active tasks in your schedule."
+                        ret_data = {"count": 0, "tasks": []}
+                    else:
+                        pending = await create_chat_pending_action(
+                            conn,
+                            action="clear_schedule",
+                            task_ids=[t["id"] for t in all_active],
+                            task_titles=[{"id": t["id"], "title": t["title"]} for t in all_active],
+                            count=len(all_active),
+                            owner_identity=owner_identity,
+                            conversation_id=conv_id,
+                            expires_minutes=5,
+                        )
+                        resp_msg = f"⚠️ Are you sure you want to clear all {len(all_active)} active tasks from your schedule? Please reply 'Confirm' or click Confirm below."
+                        ret_data = {"pending_action": pending, "tasks": all_active}
+        else:
+            matches = []
+            if pool:
+                async with pool.acquire() as conn:
+                    matches = await search_active_tasks_for_delete(conn, owner_identity, del_query)
+                    if not matches:
+                        resp_msg = f"I couldn't find any active tasks matching '{del_query}' to delete."
+                        ret_data = {"count": 0}
+                    elif len(matches) == 1:
+                        target = matches[0]
+                        pending = await create_chat_pending_action(
+                            conn,
+                            action="delete_task",
+                            task_ids=[target["id"]],
+                            task_titles=[{"id": target["id"], "title": target["title"]}],
+                            count=1,
+                            owner_identity=owner_identity,
+                            conversation_id=conv_id,
+                            expires_minutes=5,
+                        )
+                        resp_msg = f"Are you sure you want to delete task '{target['title']}' (ID: {target['id']})? Please confirm to proceed or click Cancel."
+                        ret_data = {"pending_action": pending, "task": target}
+                    else:
+                        pending = await create_chat_pending_action(
+                            conn,
+                            action="delete_task_disambiguation",
+                            task_ids=[t["id"] for t in matches],
+                            task_titles=[{"id": t["id"], "title": t["title"]} for t in matches],
+                            count=len(matches),
+                            owner_identity=owner_identity,
+                            conversation_id=conv_id,
+                            expires_minutes=5,
+                        )
+                        lines = [f"Found {len(matches)} tasks matching '{del_query}':"]
+                        for i, m in enumerate(matches[:5], 1):
+                            lines.append(f"{i}. '{m['title']}' (ID: {m['id']})")
+                        lines.append("Please reply with the number or ID you want to delete, or click Cancel.")
+                        resp_msg = "\n".join(lines)
+                        ret_data = {"pending_action": pending, "matches": matches}
+
+        if persist and pool:
+            try:
+                async with pool.acquire() as conn:
+                    real_cid = await conversations.get_or_create_conversation(conn, conv_id, user_id=user_id, guest_id=guest_id)
+                    await conversations.add_message(conn, real_cid, role="user", content=message)
+                    await conversations.add_message(conn, real_cid, role="assistant", content=resp_msg, skill_called="chat_delete_task", verifiable=False)
+                    conv_id = real_cid
+            except Exception as e:
+                logger.debug(f"Could not persist chat_delete_task history: {e}")
+
+        return {
+            "conversation_id": conv_id,
+            "response": resp_msg,
+            "message": resp_msg,
+            "skill_used": "chat_delete_task",
+            "success": success,
+            "data": ret_data,
+            "verifiable": False,
+            "routing_latency_ms": int((time.perf_counter() - start_time) * 1000),
+        }
+
+    # 2d. Skill Execution: undo
     if skill_name == "undo":
-        reverted_title = "task"
+        from backend.memory.chat_pending import undo_soft_deleted_tasks
+        restored: list = []
         found = False
+        reverted_title = "task"
         try:
             pool = await get_pool()
             if pool:
                 async with pool.acquire() as conn:
-                    row = await conn.fetchrow(
-                        """
-                        SELECT id, tool, affected_id, new_state, previous_state 
-                        FROM agent_audit_log 
-                        WHERE approved_by = $1
-                          AND is_reverted = FALSE 
-                        ORDER BY id DESC LIMIT 1
-                        """,
-                        user_id or "default_user",
-                    )
-                    if row:
+                    # 1. First attempt soft-delete undo within 10 minutes
+                    restored = await undo_soft_deleted_tasks(conn, owner_identity, minutes=10)
+                    if restored:
                         found = True
-                        log_id = row["id"]
-                        t_name = row["tool"]
-                        aff_id = row["affected_id"]
-                        new_st = row["new_state"] or {}
-                        if isinstance(new_st, str):
-                            import json
-                            try:
-                                new_st = json.loads(new_st)
-                            except Exception:
-                                new_st = {}
-                        reverted_title = new_st.get("title") or "task"
-
-                        if t_name == "add_task" and aff_id:
-                            await conn.execute(
-                                "DELETE FROM tasks WHERE id = $1 AND user_id = $2",
-                                int(aff_id),
-                                user_id or "default_user",
-                            )
-                        elif t_name in ("edit_task", "update_task_status") and aff_id and row["previous_state"]:
-                            prev_st = row["previous_state"]
-                            if isinstance(prev_st, str):
+                        titles = [f"'{t['title']}'" for t in restored]
+                        resp_msg = f"Restored {len(restored)} task(s): {', '.join(titles)}."
+                        ret_data = {"restored_tasks": restored}
+                    else:
+                        # 2. Fall back to agent_audit_log undo
+                        row = await conn.fetchrow(
+                            """
+                            SELECT id, tool, affected_id, new_state, previous_state 
+                            FROM agent_audit_log 
+                            WHERE approved_by = $1
+                              AND is_reverted = FALSE 
+                            ORDER BY id DESC LIMIT 1
+                            """,
+                            owner_identity,
+                        )
+                        if row:
+                            found = True
+                            log_id = row["id"]
+                            t_name = row["tool"]
+                            aff_id = row["affected_id"]
+                            new_st = row["new_state"] or {}
+                            if isinstance(new_st, str):
                                 import json
                                 try:
-                                    prev_st = json.loads(prev_st)
+                                    new_st = json.loads(new_st)
                                 except Exception:
-                                    prev_st = {}
-                            await structured.update_task(conn, int(aff_id), **prev_st)
+                                    new_st = {}
+                            reverted_title = new_st.get("title") or "task"
 
-                        await conn.execute("UPDATE agent_audit_log SET is_reverted = TRUE WHERE id = $1", log_id)
+                            if t_name == "add_task" and aff_id:
+                                await conn.execute(
+                                    "DELETE FROM tasks WHERE id = $1 AND user_id = $2",
+                                    int(aff_id),
+                                    owner_identity,
+                                )
+                            elif t_name in ("edit_task", "update_task_status") and aff_id and row["previous_state"]:
+                                prev_st = row["previous_state"]
+                                if isinstance(prev_st, str):
+                                    import json
+                                    try:
+                                        prev_st = json.loads(prev_st)
+                                    except Exception:
+                                        prev_st = {}
+                                await structured.update_task(conn, int(aff_id), **prev_st)
+
+                            await conn.execute("UPDATE agent_audit_log SET is_reverted = TRUE WHERE id = $1", log_id)
+                            resp_msg = f"Undid: Removed task '{reverted_title}'."
+                            ret_data = None
+                        else:
+                            resp_msg = "No recently deleted tasks were found within the 10-minute undo window."
+                            ret_data = None
         except Exception as e:
             logger.warning(f"Undo operation failed: {e}")
+            resp_msg = "Unable to process undo request right now."
+            ret_data = None
 
-        resp_msg = f"Undid: Removed task '{reverted_title}'." if found else "Nothing to undo."
         if persist:
             try:
                 pool = await get_pool()
                 if pool:
                     async with pool.acquire() as conn:
-                        real_cid = await conversations.get_or_create_conversation(conn, conv_id, user_id=user_id)
+                        real_cid = await conversations.get_or_create_conversation(conn, conv_id, user_id=user_id, guest_id=guest_id)
                         await conversations.add_message(conn, real_cid, role="user", content=message)
-                        await conversations.add_message(conn, real_cid, role="assistant", content=resp_msg, skill_called="undo")
+                        await conversations.add_message(conn, real_cid, role="assistant", content=resp_msg, skill_called="undo", verifiable=False)
                         conv_id = real_cid
             except Exception as e:
                 logger.debug(f"Could not persist undo message history: {e}")
@@ -277,7 +504,8 @@ async def handle_message(
             "message": resp_msg,
             "skill_used": "undo",
             "success": found,
-            "data": None,
+            "data": ret_data,
+            "verifiable": False,
             "routing_latency_ms": int((time.perf_counter() - start_time) * 1000),
         }
 
@@ -341,6 +569,7 @@ async def handle_message(
                         "skill_used": "add_task",
                         "success": False,
                         "data": {"error": "duplicate_exact_deadline", "existing_task_id": ex["id"]},
+                        "verifiable": False,
                         "routing_latency_ms": int((time.perf_counter() - start_time) * 1000),
                     }
 
@@ -376,6 +605,7 @@ async def handle_message(
                             "skill_used": "add_task",
                             "success": True,
                             "data": task_record,
+                            "verifiable": False,
                             "routing_latency_ms": int((time.perf_counter() - start_time) * 1000),
                         }
                     else:
@@ -403,6 +633,7 @@ async def handle_message(
                                 "existing_due_date": str(old_d),
                                 "proposed_due_date": str(new_d),
                             },
+                            "verifiable": False,
                             "routing_latency_ms": int((time.perf_counter() - start_time) * 1000),
                         }
 
@@ -437,6 +668,7 @@ async def handle_message(
                 "success": False,
                 "error": "database_unavailable",
                 "data": None,
+                "verifiable": False,
                 "routing_latency_ms": latency_ms,
             }
 
@@ -487,7 +719,7 @@ async def handle_message(
                     async with pool.acquire() as conn:
                         real_cid = await conversations.get_or_create_conversation(conn, conv_id, user_id=user_id)
                         await conversations.add_message(conn, real_cid, role="user", content=message)
-                        await conversations.add_message(conn, real_cid, role="assistant", content=summary, skill_called="add_task")
+                        await conversations.add_message(conn, real_cid, role="assistant", content=summary, skill_called="add_task", verifiable=False)
                         conv_id = real_cid
             except Exception as e:
                 logger.debug(f"Could not persist message history: {e}")
@@ -500,6 +732,7 @@ async def handle_message(
             "skill_used": "add_task",
             "success": True,
             "data": task_record,
+            "verifiable": False,
             "routing_latency_ms": latency_ms,
         }
 
@@ -568,7 +801,7 @@ async def handle_message(
                 async with pool.acquire() as conn:
                     real_cid = await conversations.get_or_create_conversation(conn, conv_id, user_id=user_id, guest_id=guest_id)
                     await conversations.add_message(conn, real_cid, role="user", content=message)
-                    await conversations.add_message(conn, real_cid, role="assistant", content=reply_content, skill_called="agent")
+                    await conversations.add_message(conn, real_cid, role="assistant", content=reply_content, skill_called="agent", verifiable=False)
                     conv_id = real_cid
             except Exception as e:
                 logger.debug("Could not persist agent conversation: %s", e)
@@ -585,6 +818,7 @@ async def handle_message(
                 "thought": "\n\n".join(thoughts) if thoughts else None,
                 "can_retry": not agent_succeeded,
             },
+            "verifiable": False,
             "routing_latency_ms": latency_ms,
         }
 
@@ -604,7 +838,7 @@ async def handle_message(
                     await conversations.add_message(conn, real_cid, role="user", content=message)
                     await conversations.add_message(
                         conn, real_cid, role="assistant",
-                        content=gate_msg, skill_called=skill_name,
+                        content=gate_msg, skill_called=skill_name, verifiable=False,
                     )
                     conv_id = real_cid
             except Exception as e:
@@ -619,6 +853,7 @@ async def handle_message(
             "success": False,
             "error": "confirmation_required",
             "data": None,
+            "verifiable": False,
             "routing_latency_ms": latency_ms,
         }
 
@@ -648,6 +883,11 @@ async def handle_message(
                 logger.warning("Skill '%s' reported failure: %s", skill_name, err)
                 summary = summary or f"I couldn't complete that: {err}"
 
+            is_verifiable = bool(
+                skill_name in ("verify_with_tavily", "web_search", "search_web")
+                or (isinstance(data, dict) and data.get("verifiable"))
+            )
+
             if persist:
                 try:
                     async with pool.acquire() as conn:
@@ -660,6 +900,7 @@ async def handle_message(
                             conn, real_cid, role="assistant",
                             content=summary, skill_called=skill_name,
                             evidence=evidence_to_save,
+                            verifiable=is_verifiable,
                         )
                         conv_id = real_cid
                 except Exception as e:
@@ -674,6 +915,7 @@ async def handle_message(
                 "success": succeeded,
                 "error": skill_result.get("error"),
                 "data": data,
+                "verifiable": is_verifiable,
                 "routing_latency_ms": latency_ms,
             }
         except Exception as e:
@@ -692,6 +934,7 @@ async def handle_message(
         guest_id=guest_id,
         persist=persist,
         start_time=start_time,
+        verifiable=False,
     )
 
 
