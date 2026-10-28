@@ -80,11 +80,18 @@ VALID_TONES = {"brief", "balanced", "exploratory"}
 TONE_INSTRUCTIONS: Dict[str, str] = {
     "brief": (
         "[TONE CONSTRAINT]: Keep response very brief (1 to 3 sentences max). "
-        "Do not ask a follow-up question unless strictly necessary."
+        "Keep response extremely brief, direct, and concise (1-2 sentences maximum, strictly under 40 words). "
+        "State the core answer or count + top item immediately with zero preamble or conversational filler. No follow-up questions."
+    ),
+    "balanced": (
+        "Provide a balanced, well-rounded response (2-4 clear sentences, roughly 60-100 words). "
+        "Balance brevity with helpful context and next steps."
     ),
     "exploratory": (
-        "[TONE CONSTRAINT]: You have more room to think out loud and explore nuances, "
-        "but still ask at most one question."
+        "[TONE CONSTRAINT]: You have more room to think out loud, explore ideas, and wander a bit. "
+        "Feel free to explain the why behind things, suggest angles the user might not have considered, and dive into interesting details. "
+        "Provide a comprehensive, in-depth exploration (at least 150 words). "
+        "Think out loud, examine nuances, discuss strategic trade-offs, provide context and rationale, and outline forward-looking recommendations."
     ),
 }
 
@@ -98,6 +105,38 @@ def validate_tone(tone: Optional[str]) -> Optional[str]:
         return None
     normalized = tone.strip().lower()
     return normalized if normalized in VALID_TONES else None
+
+
+def format_greeting_by_tone(tone: Optional[str]) -> str:
+    """Format greeting text according to selected style tone."""
+    clean = validate_tone(tone)
+    if clean == "brief":
+        return "Hello! Compass is ready. How can I help?"
+    if clean == "exploratory":
+        return (
+            "I am Compass, your AI copilot with long-term memory across hackathons, coursework, "
+            "and code repositories. I track your active deliverables, analyze schedule feasibility, "
+            "resolve deadline conflicts, search live technical documentation with Tavily, and synthesize "
+            "comprehensive focus plans. What would you like to explore, prioritize, or research today?"
+        )
+    return (
+        "I am Compass, your AI copilot with long-term memory across hackathons, coursework, "
+        "and code repositories. How can I help you today?"
+    )
+
+
+def format_fallback_by_tone(tone: Optional[str]) -> str:
+    """Format fallback text according to selected style tone."""
+    clean = validate_tone(tone)
+    if clean == "brief":
+        return "I'm Compass. How can I assist with your workspace?"
+    if clean == "exploratory":
+        return (
+            "I am Compass, your intelligent workspace assistant with persistent memory. "
+            "I can analyze active tasks, evaluate schedule feasibility, verify external claims "
+            "using Tavily, or explore project strategies. How would you like to proceed?"
+        )
+    return "I am Compass, your workspace assistant. How can I assist with your tasks or plans today?"
 
 
 # ============================================================================

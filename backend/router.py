@@ -74,6 +74,7 @@ async def route_message(
     target_message_content: Optional[str] = None,
     pool: Optional[Any] = None,
     user_id: Optional[str] = None,
+    tone: Optional[str] = None,
 ) -> Tuple[Optional[str], Optional[dict[str, Any]], str]:
     """Route a message through Nemotron-3 Nano using native tool calling.
 
@@ -108,6 +109,11 @@ async def route_message(
     if is_schedule_or_agent_intent(message):
         return "agent", {"goal": message}, ""
 
+    from backend.router_helpers import PUBLIC_EVENT_INDICATORS, PERSONAL_SCOPE_TRIGGERS
+    msg_l = message.lower()
+    if any(ind in msg_l for ind in PUBLIC_EVENT_INDICATORS) and not any(p in msg_l for p in PERSONAL_SCOPE_TRIGGERS):
+        return "search_web", {"query": message}, ""
+
     client = get_openai_client()
     import unittest.mock
     is_mocked = isinstance(client, (unittest.mock.Mock, unittest.mock.MagicMock)) or hasattr(client, "_mock_return_value")
@@ -117,7 +123,7 @@ async def route_message(
         or settings.NEBIUS_API_KEY in ("mock", "mock-key-not-used-in-tests")
     ) and not is_mocked
     if is_placeholder_key:
-        return _fallback_route(message, history)
+        return _fallback_route(message, history, tone=tone)
     today_iso = date.today().isoformat()
     system_prompt = (
         f"You are Compass, an intelligent personal assistant with persistent memory across chat sessions. "

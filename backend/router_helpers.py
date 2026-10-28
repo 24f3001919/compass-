@@ -942,7 +942,8 @@ PERSONAL_SCOPE_TRIGGERS = (
 )
 
 PUBLIC_EVENT_INDICATORS = (
-    "when is the", "what is the deadline for", "official deadline", "global ai hackathon",
+    "when is the", "what is the deadline for", "what is the submission deadline for",
+    "submission deadline for", "official deadline", "global ai hackathon",
     "nebius", "hackathon deadline for", "date of the", "rules for", "when does the"
 )
 
@@ -962,7 +963,11 @@ def should_route_to_query_tasks(message: str) -> bool:
     return has_task_terms and has_personal
 
 
-def _fallback_route(message: str, history: Optional[list[dict[str, str]]] = None) -> Tuple[Optional[str], Optional[dict[str, Any]], str]:
+def _fallback_route(
+    message: str,
+    history: Optional[list[dict[str, str]]] = None,
+    tone: Optional[str] = None,
+) -> Tuple[Optional[str], Optional[dict[str, Any]], str]:
     """Fallback route logic when LLM router is unavailable or in mock mode."""
     msg_lower = message.lower()
 
@@ -1112,6 +1117,9 @@ def _fallback_route(message: str, history: Optional[list[dict[str, str]]] = None
     is_public = any(ind in msg_lower for ind in PUBLIC_EVENT_INDICATORS)
     has_personal = any(p in msg_lower for p in PERSONAL_SCOPE_TRIGGERS)
 
+    if is_public and not has_personal:
+        return "search_web", {"query": message}, ""
+
     if not (is_public and not has_personal):
         if history:
             for h in reversed(history):
@@ -1124,9 +1132,7 @@ def _fallback_route(message: str, history: Optional[list[dict[str, str]]] = None
                 query_args["intent"] = "roadmap"
             return "query_tasks", query_args, ""
     if is_greeting_intent(message):
-        return None, None, (
-            "I am Compass, your AI copilot with long-term memory across hackathons, coursework, "
-            "and code repositories. I can help you track tasks, manage deadlines, check schedule feasibility, "
-            "search web documentation, and prevent calendar conflicts. How can I help you today?"
-        )
+        from backend.persona import format_greeting_by_tone
+        return None, None, format_greeting_by_tone(tone)
+
     return None, None, ""

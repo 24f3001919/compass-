@@ -195,7 +195,8 @@ async def run_research_specialist(
                     """
                     SELECT title, domain, due_date, status, priority, notes
                     FROM tasks
-                    WHERE domain IN ('hackathon', 'general', 'code')
+                    WHERE deleted_at IS NULL
+                      AND domain IN ('hackathon', 'general', 'code')
                     ORDER BY due_date ASC NULLS LAST
                     LIMIT 10
                     """
@@ -263,7 +264,8 @@ async def run_calendar_specialist(
                     """
                     SELECT id, title, domain, due_date, status, priority, duration_minutes, notes
                     FROM tasks
-                    WHERE status != 'completed'
+                    WHERE deleted_at IS NULL
+                      AND status != 'completed'
                     ORDER BY due_date ASC NULLS LAST, priority DESC
                     LIMIT 15
                     """

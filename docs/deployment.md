@@ -42,7 +42,7 @@ Compass decouples continuous integration (validation) from continuous deployment
                      │                                   │
                      ▼                                   ▼
         Production Frontend                 Production Backend
-   https://compass-farmlytics.vercel.app   https://compass-backend-qryu.onrender.com
+   https://compass-farmlytics.vercel.app   https://compass-backend-qryu-vcfv.onrender.com
                      │                                   │
                      │    transparent same-origin proxy  │
                      └───────────────────────────────────┤
@@ -101,9 +101,9 @@ Compass decouples continuous integration (validation) from continuous deployment
   ```json
   {
     "rewrites": [
-      { "source": "/health", "destination": "https://compass-backend-qryu.onrender.com/health" },
-      { "source": "/chat", "destination": "https://compass-backend-qryu.onrender.com/chat" },
-      { "source": "/api/:path*", "destination": "https://compass-backend-qryu.onrender.com/api/:path*" }
+      { "source": "/health", "destination": "https://compass-backend-qryu-vcfv.onrender.com/health" },
+      { "source": "/chat", "destination": "https://compass-backend-qryu-vcfv.onrender.com/chat" },
+      { "source": "/api/:path*", "destination": "https://compass-backend-qryu-vcfv.onrender.com/api/:path*" }
     ]
   }
   ```
@@ -111,7 +111,7 @@ Compass decouples continuous integration (validation) from continuous deployment
 
 ### B. Backend (Render)
 
-- **Production Domain**: `https://compass-backend-qryu.onrender.com`
+- **Production Domain**: `https://compass-backend-qryu-vcfv.onrender.com`
 - **Connected Repository**: `Ratnesh-101/compass` (Requires manual dashboard verification)
 - **Production Branch**: `main` — requires manual dashboard verification.
 - **Auto-deploy**: Not independently verified from the repository. Production currently reflects main commit `30cb1c8`, which is consistent with the intended auto-deploy configuration. Manual Render dashboard verification required.
@@ -136,7 +136,7 @@ Compass decouples continuous integration (validation) from continuous deployment
 ### Local / Build Configuration (`frontend/.env.production`)
 
 > [!NOTE]
-> `frontend/.env.production` is **untracked and gitignored** in `.gitignore`. It is a local/deployment reference file containing only public, non-secret client configuration (`VITE_API_BASE_URL=https://compass-backend-qryu.onrender.com`). It is NOT a repository-tracked file and contains zero secrets.
+> `frontend/.env.production` is **untracked and gitignored** in `.gitignore`. It is a local/deployment reference file containing only public, non-secret client configuration (`VITE_API_BASE_URL=https://compass-backend-qryu-vcfv.onrender.com`). It is NOT a repository-tracked file and contains zero secrets.
 
 | Variable | Environment | Purpose | Verification State |
 |----------|-------------|---------|-------------------|

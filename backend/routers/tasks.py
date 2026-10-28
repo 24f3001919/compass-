@@ -181,7 +181,7 @@ async def get_dashboard(
                     domains[d].project_count = r["count"]
 
             task_rows = await conn.fetch(
-                "SELECT domain, COUNT(*) AS count FROM tasks WHERE status NOT IN ('completed', 'done', 'cancelled') AND user_id = $1 GROUP BY domain",
+                "SELECT domain, COUNT(*) AS count FROM tasks WHERE status NOT IN ('completed', 'done', 'cancelled') AND deleted_at IS NULL AND user_id = $1 GROUP BY domain",
                 user_id,
             )
             for r in task_rows:
@@ -194,6 +194,7 @@ async def get_dashboard(
                 SELECT DISTINCT ON (domain) id, domain, title, due_date
                 FROM tasks
                 WHERE status NOT IN ('completed', 'done', 'cancelled')
+                  AND deleted_at IS NULL
                   AND due_date IS NOT NULL
                   AND due_date >= $1
                   AND user_id = $2
@@ -212,7 +213,7 @@ async def get_dashboard(
                     )
 
             activity_rows = await conn.fetch(
-                "SELECT domain, MAX(updated_at) AS last_act FROM tasks WHERE user_id = $1 GROUP BY domain",
+                "SELECT domain, MAX(updated_at) AS last_act FROM tasks WHERE deleted_at IS NULL AND user_id = $1 GROUP BY domain",
                 user_id,
             )
             for r in activity_rows:
@@ -254,6 +255,7 @@ async def get_timeline(
                 FROM tasks t
                 LEFT JOIN projects p ON t.project_id = p.id
                 WHERE ($1::text IS NULL OR t.domain = $1)
+                  AND t.deleted_at IS NULL
                   AND t.user_id = $4
 
                 UNION ALL
@@ -271,7 +273,7 @@ async def get_timeline(
 
             count_query = """
                 SELECT (
-                    (SELECT COUNT(*) FROM tasks WHERE ($1::text IS NULL OR domain = $1) AND user_id = $2) +
+                    (SELECT COUNT(*) FROM tasks WHERE ($1::text IS NULL OR domain = $1) AND deleted_at IS NULL AND user_id = $2) +
                     (SELECT COUNT(*) FROM memory_chunks WHERE ($1::text IS NULL OR domain = $1) AND user_id = $2)
                 ) AS total
             """

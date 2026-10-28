@@ -423,7 +423,7 @@ async def get_memory_overview(request: Request):
                 }
                 for r in runs_rows
             ]
-            tasks_count = await conn.fetchval("SELECT COUNT(*) FROM tasks")
+            tasks_count = await conn.fetchval("SELECT COUNT(*) FROM tasks WHERE deleted_at IS NULL")
             chunks_count = await conn.fetchval("SELECT COUNT(*) FROM memory_chunks")
             return {
                 "status": "connected",

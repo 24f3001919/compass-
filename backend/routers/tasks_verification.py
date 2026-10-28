@@ -565,6 +565,7 @@ async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRe
                     """
                     SELECT id, trusted_event_url FROM tasks
                     WHERE user_id = $1
+                      AND deleted_at IS NULL
                       AND trusted_event_url = ANY($2)
                     """,
                     user_id,
@@ -579,7 +580,7 @@ async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRe
             if hasattr(conn, "fetch"):
                 try:
                     res = await conn.fetch(
-                        "SELECT id, trusted_event_url FROM tasks WHERE user_id = $1 AND trusted_event_url = ANY($2)",
+                        "SELECT id, trusted_event_url FROM tasks WHERE user_id = $1 AND deleted_at IS NULL AND trusted_event_url = ANY($2)",
                         user_id,
                         all_fixture_uris,
                     )
@@ -590,7 +591,7 @@ async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRe
             if not existing_by_uri and hasattr(conn, "fetchrow"):
                 for uri in all_fixture_uris:
                     r = await conn.fetchrow(
-                        "SELECT id, trusted_event_url FROM tasks WHERE user_id = $1 AND trusted_event_url = $2 LIMIT 1",
+                        "SELECT id, trusted_event_url FROM tasks WHERE user_id = $1 AND deleted_at IS NULL AND trusted_event_url = $2 LIMIT 1",
                         user_id,
                         uri,
                     )

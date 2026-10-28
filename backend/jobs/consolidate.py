@@ -94,6 +94,7 @@ async def flag_overdue_tasks(conn: asyncpg.Connection, dry_run: bool = False) ->
         SELECT id, title, domain, due_date, status, priority
         FROM tasks
         WHERE status IN ('open', 'in_progress')
+          AND deleted_at IS NULL
           AND due_date IS NOT NULL
           AND due_date < $1
         ORDER BY due_date ASC
@@ -126,6 +127,53 @@ async def flag_overdue_tasks(conn: asyncpg.Connection, dry_run: bool = False) ->
         logger.info(f"    [DRY-RUN] Would mark {count} task(s) as 'overdue'.")
 
     return count
+
+
+# ---------------------------------------------------------------------------
+# Task 1b: Soft-Deleted Task Purge (Hard Purge after retention window)
+# ---------------------------------------------------------------------------
+
+async def purge_soft_deleted_tasks(conn: asyncpg.Connection, older_than_hours: int = 24, dry_run: bool = False) -> int:
+    """Permanently delete soft-deleted tasks whose deleted_at is older than the retention window (default: 24 hours)."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=older_than_hours)
+    stale_tasks = await conn.fetch(
+        "SELECT id, title, deleted_at FROM tasks WHERE deleted_at IS NOT NULL AND deleted_at < $1",
+        cutoff,
+    )
+    count = len(stale_tasks)
+    if not stale_tasks:
+        logger.info(f"  [Purge] Soft-deleted tasks: 0 tasks older than {older_than_hours}h.")
+        return 0
+
+    if not dry_run:
+        await conn.execute(
+            "DELETE FROM tasks WHERE deleted_at IS NOT NULL AND deleted_at < $1",
+            cutoff,
+        )
+        logger.info(f"  [Purge] Permanently deleted {count} soft-deleted task(s) older than {older_than_hours}h.")
+    else:
+        logger.info(f"  [DRY-RUN] Would permanently delete {count} task(s) with deleted_at < {cutoff}.")
+    return count
+
+
+async def purge_expired_chat_pending_actions(conn: asyncpg.Connection, dry_run: bool = False) -> int:
+    """Clean up expired pending actions (TTL: 5 minutes, cleanup after expiration)."""
+    now = datetime.now(timezone.utc)
+    if not dry_run:
+        res = await conn.execute(
+            "DELETE FROM chat_pending_actions WHERE expires_at < $1",
+            now,
+        )
+        try:
+            return int(res.split(" ")[-1])
+        except Exception:
+            return 0
+    else:
+        count = await conn.fetchval(
+            "SELECT COUNT(*) FROM chat_pending_actions WHERE expires_at < $1",
+            now,
+        )
+        return int(count or 0)
 
 
 # ---------------------------------------------------------------------------
@@ -422,6 +470,10 @@ async def run_consolidation(
         stale_buckets = await cleanup_stale_rate_limit_buckets(older_than_hours=24)
         pruned_guests = await prune_expired_guests(retention_days=int(getattr(settings, "GUEST_RETENTION_DAYS", 30)), pool=pool)
 
+        # Permanent purge of soft-deleted tasks older than 24h & expired chat pending actions
+        purged_tasks = await purge_soft_deleted_tasks(conn, older_than_hours=24, dry_run=dry_run)
+        purged_pending = await purge_expired_chat_pending_actions(conn, dry_run=dry_run)
+
         # Radar synchronization & autonomous opportunity discovery (including JobSpy)
         radar_sync_res = None
         radar_sync_error = None
@@ -443,6 +495,8 @@ async def run_consolidation(
         logger.info(f"  • Stale threads archived : {archived_count}")
         logger.info(f"  • Rate limit buckets pruned: {stale_buckets}")
         logger.info(f"  • Expired guests pruned  : {pruned_guests}")
+        logger.info(f"  • Soft-deleted tasks purged : {purged_tasks}")
+        logger.info(f"  • Expired actions purged : {purged_pending}")
         if radar_sync_res:
             logger.info(f"  • Radar Sync / JobSpy    : {radar_sync_res.get('status')} ({radar_sync_res.get('records_updated', 0)} updated)")
         if proactive_res:
@@ -461,6 +515,8 @@ async def run_consolidation(
             "stale_conversations_rolled_up": archived_count,
             "proactive_nightly_run": proactive_res,
             "slipped_schedules": slipped_res,
+            "purged_tasks": purged_tasks,
+            "purged_pending": purged_pending,
             # Backwards compatibility aliases
             "overdue_tasks": overdue_count,
             "pruned_chunks": pruned_count,

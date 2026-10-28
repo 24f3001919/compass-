@@ -78,7 +78,7 @@ async def handle_message(
                         """
                         SELECT title, domain, due_date, status, priority, duration_minutes
                         FROM tasks
-                        WHERE status != 'completed' AND user_id = $1
+                        WHERE status != 'completed' AND deleted_at IS NULL AND user_id = $1
                         ORDER BY due_date ASC NULLS LAST, priority DESC
                         LIMIT 8
                         """,
@@ -151,6 +151,8 @@ async def handle_message(
             route_kwargs["pool"] = active_pool
         if "user_id" in sig.parameters or has_var_kw:
             route_kwargs["user_id"] = user_id or guest_id
+        if "tone" in sig.parameters or has_var_kw:
+            route_kwargs["tone"] = tone
 
         if pre_routed_skill in allowed_tools:
             skill_name = pre_routed_skill
@@ -184,6 +186,8 @@ async def handle_message(
             route_kwargs["pool"] = db_pool
         if "user_id" in sig.parameters or has_var_kw:
             route_kwargs["user_id"] = user_id or guest_id
+        if "tone" in sig.parameters or has_var_kw:
+            route_kwargs["tone"] = tone
 
         skill_name, args, text_reply = await route_message(
             message,
@@ -751,6 +755,7 @@ async def handle_message(
                 pool=pool,
                 user_id=user_id,
                 conversation_id=conv_id,
+                tone=tone,
             ):
                 if step.type == "think":
                     if not any("Understanding" in m for m in thoughts):
@@ -861,7 +866,10 @@ async def handle_message(
         try:
             pool = active_pool or await get_pool()
             handler = SKILL_REGISTRY[skill_name]
-            skill_result = await handler(args or {}, pool)
+            skill_args = dict(args or {})
+            if tone and "tone" not in skill_args:
+                skill_args["tone"] = tone
+            skill_result = await handler(skill_args, pool)
 
             # SkillResult contract: {success, data, summary, error}
             # Accept "response" only as a legacy alias so older handlers keep working.
@@ -935,6 +943,7 @@ async def handle_message(
         persist=persist,
         start_time=start_time,
         verifiable=False,
+        tone=tone,
     )
 
 
