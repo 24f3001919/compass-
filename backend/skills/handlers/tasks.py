@@ -63,6 +63,15 @@ def build_daily_roadmap(
 
     active_tasks = [t for t in prioritized if str(t.get("status", "")).lower() != "done"]
     if not active_tasks:
+        clean_tone = (tone or "").strip().lower()
+        if clean_tone == "brief":
+            return "No pending tasks today. All clear!"
+        if clean_tone == "exploratory":
+            return (
+                "You have no pending tasks requiring attention today. Your workspace schedule is clear of immediate deadlines. "
+                "This provides an opportune strategic window to review upcoming milestones or outline new project goals. "
+                "Would you like to examine your project timeline or add new tasks?"
+            )
         return "You have no pending tasks requiring attention today. All clear!"
 
     top_tasks = active_tasks[:6]
@@ -452,6 +461,35 @@ async def handle_query_tasks(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
     subj_words = [w for w in re.findall(r'[a-z0-9_-]+', user_msg) if len(w) > 2 and w not in stopwords]
     conv_deadlines = _extract_conversational_deadlines(history, subj_words) if history else []
 
+    # Check if request has roadmap or planning intent
+    req_context = " ".join([
+        str(args.get("intent") or ""),
+        str(args.get("mode") or ""),
+        str(args.get("goal") or ""),
+        str(args.get("query") or ""),
+        str(args.get("message") or ""),
+        str(args.get("user_message") or ""),
+    ]).lower()
+
+    is_roadmap = any(
+        kw in req_context
+        for kw in (
+            "roadmap", "plan", "today", "prioritize", "what should i do",
+            "step-by-step", "step by step", "actionable", "attention",
+            "work on first", "start with", "first",
+        )
+    )
+
+    tone = (args.get("tone") or "").strip().lower()
+    prioritized = prioritize_tasks(tasks, target_date=date.today())
+
+    if is_roadmap:
+        summary = build_daily_roadmap(prioritized, target_date=date.today(), tone=tone)
+        return {
+            "response": summary,
+            "data": prioritized,
+        }
+
     if count == 0:
         if conflict:
             return {
@@ -474,9 +512,17 @@ async def handle_query_tasks(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
                 ),
                 "data": [],
             }
-        # Strictly preserved for backward-compatibility with test contracts
+        if tone == "brief":
+            zero_resp = f"Found 0 tasks{d_str}{s_str}."
+        elif tone == "exploratory":
+            zero_resp = (
+                f"Found 0 task(s){d_str}{s_str}. No matching tasks were found in your workspace schedule. "
+                f"You can add new deadlines anytime or import items from your project timeline to begin tracking."
+            )
+        else:
+            zero_resp = f"Found 0 task(s){d_str}{s_str}."
         return {
-            "response": f"Found 0 task(s){d_str}{s_str}.",
+            "response": zero_resp,
             "data": [],
         }
 
@@ -498,64 +544,38 @@ async def handle_query_tasks(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
                 ]
                 return {"response": "\n".join(disc_lines), "data": tasks}
 
-    prioritized = prioritize_tasks(tasks, target_date=date.today())
-
-    # Check if request has roadmap or planning intent
-    req_context = " ".join([
-        str(args.get("intent") or ""),
-        str(args.get("mode") or ""),
-        str(args.get("goal") or ""),
-        str(args.get("query") or ""),
-        str(args.get("message") or ""),
-        str(args.get("user_message") or ""),
-    ]).lower()
-
-    is_roadmap = any(
-        kw in req_context
-        for kw in (
-            "roadmap", "plan", "today", "prioritize", "what should i do",
-            "step-by-step", "step by step", "actionable", "attention",
-            "work on first", "start with", "first",
-        )
-    )
-
-    tone = (args.get("tone") or "").strip().lower()
-
-    if is_roadmap:
-        summary = build_daily_roadmap(prioritized, target_date=date.today(), tone=tone)
+    top_tasks = prioritized[:6]
+    if tone == "brief" and top_tasks:
+        due_str = str(top_tasks[0].get("due_date")) if top_tasks[0].get("due_date") else "No due date"
+        base_summary = f"Found **{count}** task(s){d_str}{s_str}. Immediate lead item: **{top_tasks[0]['title']}** (Due: {due_str})."
     else:
-        top_tasks = prioritized[:6]
-        if tone == "brief" and top_tasks:
-            due_str = str(top_tasks[0].get("due_date")) if top_tasks[0].get("due_date") else "No due date"
-            base_summary = f"Found **{count}** task(s){d_str}{s_str}. Immediate lead item: **{top_tasks[0]['title']}** (Due: {due_str})."
-        else:
-            task_lines = []
-            for t in top_tasks:
-                due_str = str(t.get("due_date")) if t.get("due_date") else "No due date"
-                dom = t.get("domain", "general").title()
-                prio = t.get("priority", "medium").title()
-                stat = t.get("status", "open")
-                task_lines.append(f"- **{t['title']}** (`{dom}` · {stat} · Due: {due_str} · Priority: {prio})")
+        task_lines = []
+        for t in top_tasks:
+            due_str = str(t.get("due_date")) if t.get("due_date") else "No due date"
+            dom = t.get("domain", "general").title()
+            prio = t.get("priority", "medium").title()
+            stat = t.get("status", "open")
+            task_lines.append(f"- **{t['title']}** (`{dom}` · {stat} · Due: {due_str} · Priority: {prio})")
 
-            more_notice = (
-                f"\n\n*Showing top {len(top_tasks)} prioritized items out of {count} total matching task(s). "
-                f"You can view the full list in the Timeline view.*"
-                if count > len(top_tasks)
-                else ""
+        more_notice = (
+            f"\n\n*Showing top {len(top_tasks)} prioritized items out of {count} total matching task(s). "
+            f"You can view the full list in the Timeline view.*"
+            if count > len(top_tasks)
+            else ""
+        )
+        base_summary = f"Found **{count}** task(s){d_str}{s_str}:\n\n" + "\n".join(task_lines) + more_notice
+
+        if tone == "exploratory":
+            base_summary += (
+                "\n\n### Backlog Insights & Planning Guidance\n"
+                "- **Prioritization**: High-priority tasks are scheduled first to prevent last-minute deadline compression.\n"
+                "- **Domain Balance**: Reviewing tasks across active projects helps maintain continuous momentum without burnout."
             )
-            base_summary = f"Found **{count}** task(s){d_str}{s_str}:\n\n" + "\n".join(task_lines) + more_notice
 
-            if tone == "exploratory":
-                base_summary += (
-                    "\n\n### Backlog Insights & Planning Guidance\n"
-                    "- **Prioritization**: High-priority tasks are scheduled first to prevent last-minute deadline compression.\n"
-                    "- **Domain Balance**: Reviewing tasks across active projects helps maintain continuous momentum without burnout."
-                )
-
-        if conflict:
-            summary = format_conflict_discrepancy(conflict) + "\n\n" + base_summary
-        else:
-            summary = base_summary
+    if conflict:
+        summary = format_conflict_discrepancy(conflict) + "\n\n" + base_summary
+    else:
+        summary = base_summary
 
     return {
         "response": summary,

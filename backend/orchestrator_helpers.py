@@ -59,9 +59,11 @@ async def format_chat_response(
     persist: bool,
     start_time: float,
     verifiable: bool = False,
+    tone: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Format and persist canonical chat response payload."""
     from backend.router_helpers import is_greeting_intent
+    from backend.persona import format_greeting_by_tone, format_fallback_by_tone
     from backend.memory import conversations
 
     is_empty_reply = not (text_reply or "").strip()
@@ -71,14 +73,13 @@ async def format_chat_response(
 
     if is_empty_reply:
         if is_greeting:
-            text_reply = (
-                "I am Compass, your AI copilot with long-term memory across hackathons, coursework, "
-                "and code repositories. How can I help you today?"
-            )
+            text_reply = format_greeting_by_tone(tone)
         else:
             chat_success = False
             chat_error = "empty_model_response"
             text_reply = "I encountered an empty response from the model. Please retry."
+    elif is_greeting:
+        text_reply = format_greeting_by_tone(tone)
 
     safe_reply = text_reply or ""
 

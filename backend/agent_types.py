@@ -116,7 +116,7 @@ async def _extract_content_from_response(response: Any, default_text: str = "") 
     return default_text
 
 
-def _build_agent_system_prompt(tool_names: List[str], abstain_first: bool = False, current_time: Optional[Any] = None) -> str:
+def _build_agent_system_prompt(tool_names: List[str], abstain_first: bool = False, current_time: Optional[Any] = None, tone: Optional[str] = None) -> str:
     """Build the system prompt that makes Super behave as a ReAct agent."""
     from datetime import datetime
     now_dt = current_time or datetime.now().astimezone()
@@ -149,5 +149,24 @@ def _build_agent_system_prompt(tool_names: List[str], abstain_first: bool = Fals
             "- When asked a question, check internal memory tools first.\n"
             "- If memory does NOT contain the necessary information, reply with '[ABSTAIN]' rather than guessing.\n"
             "- When web search is available, you may use it to find missing facts.\n"
+        )
+    clean_tone = (tone or "").strip().lower()
+    if clean_tone == "brief":
+        prompt += (
+            "\n### Tone Constraint (Brief):\n"
+            "- Keep response extremely brief, direct, and concise (1-2 sentences maximum, strictly under 40 words).\n"
+            "- State the core answer or count + top item immediately with zero preamble or conversational filler. No follow-up questions."
+        )
+    elif clean_tone == "balanced":
+        prompt += (
+            "\n### Tone Constraint (Balanced):\n"
+            "- Provide a balanced, well-rounded response (2-4 clear sentences, roughly 60-100 words).\n"
+            "- Balance brevity with helpful context and next steps."
+        )
+    elif clean_tone == "exploratory":
+        prompt += (
+            "\n### Tone Constraint (Exploratory):\n"
+            "- Provide a comprehensive, in-depth exploration (at least 150 words).\n"
+            "- Think out loud, examine nuances, provide context and rationale, and outline forward-looking recommendations."
         )
     return prompt

@@ -59,6 +59,7 @@ async def run_agent(
     settings: Any = None,
     conversation_id: Optional[str] = None,
     user_id: Optional[str] = None,
+    tone: Optional[str] = None,
 ) -> AsyncGenerator[AgentStep, None]:
     """Core ReAct agent loop yielding AgentStep objects for real-time SSE streaming."""
     if settings is None:
@@ -242,6 +243,7 @@ async def run_agent(
         system_content = _build_agent_system_prompt(
             [t["function"]["name"] for t in agent_tools if "function" in t],
             abstain_first=abstain_first,
+            tone=tone,
         )
         messages = [
             {"role": "system", "content": system_content},
@@ -263,13 +265,23 @@ async def run_agent(
         try:
             reasoning_model = str(getattr(settings, "REASONING_MODEL", getattr(settings, "SKILL_MODEL", "nvidia/nemotron-3-super-120b-a12b")))
             completions: Any = client.chat.completions
+            clean_tone = (tone or "").strip().lower()
+            if clean_tone == "brief":
+                r_max_tokens = 90
+            elif clean_tone == "balanced":
+                r_max_tokens = 250
+            elif clean_tone == "exploratory":
+                r_max_tokens = 1500
+            else:
+                r_max_tokens = int(getattr(settings, "MAX_REASONING_TOKENS", 4096))
+
             response = await completions.create(
                 model=reasoning_model,
                 messages=cast(Any, messages),
                 tools=filtered_tools or None,
                 tool_choice=tool_choice_param,
                 temperature=0.2,
-                max_tokens=int(getattr(settings, "MAX_REASONING_TOKENS", 4096)),
+                max_tokens=r_max_tokens,
                 stream=False,
             )
 
@@ -617,6 +629,7 @@ async def run_agent(
                 start_time=start_time,
                 run_id=run_id,
                 active_replan_diff=active_replan_diff,
+                tone=tone,
             )
             total_run_cost_usd += forced_cost
             yield forced_synth

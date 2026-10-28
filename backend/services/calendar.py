@@ -175,7 +175,8 @@ async def get_calendar_freebusy(
                     """
                     SELECT id, title, domain, scheduled_start, scheduled_end, is_fixed
                     FROM tasks
-                    WHERE scheduled_start IS NOT NULL
+                    WHERE deleted_at IS NULL
+                      AND scheduled_start IS NOT NULL
                       AND scheduled_end IS NOT NULL
                       AND scheduled_start < $2
                       AND scheduled_end > $1
@@ -499,6 +500,7 @@ async def sync_all_tasks_to_google_calendar(
             SELECT id, title, domain, priority, notes, duration_minutes, due_date, scheduled_start, scheduled_end
             FROM tasks
             WHERE user_id = $1
+              AND deleted_at IS NULL
               AND (
                 (scheduled_start IS NOT NULL AND scheduled_end IS NOT NULL)
                 OR due_date IS NOT NULL

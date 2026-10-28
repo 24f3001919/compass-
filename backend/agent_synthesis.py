@@ -29,25 +29,51 @@ async def force_final_synthesis(
     start_time: float,
     run_id: str,
     active_replan_diff: Optional[Dict[str, Any]],
+    tone: Optional[str] = None,
 ) -> Tuple[AgentStep, float, bool]:
     """Force final synthesis with Nemotron-3 Ultra (550B) with dynamic clock and bounded continuation."""
     now_dt = datetime.now().astimezone()
     today_str = now_dt.strftime("%A, %B %d, %Y (%Z)")
 
+    synth_prompt = (
+        "You've gathered enough information. Please produce your final answer now.\n\n"
+        f"### Temporal & Completeness Guidelines (Current Date: {today_str}):\n"
+        f"- Current reference date is {today_str}. Compare all event dates against this date.\n"
+        "- Any event whose submission deadline or end date is in the past MUST be designated as [ENDED] or past; never claim it is 'starting today' or 'one week away'.\n"
+        "- For tables, include full rows with complete details and closing markdown pipes (|).\n"
+        "- For factual claims, cite the verified source URL and status.\n"
+        "- Never emit literal bracketed placeholders such as '[time]' or '[date]'; explicitly state 'time not shown in source' instead."
+    )
+
+    clean_tone = (tone or "").strip().lower()
+    if clean_tone == "brief":
+        synth_tokens = 90
+        synth_prompt += (
+            "\n\n[TONE CONSTRAINT: STRICTLY BRIEF]\n"
+            "Keep your response extremely brief, direct, and concise (1-2 sentences maximum, strictly under 40 words). "
+            "State the core answer or count + top item immediately with zero preamble or conversational filler. No follow-up questions."
+        )
+    elif clean_tone == "balanced":
+        synth_tokens = 250
+        synth_prompt += (
+            "\n\n[TONE CONSTRAINT: BALANCED]\n"
+            "Provide a balanced, well-rounded response (2-4 clear sentences, roughly 60-100 words). "
+            "Balance brevity with helpful context and next steps."
+        )
+    elif clean_tone == "exploratory":
+        synth_tokens = 1500
+        synth_prompt += (
+            "\n\n[TONE CONSTRAINT: COMPREHENSIVE EXPLORATION]\n"
+            "Provide a comprehensive, in-depth exploration (at least 150 words). "
+            "Think out loud, examine nuances, provide context and rationale, and outline forward-looking recommendations."
+        )
+    else:
+        synth_tokens = int(getattr(settings, "MAX_SYNTHESIS_TOKENS", 8192))
+
     messages.append({
         "role": "user",
-        "content": (
-            "You've gathered enough information. Please produce your final comprehensive answer now.\n\n"
-            f"### Temporal & Completeness Guidelines (Current Date: {today_str}):\n"
-            f"- Current reference date is {today_str}. Compare all event dates against this date.\n"
-            "- Any event whose submission deadline or end date is in the past MUST be designated as [ENDED] or past; never claim it is 'starting today' or 'one week away'.\n"
-            "- For tables, include full rows with complete details and closing markdown pipes (|).\n"
-            "- For factual claims, cite the verified source URL and status.\n"
-            "- Never emit literal bracketed placeholders such as '[time]' or '[date]'; explicitly state 'time not shown in source' instead."
-        ),
+        "content": synth_prompt,
     })
-
-    synth_tokens = int(getattr(settings, "MAX_SYNTHESIS_TOKENS", 8192))
     max_continuations = int(getattr(settings, "MAX_CONTINUATION_ATTEMPTS", 2))
 
     completions = client.chat.completions

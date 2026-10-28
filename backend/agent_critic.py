@@ -113,7 +113,7 @@ async def execute_confirmed_actions(
                 task_id = tool_args.get("task_id")
                 if task_id:
                     async with pool.acquire() as conn:
-                        row = await conn.fetchrow("SELECT * FROM tasks WHERE id = $1", int(task_id))
+                        row = await conn.fetchrow("SELECT * FROM tasks WHERE id = $1 AND deleted_at IS NULL", int(task_id))
                         if row:
                             previous_state = dict(row)
                             for k, v in previous_state.items():
@@ -125,7 +125,7 @@ async def execute_confirmed_actions(
                 affected_ids = [a.get("task_id") for a in assignments if a.get("task_id")]
                 if affected_ids:
                     async with pool.acquire() as conn:
-                        rows = await conn.fetch("SELECT id, scheduled_start, scheduled_end FROM tasks WHERE id = ANY($1::int[])", affected_ids)
+                        rows = await conn.fetch("SELECT id, scheduled_start, scheduled_end FROM tasks WHERE id = ANY($1::int[]) AND deleted_at IS NULL", affected_ids)
                         previous_state = {
                             "tasks": [
                                 {

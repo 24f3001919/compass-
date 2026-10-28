@@ -232,7 +232,7 @@ async def generate_chat_events(
                     return []
                 async with pool.acquire() as conn:
                     return await conn.fetch(
-                        "SELECT title, domain, due_date, status, priority FROM tasks WHERE status != 'completed' AND user_id = $1 ORDER BY due_date ASC NULLS LAST LIMIT 8",
+                        "SELECT title, domain, due_date, status, priority FROM tasks WHERE status != 'completed' AND deleted_at IS NULL AND user_id = $1 ORDER BY due_date ASC NULLS LAST LIMIT 8",
                         user_id,
                     )
 
@@ -414,7 +414,7 @@ async def generate_chat_events(
                     done_payload['can_undo'] = raw_data['can_undo']
             if result.get('is_truncated') or (isinstance(raw_data, dict) and raw_data.get('is_truncated')):
                 done_payload['is_truncated'] = True
-            yield f"data: {json.dumps(done_payload)}\n\n"
+            yield f"data: {json.dumps(done_payload, default=str)}\n\n"
             _schedule_stream_persistence(
                 conv_id,
                 message,
@@ -429,10 +429,18 @@ async def generate_chat_events(
 
         logger.info("Serving chat stream request with model=%s", _settings.ROUTER_MODEL)
         max_synth_budget = int(getattr(_settings, "MAX_SYNTHESIS_TOKENS", 8192))
+        clean_tone = getattr(req, "tone", None)
+        if clean_tone == "brief":
+            stream_max_tokens = 90
+        elif clean_tone == "balanced":
+            stream_max_tokens = 250
+        else:
+            stream_max_tokens = max_synth_budget
+
         call_kwargs: dict[str, Any] = {
             "model": _settings.ROUTER_MODEL,
             "messages": messages,
-            "max_tokens": max_synth_budget,
+            "max_tokens": stream_max_tokens,
             "temperature": 0.7,
             "stream": True,
             "stream_options": {"include_usage": True},
@@ -640,6 +648,7 @@ async def generate_chat_events(
                 pre_routed_args=pre_routed_args,
                 target_message_id=target_msg_id,
                 target_message_content=target_msg_content,
+                tone=getattr(req, "tone", None),
             )
             response_text = result.get("response", "")
             skill_used = result.get("skill_used") or "agent"
@@ -686,6 +695,10 @@ async def generate_chat_events(
                 evidence2 = raw_data2.get('evidence')
                 if evidence2:
                     done_payload2['evidence'] = evidence2
+                if 'pending_action' in raw_data2:
+                    done_payload2['pending_action'] = raw_data2['pending_action']
+                if 'can_undo' in raw_data2:
+                    done_payload2['can_undo'] = raw_data2['can_undo']
             if result.get('is_truncated') or (isinstance(raw_data2, dict) and raw_data2.get('is_truncated')):
                 done_payload2['is_truncated'] = True
             yield f"data: {json.dumps(done_payload2, default=str)}\n\n"
@@ -701,6 +714,7 @@ async def generate_chat_events(
                 history=history_items if history_items else None,
                 memory_context=memory_context if memory_context else None,
                 persist=False,
+                tone=getattr(req, "tone", None),
             )
             response_text = result.get("response", "")
             skill_used = result.get("skill_used") or "chat"
@@ -731,6 +745,10 @@ async def generate_chat_events(
                 ev = raw_data_orch.get('evidence')
                 if ev:
                     done_payload_orchestrator['evidence'] = ev
+                if 'pending_action' in raw_data_orch:
+                    done_payload_orchestrator['pending_action'] = raw_data_orch['pending_action']
+                if 'can_undo' in raw_data_orch:
+                    done_payload_orchestrator['can_undo'] = raw_data_orch['can_undo']
             if result.get('is_truncated') or (isinstance(raw_data_orch, dict) and raw_data_orch.get('is_truncated')):
                 done_payload_orchestrator['is_truncated'] = True
             yield f"data: {json.dumps(done_payload_orchestrator, default=str)}\n\n"

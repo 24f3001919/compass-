@@ -314,7 +314,7 @@ def _stream_chat(payload: dict) -> tuple[str, str | None, str | None]:
         try:
             req_headers = _headers()
         except typer.Exit:
-            res = _post("/chat", payload)
+            res = _post("/api/chat", payload)
             resp_text = res.get("response", "")
             console.print(resp_text)
             return resp_text, res.get("conversation_id"), res.get("skill_used")
@@ -322,7 +322,7 @@ def _stream_chat(payload: dict) -> tuple[str, str | None, str | None]:
         with httpx.stream("POST", url, headers=req_headers, json=payload, timeout=60.0) as resp:
             if resp.status_code != 200:
                 try:
-                    res = _post("/chat", payload)
+                    res = _post("/api/chat", payload)
                     resp_text = res.get("response", "")
                     console.print(resp_text)
                     return resp_text, res.get("conversation_id"), res.get("skill_used")
@@ -349,7 +349,7 @@ def _stream_chat(payload: dict) -> tuple[str, str | None, str | None]:
                     err_msg = ev.get("message", "Unknown error")
                     if not full_text:
                         try:
-                            res = _post("/chat", payload)
+                            res = _post("/api/chat", payload)
                             resp_text = res.get("response", "")
                             console.print(resp_text)
                             return resp_text, res.get("conversation_id"), res.get("skill_used")
@@ -376,7 +376,7 @@ def _stream_chat(payload: dict) -> tuple[str, str | None, str | None]:
     except (httpx.ConnectError, httpx.TimeoutException) as e:
         if not full_text:
             try:
-                res = _post("/chat", payload)
+                res = _post("/api/chat", payload)
                 resp_text = res.get("response", "")
                 console.print(resp_text)
                 return resp_text, res.get("conversation_id"), res.get("skill_used")
