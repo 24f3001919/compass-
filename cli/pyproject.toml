@@ -15,4 +15,4 @@ dependencies = [
 ]
 
 [project.scripts]
-compass = "assistant_cli:app"
+compass = "cli.assistant_cli:app"

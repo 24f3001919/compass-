@@ -7,6 +7,8 @@ Communicates with the backend at http://localhost:8000 via httpx.
 
 Usage:
     compass --help          Show all available commands
+    compass --version       Show version
+    compass login           Obtain caller's own signed guest identity
     compass chat            Interactive conversation REPL
     compass ask "question"  One-shot question
     compass tasks           View current tasks
@@ -14,12 +16,16 @@ Usage:
     compass projects        List tracked projects
     compass log "summary"   Log a memory entry
     compass status          Dashboard overview
+    compass agent "goal"    Autonomous ReAct planner
+    compass triage          Feasibility triage
+    compass admin usage     Admin usage statistics (requires AUTH_TOKEN)
 
 Install:
     pip install -e ./cli
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -40,7 +46,6 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
-from rich.theme import Theme
 
 # Python 3.11+ tomllib or fallback
 try:
@@ -52,18 +57,36 @@ except ImportError:
         tomllib = None  # type: ignore[assignment]
 
 # ---------------------------------------------------------------------------
-# Load environment & persistent config (~/.compass/config.toml)
+# Load environment & persistent config (~/.compass)
 # ---------------------------------------------------------------------------
 load_dotenv()
 
 CONFIG_DIR = Path.home() / ".compass"
 CONFIG_FILE = CONFIG_DIR / "config.toml"
+CREDENTIALS_FILE = CONFIG_DIR / "credentials.json"
 
 
-def load_config() -> tuple[str, str]:
-    """Read API base URL and AUTH_TOKEN from ~/.compass/config.toml, env vars, or defaults."""
+def _secure_file_permissions(path: Path) -> None:
+    """Set owner-only permissions (Windows ACL or 0600 on POSIX)."""
+    try:
+        if sys.platform == "win32":
+            import subprocess
+            username = os.environ.get("USERNAME") or os.environ.get("USER")
+            if username:
+                subprocess.run(
+                    ["icacls", str(path), "/inheritance:r", "/grant:r", f"{username}:(R,W)"],
+                    capture_output=True,
+                    check=False,
+                )
+        else:
+            os.chmod(path, 0o600)
+    except Exception:
+        pass
+
+
+def load_config() -> str:
+    """Read API base URL from ~/.compass/config.toml, env vars, or defaults."""
     api_url = os.getenv("COMPASS_API_URL")
-    auth_token = os.getenv("AUTH_TOKEN")
 
     if CONFIG_FILE.exists():
         try:
@@ -71,23 +94,56 @@ def load_config() -> tuple[str, str]:
             if tomllib:
                 cfg = tomllib.loads(content)
                 api_url = api_url or cfg.get("api_url")
-                auth_token = auth_token or cfg.get("auth_token")
             else:
                 for line in content.splitlines():
                     line = line.strip()
                     if line.startswith("api_url"):
                         api_url = api_url or line.split("=", 1)[1].strip().strip('"').strip("'")
-                    elif line.startswith("auth_token"):
-                        auth_token = auth_token or line.split("=", 1)[1].strip().strip('"').strip("'")
         except Exception:
             pass
 
-    resolved_url = (api_url or os.getenv("COMPASS_API_URL") or "http://localhost:8000").strip().rstrip("/")
-    resolved_token = (auth_token or os.getenv("AUTH_TOKEN") or "dev-token").strip()
-    return resolved_url, resolved_token
+    return (api_url or os.getenv("COMPASS_API_URL") or "http://localhost:8000").strip().rstrip("/")
 
 
-API_BASE, AUTH_TOKEN = load_config()
+def save_config(api_url: str) -> None:
+    """Save API base URL to ~/.compass/config.toml."""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    content = f'api_url = "{api_url}"\n'
+    CONFIG_FILE.write_text(content, encoding="utf-8")
+
+
+def load_credentials() -> dict:
+    """Read caller's credentials from ~/.compass/credentials.json or env vars."""
+    creds = {}
+    if CREDENTIALS_FILE.exists():
+        try:
+            creds = json.loads(CREDENTIALS_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    if os.getenv("GUEST_TOKEN"):
+        creds["guest_token"] = os.getenv("GUEST_TOKEN")
+    if os.getenv("GUEST_ID"):
+        creds["guest_id"] = os.getenv("GUEST_ID")
+    if os.getenv("COMPASS_SESSION"):
+        creds["session_token"] = os.getenv("COMPASS_SESSION")
+    return creds
+
+
+def save_credentials(data: dict) -> None:
+    """Persist caller's credentials with owner-only permissions."""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    CREDENTIALS_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    _secure_file_permissions(CREDENTIALS_FILE)
+
+
+def _mask_token(tok: Optional[str]) -> str:
+    """Mask token without revealing length."""
+    if not tok:
+        return "[NOT SET]"
+    return "[CONFIGURED]"
+
+
+API_BASE = load_config()
 
 from cli.cli_formatters import (
     DOMAIN_COLORS,
@@ -96,6 +152,7 @@ from cli.cli_formatters import (
     STATUS_EMOJI,
     STEP_COLORS,
     console,
+    console_err,
     format_domain_text,
     render_agent_activity_table,
     render_agent_runs_table,
@@ -113,6 +170,20 @@ from cli.cli_agent_runner import (
 
 _domain_text = format_domain_text
 
+
+def _check_connected_banner():
+    """Print visible banner when connecting to remote production host."""
+    if API_BASE and "localhost" not in API_BASE and "127.0.0.1" not in API_BASE:
+        console.print(f"[bold yellow]Connected to {API_BASE}[/]")
+
+
+def version_callback(value: bool):
+    """Print CLI version and exit cleanly."""
+    if value:
+        console.print("Compass CLI 0.1.0")
+        raise typer.Exit()
+
+
 # ---------------------------------------------------------------------------
 # Typer App
 # ---------------------------------------------------------------------------
@@ -124,72 +195,139 @@ app = typer.Typer(
 )
 
 
+@app.callback()
+def main(
+    version: Optional[bool] = typer.Option(
+        None, "--version", "-v", help="Show CLI version and exit", callback=version_callback, is_eager=True
+    ),
+):
+    """Compass — Personal AI Assistant CLI."""
+    _check_connected_banner()
+
+
 # ---------------------------------------------------------------------------
 # HTTP Helpers
 # ---------------------------------------------------------------------------
 
-def _headers() -> dict:
-    """Return auth headers for API requests."""
-    if not AUTH_TOKEN:
-        console.print(
-            "[compass.error]❌ AUTH_TOKEN not set. "
-            "Copy .env.example → .env and set your token.[/]"
+def _headers(admin: bool = False, admin_token: Optional[str] = None) -> dict:
+    """Return auth headers for API requests.
+    
+    Normal commands send the caller's guest/session token.
+    Admin commands send master AUTH_TOKEN only when explicitly provided.
+    """
+    if admin:
+        token = admin_token or os.getenv("AUTH_TOKEN")
+        if not token:
+            console_err.print(
+                "[compass.error]❌ AUTH_TOKEN required for admin commands. "
+                "Provide via --token flag or AUTH_TOKEN environment variable.[/]"
+            )
+            raise typer.Exit(1)
+        return {"Authorization": f"Bearer {token}"}
+
+    creds = load_credentials()
+    guest_token = creds.get("guest_token")
+    session_token = creds.get("session_token")
+    env_token = os.getenv("AUTH_TOKEN") or os.getenv("COMPASS_AUTH_TOKEN")
+
+    if guest_token:
+        return {
+            "x-guest-token": guest_token,
+            "Authorization": f"Bearer {guest_token}",
+        }
+    elif session_token:
+        return {
+            "Authorization": f"Bearer {session_token}",
+        }
+    elif env_token:
+        return {
+            "Authorization": f"Bearer {env_token}",
+        }
+    else:
+        console_err.print(
+            "[compass.error]❌ Not authenticated. Run 'compass login' to initialize your guest session.[/]"
         )
         raise typer.Exit(1)
-    return {"Authorization": f"Bearer {AUTH_TOKEN}"}
 
 
-def _get(path: str, params: dict | None = None) -> dict:
-    """Make an authenticated GET request to the backend."""
+def _handle_http_error(e: httpx.HTTPStatusError):
+    """Format and print HTTP error with status code and Retry-After if present."""
+    retry_after = e.response.headers.get("Retry-After")
+    detail = e.response.text
     try:
-        resp = httpx.get(f"{API_BASE}{path}", headers=_headers(), params=params, timeout=30.0)
+        d = e.response.json()
+        if isinstance(d, dict) and "detail" in d:
+            detail = str(d["detail"])
+    except Exception:
+        pass
+
+    msg = f"❌ API error {e.response.status_code}: {detail}"
+    if retry_after:
+        msg += f" (Retry-After: {retry_after}s)"
+    console_err.print(f"[compass.error]{msg}[/]")
+    raise typer.Exit(1)
+
+
+def _get(path: str, params: dict | None = None, headers: dict | None = None) -> dict:
+    """Make an authenticated GET request to the backend."""
+    h = headers or _headers()
+    try:
+        resp = httpx.get(f"{API_BASE}{path}", headers=h, params=params, timeout=30.0)
         resp.raise_for_status()
         return resp.json()
     except (httpx.ConnectError, httpx.TimeoutException) as e:
-        console.print("[compass.error]❌ Cannot connect to backend at "
-                      f"{API_BASE} (error: {e}). Is the server running?[/]")
+        console_err.print(f"[compass.error]❌ Cannot connect to backend at {API_BASE} (error: {e}). Is the server running?[/]")
         raise typer.Exit(1)
     except httpx.HTTPStatusError as e:
-        console.print(f"[compass.error]❌ API error {e.response.status_code}: "
-                      f"{e.response.text}[/]")
-        raise typer.Exit(1)
+        _handle_http_error(e)
+        return {}
 
 
-def _post(path: str, data: dict) -> dict:
+def _post(path: str, data: dict, headers: dict | None = None) -> dict:
     """Make an authenticated POST request to the backend."""
+    h = headers or _headers()
     try:
-        resp = httpx.post(f"{API_BASE}{path}", headers=_headers(), json=data, timeout=30)
+        resp = httpx.post(f"{API_BASE}{path}", headers=h, json=data, timeout=30.0)
         resp.raise_for_status()
         return resp.json()
-    except httpx.ConnectError:
-        console.print("[compass.error]❌ Cannot connect to backend at "
-                      f"{API_BASE}. Is the server running?[/]")
+    except (httpx.ConnectError, httpx.TimeoutException) as e:
+        console_err.print(f"[compass.error]❌ Cannot connect to backend at {API_BASE} (error: {e}). Is the server running?[/]")
         raise typer.Exit(1)
     except httpx.HTTPStatusError as e:
-        console.print(f"[compass.error]❌ API error {e.response.status_code}: "
-                      f"{e.response.text}[/]")
-        raise typer.Exit(1)
+        _handle_http_error(e)
+        return {}
 
 
 def _stream_chat(payload: dict) -> tuple[str, str | None, str | None]:
     """Consume the SSE streaming endpoint /api/chat/stream, printing tokens live.
 
     Returns (full_response, conversation_id, skill_used).
-    Falls back cleanly to synchronous _post('/chat', payload) if streaming fails.
+    On Ctrl+C, exits cleanly with code 130 and no traceback.
+    On partial errors, preserves output and exits non-zero.
     """
-    import json
     url = f"{API_BASE}/api/chat/stream"
     full_text = []
     conv_id = payload.get("conversation_id")
     skill_used = None
 
     try:
-        with httpx.stream("POST", url, headers=_headers(), json=payload, timeout=60.0) as resp:
+        try:
+            req_headers = _headers()
+        except typer.Exit:
+            res = _post("/chat", payload)
+            resp_text = res.get("response", "")
+            console.print(resp_text)
+            return resp_text, res.get("conversation_id"), res.get("skill_used")
+
+        with httpx.stream("POST", url, headers=req_headers, json=payload, timeout=60.0) as resp:
             if resp.status_code != 200:
-                res = _post("/chat", payload)
-                resp_text = res.get("response", "")
-                console.print(resp_text)
-                return resp_text, res.get("conversation_id"), res.get("skill_used")
+                try:
+                    res = _post("/chat", payload)
+                    resp_text = res.get("response", "")
+                    console.print(resp_text)
+                    return resp_text, res.get("conversation_id"), res.get("skill_used")
+                except Exception:
+                    _handle_http_error(httpx.HTTPStatusError("Stream error", request=resp.request, response=resp))
 
             for line in resp.iter_lines():
                 if not line or not line.startswith("data: "):
@@ -209,28 +347,93 @@ def _stream_chat(payload: dict) -> tuple[str, str | None, str | None]:
                     skill_used = ev.get("skill_used")
                 elif ev_type == "error":
                     err_msg = ev.get("message", "Unknown error")
-                    console.print(f"\n[dim red]Error: {err_msg}[/]")
+                    if not full_text:
+                        try:
+                            res = _post("/chat", payload)
+                            resp_text = res.get("response", "")
+                            console.print(resp_text)
+                            return resp_text, res.get("conversation_id"), res.get("skill_used")
+                        except Exception:
+                            pass
+                    console_err.print(f"\n[compass.error]Error: {err_msg}[/]")
+                    if full_text:
+                        console.print()
+                    raise typer.Exit(1)
 
             console.print()
             return "".join(full_text), conv_id, skill_used
 
-    except (httpx.ConnectError, httpx.HTTPError):
-        res = _post("/chat", payload)
-        resp_text = res.get("response", "")
-        console.print(resp_text)
-        return resp_text, res.get("conversation_id"), res.get("skill_used")
-
-
-def _domain_text(domain: str) -> Text:
-    """Return a Rich Text styled with the domain's color."""
-    emoji = DOMAIN_EMOJI.get(domain, "")
-    color = DOMAIN_COLORS.get(domain, "white")
-    return Text(f"{emoji} {domain}", style=f"bold {color}")
+    except KeyboardInterrupt:
+        if full_text:
+            console.print()
+        console_err.print("\n[dim]Cancelled.[/]")
+        raise typer.Exit(130)
+    except httpx.HTTPStatusError as e:
+        if full_text:
+            console.print()
+        _handle_http_error(e)
+        return "", None, None
+    except (httpx.ConnectError, httpx.TimeoutException) as e:
+        if not full_text:
+            try:
+                res = _post("/chat", payload)
+                resp_text = res.get("response", "")
+                console.print(resp_text)
+                return resp_text, res.get("conversation_id"), res.get("skill_used")
+            except typer.Exit:
+                raise
+            except Exception:
+                pass
+        if full_text:
+            console.print()
+        console_err.print(f"[compass.error]❌ Cannot connect to backend at {API_BASE} (error: {e}). Is the server running?[/]")
+        raise typer.Exit(1)
 
 
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
+
+
+@app.command()
+def login(
+    url: Optional[str] = typer.Option(None, "--url", "-u", help="Set the Compass API base URL"),
+    token: Optional[str] = typer.Option(None, "--token", "-t", help="Existing session token (optional)"),
+):
+    """🔐 Obtain caller's own signed guest identity or configure session."""
+    global API_BASE
+    if url:
+        API_BASE = url.strip().rstrip("/")
+        save_config(API_BASE)
+
+    if token:
+        save_credentials({"session_token": token.strip()})
+        console.print("[compass.success]✅ Session token saved with owner-only permissions.[/]")
+        console.print(f"   API URL: {API_BASE}")
+        console.print(f"   Token:   {_mask_token(token)}")
+        return
+
+    console.print(f"[bold cyan]🧭 Obtaining new guest session from {API_BASE}...[/]")
+    try:
+        resp = httpx.post(f"{API_BASE}/api/guest/session", timeout=15.0)
+        resp.raise_for_status()
+        data = resp.json()
+        gid = data.get("guest_id")
+        gtok = data.get("guest_token")
+        if not gid or not gtok:
+            console_err.print("[compass.error]❌ Invalid response from guest session endpoint.[/]")
+            raise typer.Exit(1)
+
+        save_credentials({"guest_id": gid, "guest_token": gtok})
+        console.print("[compass.success]✅ Logged in successfully![/]")
+        console.print(f"   Base URL: {API_BASE}")
+        console.print(f"   Guest ID: {gid[:8]}...")
+        console.print(f"   Token:    {_mask_token(gtok)}")
+    except httpx.HTTPStatusError as e:
+        _handle_http_error(e)
+    except (httpx.ConnectError, httpx.TimeoutException):
+        console_err.print(f"[compass.error]❌ Cannot connect to backend at {API_BASE}. Is the server running?[/]")
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -290,23 +493,25 @@ def add(
     priority: Optional[str] = typer.Option(None, "--priority", help="Priority: urgent, high, medium, low"),
     notes: Optional[str] = typer.Option(None, "--notes", "-n", help="Additional notes"),
 ):
-    """➕ Add a new task via the chat endpoint."""
-    parts = [f"Add task: {title}"]
-    parts.append(f"--domain {domain}")
+    """➕ Add a new task via the tasks endpoint."""
+    payload = {
+        "title": title,
+        "domain": domain,
+    }
     if project:
-        parts.append(f"--project {project}")
+        payload["project_id"] = project
     if due:
-        parts.append(f"--due {due}")
+        payload["due_date"] = due
     if priority:
-        parts.append(f"--priority {priority}")
+        payload["priority"] = priority
     if notes:
-        parts.append(f"--notes {notes}")
+        payload["notes"] = notes
 
-    message = " ".join(parts)
-    result = _post("/chat", {"message": message})
-
-    console.print("\n[compass.success]✅ Task sent to Compass[/]")
-    console.print(f"   Response: {result.get('response', '')}")
+    result = _post("/api/tasks", payload)
+    console.print("\n[compass.success]✅ Task created successfully[/]")
+    console.print(f"   ID:       {result.get('id', '')}")
+    console.print(f"   Title:    {result.get('title', title)}")
+    console.print(f"   Domain:   {_domain_text(domain)}")
 
 
 @app.command()
@@ -324,8 +529,9 @@ def tasks(
     if status:
         params["status"] = status
 
-    data = _get("/tasks", params)
-    render_tasks_table(data.get("tasks", []))
+    data = _get("/api/tasks", params)
+    task_list = data if isinstance(data, list) else data.get("tasks", [])
+    render_tasks_table(task_list)
 
 
 @app.command()
@@ -350,7 +556,7 @@ def log(
 ):
     """📝 Log a memory entry (code context, coursework note, etc.)."""
     payload = {
-        "summary": summary,
+        "content": summary,
         "domain": domain,
         "project": project,
         "tags": tags,
@@ -373,55 +579,30 @@ def status():
     render_status_dashboard(data)
 
 
-
 @app.command()
 def config(
     url: Optional[str] = typer.Option(None, "--url", "-u", help="Set the Compass API base URL"),
-    token: Optional[str] = typer.Option(None, "--token", "-t", help="Set the Bearer auth token"),
 ):
     """⚙️ View or update persistent CLI settings (~/.compass/config.toml)."""
-    global API_BASE, AUTH_TOKEN
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-
-    if url is None and token is None:
-        console.print(Panel(
-            f"[bold cyan]Compass CLI Configuration[/]\n\n"
-            f"  [bold]Config file:[/] {CONFIG_FILE}\n"
-            f"  [bold]API URL:[/]     {API_BASE}\n"
-            f"  [bold]Auth Token:[/]  {'*' * len(AUTH_TOKEN) if AUTH_TOKEN else '[dim]not set[/]'}",
-            border_style="cyan",
-        ))
+    global API_BASE
+    if url:
+        API_BASE = url.strip().rstrip("/")
+        save_config(API_BASE)
+        console.print(f"[compass.success]✅ Configuration saved to {CONFIG_FILE}[/]")
+        console.print(f"   API URL: {API_BASE}")
         return
 
-    new_url = url or API_BASE
-    new_token = token or AUTH_TOKEN
-
-    content = f'api_url = "{new_url}"\nauth_token = "{new_token}"\n'
-    CONFIG_FILE.write_text(content, encoding="utf-8")
-    API_BASE = new_url
-    AUTH_TOKEN = new_token
-
-    console.print(f"[compass.success]✅ Configuration saved to {CONFIG_FILE}[/]")
-    console.print(f"   API URL:    {new_url}")
-    console.print(f"   Auth Token: {'*' * len(new_token) if new_token else '[dim]not set[/]'}")
-
-
-@app.command()
-def login():
-    """🔐 Interactively configure Compass API URL and Bearer token."""
+    creds = load_credentials()
+    tok = creds.get("guest_token") or creds.get("session_token")
     console.print(Panel(
-        "[bold cyan]🧭 Compass Login[/]\n\n"
-        "Configure your backend endpoint and authentication token.",
+        f"[bold cyan]Compass CLI Configuration[/]\n\n"
+        f"  [bold]Config file:[/]      {CONFIG_FILE}\n"
+        f"  [bold]Credentials file:[/] {CREDENTIALS_FILE}\n"
+        f"  [bold]API URL:[/]          {API_BASE}\n"
+        f"  [bold]Active Identity:[/]  {creds.get('guest_id', '[NOT SET]')}\n"
+        f"  [bold]Auth Token:[/]       {_mask_token(tok)}",
         border_style="cyan",
     ))
-    new_url = Prompt.ask("Compass API Base URL", default=API_BASE)
-    new_token = Prompt.ask("Bearer Auth Token", password=True, default=AUTH_TOKEN)
-
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    content = f'api_url = "{new_url}"\nauth_token = "{new_token}"\n'
-    CONFIG_FILE.write_text(content, encoding="utf-8")
-
-    console.print(f"\n[compass.success]✅ Credentials saved to {CONFIG_FILE}[/]")
 
 
 # ---------------------------------------------------------------------------
@@ -436,9 +617,11 @@ app.add_typer(admin_app, name="admin")
 
 
 @admin_app.command("usage")
-def admin_usage():
+def admin_usage(
+    token: Optional[str] = typer.Option(None, "--token", "-t", help="Master admin AUTH_TOKEN"),
+):
     """💰 Pretty-print token consumption and estimated USD cost across models."""
-    data = _get("/admin/usage")
+    data = _get("/admin/usage", headers=_headers(admin=True, admin_token=token))
     render_usage_tables(data)
 
 
@@ -447,6 +630,7 @@ def admin_consolidate(
     dry_run: bool = typer.Option(False, "--dry-run", help="Simulate without applying updates"),
     threshold: float = typer.Option(0.95, "--threshold", "-t", help="Cosine similarity threshold"),
     stale_days: int = typer.Option(7, "--stale-days", "-s", help="Days before marking thread stale"),
+    token: Optional[str] = typer.Option(None, "--token", "-t", help="Master admin AUTH_TOKEN"),
 ):
     """🧹 Trigger memory consolidation and overdue task flagging."""
     mode_text = "[yellow](DRY RUN)[/]" if dry_run else "[green](LIVE)[/]"
@@ -459,13 +643,14 @@ def admin_consolidate(
     }
 
     try:
-        report = _post("/admin/consolidate", payload)
+        report = _post("/admin/consolidate", payload, headers=_headers(admin=True, admin_token=token))
         console.print("\n[compass.success]✅ Consolidation complete[/]")
         console.print(f"  • Overdue tasks flagged: [bold]{report.get('overdue_tasks_flagged', 0)}[/]")
         console.print(f"  • Duplicate pairs merged: [bold]{report.get('duplicate_chunks_merged', 0)}[/]")
         console.print(f"  • Stale conversations rolled up: [bold]{report.get('stale_conversations_rolled_up', 0)}[/]")
     except Exception as e:
-        console.print(f"[compass.error]❌ Remote consolidation request failed: {e}[/]")
+        console_err.print(f"[compass.error]❌ Remote consolidation request failed: {e}[/]")
+        raise typer.Exit(1)
 
 
 # ---------------------------------------------------------------------------
@@ -479,26 +664,20 @@ def agent(
     demo_reject: bool = typer.Option(False, "--demo-reject", help="Run in pre-loaded reject-path demo mode"),
     conversation_id: Optional[str] = typer.Option(None, "--conversation-id", "-c", help="Link run to an existing conversation"),
 ):
-    """🧠 Run the autonomous agent to plan, analyze, and act on your tasks.
-
-    The agent reasons step-by-step, calling tools autonomously to gather data
-    and propose solutions. State-mutating actions require your confirmation.
-
-    Examples:
-        compass agent "Plan my week considering all deadlines"
-        compass agent "Flag deadline conflicts and suggest resolutions"
-        compass agent "Write a retrospective for the Compass project"
-        compass agent --demo-reject "Reschedule conflicting tasks"
-    """
-    run_interactive_agent_session(
-        api_base=API_BASE,
-        auth_token=AUTH_TOKEN,
-        goal=goal,
-        max_steps=max_steps,
-        no_critic=no_critic,
-        demo_reject=demo_reject,
-        conversation_id=conversation_id,
-    )
+    """🧠 Run the autonomous agent to plan, analyze, and act on your tasks."""
+    try:
+        run_interactive_agent_session(
+            api_base=API_BASE,
+            goal=goal,
+            max_steps=max_steps,
+            no_critic=no_critic,
+            demo_reject=demo_reject,
+            conversation_id=conversation_id,
+            headers=_headers(),
+        )
+    except KeyboardInterrupt:
+        console_err.print("\n[dim]Cancelled.[/]")
+        raise typer.Exit(130)
 
 
 @app.command("agent-undo")
@@ -508,14 +687,7 @@ def agent_undo(
 ):
     """Revert an agent-executed mutation using the audit log."""
     try:
-        resp = httpx.post(
-            f"{API_BASE}/api/agent/undo",
-            json={"run_id": run_id, "audit_log_id": log_id},
-            headers={"Authorization": f"Bearer {AUTH_TOKEN}"},
-            timeout=30.0,
-        )
-        resp.raise_for_status()
-        data = resp.json()
+        data = _post("/api/agent/undo", {"run_id": run_id, "audit_log_id": log_id})
         if data.get("status") == "ok":
             console.print(f"[green]✅ {data.get('message')}[/]")
             if "reverted" in data:
@@ -523,30 +695,31 @@ def agent_undo(
         else:
             console.print(f"[yellow]⚠️ {data.get('message', 'Nothing to undo')}[/]")
     except Exception as e:
-        console.print(f"[compass.error]❌ Failed to undo: {e}[/]")
+        console_err.print(f"[compass.error]❌ Failed to undo: {e}[/]")
+        raise typer.Exit(1)
 
 
 @app.command("agent-activity")
 def agent_activity(limit: int = typer.Option(15, "--limit", "-n", help="Number of entries to show")):
     """📋 View recent agent mutations from the audit log with per-item IDs for undo."""
     try:
-        resp = httpx.get(f"{API_BASE}/api/agent/activity?limit={limit}", timeout=15.0)
-        resp.raise_for_status()
-        entries = resp.json().get("activity", [])
+        data = _get(f"/api/agent/activity?limit={limit}")
+        entries = data.get("activity", [])
         render_agent_activity_table(entries)
     except Exception as e:
-        console.print(f"[compass.error]❌ Failed to fetch activity: {e}[/]")
+        console_err.print(f"[compass.error]❌ Failed to fetch activity: {e}[/]")
+        raise typer.Exit(1)
 
 
 @app.command("agent-stats")
 def agent_stats():
     """⚖️ Surface real self-critique pass effectiveness metrics."""
     try:
-        resp = httpx.get(f"{API_BASE}/api/agent/critique-stats", timeout=15.0)
-        resp.raise_for_status()
-        render_agent_stats_view(resp.json())
+        data = _get("/api/agent/critique-stats")
+        render_agent_stats_view(data)
     except Exception as e:
-        console.print(f"[compass.error]❌ Failed to fetch critique stats: {e}[/]")
+        console_err.print(f"[compass.error]❌ Failed to fetch critique stats: {e}[/]")
+        raise typer.Exit(1)
 
 
 @app.command("agent-runs")
@@ -556,25 +729,25 @@ def agent_runs(
 ):
     """📜 List recent agent execution runs with statuses and step counts."""
     try:
-        url = f"{API_BASE}/api/agent/runs?limit={limit}"
+        path = f"/api/agent/runs?limit={limit}"
         if conversation_id:
-            url += f"&conversation_id={conversation_id}"
-        resp = httpx.get(url, timeout=15.0)
-        resp.raise_for_status()
-        render_agent_runs_table(resp.json().get("runs", []))
+            path += f"&conversation_id={conversation_id}"
+        data = _get(path)
+        render_agent_runs_table(data.get("runs", []))
     except Exception as e:
-        console.print(f"[compass.error]❌ Failed to fetch agent runs: {e}[/]")
+        console_err.print(f"[compass.error]❌ Failed to fetch agent runs: {e}[/]")
+        raise typer.Exit(1)
 
 
 @app.command("agent-briefing")
 def agent_briefing():
     """🌅 Inspect the latest autonomous overnight proactive briefing."""
     try:
-        resp = httpx.get(f"{API_BASE}/api/agent/proactive-briefing", timeout=15.0)
-        resp.raise_for_status()
-        render_briefing_panel(resp.json())
+        data = _get("/api/agent/proactive-briefing")
+        render_briefing_panel(data)
     except Exception as e:
-        console.print(f"[compass.error]❌ Failed to fetch proactive briefing: {e}[/]")
+        console_err.print(f"[compass.error]❌ Failed to fetch proactive briefing: {e}[/]")
+        raise typer.Exit(1)
 
 
 @app.command("triage")
@@ -583,22 +756,25 @@ def triage(
     hours: float = typer.Option(4.0, "--hours", "-h", help="Focused hours per day"),
     domain: Optional[str] = typer.Option(None, "--domain", help="Restrict to domain"),
 ):
-    run_feasibility_triage_session(
-        api_base=API_BASE,
-        headers=_headers(),
-        days=days,
-        hours=hours,
-        domain=domain,
-    )
+    """Run interactive Planner <-> Realist feasibility negotiation triage."""
+    try:
+        run_feasibility_triage_session(
+            api_base=API_BASE,
+            headers=_headers(),
+            days=days,
+            hours=hours,
+            domain=domain,
+        )
+    except KeyboardInterrupt:
+        console_err.print("\n[dim]Cancelled.[/]")
+        raise typer.Exit(130)
 
 
 @app.command("memory")
 def view_memory():
     """🧠 View personal profile facts and preferences remembered by Compass."""
     try:
-        resp = httpx.get(f"{API_BASE}/api/profile/facts", headers=_headers(), timeout=10.0)
-        resp.raise_for_status()
-        data = resp.json()
+        data = _get("/api/profile/facts")
         facts = data.get("facts", {})
         if not facts:
             console.print("[compass.dim]No personal profile facts stored yet. Tell Compass your name, goals, or preferences in chat.[/]")
@@ -617,16 +793,15 @@ def view_memory():
 
         console.print(table)
     except Exception as e:
-        console.print(f"[compass.error]❌ Failed to fetch memory facts: {e}[/]")
+        console_err.print(f"[compass.error]❌ Failed to fetch memory facts: {e}[/]")
+        raise typer.Exit(1)
 
 
 @app.command("parked")
 def view_parked():
     """📌 View ideas and tangents saved on the 'Park it' shelf."""
     try:
-        resp = httpx.get(f"{API_BASE}/api/parked", headers=_headers(), timeout=10.0)
-        resp.raise_for_status()
-        data = resp.json()
+        data = _get("/api/parked")
         parked = data.get("parked", [])
         if not parked:
             console.print("[compass.dim]Your 'Park it' shelf is currently empty.[/]")
@@ -648,7 +823,8 @@ def view_parked():
 
         console.print(table)
     except Exception as e:
-        console.print(f"[compass.error]❌ Failed to fetch parked thoughts: {e}[/]")
+        console_err.print(f"[compass.error]❌ Failed to fetch parked thoughts: {e}[/]")
+        raise typer.Exit(1)
 
 
 @app.command("recap")
@@ -659,11 +835,9 @@ def recap_conversation(
     cid = conversation_id
     if not cid:
         try:
-            resp_list = httpx.get(f"{API_BASE}/api/conversations?limit=1", headers=_headers(), timeout=10.0)
-            if resp_list.status_code == 200:
-                convs = resp_list.json().get("conversations", [])
-                if convs:
-                    cid = convs[0].get("id")
+            convs = _get("/api/conversations?limit=1").get("conversations", [])
+            if convs:
+                cid = convs[0].get("id")
         except Exception:
             pass
 
@@ -672,9 +846,7 @@ def recap_conversation(
         return
 
     try:
-        resp = httpx.post(f"{API_BASE}/api/chat/recap", json={"conversation_id": cid}, headers=_headers(), timeout=20.0)
-        resp.raise_for_status()
-        data = resp.json()
+        data = _post("/api/chat/recap", {"conversation_id": cid})
         recap_text = data.get("recap", "")
 
         console.print(Panel(
@@ -684,7 +856,8 @@ def recap_conversation(
             padding=(1, 2),
         ))
     except Exception as e:
-        console.print(f"[compass.error]❌ Failed to fetch conversation recap: {e}[/]")
+        console_err.print(f"[compass.error]❌ Failed to fetch conversation recap: {e}[/]")
+        raise typer.Exit(1)
 
 
 # ---------------------------------------------------------------------------
@@ -692,4 +865,3 @@ def recap_conversation(
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     app()
-

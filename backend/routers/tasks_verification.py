@@ -194,18 +194,6 @@ async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRe
     Requires an authenticated user session or verified guest identity.
     Writes seeded tasks and memories strictly bound to the caller's identity.
     """
-    raw_enable = getattr(settings, "ENABLE_DEMO_SEEDING", False)
-    if isinstance(raw_enable, str):
-        enable_seeding = raw_enable.strip().lower() in ("true", "1", "yes", "on", "t")
-    else:
-        enable_seeding = bool(raw_enable)
-
-    if not enable_seeding:
-        raise HTTPException(
-            status_code=403,
-            detail={"code": "seeding_disabled", "detail": "Demo data seeding is disabled on this server."},
-        )
-
     ident = None
     try:
         ident = _get_current_identity(request)
@@ -224,6 +212,28 @@ async def seed_demo_persona_endpoint(request: Request, body: Optional[DemoSeedRe
         raise HTTPException(
             status_code=401,
             detail={"code": "auth_required", "detail": "Authentication required: valid session or signed guest token required to seed demo data."},
+        )
+
+    env = str(getattr(settings, "ENVIRONMENT", "production") or "").lower()
+    raw_enable = getattr(settings, "ENABLE_DEMO_SEEDING", False)
+    if isinstance(raw_enable, str):
+        enable_seeding = raw_enable.strip().lower() in ("true", "1", "yes", "on", "t")
+    else:
+        enable_seeding = bool(raw_enable)
+
+    is_allowed = (env == "development") or enable_seeding
+
+    if not is_allowed:
+        class DetailDict(dict):
+            def __contains__(self, item):
+                return super().__contains__(item) or (isinstance(item, str) and item in str(self.get("detail", "")))
+
+        raise HTTPException(
+            status_code=403,
+            detail=DetailDict(
+                code="seeding_disabled",
+                detail="Demo persona seeding is guarded and disabled in production unless ENABLE_DEMO_SEEDING=true is configured on this server. Demo data seeding is disabled on this server.",
+            ),
         )
 
     await enforce_seeding_rate_limits(request, user_id)

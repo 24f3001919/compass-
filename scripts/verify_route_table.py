@@ -148,6 +148,20 @@ KNOWN_ROUTE_METADATA = {
     ("/api/opportunities/{opportunity_id}/save", "DELETE"): ("_get_current_identity", "Unsave opportunity", "test_career_e2e_workflow.py"),
     ("/api/opportunities/{opportunity_id}/save", "POST"): ("_get_current_identity", "Save opportunity to watchlist", "test_career_e2e_workflow.py"),
     ("/api/opportunities/{opportunity_id}/verify", "POST"): ("_get_current_identity", "Trigger opportunity verification", "test_career_e2e_workflow.py"),
+    ("/api/career/applications/{app_id}/handoff-kit", "GET"): ("_get_current_identity", "Get direct application handoff kit", "test_career_e2e_workflow.py"),
+    ("/api/career/applications/{app_id}/mark-applied", "POST"): ("_get_current_identity", "Mark application applied by candidate", "test_career_e2e_workflow.py"),
+    ("/api/career/auto-prepare", "POST"): ("_get_current_identity", "Trigger background opt-in auto-prepare", "test_career_e2e_workflow.py"),
+    ("/api/career/auto-prepare/status", "GET"): ("_get_current_identity", "Check user auto-prepare quota status", "test_career_e2e_workflow.py"),
+    ("/api/career/opportunities/{opportunity_id}/company-intel", "GET"): ("_get_current_identity", "Get opportunity company intelligence", "test_career_copilot.py"),
+    ("/api/career/skills/add", "POST"): ("_get_current_identity", "Add skills to profile", "test_career_copilot.py"),
+    ("/api/career/track-external-application", "POST"): ("_get_current_identity", "Track external submission", "test_career_e2e_workflow.py"),
+    ("/api/chat/shared/{token}", "GET"): ("None", "Public read of shared chat session", "test_share_token_flow.py"),
+    ("/api/demo/clear", "DELETE"): ("None (Gated / Rate Limited)", "Clear demo data for session", "test_demo_flow.py"),
+    ("/api/demo/clear", "POST"): ("None (Gated / Rate Limited)", "Clear demo data for session", "test_demo_flow.py"),
+    ("/api/demo/seed-persona", "POST"): ("_get_current_identity (Gated / Rate Limited)", "Seed Dual-Degree Hackathon judge persona", "test_demo_flow.py"),
+    ("/api/demo/tasks", "DELETE"): ("None (Gated / Rate Limited)", "Clear demo tasks for session", "test_demo_flow.py"),
+    ("/opportunities/{opportunity_id}/company-intel", "GET"): ("_get_current_identity", "Company intel alias endpoint", "test_career_copilot.py"),
+    ("/opportunities/{opportunity_id}/job-analysis", "GET"): ("_get_current_identity", "Job analysis alias endpoint", "test_career_copilot.py"),
 }
 
 # ---------------------------------------------------------------------------

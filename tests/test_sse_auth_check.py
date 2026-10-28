@@ -38,8 +38,8 @@ async def test_sse_flows(monkeypatch):
     monkeypatch.setattr("backend.services.chat_stream.openai.AsyncOpenAI", lambda **kwargs: mock_client)
 
     # In production or when ENVIRONMENT is unset, GUEST_SIGNING_SECRET is required
-    os.environ["GUEST_SIGNING_SECRET"] = "custom-secure-guest-signing-secret-32bytes!"
-    os.environ["ENVIRONMENT"] = "development"
+    monkeypatch.setenv("GUEST_SIGNING_SECRET", "custom-secure-guest-signing-secret-32bytes!")
+    monkeypatch.setenv("ENVIRONMENT", "development")
     get_settings.cache_clear()
 
     gid, token = generate_guest_token()
@@ -58,8 +58,7 @@ async def test_sse_flows(monkeypatch):
         assert "text/event-stream" in resp.headers.get("content-type", "")
 
     # Scenario 2: ENVIRONMENT unset + fresh signed guest
-    if "ENVIRONMENT" in os.environ:
-        del os.environ["ENVIRONMENT"]
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
     get_settings.cache_clear()
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.post(
@@ -106,4 +105,6 @@ async def test_sse_flows(monkeypatch):
         assert resp.status_code == 401
         assert "Authentication required" in resp.json().get("detail", "")
 
+    os.environ["ENVIRONMENT"] = "test"
+    get_settings.cache_clear()
     print("ALL 5 SSE & AUTH SCENARIOS VERIFIED SUCCESSFULLY!")

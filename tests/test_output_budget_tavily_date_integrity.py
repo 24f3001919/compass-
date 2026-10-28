@@ -261,6 +261,8 @@ async def test_demo_seed_covers_all_categories_dynamically():
     """33-34. Demo seed generates dynamic relative dates across all requested categories."""
     from backend.routers.tasks_verification import seed_demo_persona_endpoint
     from backend.dependencies import Identity
+    from backend.config import get_settings
+    settings = get_settings()
 
     mock_request = MagicMock()
     mock_identity = Identity(
@@ -303,6 +305,7 @@ async def test_demo_seed_covers_all_categories_dynamically():
 
     with patch("backend.routers.tasks_verification._get_current_identity", return_value=mock_identity), \
          patch("backend.routers.tasks_verification.get_pool", return_value=mock_pool), \
+         patch.object(settings, "ENABLE_DEMO_SEEDING", True), \
          patch("backend.memory.structured.create_task", side_effect=mock_create_task), \
          patch("backend.memory.structured.get_or_create_project", side_effect=mock_get_or_create_project), \
          patch("backend.memory.structured.update_task", new=AsyncMock()):

@@ -312,23 +312,49 @@ async def test_tenant_isolation_on_handoff_kit():
     from backend.memory.career import get_or_create_career_application
     from backend.routers.career import get_application_handoff_kit_endpoint
     from starlette.requests import Request
+    from backend.memory.db import get_pool
 
+    pool = await get_pool()
+    opp_id = 9999
     user_a = "user_tenant_alice"
     user_b = "user_tenant_bob"
-    opp_id = 9999
 
-    # Create application for Alice
-    app_a = await get_or_create_career_application(user_a, opp_id)
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO opportunities (
+                id, company_name, normalized_company, role_title,
+                opportunity_type, category, location, work_arrangement,
+                country, is_india_eligible, canonical_url, official_application_url,
+                current_status, description, created_at, updated_at
+            ) VALUES (
+                $1, 'Test Corp', 'test_corp', 'Software Engineer',
+                'full_time', 'software', 'Remote', 'remote',
+                'India', TRUE, 'https://testcorp.example/jobs/9999', 'https://testcorp.example/jobs/9999',
+                'OPEN_CONFIRMED', 'Testing handoff kit isolation', now(), now()
+            )
+            ON CONFLICT (id) DO NOTHING;
+            """,
+            opp_id,
+        )
 
-    # Bob attempts to access Alice's handoff kit
-    scope = {"type": "http", "method": "GET", "headers": [(b"host", b"localhost")]}
-    req_bob = Request(scope)
-    req_bob.state.identity = Identity(id=user_b, is_admin=False, is_guest=False, user_id=user_b)
+    try:
+        # Create application for Alice
+        app_a = await get_or_create_career_application(user_a, opp_id)
 
-    with pytest.raises(HTTPException) as exc_info:
-        await get_application_handoff_kit_endpoint(app_a.id, req_bob)
+        # Bob attempts to access Alice's handoff kit
+        scope = {"type": "http", "method": "GET", "headers": [(b"host", b"localhost")]}
+        req_bob = Request(scope)
+        req_bob.state.identity = Identity(id=user_b, is_admin=False, is_guest=False, user_id=user_b)
 
-    assert exc_info.value.status_code == 404, "Cross-tenant access must return 404 Not Found"
+        with pytest.raises(HTTPException) as exc_info:
+            await get_application_handoff_kit_endpoint(app_a.id, req_bob)
+
+        assert exc_info.value.status_code == 404, "Cross-tenant access must return 404 Not Found"
+    finally:
+        async with pool.acquire() as conn:
+            await conn.execute("DELETE FROM career_applications WHERE opportunity_id = $1", opp_id)
+            await conn.execute("DELETE FROM opportunities WHERE id = $1", opp_id)
 
 
 @pytest.mark.asyncio
@@ -338,17 +364,44 @@ async def test_mark_applied_endpoint_schedules_followup():
     from backend.memory.career import get_or_create_career_application
     from backend.routers.career import mark_application_applied_endpoint
     from starlette.requests import Request
+    from backend.memory.db import get_pool
 
+    pool = await get_pool()
     user_id = "user_submitter"
     opp_id = 8888
-    app = await get_or_create_career_application(user_id, opp_id)
 
-    scope = {"type": "http", "method": "POST", "headers": [(b"host", b"localhost")]}
-    req = Request(scope)
-    req.state.identity = Identity(id=user_id, is_admin=False, is_guest=False, user_id=user_id)
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO opportunities (
+                id, company_name, normalized_company, role_title,
+                opportunity_type, category, location, work_arrangement,
+                country, is_india_eligible, canonical_url, official_application_url,
+                current_status, description, created_at, updated_at
+            ) VALUES (
+                $1, 'Apply Corp', 'apply_corp', 'Backend Engineer',
+                'full_time', 'software', 'Remote', 'remote',
+                'India', TRUE, 'https://applycorp.example/jobs/8888', 'https://applycorp.example/jobs/8888',
+                'OPEN_CONFIRMED', 'Testing mark applied', now(), now()
+            )
+            ON CONFLICT (id) DO NOTHING;
+            """,
+            opp_id,
+        )
 
-    updated = await mark_application_applied_endpoint(app.id, req)
-    assert updated.status == CareerApplicationStatus.SUBMITTED.value or updated.status == CareerApplicationStatus.SUBMITTED
-    assert updated.submitted_at is not None
-    assert updated.target_deadline == date.today() + timedelta(days=14)
+    try:
+        career_app = await get_or_create_career_application(user_id, opp_id)
+
+        scope = {"type": "http", "method": "POST", "headers": [(b"host", b"localhost")]}
+        req = Request(scope)
+        req.state.identity = Identity(id=user_id, is_admin=False, is_guest=False, user_id=user_id)
+
+        updated = await mark_application_applied_endpoint(career_app.id, req)
+        assert updated.status == CareerApplicationStatus.SUBMITTED.value or updated.status == CareerApplicationStatus.SUBMITTED
+        assert updated.submitted_at is not None
+        assert updated.target_deadline == date.today() + timedelta(days=14)
+    finally:
+        async with pool.acquire() as conn:
+            await conn.execute("DELETE FROM career_applications WHERE opportunity_id = $1", opp_id)
+            await conn.execute("DELETE FROM opportunities WHERE id = $1", opp_id)
 

@@ -361,7 +361,7 @@ def normalize_jobspy_opportunity(row: Dict[str, Any]) -> Optional[Dict[str, Any]
     return {
         "company_name": company,
         "role_title": title,
-        "employer_type": emp_type,
+        "employer_type": emp_type or EmployerType.ENTERPRISE,
         "opportunity_type": "internship",
         "category": cat,
         "location": location,

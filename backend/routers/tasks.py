@@ -11,9 +11,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from backend.config import get_settings
 from backend.dependencies import (
+    Identity,
     _get_current_identity,
     _get_or_create_user_id,
     rate_limit,
+    require_identity,
     verify_token,
 )
 from backend.memory import structured
@@ -56,7 +58,7 @@ router.include_router(tasks_verification_router)
 @router.get("/projects", response_model=ProjectsResponse)
 async def get_projects(
     domain: Optional[str] = Query(None, description="Filter by domain"),
-    _token: str = Depends(verify_token),
+    _ident: Identity = Depends(require_identity),
 ):
     """List all tracked projects from database."""
     try:
@@ -94,7 +96,7 @@ async def get_tasks(
     project: Optional[str] = Query(None, description="Filter by project name"),
     status: Optional[str] = Query(None),
     due_before: Optional[str] = Query(None, description="ISO date YYYY-MM-DD"),
-    _token: str = Depends(verify_token),
+    _ident: Identity = Depends(require_identity),
 ):
     """Query tasks with optional filters from database with strict per-account isolation."""
     ident = _get_current_identity(request)
@@ -155,7 +157,7 @@ async def get_tasks(
 async def get_dashboard(
     request: Request,
     ref_date: Optional[date] = Query(None, description="Optional reference date for deterministic classification"),
-    _token: str = Depends(verify_token),
+    _ident: Identity = Depends(require_identity),
 ):
     """Aggregate live counts via SQL with strict per-account isolation."""
     ident = _get_current_identity(request)
@@ -238,7 +240,7 @@ async def get_timeline(
     domain: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    _token: str = Depends(verify_token),
+    _ident: Identity = Depends(require_identity),
 ):
     """Fetch ordered rows across tasks (created_at) and memory_chunks (created_at) filtered by domain with per-account isolation."""
     ident = _get_current_identity(request)
@@ -305,7 +307,9 @@ async def get_frontend_tasks(
     """Public frontend endpoint matching frontend/src/api/client.js format with per-account isolation."""
     try:
         ident = _get_current_identity(request)
-        user_id = ident.id if ident else _get_or_create_user_id(request)
+        if not ident:
+            return []
+        user_id = ident.id
         pool = await get_pool()
         async with pool.acquire() as conn:
             raw_tasks = await structured.list_tasks(conn, domain=domain, user_id=user_id)
@@ -319,6 +323,8 @@ async def get_frontend_tasks(
                 proj_name = t.get("project", {}).get("name", "General") if t.get("project") else "General"
                 result.append(build_frontend_task(t, proj_name=proj_name))
             return result
+    except HTTPException:
+        raise
     except Exception as e:
         logger.warning(f"Error fetching frontend tasks from DB: {e}")
         return []

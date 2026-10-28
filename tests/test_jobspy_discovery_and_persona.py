@@ -138,7 +138,7 @@ def test_jobspy_normalization_internship_filtering():
     assert "stripe.com/jobs/12345" in norm_intern["canonical_url"]
     assert norm_intern["source_name"] == "JobSpy (Indeed)"
     assert norm_intern["source_type"] == "jobspy_indeed"
-    assert norm_intern["source_authority"] == "tier_1"
+    assert norm_intern["source_authority"] == "tier_2"
 
     # 2. Senior / non-internship role -> filtered out
     row_senior = {

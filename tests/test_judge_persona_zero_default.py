@@ -214,12 +214,14 @@ async def test_judge_persona_idempotent_reseed_and_date_shift():
 
     clock = [1000.0]
     with patch("backend.routers.tasks_verification.settings") as mock_settings, \
+         patch("backend.config.get_settings", return_value=mock_settings), \
          patch("backend.routers.tasks_verification._get_current_identity", return_value=mock_ident), \
          patch("backend.routers.tasks_verification.get_pool", AsyncMock(return_value=mock_pool)), \
          patch("backend.routers.tasks_verification.structured.get_or_create_project", AsyncMock(return_value={"id": 10})), \
          patch("backend.routers.tasks_verification.structured.create_task", side_effect=mock_create), \
          patch("backend.routers.tasks_verification.structured.update_task", side_effect=mock_update), \
          patch("backend.services.embeddings.get_embedding", AsyncMock(return_value=[0.05] * 768)), \
+         patch("backend.services.rate_limiter.get_pool", AsyncMock(return_value=None)), \
          patch("backend.services.rate_limiter.time.monotonic", side_effect=lambda: clock[0]):
 
         mock_settings.ENVIRONMENT = "development"
@@ -381,12 +383,14 @@ async def test_reseed_preserves_user_completed_status():
 
     clock = [1000.0]
     with patch("backend.routers.tasks_verification.settings") as mock_settings, \
+         patch("backend.config.get_settings", return_value=mock_settings), \
          patch("backend.routers.tasks_verification._get_current_identity", return_value=mock_ident), \
          patch("backend.routers.tasks_verification.get_pool", AsyncMock(return_value=mock_pool)), \
          patch("backend.routers.tasks_verification.structured.get_or_create_project", AsyncMock(return_value={"id": 10})), \
          patch("backend.routers.tasks_verification.structured.create_task", side_effect=mock_create), \
          patch("backend.routers.tasks_verification.structured.update_task", side_effect=mock_update), \
          patch("backend.services.embeddings.get_embedding", AsyncMock(return_value=[0.05] * 768)), \
+         patch("backend.services.rate_limiter.get_pool", AsyncMock(return_value=None)), \
          patch("backend.services.rate_limiter.time.monotonic", side_effect=lambda: clock[0]):
 
         mock_settings.ENVIRONMENT = "development"

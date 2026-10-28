@@ -341,7 +341,7 @@ async def run_radar_sync(source_filter: Optional[str] = None, dry_run: bool = Fa
                                     official_application_url=j_opp["official_application_url"],
                                     current_status=j_opp["current_status"],
                                     opportunity_type=j_opp["opportunity_type"],
-                                    employer_type=j_opp.get("employer_type", EmployerType.ENTERPRISE),
+                                    employer_type=j_opp.get("employer_type") or EmployerType.ENTERPRISE,
                                     category=j_opp["category"],
                                     location=j_opp.get("location"),
                                     work_arrangement=j_opp.get("work_arrangement", "unknown"),

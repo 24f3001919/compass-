@@ -70,6 +70,7 @@ compass_theme = Theme({
 })
 
 console = Console(theme=compass_theme, legacy_windows=False)
+console_err = Console(theme=compass_theme, legacy_windows=False, stderr=True)
 
 
 def format_domain_text(domain: str) -> Text:
@@ -88,12 +89,12 @@ def render_tasks_table(task_list: List[Dict[str, Any]]) -> None:
         show_lines=True,
     )
     table.add_column("#", style="dim", width=4, justify="right")
-    table.add_column("Domain", width=12)
-    table.add_column("Title", min_width=25)
-    table.add_column("Status", width=12, justify="center")
-    table.add_column("Priority", width=10, justify="center")
-    table.add_column("Due", width=12, justify="center")
-    table.add_column("Project", width=15)
+    table.add_column("Domain", width=10)
+    table.add_column("Title", min_width=15, ratio=1)
+    table.add_column("Status", width=10, justify="center")
+    table.add_column("Priority", width=8, justify="center")
+    table.add_column("Due", width=10, justify="center")
+    table.add_column("Project", width=10)
 
     if not task_list:
         console.print(table)
@@ -108,7 +109,8 @@ def render_tasks_table(task_list: List[Dict[str, Any]]) -> None:
         status_icon = STATUS_EMOJI.get(status_str, "")
         priority_str = task.get("priority", "medium")
         priority_style = PRIORITY_STYLE.get(priority_str, "white")
-        project_name = task["project"]["name"] if task.get("project") else "—"
+        proj_val = task.get("project")
+        project_name = proj_val.get("name", "—") if isinstance(proj_val, dict) else (str(proj_val) if proj_val else "—")
         due_str = task.get("due_date") or "—"
 
         table.add_row(

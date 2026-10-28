@@ -34,12 +34,17 @@ test_db_url = os.environ.get("TEST_DATABASE_URL", "").strip()
 if test_db_url:
     os.environ["DATABASE_URL"] = test_db_url
 os.environ["ENVIRONMENT"] = "test"
+os.environ["AUTH_TOKEN"] = "compass-test-auth-token"
+os.environ.setdefault("OPENAI_API_KEY", "mock-openai-key")
+os.environ.setdefault("NEBIUS_API_KEY", "mock-nebius-key")
+os.environ.setdefault("TAVILY_API_KEY", "mock-tavily-key")
 
 from backend.main import app
 from backend.config import get_settings, PROTECTED_DB_HOSTS
 
 settings = get_settings()
 settings.ENVIRONMENT = "test"
+settings.AUTH_TOKEN = "compass-test-auth-token"
 if test_db_url:
     settings.DATABASE_URL = test_db_url
 
@@ -47,6 +52,7 @@ if test_db_url:
 def validate_test_db_guard(
     test_url: str,
     prod_url: str,
+    prod_marker: str = None,
 ) -> None:
     """Validate positive separation between test and production databases.
     Aborts via pytest.exit if test_url is missing, invalid, identical to prod_url,
@@ -65,6 +71,12 @@ def validate_test_db_guard(
     if not test_hostname:
         pytest.exit(
             "ABORTED: TEST_DATABASE_URL lacks a valid hostname. Refusing to run tests.",
+            returncode=1,
+        )
+
+    if prod_marker and prod_marker.lower() in test_hostname:
+        pytest.exit(
+            f"ABORTED: TEST_DATABASE_URL contains production marker '{prod_marker}'. Refusing to run tests.",
             returncode=1,
         )
 
@@ -126,6 +138,16 @@ async def test_db_lifecycle():
     except Exception:
         pass
     try:
+        from backend.services.rate_limiter import _MEM_BUCKETS
+        _MEM_BUCKETS.clear()
+    except Exception:
+        pass
+    try:
+        os.environ["ENVIRONMENT"] = "test"
+        settings.ENVIRONMENT = "test"
+    except Exception:
+        pass
+    try:
         from backend.memory import db
         if db._pool is not None:
             async with db._pool.acquire(timeout=5.0) as conn:
@@ -133,6 +155,7 @@ async def test_db_lifecycle():
                     DELETE FROM user_profile_facts WHERE user_id LIKE 'alice_%' OR user_id LIKE 'bob_%' OR user_id LIKE 'carol_%' OR user_id LIKE 'david_%' OR user_id LIKE 'test_%' OR user_id LIKE '%@example.com';
                     DELETE FROM parked_thoughts WHERE user_id LIKE 'alice_%' OR user_id LIKE 'bob_%' OR user_id LIKE 'carol_%' OR user_id LIKE 'david_%' OR user_id LIKE 'test_%' OR user_id LIKE '%@example.com';
                     DELETE FROM rate_limit_buckets;
+                    DELETE FROM guest_mint_log;
                     DELETE FROM agent_runs WHERE id LIKE 'test_%' OR id LIKE 'run_%';
                     DELETE FROM pending_actions WHERE run_id LIKE 'test_%' OR run_id LIKE 'run_%';
                 """)
