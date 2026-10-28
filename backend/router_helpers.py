@@ -215,13 +215,21 @@ def is_chat_delete_intent(message: str) -> Tuple[bool, bool, str]:
     if any(phrase == msg or msg.startswith(phrase) for phrase in clear_all_phrases):
         return True, True, ""
 
-    # 2. Delete / remove specific task query
-    m = re.match(r"^(?:delete|remove|drop)\s+(?:the\s+)?(?:task\s+)?['\"]?(.+?)['\"]?(?:\s+task)?$", msg)
-    if m:
-        target = m.group(1).strip()
-        # Avoid treating confirmation phrases as delete targets
-        if target not in ("first one", "the first one", "it", "this"):
-            return True, False, target
+    # 2. Delete / remove specific task query (deterministic parsing without regex backtracking)
+    for prefix in ("delete", "remove", "drop"):
+        if msg == prefix:
+            continue
+        if msg.startswith(prefix + " "):
+            remainder = msg[len(prefix):].strip()
+            if remainder.startswith("the "):
+                remainder = remainder[4:].strip()
+            if remainder.startswith("task "):
+                remainder = remainder[5:].strip()
+            if remainder.endswith(" task"):
+                remainder = remainder[:-5].strip()
+            target = remainder.strip("'\"").strip()
+            if target and target not in ("first one", "the first one", "it", "this"):
+                return True, False, target
 
     return False, False, ""
 

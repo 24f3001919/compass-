@@ -8,8 +8,11 @@ so all connections in the pool can read/write VECTOR columns.
 from __future__ import annotations
 
 import time
+import logging
 import asyncpg
 from pgvector.asyncpg import register_vector
+
+logger = logging.getLogger("compass.db")
 
 
 _pool: asyncpg.Pool | None = None
@@ -44,13 +47,13 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
         CREATE INDEX IF NOT EXISTS idx_agent_runs_created_at      ON agent_runs(created_at);
         CREATE INDEX IF NOT EXISTS idx_agent_runs_conversation_id ON agent_runs(conversation_id);
 
-        ALTER TABLE conversations ADD COLUMN IF NOT EXISTS title TEXT;
-        ALTER TABLE conversations ADD COLUMN IF NOT EXISTS user_id TEXT;
-        ALTER TABLE conversations ADD COLUMN IF NOT EXISTS guest_id TEXT;
-        ALTER TABLE conversations ADD COLUMN IF NOT EXISTS imported_from_id UUID;
-        ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE;
-        ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE;
-        ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_shared BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE conversations ADD COLUMN IF NOT EXISTS title TEXT,
+            ADD COLUMN IF NOT EXISTS user_id TEXT,
+            ADD COLUMN IF NOT EXISTS guest_id TEXT,
+            ADD COLUMN IF NOT EXISTS imported_from_id UUID,
+            ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS is_shared BOOLEAN NOT NULL DEFAULT FALSE;
         CREATE INDEX IF NOT EXISTS idx_conversations_last_active ON conversations(last_active_at DESC);
         CREATE INDEX IF NOT EXISTS idx_conversations_guest_id ON conversations(guest_id);
         CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id);
@@ -70,9 +73,9 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
         );
         ALTER TABLE guest_migration_log ALTER COLUMN guest_conversation_id DROP NOT NULL;
         ALTER TABLE guest_migration_log ALTER COLUMN user_conversation_id DROP NOT NULL;
-        ALTER TABLE guest_migration_log ADD COLUMN IF NOT EXISTS entity_type TEXT NOT NULL DEFAULT 'conversation';
-        ALTER TABLE guest_migration_log ADD COLUMN IF NOT EXISTS entity_key TEXT;
-        ALTER TABLE guest_migration_log ADD COLUMN IF NOT EXISTS detail JSONB DEFAULT '{}'::jsonb;
+        ALTER TABLE guest_migration_log ADD COLUMN IF NOT EXISTS entity_type TEXT NOT NULL DEFAULT 'conversation',
+            ADD COLUMN IF NOT EXISTS entity_key TEXT,
+            ADD COLUMN IF NOT EXISTS detail JSONB DEFAULT '{}'::jsonb;
         CREATE INDEX IF NOT EXISTS idx_guest_mig_guest ON guest_migration_log(guest_id);
         CREATE INDEX IF NOT EXISTS idx_guest_mig_user ON guest_migration_log(user_id);
         CREATE INDEX IF NOT EXISTS idx_guest_mig_entity ON guest_migration_log(guest_id, user_id, entity_type);
@@ -122,39 +125,28 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
         ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_domain_check;
         ALTER TABLE projects DROP CONSTRAINT IF EXISTS projects_domain_check;
         ALTER TABLE memory_chunks DROP CONSTRAINT IF EXISTS memory_chunks_domain_check;
-        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS user_id VARCHAR(255) DEFAULT 'default_user';
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS user_id VARCHAR(255) DEFAULT 'default_user',
+            ADD COLUMN IF NOT EXISTS duration_minutes INTEGER DEFAULT 60,
+            ADD COLUMN IF NOT EXISTS scheduled_start TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS scheduled_end TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS is_fixed BOOLEAN NOT NULL DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS recurrence_rule TEXT,
+            ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ DEFAULT NULL;
         CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id);
-        ALTER TABLE memory_chunks ADD COLUMN IF NOT EXISTS user_id VARCHAR(255) DEFAULT 'default_user';
-        CREATE INDEX IF NOT EXISTS idx_memory_chunks_user_id ON memory_chunks(user_id);
-        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS duration_minutes INTEGER DEFAULT 60;
-        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS scheduled_start TIMESTAMPTZ;
-        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS scheduled_end TIMESTAMPTZ;
-        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_fixed BOOLEAN NOT NULL DEFAULT FALSE;
-        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurrence_rule TEXT;
         CREATE INDEX IF NOT EXISTS idx_tasks_scheduled_start ON tasks(scheduled_start);
-
-        -- Soft Delete Support on Tasks
-        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ DEFAULT NULL;
         CREATE INDEX IF NOT EXISTS idx_tasks_deleted_at ON tasks(deleted_at);
 
-        -- Chat Pending Actions Store
+        ALTER TABLE memory_chunks ADD COLUMN IF NOT EXISTS user_id VARCHAR(255) DEFAULT 'default_user';
+        CREATE INDEX IF NOT EXISTS idx_memory_chunks_user_id ON memory_chunks(user_id);
+
         CREATE TABLE IF NOT EXISTS chat_pending_actions (
-            id                  SERIAL        PRIMARY KEY,
-            action              TEXT          NOT NULL,
-            task_ids            INTEGER[]     NOT NULL DEFAULT '{}'::integer[],
-            task_titles         JSONB         NOT NULL DEFAULT '[]'::jsonb,
-            count               INTEGER       NOT NULL DEFAULT 1,
-            owner_identity      TEXT          NOT NULL,
-            conversation_id     TEXT          NOT NULL,
-            status              TEXT          NOT NULL DEFAULT 'pending',
-            created_at          TIMESTAMPTZ   NOT NULL DEFAULT now(),
-            expires_at          TIMESTAMPTZ   NOT NULL,
-            executed_at         TIMESTAMPTZ
+            id SERIAL PRIMARY KEY, action TEXT NOT NULL, task_ids INTEGER[] NOT NULL DEFAULT '{}'::integer[],
+            task_titles JSONB NOT NULL DEFAULT '[]'::jsonb, count INTEGER NOT NULL DEFAULT 1,
+            owner_identity TEXT NOT NULL, conversation_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(), expires_at TIMESTAMPTZ NOT NULL, executed_at TIMESTAMPTZ
         );
         CREATE INDEX IF NOT EXISTS idx_chat_pending_owner_conv ON chat_pending_actions(owner_identity, conversation_id, status);
         CREATE INDEX IF NOT EXISTS idx_chat_pending_expires ON chat_pending_actions(expires_at);
-
-        -- Verifiable flag on messages
         ALTER TABLE messages ADD COLUMN IF NOT EXISTS verifiable BOOLEAN DEFAULT FALSE;
 
             CREATE TABLE IF NOT EXISTS sessions (
@@ -354,13 +346,13 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
         CREATE INDEX IF NOT EXISTS idx_opportunities_india ON opportunities(is_india_eligible);
         CREATE INDEX IF NOT EXISTS idx_opportunities_dates ON opportunities(confirmed_close_date, confirmed_open_date);
 
-        ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS employer_type TEXT NOT NULL DEFAULT 'enterprise';
-        ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS verification_evidence TEXT;
-        ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS employer_identity_verified BOOLEAN NOT NULL DEFAULT FALSE;
-        ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS official_source_confirmed BOOLEAN NOT NULL DEFAULT FALSE;
-        ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS application_url_checked BOOLEAN NOT NULL DEFAULT FALSE;
-        ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS posted_at TIMESTAMPTZ;
-        ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS posted_at_precision TEXT NOT NULL DEFAULT 'unknown';
+        ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS employer_type TEXT NOT NULL DEFAULT 'enterprise',
+            ADD COLUMN IF NOT EXISTS verification_evidence TEXT,
+            ADD COLUMN IF NOT EXISTS employer_identity_verified BOOLEAN NOT NULL DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS official_source_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS application_url_checked BOOLEAN NOT NULL DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS posted_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS posted_at_precision TEXT NOT NULL DEFAULT 'unknown';
         CREATE INDEX IF NOT EXISTS idx_opportunities_employer_type ON opportunities(employer_type);
 
         CREATE TABLE IF NOT EXISTS opportunity_sources (
@@ -394,11 +386,10 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
             unknown_requirements         TEXT[]        DEFAULT ARRAY[]::TEXT[],
             last_updated_at              TIMESTAMPTZ   NOT NULL DEFAULT now()
         );
-        CREATE INDEX IF NOT EXISTS idx_opp_req_opp_id ON opportunity_requirements(opportunity_id);
-        ALTER TABLE opportunity_requirements ADD COLUMN IF NOT EXISTS preferred_skills TEXT[] DEFAULT ARRAY[]::TEXT[];
-        ALTER TABLE opportunity_requirements ADD COLUMN IF NOT EXISTS gpa_scale NUMERIC(4, 2) DEFAULT 10.0;
-        ALTER TABLE opportunity_requirements ADD COLUMN IF NOT EXISTS no_active_backlogs BOOLEAN DEFAULT FALSE;
-        ALTER TABLE opportunity_requirements ADD COLUMN IF NOT EXISTS has_conflicting_requirements BOOLEAN DEFAULT FALSE;
+        ALTER TABLE opportunity_requirements ADD COLUMN IF NOT EXISTS preferred_skills TEXT[] DEFAULT ARRAY[]::TEXT[],
+            ADD COLUMN IF NOT EXISTS gpa_scale NUMERIC(4, 2) DEFAULT 10.0,
+            ADD COLUMN IF NOT EXISTS no_active_backlogs BOOLEAN DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS has_conflicting_requirements BOOLEAN DEFAULT FALSE;
 
         CREATE TABLE IF NOT EXISTS opportunity_cycles (
             id                  SERIAL        PRIMARY KEY,
@@ -561,34 +552,11 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
         CREATE INDEX IF NOT EXISTS idx_app_events_app ON application_events(application_id);
 
         CREATE TABLE IF NOT EXISTS original_resume_documents (
-            id                  TEXT          PRIMARY KEY,
-            user_id             TEXT          NOT NULL,
-            filename            TEXT          NOT NULL,
-            file_type           TEXT          NOT NULL,
-            raw_text            TEXT          NOT NULL,
-            metadata            JSONB         NOT NULL DEFAULT '{}'::jsonb,
-            uploaded_at         TIMESTAMPTZ   NOT NULL DEFAULT now()
+            id TEXT PRIMARY KEY, user_id TEXT NOT NULL, filename TEXT NOT NULL,
+            file_type TEXT NOT NULL, raw_text TEXT NOT NULL, metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+            uploaded_at TIMESTAMPTZ NOT NULL DEFAULT now()
         );
         CREATE INDEX IF NOT EXISTS idx_orig_resumes_user ON original_resume_documents(user_id);
-
-        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ DEFAULT NULL;
-        CREATE INDEX IF NOT EXISTS idx_tasks_deleted_at ON tasks(deleted_at);
-
-        CREATE TABLE IF NOT EXISTS chat_pending_actions (
-            id                  SERIAL        PRIMARY KEY,
-            action              TEXT          NOT NULL,
-            task_ids            INTEGER[]     NOT NULL DEFAULT '{}'::integer[],
-            task_titles         JSONB         NOT NULL DEFAULT '[]'::jsonb,
-            count               INTEGER       NOT NULL DEFAULT 1,
-            owner_identity      TEXT          NOT NULL,
-            conversation_id     TEXT          NOT NULL,
-            status              TEXT          NOT NULL DEFAULT 'pending',
-            created_at          TIMESTAMPTZ   NOT NULL DEFAULT now(),
-            expires_at          TIMESTAMPTZ   NOT NULL,
-            executed_at         TIMESTAMPTZ
-        );
-        CREATE INDEX IF NOT EXISTS idx_chat_pending_owner_conv ON chat_pending_actions(owner_identity, conversation_id, status);
-        CREATE INDEX IF NOT EXISTS idx_chat_pending_expires ON chat_pending_actions(expires_at);
         """)
     _tables_ensured = True
 
@@ -639,10 +607,7 @@ async def init_pool(dsn: str | None = None) -> asyncpg.Pool:
             last_err = e
             if attempt < max_retries:
                 backoff = attempt * 1.5
-                import logging
-                logging.getLogger("compass.db").warning(
-                    f"⚠️ Neon pool init attempt {attempt}/{max_retries} failed ({e}); retrying in {backoff}s..."
-                )
+                logger.warning(f"⚠️ Neon pool init attempt {attempt}/{max_retries} failed ({e}); retrying in {backoff}s...")
                 await asyncio.sleep(backoff)
             else:
                 raise last_err
@@ -654,8 +619,7 @@ async def init_pool(dsn: str | None = None) -> asyncpg.Pool:
         try:
             await asyncio.wait_for(_ensure_tables(pool), timeout=15.0)
         except Exception as e:
-            import logging
-            logging.getLogger("compass.db").error(f"Could not auto-create database tables: {e}")
+            logger.error(f"Could not auto-create database tables: {e}")
             raise
 
         # Verify critical tables exist; never silently degrade
@@ -665,18 +629,13 @@ async def init_pool(dsn: str | None = None) -> asyncpg.Pool:
                     "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('user_profile_facts', 'parked_thoughts', 'oauth_consumed_states', 'original_resume_documents')"
                 )
                 found = {r["table_name"] for r in existing_tables}
-                import logging
-                db_logger = logging.getLogger("compass.db")
                 for req_table in ("user_profile_facts", "parked_thoughts", "oauth_consumed_states", "original_resume_documents"):
                     if req_table not in found:
-                        db_logger.error(f"ERROR: Required database table '{req_table}' is missing! Feature will degrade.")
+                        logger.error(f"ERROR: Required database table '{req_table}' is missing! Feature will degrade.")
         except Exception as e:
-            import logging
-            logging.getLogger("compass.db").warning(f"Could not verify table existence at startup: {e}")
+            logger.warning(f"Could not verify table existence at startup: {e}")
         _tables_ensured = True
-
     return pool
-
 
 
 async def get_pool() -> asyncpg.Pool:
