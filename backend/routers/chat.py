@@ -241,6 +241,7 @@ async def get_messages(
                     content=r["content"],
                     skill_called=r.get("skill_called"),
                     evidence=r.get("evidence"),
+                    verifiable=r.get("verifiable"),
                     created_at=r["created_at"].isoformat() if hasattr(r["created_at"], "isoformat") else str(r["created_at"]),
                 )
                 for r in rows
@@ -501,6 +502,8 @@ async def public_chat(req: PublicChatRequest, request: Request, _rl: None = Depe
         message=result.get("message", result.get("response", "")),
         conversation_id=result.get("conversation_id"),
         skill_used=result.get("skill_used", "chat"),
+        data=result.get("data"),
+        verifiable=result.get("verifiable", False),
     )
 
 

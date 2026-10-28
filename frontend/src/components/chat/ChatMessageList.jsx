@@ -324,6 +324,90 @@ export default function ChatMessageList({
                           </button>
                         </div>
                       )}
+                      {(msg.data?.pending_action || msg.pending_action) && (
+                        <div
+                          className="chat-pending-action-card"
+                          role="region"
+                          aria-label="Pending action confirmation"
+                          style={{
+                            marginTop: '10px',
+                            padding: '10px 14px',
+                            background: 'rgba(230, 81, 0, 0.08)',
+                            border: '1px solid rgba(230, 81, 0, 0.35)',
+                            borderRadius: '6px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '8px',
+                          }}
+                        >
+                          <div style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-primary)' }}>
+                            Confirm destructive action:
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <button
+                              type="button"
+                              id="btn-pending-confirm"
+                              className="btn-primary"
+                              style={{
+                                padding: '4px 14px',
+                                minHeight: '30px',
+                                fontSize: '12px',
+                                background: '#d32f2f',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontWeight: '600',
+                              }}
+                              onClick={() => onSendMessage && onSendMessage("Confirm")}
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              type="button"
+                              id="btn-pending-cancel"
+                              className="btn-secondary"
+                              style={{
+                                padding: '4px 14px',
+                                minHeight: '30px',
+                                fontSize: '12px',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                              }}
+                              onClick={() => onSendMessage && onSendMessage("Cancel")}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {(msg.data?.can_undo || msg.can_undo) && (
+                        <div style={{ marginTop: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <button
+                            type="button"
+                            id="btn-chat-undo"
+                            title="Restore soft-deleted tasks within 10 minutes"
+                            onClick={() => onSendMessage && onSendMessage("Undo")}
+                            className="btn-secondary"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '5px',
+                              padding: '3px 10px',
+                              minHeight: '26px',
+                              fontSize: '11px',
+                              borderRadius: '4px',
+                              color: 'var(--text-secondary)',
+                              cursor: 'pointer',
+                              background: 'var(--bg-card-soft, rgba(255,255,255,0.03))',
+                              border: '1px solid var(--border)',
+                            }}
+                          >
+                            <span>↩️</span>
+                            <span>Undo (10 min)</span>
+                          </button>
+                        </div>
+                      )}
                       {isMessageEligibleForVerification(msg) && (
                         <div style={{ marginTop: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
                           <button

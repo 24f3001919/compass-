@@ -52,7 +52,11 @@ def prioritize_tasks(tasks: List[Dict[str, Any]], target_date: Optional[date] = 
     return sorted(tasks, key=score_task)
 
 
-def build_daily_roadmap(tasks: List[Dict[str, Any]], target_date: Optional[date] = None) -> str:
+def build_daily_roadmap(
+    tasks: List[Dict[str, Any]],
+    target_date: Optional[date] = None,
+    tone: Optional[str] = None,
+) -> str:
     """Synthesize an actionable, structured step-by-step daily roadmap from task records."""
     today = target_date or date.today()
     prioritized = prioritize_tasks(tasks, today)
@@ -78,6 +82,14 @@ def build_daily_roadmap(tasks: List[Dict[str, Any]], target_date: Optional[date]
             or (isinstance(t["due_date"], str) and t["due_date"][:10] == today.isoformat())
         )
     )
+
+    clean_tone = (tone or "").strip().lower()
+    if clean_tone == "brief":
+        first = top_tasks[0]
+        due_lbl = f" (Due: {first.get('due_date')})" if first.get("due_date") else ""
+        return (
+            f"You have **{total_count}** active task(s). Start with: **{first['title']}**{due_lbl}."
+        )
 
     lines = []
     lines.append("### Your plan for today")
@@ -150,8 +162,18 @@ def build_daily_roadmap(tasks: List[Dict[str, Any]], target_date: Optional[date]
     # Before you finish
     lines.append("### Before you finish")
     lines.append("- [ ] Review completed tasks and update statuses")
-    lines.append(f"- [ ] Check remaining {max(0, total_count - len(top_tasks))} task(s) in Timeline")
+    rem_count = max(0, total_count - len(top_tasks))
+    if rem_count > 0:
+        lines.append(f"- [ ] Check remaining {rem_count} task(s) in Timeline")
     lines.append("")
+
+    # Exploratory addition: in-depth context and strategic trade-offs
+    if clean_tone == "exploratory":
+        lines.append("### Context & Deep Dive")
+        lines.append("- **Strategic Alignment**: Focusing on core milestones unlocks prerequisite work across your active projects.")
+        lines.append("- **Energy & Pacing**: Tackle cognitively intensive tasks during your peak focus window, leaving routine admin for buffer periods.")
+        lines.append("- **Schedule Adaptability**: If unexpected blockers arise, shift the secondary focus block rather than delaying the lead deliverable.")
+        lines.append("")
 
     # Next action
     lines.append("### Next action")
@@ -497,25 +519,39 @@ async def handle_query_tasks(args: Dict[str, Any], pool: Any) -> Dict[str, Any]:
         )
     )
 
+    tone = (args.get("tone") or "").strip().lower()
+
     if is_roadmap:
-        summary = build_daily_roadmap(prioritized, target_date=date.today())
+        summary = build_daily_roadmap(prioritized, target_date=date.today(), tone=tone)
     else:
         top_tasks = prioritized[:6]
-        task_lines = []
-        for t in top_tasks:
-            due_str = str(t.get("due_date")) if t.get("due_date") else "No due date"
-            dom = t.get("domain", "general").title()
-            prio = t.get("priority", "medium").title()
-            stat = t.get("status", "open")
-            task_lines.append(f"- **{t['title']}** (`{dom}` · {stat} · Due: {due_str} · Priority: {prio})")
+        if tone == "brief" and top_tasks:
+            due_str = str(top_tasks[0].get("due_date")) if top_tasks[0].get("due_date") else "No due date"
+            base_summary = f"Found **{count}** task(s){d_str}{s_str}. Immediate lead item: **{top_tasks[0]['title']}** (Due: {due_str})."
+        else:
+            task_lines = []
+            for t in top_tasks:
+                due_str = str(t.get("due_date")) if t.get("due_date") else "No due date"
+                dom = t.get("domain", "general").title()
+                prio = t.get("priority", "medium").title()
+                stat = t.get("status", "open")
+                task_lines.append(f"- **{t['title']}** (`{dom}` · {stat} · Due: {due_str} · Priority: {prio})")
 
-        more_notice = (
-            f"\n\n*Showing top {len(top_tasks)} prioritized items out of {count} total matching task(s). "
-            f"You can view the full list in the Timeline view.*"
-            if count > len(top_tasks)
-            else ""
-        )
-        base_summary = f"Found **{count}** task(s){d_str}{s_str}:\n\n" + "\n".join(task_lines) + more_notice
+            more_notice = (
+                f"\n\n*Showing top {len(top_tasks)} prioritized items out of {count} total matching task(s). "
+                f"You can view the full list in the Timeline view.*"
+                if count > len(top_tasks)
+                else ""
+            )
+            base_summary = f"Found **{count}** task(s){d_str}{s_str}:\n\n" + "\n".join(task_lines) + more_notice
+
+            if tone == "exploratory":
+                base_summary += (
+                    "\n\n### Backlog Insights & Planning Guidance\n"
+                    "- **Prioritization**: High-priority tasks are scheduled first to prevent last-minute deadline compression.\n"
+                    "- **Domain Balance**: Reviewing tasks across active projects helps maintain continuous momentum without burnout."
+                )
+
         if conflict:
             summary = format_conflict_discrepancy(conflict) + "\n\n" + base_summary
         else:

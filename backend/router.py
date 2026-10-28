@@ -20,6 +20,9 @@ from backend.router_helpers import (
     is_task_mutation_request,
     is_explicit_task_creation,
     is_undo_request,
+    is_pending_action_confirm,
+    is_pending_action_cancel,
+    is_chat_delete_intent,
     _parse_time,
     _parse_natural_date,
     _extract_task_creation_args,
@@ -77,6 +80,13 @@ async def route_message(
     Returns:
         (skill_name, tool_arguments, text_response)
     """
+    if is_pending_action_confirm(message):
+        return "pending_action_confirm", {"message": message}, ""
+    if is_pending_action_cancel(message):
+        return "pending_action_cancel", {"message": message}, ""
+    is_del, is_clear, del_target = is_chat_delete_intent(message)
+    if is_del:
+        return "chat_delete_task", {"query": del_target, "clear_all": is_clear}, ""
     if is_undo_request(message):
         return "undo", {"message": message}, ""
     if is_explicit_task_creation(message):

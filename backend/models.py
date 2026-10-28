@@ -45,6 +45,7 @@ class PublicChatResponse(BaseModel):
     conversation_id: Optional[str] = None
     routing_latency_ms: Optional[int] = None
     message: Optional[str] = None
+    verifiable: Optional[bool] = None
 
 
 class LogMemoryRequest(BaseModel):
@@ -60,6 +61,7 @@ class ChatResponse(BaseModel):
     response: str
     skill_used: Optional[str] = None
     data: Optional[Any] = None
+    verifiable: Optional[bool] = None
 
 
 class ChatRecapRequest(BaseModel):
@@ -78,6 +80,7 @@ class MessageOut(BaseModel):
     skill_called: Optional[str] = None
     created_at: str
     evidence: Optional[Dict[str, Any]] = None
+    verifiable: Optional[bool] = None
 
 
 class MessagesResponse(BaseModel):

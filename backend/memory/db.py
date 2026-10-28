@@ -133,6 +133,30 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
         ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurrence_rule TEXT;
         CREATE INDEX IF NOT EXISTS idx_tasks_scheduled_start ON tasks(scheduled_start);
 
+        -- Soft Delete Support on Tasks
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ DEFAULT NULL;
+        CREATE INDEX IF NOT EXISTS idx_tasks_deleted_at ON tasks(deleted_at);
+
+        -- Chat Pending Actions Store
+        CREATE TABLE IF NOT EXISTS chat_pending_actions (
+            id                  SERIAL        PRIMARY KEY,
+            action              TEXT          NOT NULL,
+            task_ids            INTEGER[]     NOT NULL DEFAULT '{}'::integer[],
+            task_titles         JSONB         NOT NULL DEFAULT '[]'::jsonb,
+            count               INTEGER       NOT NULL DEFAULT 1,
+            owner_identity      TEXT          NOT NULL,
+            conversation_id     TEXT          NOT NULL,
+            status              TEXT          NOT NULL DEFAULT 'pending',
+            created_at          TIMESTAMPTZ   NOT NULL DEFAULT now(),
+            expires_at          TIMESTAMPTZ   NOT NULL,
+            executed_at         TIMESTAMPTZ
+        );
+        CREATE INDEX IF NOT EXISTS idx_chat_pending_owner_conv ON chat_pending_actions(owner_identity, conversation_id, status);
+        CREATE INDEX IF NOT EXISTS idx_chat_pending_expires ON chat_pending_actions(expires_at);
+
+        -- Verifiable flag on messages
+        ALTER TABLE messages ADD COLUMN IF NOT EXISTS verifiable BOOLEAN DEFAULT FALSE;
+
             CREATE TABLE IF NOT EXISTS sessions (
                 token_hash        TEXT          PRIMARY KEY,
                 user_id           TEXT          NOT NULL,
@@ -546,6 +570,25 @@ async def _ensure_tables(pool: asyncpg.Pool) -> None:
             uploaded_at         TIMESTAMPTZ   NOT NULL DEFAULT now()
         );
         CREATE INDEX IF NOT EXISTS idx_orig_resumes_user ON original_resume_documents(user_id);
+
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ DEFAULT NULL;
+        CREATE INDEX IF NOT EXISTS idx_tasks_deleted_at ON tasks(deleted_at);
+
+        CREATE TABLE IF NOT EXISTS chat_pending_actions (
+            id                  SERIAL        PRIMARY KEY,
+            action              TEXT          NOT NULL,
+            task_ids            INTEGER[]     NOT NULL DEFAULT '{}'::integer[],
+            task_titles         JSONB         NOT NULL DEFAULT '[]'::jsonb,
+            count               INTEGER       NOT NULL DEFAULT 1,
+            owner_identity      TEXT          NOT NULL,
+            conversation_id     TEXT          NOT NULL,
+            status              TEXT          NOT NULL DEFAULT 'pending',
+            created_at          TIMESTAMPTZ   NOT NULL DEFAULT now(),
+            expires_at          TIMESTAMPTZ   NOT NULL,
+            executed_at         TIMESTAMPTZ
+        );
+        CREATE INDEX IF NOT EXISTS idx_chat_pending_owner_conv ON chat_pending_actions(owner_identity, conversation_id, status);
+        CREATE INDEX IF NOT EXISTS idx_chat_pending_expires ON chat_pending_actions(expires_at);
         """)
     _tables_ensured = True
 

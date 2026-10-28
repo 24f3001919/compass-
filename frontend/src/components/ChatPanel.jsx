@@ -342,6 +342,13 @@ export default function ChatPanel({
               tasks: Array.isArray(doneData?.tasks) ? doneData.tasks : null,
               evidence: doneData?.evidence || null,
               isTruncated: Boolean(doneData?.is_truncated),
+              verifiable: doneData?.verifiable,
+              pending_action: doneData?.pending_action || doneData?.data?.pending_action,
+              can_undo: Boolean(doneData?.can_undo || doneData?.data?.can_undo),
+              data: doneData?.data || {
+                pending_action: doneData?.pending_action,
+                can_undo: doneData?.can_undo,
+              },
             }])
           } else if (onSendMessage) {
             const reply = await onSendMessage(text, tone, specialistIdToUse)

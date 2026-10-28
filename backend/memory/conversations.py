@@ -154,6 +154,7 @@ async def add_message(
     content: str,
     skill_called: Optional[str] = None,
     evidence: Optional[Union[Dict[str, Any], List[Any], str]] = None,
+    verifiable: Optional[bool] = None,
 ) -> dict:
     """Insert a message into the conversation history and update title if first user message."""
     import json
@@ -165,21 +166,31 @@ async def add_message(
     try:
         row = await conn.fetchrow(
             """
-            INSERT INTO messages (conversation_id, role, content, skill_called, evidence)
-            VALUES ($1, $2, $3, $4, $5::jsonb)
-            RETURNING id, conversation_id, role, content, skill_called, evidence, created_at
+            INSERT INTO messages (conversation_id, role, content, skill_called, evidence, verifiable)
+            VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+            RETURNING id, conversation_id, role, content, skill_called, evidence, verifiable, created_at
             """,
-            cid, role, clean_content, skill_called, evidence_json
+            cid, role, clean_content, skill_called, evidence_json, verifiable
         )
     except Exception:
-        row = await conn.fetchrow(
-            """
-            INSERT INTO messages (conversation_id, role, content, skill_called)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id, conversation_id, role, content, skill_called, created_at
-            """,
-            cid, role, clean_content, skill_called
-        )
+        try:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO messages (conversation_id, role, content, skill_called, evidence)
+                VALUES ($1, $2, $3, $4, $5::jsonb)
+                RETURNING id, conversation_id, role, content, skill_called, evidence, created_at
+                """,
+                cid, role, clean_content, skill_called, evidence_json
+            )
+        except Exception:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO messages (conversation_id, role, content, skill_called)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id, conversation_id, role, content, skill_called, created_at
+                """,
+                cid, role, clean_content, skill_called
+            )
 
     await conn.execute(
         "UPDATE conversations SET last_active_at = now() WHERE id = $1",
@@ -227,9 +238,9 @@ async def get_recent_messages(
     try:
         rows = await conn.fetch(
             """
-            SELECT id, role, content, skill_called, evidence, created_at
+            SELECT id, role, content, skill_called, evidence, verifiable, created_at
             FROM (
-                SELECT id, role, content, skill_called, evidence, created_at
+                SELECT id, role, content, skill_called, evidence, verifiable, created_at
                 FROM messages
                 WHERE conversation_id = $1
                 ORDER BY created_at DESC, id DESC
@@ -240,20 +251,36 @@ async def get_recent_messages(
             cid, limit
         )
     except Exception:
-        rows = await conn.fetch(
-            """
-            SELECT id, role, content, skill_called, created_at
-            FROM (
+        try:
+            rows = await conn.fetch(
+                """
+                SELECT id, role, content, skill_called, evidence, created_at
+                FROM (
+                    SELECT id, role, content, skill_called, evidence, created_at
+                    FROM messages
+                    WHERE conversation_id = $1
+                    ORDER BY created_at DESC, id DESC
+                    LIMIT $2
+                ) sub
+                ORDER BY created_at ASC, id ASC
+                """,
+                cid, limit
+            )
+        except Exception:
+            rows = await conn.fetch(
+                """
                 SELECT id, role, content, skill_called, created_at
-                FROM messages
-                WHERE conversation_id = $1
-                ORDER BY created_at DESC, id DESC
-                LIMIT $2
-            ) sub
-            ORDER BY created_at ASC, id ASC
-            """,
-            cid, limit
-        )
+                FROM (
+                    SELECT id, role, content, skill_called, created_at
+                    FROM messages
+                    WHERE conversation_id = $1
+                    ORDER BY created_at DESC, id DESC
+                    LIMIT $2
+                ) sub
+                ORDER BY created_at ASC, id ASC
+                """,
+                cid, limit
+            )
 
     result = []
     for r in rows:

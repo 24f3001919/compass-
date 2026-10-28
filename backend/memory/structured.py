@@ -169,7 +169,7 @@ async def get_task(conn: DbConn, task_id: int) -> Optional[dict]:
                p.id AS project_id, p.name AS project_name
         FROM tasks t
         LEFT JOIN projects p ON t.project_id = p.id
-        WHERE t.id = $1
+        WHERE t.id = $1 AND t.deleted_at IS NULL
         """,
         task_id
     )
@@ -203,6 +203,7 @@ async def list_tasks(
         FROM tasks t
         LEFT JOIN projects p ON t.project_id = p.id
         WHERE ($1::text IS NULL OR t.user_id = $1)
+          AND t.deleted_at IS NULL
           AND ($2::text IS NULL OR t.domain = $2)
           AND ($3::integer IS NULL OR t.project_id = $3)
           AND ($4::text IS NULL OR t.status = $4)
@@ -276,7 +277,7 @@ async def update_task(
             recurrence_rule = CASE WHEN $24::boolean THEN $25::text ELSE recurrence_rule END,
             trusted_event_url = CASE WHEN $26::boolean THEN $27::text ELSE trusted_event_url END,
             updated_at = now()
-        WHERE id = $1
+        WHERE id = $1 AND deleted_at IS NULL
         RETURNING id
     """
     row = await conn.fetchrow(
@@ -320,9 +321,12 @@ async def update_task_status(conn: DbConn, task_id: int, status: str) -> Optiona
 
 
 async def delete_task(conn: DbConn, task_id: int) -> bool:
-    """Delete a task by ID."""
-    result = await conn.execute("DELETE FROM tasks WHERE id = $1", task_id)
-    return result == "DELETE 1"
+    """Soft delete a task by ID."""
+    result = await conn.execute(
+        "UPDATE tasks SET deleted_at = now(), updated_at = now() WHERE id = $1 AND deleted_at IS NULL",
+        task_id,
+    )
+    return "UPDATE 1" in result
 
 
 # ---------------------------------------------------------------------------

@@ -33,13 +33,16 @@ export const DEMO_TASK_TITLES = new Set([
  */
 export function isDemoTask(t) {
   if (!t) return false
-  if (t.is_demo || t.is_fallback) return true
+  // If explicitly flagged as not demo by the backend/user session, preserve it
+  if (t.is_demo === false) return false
+  if (t.is_demo === true || t.is_fallback) return true
   const taskIdStr = String(t.id || '')
   if (taskIdStr.startsWith('demo-') || taskIdStr.startsWith('mock-') || taskIdStr.startsWith('sim-')) {
     return true
   }
   if (Array.isArray(t.tags) && t.tags.includes('demo')) return true
-  if (t.trusted_event_url && String(t.trusted_event_url).toLowerCase().includes('demo')) return true
+  const trustedUrl = String(t.trusted_event_url || '').toLowerCase()
+  if (trustedUrl.includes('demo')) return true
   if (t.notes && String(t.notes).toLowerCase().includes('demo persona')) return true
   if (t.title && DEMO_TASK_TITLES.has(String(t.title).trim())) return true
   return false
