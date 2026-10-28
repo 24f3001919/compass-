@@ -129,21 +129,25 @@ async def test_tone_path_3_planner_roadmap():
 
 @pytest.mark.asyncio
 async def test_tone_path_4_llm_answer():
-    """Direct LLM answer path: simulated router with mocked model responses conditioned on tone prompt."""
-    prompt = "how should I prioritize my study sessions for finals?"
+    """LLM answer path: the model sees the selected tone's instruction, and the word budgets
+    those instructions impose are strictly ordered Brief < Balanced < Exploratory."""
+    import re
+    from backend.persona import build_persona_system_prompt
 
-    # The router appends TONE_INSTRUCTIONS[tone] to system_prompt
-    for tone in ("brief", "balanced", "exploratory"):
-        instruction = TONE_INSTRUCTIONS[tone]
-        assert tone in instruction.lower() or "concise" in instruction.lower() or "in-depth" in instruction.lower()
+    tones = ("brief", "balanced", "exploratory")
+    for tone in tones:
+        prompt = build_persona_system_prompt(profile_facts=None, extra_context="", tone=tone)
+        assert TONE_INSTRUCTIONS[tone] in prompt, f"{tone} instruction missing from persona prompt"
 
-    # Verify mock completion produces length hierarchy when conditioned on system prompt
-    brief_resp = "Prioritize hardest subjects first in 25-minute Pomodoro sprints."
-    bal_resp = "Prioritize high-weight finals first. Use 45-minute focused blocks with 15-minute active recall breaks. Review past exam errors daily."
-    exp_resp = "To optimize your finals preparation, start by auditing your syllabi for grading weight distributions. Allocate 60% of your calendar to high-risk courses, using spaced repetition and timed mock exams. Incorporate active interleaving between quantitative problem sets and conceptual readings to avoid cognitive fatigue. Conclude each evening with a 20-minute synthesis review."
+    brief_max = int(re.search(r"under (\d+) words", TONE_INSTRUCTIONS["brief"]).group(1))
+    bal_min, bal_max = (int(x) for x in re.search(r"(\d+)-(\d+) words", TONE_INSTRUCTIONS["balanced"]).groups())
+    exp_min = int(re.search(r"at least (\d+) words", TONE_INSTRUCTIONS["exploratory"]).group(1))
+    assert brief_max <= bal_min, "Brief word cap must not exceed Balanced minimum"
+    assert bal_max <= exp_min, "Balanced word cap must not exceed Exploratory minimum"
 
-    assert len(brief_resp) < len(bal_resp) < len(exp_resp)
-
+    # Wiring: tone passed to route_message reaches the greeting reply.
+    lengths = [len((await route_message("hello", tone=tone))[2]) for tone in tones]
+    assert lengths[0] < lengths[1] < lengths[2], f"route_message greeting lengths not ordered: {lengths}"
 
 @pytest.mark.asyncio
 async def test_tone_path_5_fallback():
@@ -400,3 +404,42 @@ async def test_pending_action_ttl_and_purge():
 
         check_exists = await conn.fetchrow("SELECT id FROM chat_pending_actions WHERE id = $1", action["id"])
         assert check_exists is None, "Expired pending action must be deleted by purge job"
+
+
+@pytest.mark.asyncio
+async def test_soft_deleted_tasks_excluded_from_dependency_graph():
+    """Dependency reads and writes must ignore soft-deleted tasks."""
+    from backend.memory import structured
+
+    pool = await get_pool()
+    user_id = "test-soft-del-deps-001"
+    ids = {}
+
+    async with pool.acquire() as conn:
+        await conn.execute("DELETE FROM tasks WHERE user_id = $1", user_id)
+        for key in ("a", "b", "c"):
+            ids[key] = await conn.fetchval(
+                "INSERT INTO tasks (title, domain, priority, status, user_id) VALUES ($1, 'coursework', 'medium', 'open', $2) RETURNING id",
+                f"Dep task {key}",
+                user_id,
+            )
+
+    try:
+        async with pool.acquire() as conn:
+            await structured.add_task_dependency(conn, ids["b"], ids["a"])
+            await structured.add_task_dependency(conn, ids["c"], ids["b"])
+            assert [t["id"] for t in await structured.get_task_dependencies(conn, ids["b"])] == [ids["a"]]
+            assert [t["id"] for t in await structured.get_downstream_tasks(conn, ids["b"])] == [ids["c"]]
+
+            await conn.execute("UPDATE tasks SET deleted_at = now() WHERE id = ANY($1::int[])", [ids["a"], ids["c"]])
+
+            assert await structured.get_task_dependencies(conn, ids["b"]) == []
+            assert await structured.get_downstream_tasks(conn, ids["b"]) == []
+            with pytest.raises(ValueError, match="does not exist"):
+                await structured.add_task_dependency(conn, ids["b"], ids["a"])
+            with pytest.raises(ValueError, match="does not exist"):
+                await structured.add_task_dependency(conn, ids["c"], ids["b"])
+    finally:
+        async with pool.acquire() as conn:
+            await conn.execute("DELETE FROM task_dependencies WHERE task_id = ANY($1::int[]) OR depends_on_task_id = ANY($1::int[])", list(ids.values()))
+            await conn.execute("DELETE FROM tasks WHERE user_id = $1", user_id)

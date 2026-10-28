@@ -423,10 +423,10 @@ async def add_task_dependency(conn: DbConn, task_id: int, depends_on_task_id: in
     if task_id == depends_on_task_id:
         raise ValueError("A task cannot depend on itself")
 
-    t1 = await conn.fetchrow("SELECT id FROM tasks WHERE id = $1", task_id)
+    t1 = await conn.fetchrow("SELECT id FROM tasks WHERE id = $1 AND deleted_at IS NULL", task_id)
     if not t1:
         raise ValueError(f"Task {task_id} does not exist")
-    t2 = await conn.fetchrow("SELECT id FROM tasks WHERE id = $1", depends_on_task_id)
+    t2 = await conn.fetchrow("SELECT id FROM tasks WHERE id = $1 AND deleted_at IS NULL", depends_on_task_id)
     if not t2:
         raise ValueError(f"Prerequisite task {depends_on_task_id} does not exist")
 
@@ -477,7 +477,7 @@ async def get_task_dependencies(conn: DbConn, task_id: int) -> list[dict]:
                td.created_at AS dependency_created_at
         FROM task_dependencies td
         JOIN tasks t ON td.depends_on_task_id = t.id
-        WHERE td.task_id = $1
+        WHERE td.task_id = $1 AND t.deleted_at IS NULL
         ORDER BY t.scheduled_start ASC NULLS LAST, t.id ASC
         """,
         task_id
@@ -504,7 +504,7 @@ async def get_downstream_tasks(conn: DbConn, task_id: int) -> list[dict]:
                t.duration_minutes, t.scheduled_start, t.scheduled_end, t.is_fixed,
                d.depth
         FROM downstream d
-        JOIN tasks t ON d.task_id = t.id
+        JOIN tasks t ON d.task_id = t.id AND t.deleted_at IS NULL
         ORDER BY t.id, d.depth ASC
         """,
         task_id

@@ -110,3 +110,45 @@ async def test_stream_serialization_handles_date_datetime_decimal_uuid(client: A
 
     assert not has_error_frame, f"Stream unexpectedly yielded error frame: {events}"
     assert saw_done_frame, f"Stream failed to yield done event. Events received: {events}"
+
+
+@pytest.mark.asyncio
+async def test_stream_done_payload_serializes_pending_action_datetimes(client: AsyncClient, monkeypatch):
+    """Delete-confirmation cards carry created_at/expires_at datetimes in `data`/`pending_action`.
+    The safety-intent fast path must still emit a parseable `done` frame instead of an error frame."""
+    created = datetime.datetime(2026, 10, 28, 9, 0, 0, tzinfo=datetime.timezone.utc)
+    pending = {
+        "id": 7,
+        "action": "delete_task",
+        "status": "pending",
+        "count": 2,
+        "created_at": created,
+        "expires_at": created + datetime.timedelta(minutes=5),
+    }
+    monkeypatch.setattr(
+        "backend.orchestrator.handle_message",
+        AsyncMock(return_value={
+            "response": "Delete 2 tasks? Reply confirm to proceed.",
+            "skill_used": "chat_delete_task",
+            "data": {"pending_action": pending, "tasks": []},
+        }),
+    )
+
+    from backend.dependencies import generate_guest_token
+    _, guest_token = generate_guest_token()
+    headers = {"x-guest-token": guest_token}
+
+    events = []
+    async with client.stream(
+        "POST", "/api/chat/stream", json={"message": "delete all my tasks"}, headers=headers, timeout=10.0
+    ) as resp:
+        assert resp.status_code == 200
+        async for line in resp.aiter_lines():
+            if line.startswith("data: ") and line[6:].strip() != "[DONE]":
+                events.append(json.loads(line[6:]))
+
+    assert not [e for e in events if e.get("type") == "error"], f"Stream yielded error frame: {events}"
+    done = [e for e in events if e.get("type") == "done"]
+    assert done, f"No done frame. Events: {events}"
+    assert isinstance(done[-1]["pending_action"]["expires_at"], str)
+    assert isinstance(done[-1]["data"]["pending_action"]["created_at"], str)

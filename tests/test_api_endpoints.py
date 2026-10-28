@@ -133,3 +133,20 @@ async def test_specialist_dispatch_endpoint_deleted_returns_404(client: AsyncCli
     """POST /api/specialist/dispatch was completely removed and returns 404."""
     resp = await client.post("/api/specialist/dispatch", json={"capability": "memory", "user_goal": "test"})
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_admin_consolidate_rejects_guest_token(client: AsyncClient):
+    """A valid guest token must not authorize admin endpoints, and the job must not run."""
+    from unittest.mock import patch, AsyncMock
+    from backend.dependencies import generate_guest_token
+    _, guest_token = generate_guest_token()
+
+    with patch("backend.jobs.consolidate.run_consolidation", AsyncMock(return_value={})) as run_mock:
+        for headers in (
+            {"Authorization": f"Bearer {guest_token}"},
+            {"x-guest-token": guest_token},
+        ):
+            resp = await client.post("/admin/consolidate", headers=headers, json={"dry_run": True})
+            assert resp.status_code in (401, 403), headers
+        run_mock.assert_not_called()
