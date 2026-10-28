@@ -64,13 +64,14 @@ export default function RadarFilters({
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
       {/* Top Tabs Bar */}
       <div
+        role="tablist"
+        aria-label="Radar opportunity categories"
+        className="unified-tablist"
         style={{
-          display: 'flex',
-          gap: '8px',
-          overflowX: 'auto',
-          paddingBottom: '4px',
           borderBottom: '1px solid var(--border)',
-          WebkitOverflowScrolling: 'touch',
+          paddingBottom: '0',
+          paddingLeft: '0',
+          paddingRight: '0',
         }}
       >
         {TABS.map(tab => {
@@ -79,26 +80,17 @@ export default function RadarFilters({
           return (
             <button
               key={tab.id}
+              id={`radar-tab-${tab.id}`}
+              role="tab"
+              aria-selected={isActive}
+              tabIndex={isActive ? 0 : -1}
               type="button"
               onClick={() => onSelectTab(tab.id)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '10px 16px',
-                borderRadius: 'var(--radius-tab, 6px) var(--radius-tab, 6px) 0 0',
-                border: 'none',
-                background: isActive ? 'var(--bg-card)' : 'transparent',
-                color: isActive ? 'var(--brand)' : 'var(--text-secondary)',
-                fontWeight: isActive ? 600 : 500,
-                fontSize: '14px',
-                cursor: 'pointer',
-                borderBottom: isActive ? '2px solid var(--brand)' : '2px solid transparent',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.15s ease',
-              }}
+              className={`unified-tab ${isActive ? 'active' : ''}`}
             >
-              <TabIcon size={15} strokeWidth={1.8} />
+              <span className="unified-tab-icon" aria-hidden="true">
+                <TabIcon size={14} strokeWidth={1.8} />
+              </span>
               <span>{tab.label}</span>
             </button>
           )

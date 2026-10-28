@@ -249,7 +249,17 @@ export default function ApplicationCenter() {
       )}
 
       {/* Pipeline Filter Tabs */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+      <div
+        role="tablist"
+        aria-label="Application pipeline stages"
+        className="unified-tablist"
+        style={{
+          borderBottom: '1px solid var(--border)',
+          marginBottom: '16px',
+          paddingLeft: 0,
+          paddingRight: 0,
+        }}
+      >
         {[
           { id: 'ALL', label: `All (${applications.length})` },
           { id: 'HANDOFF_READY', label: `Handoff Ready (${applications.filter(a => a.status === 'HANDOFF_KIT_READY').length})` },
@@ -257,25 +267,23 @@ export default function ApplicationCenter() {
           { id: 'APPROVED', label: `Approved (${applications.filter(a => a.status === 'APPROVED_FOR_SUBMISSION').length})` },
           { id: 'SUBMITTED', label: `Submitted (${applications.filter(a => ['SUBMITTED', 'MANUAL_SUBMISSION_REQUIRED'].includes(a.status)).length})` },
           { id: 'INTERVIEWS', label: `Interviews & Offers (${applications.filter(a => ['INTERVIEW', 'OFFER_RECEIVED'].includes(a.status)).length})` },
-        ].map(tab => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setStatusFilter(tab.id)}
-            style={{
-              background: statusFilter === tab.id ? 'var(--primary)' : 'var(--bg-card-soft)',
-              color: statusFilter === tab.id ? '#fff' : 'var(--text-muted)',
-              border: '1px solid var(--border)',
-              padding: '6px 12px',
-              borderRadius: '8px',
-              fontSize: '12px',
-              fontWeight: '600',
-              cursor: 'pointer',
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
+        ].map(tab => {
+          const isActive = statusFilter === tab.id
+          return (
+            <button
+              key={tab.id}
+              id={`app-tab-${tab.id.toLowerCase()}`}
+              role="tab"
+              aria-selected={isActive}
+              tabIndex={isActive ? 0 : -1}
+              type="button"
+              onClick={() => setStatusFilter(tab.id)}
+              className={`unified-tab ${isActive ? 'active' : ''}`}
+            >
+              <span>{tab.label}</span>
+            </button>
+          )
+        })}
       </div>
 
       {/* Applications Table / Cards */}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { FileText, GitCompare, PenLine } from 'lucide-react'
 import {
   fetchMasterResume,
   updateMasterResume,
@@ -629,61 +630,62 @@ export default function ResumeStudio() {
           </div>
 
           {/* Sub-tabs: Resume Profile vs Cover Letter vs Diff */}
-          <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border)', paddingBottom: '12px', marginBottom: '18px' }}>
+          <div
+            role="tablist"
+            aria-label="Resume sections"
+            className="unified-tablist"
+            style={{
+              borderBottom: '1px solid var(--border)',
+              marginBottom: '18px',
+              paddingLeft: 0,
+              paddingRight: 0,
+            }}
+          >
             <button
+              id="resume-tab-editor"
+              role="tab"
+              aria-selected={activeTab === 'resume' && viewMode === 'editor'}
+              tabIndex={activeTab === 'resume' && viewMode === 'editor' ? 0 : -1}
               type="button"
               onClick={() => { setActiveTab('resume'); setViewMode('editor'); }}
-              style={{
-                background: activeTab === 'resume' && viewMode === 'editor' ? 'var(--primary, #2563eb)' : 'var(--bg-card-soft)',
-                color: activeTab === 'resume' && viewMode === 'editor' ? '#ffffff' : 'var(--text-secondary)',
-                border: activeTab === 'resume' && viewMode === 'editor' ? 'none' : '1px solid var(--border)',
-                padding: '7px 16px',
-                borderRadius: '8px',
-                fontSize: '13px',
-                fontWeight: '700',
-                cursor: 'pointer',
-                boxShadow: activeTab === 'resume' && viewMode === 'editor' ? '0 2px 8px rgba(37, 99, 235, 0.25)' : 'none',
-              }}
+              className={`unified-tab ${activeTab === 'resume' && viewMode === 'editor' ? 'active' : ''}`}
             >
-              📄 Resume Editor
+              <span className="unified-tab-icon" aria-hidden="true">
+                <FileText size={14} strokeWidth={1.8} />
+              </span>
+              <span>Resume Editor</span>
             </button>
 
             {isTailored && (
               <button
+                id="resume-tab-diff"
+                role="tab"
+                aria-selected={viewMode === 'diff'}
+                tabIndex={viewMode === 'diff' ? 0 : -1}
                 type="button"
                 onClick={() => setViewMode('diff')}
-                style={{
-                  background: viewMode === 'diff' ? 'var(--primary, #2563eb)' : 'var(--bg-card-soft)',
-                  color: viewMode === 'diff' ? '#ffffff' : 'var(--text-secondary)',
-                  border: viewMode === 'diff' ? 'none' : '1px solid var(--border)',
-                  padding: '7px 16px',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  fontWeight: '700',
-                  cursor: 'pointer',
-                  boxShadow: viewMode === 'diff' ? '0 2px 8px rgba(37, 99, 235, 0.25)' : 'none',
-                }}
+                className={`unified-tab ${viewMode === 'diff' ? 'active' : ''}`}
               >
-                ⚖️ Master vs Tailored Diff
+                <span className="unified-tab-icon" aria-hidden="true">
+                  <GitCompare size={14} strokeWidth={1.8} />
+                </span>
+                <span>Master vs Tailored Diff</span>
               </button>
             )}
 
             <button
+              id="resume-tab-cover-letter"
+              role="tab"
+              aria-selected={activeTab === 'cover_letter' && viewMode === 'editor'}
+              tabIndex={activeTab === 'cover_letter' && viewMode === 'editor' ? 0 : -1}
               type="button"
               onClick={() => { setActiveTab('cover_letter'); setViewMode('editor'); }}
-              style={{
-                background: activeTab === 'cover_letter' && viewMode === 'editor' ? 'var(--primary, #2563eb)' : 'var(--bg-card-soft)',
-                color: activeTab === 'cover_letter' && viewMode === 'editor' ? '#ffffff' : 'var(--text-secondary)',
-                border: activeTab === 'cover_letter' && viewMode === 'editor' ? 'none' : '1px solid var(--border)',
-                padding: '7px 16px',
-                borderRadius: '8px',
-                fontSize: '13px',
-                fontWeight: '700',
-                cursor: 'pointer',
-                boxShadow: activeTab === 'cover_letter' && viewMode === 'editor' ? '0 2px 8px rgba(37, 99, 235, 0.25)' : 'none',
-              }}
+              className={`unified-tab ${activeTab === 'cover_letter' && viewMode === 'editor' ? 'active' : ''}`}
             >
-              ✍️ Truthful Cover Letter
+              <span className="unified-tab-icon" aria-hidden="true">
+                <PenLine size={14} strokeWidth={1.8} />
+              </span>
+              <span>Truthful Cover Letter</span>
             </button>
           </div>
 
