@@ -42,6 +42,7 @@ CREATE TABLE tasks (
                              CHECK (priority IN ('low','medium','high','urgent')),
     notes       TEXT,
     user_id     TEXT,        -- Account owner identifier for memory isolation
+    needs_reindex BOOLEAN NOT NULL DEFAULT FALSE,
     created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
@@ -78,6 +79,7 @@ CREATE TABLE memory_chunks (
     source      TEXT,        -- e.g. repo URL, course name, file path
     tags        TEXT[],
     user_id     TEXT,        -- Account owner identifier for memory isolation
+    needs_reindex BOOLEAN NOT NULL DEFAULT FALSE,
     created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
