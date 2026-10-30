@@ -10,6 +10,9 @@ import re
 from datetime import date, datetime, timedelta
 from typing import Any, Optional, Tuple
 
+from backend.services.task_intent import blocks_task_creation, normalize_task_intent_text, title_problem
+from backend.services.task_time import local_today, request_timezone
+
 logger = logging.getLogger("compass.router.helpers")
 
 MONTH_MAP = {
@@ -41,16 +44,19 @@ DAYS_OF_WEEK = {
 
 
 def _current_today() -> date:
+    """Today in the request's timezone (server date outside a chat request or when tests patch router.date)."""
     try:
         import sys
         mod = sys.modules.get("backend.router")
-        if mod and hasattr(mod, "date"):
-            cand = mod.date.today()
+        patched = getattr(mod, "date", date) if mod else date
+        if patched is not date:
+            cand = patched.today()
             if hasattr(cand, "year"):
                 return cand
     except Exception:
         pass
-    return date.today()
+    tz_name = request_timezone.get()
+    return local_today(tz_name) if tz_name else date.today()
 
 
 def parse_natural_due_date(text: str) -> Tuple[Optional[str], str]:
@@ -109,7 +115,12 @@ def parse_natural_due_date(text: str) -> Tuple[Optional[str], str]:
 
 def is_task_mutation_request(msg: str) -> bool:
     """Check if a prompt contains intent to add, create, or schedule a task or deadline."""
-    msg_l = (msg or "").lower()
+    if not msg:
+        return False
+    norm = normalize_task_intent_text(msg)
+    msg_l = norm.lower()
+    if blocks_task_creation(msg) or blocks_task_creation(norm):
+        return False
     mutation_keywords = (
         "add a task", "add task", "new task", "create task",
         "add a deadline", "add deadline", "set deadline", "set a deadline",
@@ -121,14 +132,21 @@ def is_task_mutation_request(msg: str) -> bool:
 
 def is_explicit_task_creation(message: str) -> bool:
     """Determine whether message represents an explicit command to add a task/deadline/reminder."""
-    msg = message.lower().strip()
+    if not message:
+        return False
+    if blocks_task_creation(message):
+        return False
+    norm = normalize_task_intent_text(message)
+    if blocks_task_creation(norm):
+        return False
+    msg = norm.lower().strip()
     if not msg:
         return False
 
     # Queries, questions, or passive statements must NOT be treated as task creation
     if re.search(r"^(when\s+is|what\s+is|what's|where\s+is|who\s+is|how\s+to|why\s+is|is\s+there|are\s+there|tell\s+me|show\s+me|check\s+the|find\s+the|do\s+i\s+have)\b", msg):
         return False
-    if msg.endswith("?"):
+    if blocks_task_creation(message):
         return False
 
     # Declarative sentences describing existing deadlines (e.g. "The deadline for X is ...") are NOT creation commands
@@ -411,9 +429,18 @@ def _parse_natural_date(text: str, today: Optional[date] = None) -> Tuple[Option
     return None, time_24, time_12
 
 
+_AFTER_CREATION_PHRASE = re.compile(
+    r"\b(?:add|create|make|set(?:\s+up)?|schedule|put|new|track)\b\s+(?:me\s+)?(?:an?\s+|the\s+|another\s+)?(?:new\s+)?"
+    r"(?:tasks?|todos?|to-dos?|deadlines?|reminders?)\b\s*(?:(?:for\s+me|please)\b\s*)*"
+    r"(?:[:\-\u2013]|\b(?:to|for|called|named|titled|about|on)\b)?\s*(.*)$",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
 def _extract_task_creation_args(message: str) -> dict:
     """Extract title, domain, due_date, time_str, and priority from natural language."""
-    msg = message.strip()
+    norm = normalize_task_intent_text(message)
+    msg = norm.strip()
     msg_lower = msg.lower()
 
     # 1. Domain detection
@@ -479,7 +506,7 @@ def _extract_task_creation_args(message: str) -> dict:
             r"\b(?:at\s+)?(?:1[0-2]|0?[1-9])\s*(?:am|pm)\b",
             r"\b(?:at\s+)?(?:midnight|noon)\b",
             r"^\s*(?:on|at|due|by|in|for)\s+",
-            r"\s+(?:on|at|due|by|in)\s*$",
+            r"\s+(?:on|at|due|by|in|for)\s*$",
         ]
         for p in patterns:
             t = re.sub(p, "", t, flags=re.IGNORECASE)
@@ -501,27 +528,25 @@ def _extract_task_creation_args(message: str) -> dict:
             "create a task for", "create a task on", "create a task:", "create a task", "create task for", "create task on", "create task:", "create task", "new task:", "new task", "new deadline:", "new deadline",
         )
         for pref in prefixes:
-            if msg_lower.startswith(pref):
+            if msg_lower.startswith(pref) and not msg_lower[len(pref):len(pref) + 1].isalnum():
                 rest = msg[len(pref):].strip(" :,-")
+                rest = re.sub(r"^(?:please\s*[:\-\u2013]?|for\s+me\s*[:\-\u2013]?)\s*", "", rest, flags=re.IGNORECASE)
                 cleaned = _strip_dates_and_times(rest)
                 cleaned = re.sub(r"\bdomain[:= ]\s*[a-z0-9_-]+", "", cleaned, flags=re.IGNORECASE).strip(" .!?:;'\"")
                 if cleaned and cleaned.lower() not in ("tomorrow", "today", "yesterday"):
                     title = cleaned
                 break
 
-    # Strategy E: Fallback clean-up if still empty
+    # Strategy E: the text that follows the creation phrase ("please create a task: write report by friday")
     if not title:
-        cand = re.sub(r"\b(add|create|new|set|schedule|remind me to|a deadline|deadline|a task|task|todo)\b", "", msg, flags=re.IGNORECASE)
-        cand = _strip_dates_and_times(cand)
-        cand = cand.strip(" .!?:;'\"")
-        date_words = {"tomorrow", "today", "yesterday", "october", "deadline", "task", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
-        if len(cand) >= 1 and not any(kw == cand.lower() for kw in date_words):
-            title = cand
+        m_after = _AFTER_CREATION_PHRASE.search(msg)
+        if m_after:
+            title = _strip_dates_and_times(m_after.group(1)).strip(" .!?:;'\"")
 
     # Final guard: if title after stripping dates is empty or was purely date words/digits/time, clear it
     if title:
         residual = _strip_dates_and_times(title)
-        if not residual or re.fullmatch(r"[\d:\sAPMapm\.,\-]+", residual):
+        if not residual or re.fullmatch(r"[\d:\sAPMapm\.,\-]+", residual) or title_problem(residual):
             title = ""
         else:
             title = residual
