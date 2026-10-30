@@ -67,3 +67,5 @@ artifacts/scratch/
 visual_comparison.html
 intel_states*.html
 preview_states.html
+.playwright-mcp/
+.claude/
